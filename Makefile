@@ -84,8 +84,8 @@ LPIDENT_DIR	    := $(PWD)/$(LIBPROTOIDENT)
 export LD_LIBRARY_PATH := $(PWD)/$(PCAP)
 
 # for building with cgo
-export CGO_CFLAGS := -I$(PCAP_DIR) -I$(GO_SRCDIR)/OSAG/goDB/lz4
-export CGO_LDFLAGS := -L$(PCAP_DIR) $(GO_SRCDIR)/OSAG/goDB/lz4/liblz4.a
+export CGO_CFLAGS := -I$(PCAP_DIR)
+export CGO_LDFLAGS := -L$(PCAP_DIR)
 
 fetch:
 	## GO SETUP ##
@@ -109,7 +109,7 @@ unpack:
 	mv gopacket-$(GOPACKET) gopacket
 
 	echo "*** fetching gopacket dependencies"
-	go get github.com/mdlayher/raw
+	go get -x github.com/mdlayher/raw
 
 	echo "*** unpacking dependency $(PCAP) ***"
 	tar xf $(PCAP).tar.gz
@@ -136,9 +136,6 @@ compile:
 	# first, compile libpcap and libprotoident because the go code depends on it
 	echo "*** compiling $(PCAP) ***"
 	cd $(PCAP); make -s > /dev/null; rm libpcap.a; ln -sf libpcap.so.$(PCAP_VERSION) libpcap.so; ln -sf libpcap.so.$(PCAP_VERSION) libpcap.so.1
-
-	echo "*** compiling lz4 ***"
-	cd $(GO_SRCDIR)/OSAG/goDB/lz4; make -s >> /dev/null;
 
 	# make the protocol-category mappings available to goquery using the
 	# compiled helper binary and a bash script for IP protocols
@@ -232,8 +229,6 @@ clean:
 	rm -rf $(PCAP) $(PCAP).tar.gz
 
 	rm -rf $(PKG).tar.bz2
-
-	cd $(GO_SRCDIR)/OSAG/goDB/lz4; make clean > /dev/null
 
 all: clean fetch unpack patch configure compile install
 

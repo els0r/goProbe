@@ -53,7 +53,7 @@ all: liblz4
 liblz4: lz4.c lz4hc.c
 	@echo compiling static library
 	@$(CC) $(CPPFLAGS) $(CFLAGS) -c $^
-	@$(AR) rcs liblz4.a lz4.o lz4hc.o
+	@$(AR) rcs liblz4_linux.a lz4.o lz4hc.o
 	@echo compiling dynamic library
 	@$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -shared $^ -fPIC $(SONAME_FLAGS) -o $@.$(SHARED_EXT_VER)
 	@echo creating versioned links
@@ -83,7 +83,7 @@ install: liblz4 liblz4.pc
 	@cp -a liblz4.$(SHARED_EXT_MAJOR) $(DESTDIR)$(LIBDIR)
 	@cp -a liblz4.$(SHARED_EXT) $(DESTDIR)$(LIBDIR)
 	@cp -a liblz4.pc $(DESTDIR)$(LIBDIR)/pkgconfig/
-	@install -m 644 liblz4.a $(DESTDIR)$(LIBDIR)/liblz4.a
+	@install -m 644 liblz4_linux.a $(DESTDIR)$(LIBDIR)/liblz4_linux.a
 	@install -m 644 lz4.h $(DESTDIR)$(INCLUDEDIR)/lz4.h
 	@install -m 644 lz4hc.h $(DESTDIR)$(INCLUDEDIR)/lz4hc.h
 	@echo lz4 static and shared library installed
@@ -94,7 +94,7 @@ uninstall:
 	rm -f $(DESTDIR)$(LIBDIR)/liblz4.$(SHARED_EXT_MAJOR)
 	rm -f $(DESTDIR)$(LIBDIR)/pkgconfig/liblz4.pc
 	[ -x $(DESTDIR)$(LIBDIR)/liblz4.$(SHARED_EXT_VER) ] && rm -f $(DESTDIR)$(LIBDIR)/liblz4.$(SHARED_EXT_VER)
-	[ -f $(DESTDIR)$(LIBDIR)/liblz4.a ] && rm -f $(DESTDIR)$(LIBDIR)/liblz4.a
+	[ -f $(DESTDIR)$(LIBDIR)/liblz4_linux.a ] && rm -f $(DESTDIR)$(LIBDIR)/liblz4_linux.a
 	[ -f $(DESTDIR)$(INCLUDEDIR)/lz4.h ] && rm -f $(DESTDIR)$(INCLUDEDIR)/lz4.h
 	[ -f $(DESTDIR)$(INCLUDEDIR)/lz4hc.h ] && rm -f $(DESTDIR)$(INCLUDEDIR)/lz4hc.h
 	@echo lz4 libraries successfully uninstalled
