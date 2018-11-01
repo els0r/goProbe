@@ -35,7 +35,6 @@ var helpBase string = `USAGE:
           dport          destination port
           iface          interface
           proto          protocol (e.g. UDP, TCP)
-          l7proto        layer7 protocol (e.g. GameSpy, SMTP)
           time           timestamp
 
     QUERY_TYPE
@@ -49,12 +48,10 @@ var helpBase string = `USAGE:
                           (equivalent to columns "sip,dip")
           apps_port       top applications by protocol:[port]
                           (equivalent to columns "dport,proto")
-          apps_dpi        top applications by deep packet inspection (L7)
-                          (equivalent to columns "l7proto")
           agg_talk_port   aggregation of conversation and applications
                           (equivalent to columns "sip,dip,dport,proto")
           raw             a raw dump of all flows, including timestamps and interfaces
-                          (equiv. to columns "time,iface,sip,dip,dport,proto,l7proto")
+                          (equiv. to columns "time,iface,sip,dip,dport,proto")
 `
 var examples string = `
 EXAMPLES
@@ -82,7 +79,7 @@ EXAMPLES
     * Get the top 10 (-n) layer-7-protocol/source-ip/destination-ip triples from all time
       (-f "-9999d") whose source or destination was in 172.27.0.0/16:
 
-        goquery -i eth0 -f "-9999d" -c "snet = 172.27.0.0/16 | dnet = 172.27.0.0/16" -n 10 "l7proto,sip,dip"
+        goquery -i eth0 -f "-9999d" -c "snet = 172.27.0.0/16 | dnet = 172.27.0.0/16" -n 10 "sip,dip"
 `
 var admin string = `
     Advanced maintenance options (should not be used in interactive mode):
@@ -98,23 +95,23 @@ var admin string = `
 `
 
 var helpMap map[string]string = map[string]string{
-    "i": `
+	"i": `
     -i <interfaces>
 
         Interfaces for which the query should be performed (e.g. "eth0", "eth0,t4_33760")
         You can specify "ANY" to query all interfaces.
 `,
-    "h": `
+	"h": `
     -h, --help
 
         Display this help text.
 `,
-    "help-admin": `
+	"help-admin": `
     -help-admin
 
         Display advanced options for database maintenance.
 `,
-    "f": `
+	"f": `
    -f / -l "<date>"
 
         Lower / upper bound on flow timestamp. Allowed formats are:
@@ -174,7 +171,7 @@ var helpMap map[string]string = map[string]string{
 
                 02.01.06 +0430
 `,
-    "c": `
+	"c": `
     -c "<conditional>"
 
         The conditional consists of multiple conditions chained together
@@ -216,10 +213,9 @@ var helpMap map[string]string = map[string]string{
 
           Application:
             dport       Destination port
-            l7proto     Application Layer protocol
             proto       IP protocol
 
-            EXAMPLE: "dport = 22 & proto = TCP and l7proto = SSH"
+            EXAMPLE: "dport = 22 & proto = TCP"
 
         COMPARATIVE OPERATORS:
 
@@ -289,7 +285,7 @@ var helpMap map[string]string = map[string]string{
 
         and any other combination of the allowed representations.
 `,
-    "d": `
+	"d": `
     -d <db-path>
 
         Path to goDB database directory <db-path>. By default,
@@ -300,7 +296,7 @@ var helpMap map[string]string = map[string]string{
         the path if you analyze data on a different host without
         goProbe.
 `,
-    "e": `
+	"e": `
     -e <format>
 
         Output format:
@@ -308,14 +304,14 @@ var helpMap map[string]string = map[string]string{
           json          Output in JSON format
           csv           Output in comma-separated table format
 `,
-    "n": `
+	"n": `
     -n <number of entries>
 
         Maximum number of final entries to show. Defaults to 95% of the overall
         data volume / number of packets (depending on the '-s' parameter). Ignored
         for queries including the "time" field.
 `,
-    "s": `
+	"s": `
     -s <column>
 
         Sort results by given column name:
@@ -323,36 +319,36 @@ var helpMap map[string]string = map[string]string{
           packets       Sort by accumulated packets
           time          Sort by time. Forced for queries including the "time" field
 `,
-    "a": `
+	"a": `
     -a
         Sort results in ascending instead of descending order. Forced for queries
         including the "time" field.
 `,
-    "list": `
+	"list": `
     -list, --list
         List all interfaces on which data was captured and written to the database.
 `,
-    "in": `
+	"in": `
     -in
         Take into account incoming data (received packets/bytes). Can be combined
         with -out.
 `,
-    "out": `
+	"out": `
     -out
         Take into account outgoing data (sent packets/bytes). Can be combined
         with -in.
 `,
-    "sum": `
+	"sum": `
     -sum
         Sum incoming and outgoing data.
 `,
-    "x": `
+	"x": `
     -x
         Mode for external calls, e.g. from portal. Reduces verbosity of error
         messages to customer friendly text and writes full error messages
         to message log instead.
 `,
-    "resolve": `
+	"resolve": `
     -resolve
         Resolve top IPs in output using reverse DNS lookups. Off by default.
         If the reverse DNS lookup for an IP fails, the IP is shown instead.
@@ -361,11 +357,11 @@ var helpMap map[string]string = map[string]string{
         Beware: The lookup is carried out at query time; DNS data may have been
         different when the packets were captured.
 `,
-    "resolve-timeout": `
+	"resolve-timeout": `
     -resolve-timeout
         Timeout for (reverse) DNS lookups. Default: 1s
 `,
-    "resolve-rows": `
+	"resolve-rows": `
     -resolve-rows
         Maximum number of output rows to perform DNS resolution against. Before setting
         this to some high value (e.g. 1000), consider that this may incur a high load on
@@ -373,53 +369,53 @@ var helpMap map[string]string = map[string]string{
 `}
 
 func PrintFlagGenerator(external bool) func(affectedFlag string) {
-    var helpString string = helpBase
-    if !external {
-        return func(affectedFlag string) {
-            if affectedFlag == "" {
-                fmt.Println(helpString)
-                return
-            } else if affectedFlag == "admin" {
-                fmt.Println(helpString + admin)
-                return
-            }
-            helpString = helpString + helpMap[affectedFlag]
-            fmt.Println(helpString)
-        }
-    }
+	var helpString string = helpBase
+	if !external {
+		return func(affectedFlag string) {
+			if affectedFlag == "" {
+				fmt.Println(helpString)
+				return
+			} else if affectedFlag == "admin" {
+				fmt.Println(helpString + admin)
+				return
+			}
+			helpString = helpString + helpMap[affectedFlag]
+			fmt.Println(helpString)
+		}
+	}
 
-    // do nothing if external call
-    return func(affectedFlag string) {
-        return
-    }
+	// do nothing if external call
+	return func(affectedFlag string) {
+		return
+	}
 }
 
 // Returns a function that prints the usage information if external is false and a
 // function that prints nothing if external is true.
 // Note that the usage information doesn't contain the admin help.
 func PrintUsageGenerator(external bool) func() {
-    var helpString string = helpBase
-    if !external {
-        // sort the map alphabetically
-        sorted := make([]string, len(helpMap))
-        i := 0
-        for k, _ := range helpMap {
-            sorted[i] = k
-            i++
-        }
-        sort.Strings(sorted)
+	var helpString string = helpBase
+	if !external {
+		// sort the map alphabetically
+		sorted := make([]string, len(helpMap))
+		i := 0
+		for k, _ := range helpMap {
+			sorted[i] = k
+			i++
+		}
+		sort.Strings(sorted)
 
-        return func() {
-            for _, mapKey := range sorted {
-                helpString = helpString + helpMap[mapKey]
-            }
-            helpString = helpString + examples
-            fmt.Println(helpString)
-        }
-    }
+		return func() {
+			for _, mapKey := range sorted {
+				helpString = helpString + helpMap[mapKey]
+			}
+			helpString = helpString + examples
+			fmt.Println(helpString)
+		}
+	}
 
-    // do nothing if external call
-    return func() {
-        return
-    }
+	// do nothing if external call
+	return func() {
+		return
+	}
 }

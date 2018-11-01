@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo -e "\nvar IPProtocols = map[int] string {"
+echo -e "package goDB\n\nvar IPProtocols = map[int] string {"
 egrep -v "^#" /etc/protocols | egrep -v "^ip\s+0\s+IP" | egrep -v "^(\s+)?$" | sort -unk2 | awk '{print "  " $2 ": \"" $3 "\","}'
 echo -e "  255: \"UNKNOWN\",\n}\n\nfunc GetIPProto(id int) string {\n  return IPProtocols[id]\n}\n"
 

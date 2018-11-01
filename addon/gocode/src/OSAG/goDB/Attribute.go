@@ -12,118 +12,95 @@
 package goDB
 
 import (
-    "fmt"
-    "strconv"
-    "strings"
+	"fmt"
+	"strconv"
+	"strings"
 )
 
 // Interface for attributes
 // This interface is not meant to be implemented by structs
 // outside this package
 type Attribute interface {
-    Name() string
-    // Some attributes use more than a single output column.
-    ExtraColumns() []string
-    // ExtractStrings() extracts a list of records representing the
-    // attribute from a given key.
-    // You may assume that the length of the returned list is always
-    // the length of ExtraColumns() + 1.
-    ExtractStrings(key *ExtraKey) []string
-    // Ensures that this interface cannot be implemented outside this
-    // package.
-    attributeMarker()
+	Name() string
+	// Some attributes use more than a single output column.
+	ExtraColumns() []string
+	// ExtractStrings() extracts a list of records representing the
+	// attribute from a given key.
+	// You may assume that the length of the returned list is always
+	// the length of ExtraColumns() + 1.
+	ExtractStrings(key *ExtraKey) []string
+	// Ensures that this interface cannot be implemented outside this
+	// package.
+	attributeMarker()
 }
 
 type SipAttribute struct{}
 
 func (_ SipAttribute) Name() string {
-    return "sip"
+	return "sip"
 }
 func (_ SipAttribute) ExtraColumns() []string {
-    return nil
+	return nil
 }
 func (_ SipAttribute) ExtractStrings(key *ExtraKey) []string {
-    return []string{rawIpToString(key.Sip[:])}
+	return []string{rawIpToString(key.Sip[:])}
 }
 func (_ SipAttribute) attributeMarker() {}
 
 type DipAttribute struct{}
 
 func (_ DipAttribute) Name() string {
-    return "dip"
+	return "dip"
 }
 func (_ DipAttribute) ExtraColumns() []string {
-    return nil
+	return nil
 }
 func (_ DipAttribute) ExtractStrings(key *ExtraKey) []string {
-    return []string{rawIpToString(key.Dip[:])}
+	return []string{rawIpToString(key.Dip[:])}
 }
 func (_ DipAttribute) attributeMarker() {}
 
 type ProtoAttribute struct{}
 
 func (_ ProtoAttribute) Name() string {
-    return "proto"
+	return "proto"
 }
 func (_ ProtoAttribute) ExtraColumns() []string {
-    return nil
+	return nil
 }
 func (_ ProtoAttribute) ExtractStrings(key *ExtraKey) []string {
-    return []string{GetIPProto(int(key.Protocol))}
+	return []string{GetIPProto(int(key.Protocol))}
 }
 func (_ ProtoAttribute) attributeMarker() {}
 
 type DportAttribute struct{}
 
 func (_ DportAttribute) Name() string {
-    return "dport"
+	return "dport"
 }
 func (_ DportAttribute) ExtraColumns() []string {
-    return nil
+	return nil
 }
 func (_ DportAttribute) ExtractStrings(key *ExtraKey) []string {
-    return []string{strconv.Itoa(int(uint16(key.Dport[0])<<8 | uint16(key.Dport[1])))}
+	return []string{strconv.Itoa(int(uint16(key.Dport[0])<<8 | uint16(key.Dport[1])))}
 }
 func (_ DportAttribute) attributeMarker() {}
-
-type L7ProtoAttribute struct{}
-
-func (_ L7ProtoAttribute) Name() string {
-    return "l7proto"
-}
-func (_ L7ProtoAttribute) ExtraColumns() []string {
-    return []string{"category"}
-}
-func (_ L7ProtoAttribute) ExtractStrings(key *ExtraKey) []string {
-    l7proto, category := GetDPIProtoCat(int(uint16(key.L7proto[0])<<8 | uint16(key.L7proto[1])))
-    if l7proto == "" {
-        l7proto = "Unknown"
-    }
-    if category == "" {
-        category = "Uncategorised"
-    }
-
-    return []string{l7proto, category}
-}
-func (_ L7ProtoAttribute) attributeMarker() {}
 
 // Returns an Attribute for the given name. If no such attribute
 // exists, an error is returned.
 func NewAttribute(name string) (Attribute, error) {
-    switch name {
-    case "sip", "src": // src is an alias for sip
-        return SipAttribute{}, nil
-    case "dip", "dst": // dst is an alias for dip
-        return DipAttribute{}, nil
-    case "proto":
-        return ProtoAttribute{}, nil
-    case "dport":
-        return DportAttribute{}, nil
-    case "l7proto":
-        return L7ProtoAttribute{}, nil
-    default:
-        return nil, fmt.Errorf("Unknown attribute name: '%s'", name)
-    }
+	switch name {
+	case "sip", "src": // src is an alias for sip
+		return SipAttribute{}, nil
+	case "dip", "dst": // dst is an alias for dip
+		return DipAttribute{}, nil
+	case "proto":
+		return ProtoAttribute{}, nil
+	case "dport":
+		return DportAttribute{}, nil
+	default:
+		return nil, fmt.Errorf("Unknown attribute name: '%s'", name)
+	}
 }
 
 // Parses the given query type into a list of attributes.
@@ -137,55 +114,53 @@ func NewAttribute(name string) (Attribute, error) {
 // 'raw', or if it is explicitly mentioned in a list of attribute
 // names.
 func ParseQueryType(queryType string) (attributes []Attribute, hasAttrTime, hasAttrIface bool, err error) {
-    switch queryType {
-    case "talk_conv":
-        return []Attribute{SipAttribute{}, DipAttribute{}}, false, false, nil
-    case "talk_src":
-        return []Attribute{SipAttribute{}}, false, false, nil
-    case "talk_dst":
-        return []Attribute{DipAttribute{}}, false, false, nil
-    case "apps_port":
-        return []Attribute{DportAttribute{}, ProtoAttribute{}}, false, false, nil
-    case "apps_dpi":
-        return []Attribute{L7ProtoAttribute{}}, false, false, nil
-    case "agg_talk_port":
-        return []Attribute{SipAttribute{}, DipAttribute{}, DportAttribute{}, ProtoAttribute{}}, false, false, nil
-    case "raw":
-        return []Attribute{SipAttribute{}, DipAttribute{}, DportAttribute{}, ProtoAttribute{}, L7ProtoAttribute{}}, true, true, nil
-    }
-    // We didn't match any of the preset query types, so we are dealing with
-    // a comma separated list of attribute names.
-    attributeNames := strings.Split(queryType, ",")
-    attributeSet := make(map[string]struct{})
-    for _, attributeName := range attributeNames {
-        switch attributeName {
-        case "time":
-            hasAttrTime = true
-            continue
-        case "iface":
-            hasAttrIface = true
-            continue
-        }
+	switch queryType {
+	case "talk_conv":
+		return []Attribute{SipAttribute{}, DipAttribute{}}, false, false, nil
+	case "talk_src":
+		return []Attribute{SipAttribute{}}, false, false, nil
+	case "talk_dst":
+		return []Attribute{DipAttribute{}}, false, false, nil
+	case "apps_port":
+		return []Attribute{DportAttribute{}, ProtoAttribute{}}, false, false, nil
+	case "agg_talk_port":
+		return []Attribute{SipAttribute{}, DipAttribute{}, DportAttribute{}, ProtoAttribute{}}, false, false, nil
+	case "raw":
+		return []Attribute{SipAttribute{}, DipAttribute{}, DportAttribute{}, ProtoAttribute{}}, true, true, nil
+	}
+	// We didn't match any of the preset query types, so we are dealing with
+	// a comma separated list of attribute names.
+	attributeNames := strings.Split(queryType, ",")
+	attributeSet := make(map[string]struct{})
+	for _, attributeName := range attributeNames {
+		switch attributeName {
+		case "time":
+			hasAttrTime = true
+			continue
+		case "iface":
+			hasAttrIface = true
+			continue
+		}
 
-        attribute, err := NewAttribute(attributeName)
-        if err != nil {
-            return nil, false, false, err
-        }
-        if _, exists := attributeSet[attribute.Name()]; !exists {
-            attributeSet[attribute.Name()] = struct{}{}
-            attributes = append(attributes, attribute)
-        }
-    }
-    return
+		attribute, err := NewAttribute(attributeName)
+		if err != nil {
+			return nil, false, false, err
+		}
+		if _, exists := attributeSet[attribute.Name()]; !exists {
+			attributeSet[attribute.Name()] = struct{}{}
+			attributes = append(attributes, attribute)
+		}
+	}
+	return
 }
 
 // Find out if any of the attributes are usable for a reverse DNS lookup
 // (e.g. check for IP attributes)
 func HasDNSAttributes(attributes []Attribute) bool {
-    for _, attr := range attributes {
-        if attr.Name() == "sip" || attr.Name() == "dip" {
-            return true
-        }
-    }
-    return false
+	for _, attr := range attributes {
+		if attr.Name() == "sip" || attr.Name() == "dip" {
+			return true
+		}
+	}
+	return false
 }

@@ -41,7 +41,7 @@ type Config struct {
 // parameter governing the number of seconds that are covered by a block
 const (
 	DB_WRITE_INTERVAL  int64 = 300
-	CSV_DEFAULT_SCHEMA       = "time,iface,sip,dip,dport,proto,l7proto,category,packets received,packets sent,%,data vol. received,data vol. sent,%"
+	CSV_DEFAULT_SCHEMA       = "time,iface,sip,dip,dport,proto,category,packets received,packets sent,%,data vol. received,data vol. sent,%"
 )
 
 type writeJob struct {

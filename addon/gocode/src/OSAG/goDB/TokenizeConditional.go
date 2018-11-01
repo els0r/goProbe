@@ -18,10 +18,10 @@
 package goDB
 
 import (
-    "bufio"
-    "bytes"
-    "regexp"
-    "strings"
+	"bufio"
+	"bytes"
+	"regexp"
+	"strings"
 )
 
 // SanitizeUserInput sanitizes a conditional string provided by the user. Its main purpose
@@ -41,65 +41,65 @@ import (
 //  error:   any error from golang's regex module
 //
 // NOTE:  the current implementation of GPDPIProtocols.go has to make sure that the map keys
-//        of "proto" and "l7proto" to numbers are all lower case
+//        of "proto" to numbers are all lower case
 func SanitizeUserInput(conditional string) (string, error) {
 
-    var (
-        sanitized string
-        r         *regexp.Regexp
-        err       error
-    )
+	var (
+		sanitized string
+		r         *regexp.Regexp
+		err       error
+	)
 
-    // expressions that count as "user grammar" for the different parts of the conditional
-    var grammarConversionMap = map[string][]string{
-        "!":  []string{"(^|\\s+)not\\s+"},
-        "!(": []string{"(^|\\s+)not[\\(\\[\\{]"}, // Users should be able to write "not{dport = 80}"
-        "&":  []string{"&&", "\\s+and\\s+", "\\*"},
-        "|":  []string{"\\|\\|", "\\s+or\\s+", "\\+"},
-        "(":  []string{"\\{", "\\["},
-        ")":  []string{"\\}", "\\]"},
-        "=":  []string{"\\s+eq\\s+", "\\s+\\-eq\\s+", "\\s+equals\\s+", "===", "=="},
-        "!=": []string{"\\s+neq\\s+", "\\s+-neq\\s+", "\\s+ne\\s+", "\\s+\\-ne\\s+"},
-        "<=": []string{"\\s+le\\s+", "\\s+\\-le\\s+", "\\s+leq\\s+", "\\s+-leq\\s+"},
-        ">=": []string{"\\s+ge\\s+", "\\s+\\-ge\\s+", "\\s+geq\\s+", "\\s+-geq\\s+"},
-        ">":  []string{"\\s+g\\s+", "\\s+\\-g\\s+", "\\s+gt\\s+", "\\s+\\-gt\\s+", "\\s+greater\\s+"},
-        "<":  []string{"\\s+l\\s+", "\\s+\\-l\\s+", "\\s+lt\\s+", "\\s+\\-lt\\s+", "\\s+less\\s+"},
-    }
+	// expressions that count as "user grammar" for the different parts of the conditional
+	var grammarConversionMap = map[string][]string{
+		"!":  []string{"(^|\\s+)not\\s+"},
+		"!(": []string{"(^|\\s+)not[\\(\\[\\{]"}, // Users should be able to write "not{dport = 80}"
+		"&":  []string{"&&", "\\s+and\\s+", "\\*"},
+		"|":  []string{"\\|\\|", "\\s+or\\s+", "\\+"},
+		"(":  []string{"\\{", "\\["},
+		")":  []string{"\\}", "\\]"},
+		"=":  []string{"\\s+eq\\s+", "\\s+\\-eq\\s+", "\\s+equals\\s+", "===", "=="},
+		"!=": []string{"\\s+neq\\s+", "\\s+-neq\\s+", "\\s+ne\\s+", "\\s+\\-ne\\s+"},
+		"<=": []string{"\\s+le\\s+", "\\s+\\-le\\s+", "\\s+leq\\s+", "\\s+-leq\\s+"},
+		">=": []string{"\\s+ge\\s+", "\\s+\\-ge\\s+", "\\s+geq\\s+", "\\s+-geq\\s+"},
+		">":  []string{"\\s+g\\s+", "\\s+\\-g\\s+", "\\s+gt\\s+", "\\s+\\-gt\\s+", "\\s+greater\\s+"},
+		"<":  []string{"\\s+l\\s+", "\\s+\\-l\\s+", "\\s+lt\\s+", "\\s+\\-lt\\s+", "\\s+less\\s+"},
+	}
 
-    // first, convert everything to lower case
-    r, err = regexp.Compile(".*")
-    if err != nil {
-        return sanitized, err
-    }
+	// first, convert everything to lower case
+	r, err = regexp.Compile(".*")
+	if err != nil {
+		return sanitized, err
+	}
 
-    sanitized = string(r.ReplaceAllFunc([]byte(conditional), bytes.ToLower))
+	sanitized = string(r.ReplaceAllFunc([]byte(conditional), bytes.ToLower))
 
-    // range over map to convert the individual entries
-    for condGrammarOp, userGrammarOps := range grammarConversionMap {
-        for _, userOp := range userGrammarOps {
-            r, err = regexp.Compile(userOp)
-            if err != nil {
-                return sanitized, err
-            }
+	// range over map to convert the individual entries
+	for condGrammarOp, userGrammarOps := range grammarConversionMap {
+		for _, userOp := range userGrammarOps {
+			r, err = regexp.Compile(userOp)
+			if err != nil {
+				return sanitized, err
+			}
 
-            sanitized = r.ReplaceAllString(sanitized, condGrammarOp)
-        }
-    }
+			sanitized = r.ReplaceAllString(sanitized, condGrammarOp)
+		}
+	}
 
-    return sanitized, err
+	return sanitized, err
 }
 
 func startsDelimiter(char byte) bool {
-    switch char {
-    case '!', '=', '<', '>', '|', '&', '(', ')', ' ', '\n', '\r', '\t':
-        return true
-    default:
-        return false
-    }
+	switch char {
+	case '!', '=', '<', '>', '|', '&', '(', ')', ' ', '\n', '\r', '\t':
+		return true
+	default:
+		return false
+	}
 }
 
 func endsDelimiter(char byte) bool {
-    return char == '='
+	return char == '='
 }
 
 // delimiterSplitFunc is the SplitFunc for delimiter tokens. Since delimiter tokens
@@ -110,60 +110,60 @@ func endsDelimiter(char byte) bool {
 // For the other six tokens ("<", ">", "!", "<=", ">=", "!=") we can simply look ahead
 // one character to determine what kind of token we are dealing with.
 func delimiterSplitFunc(data []byte, atEOF bool) (advance int, token []byte, err error) {
-    if len(data) == 0 {
-        return
-    }
+	if len(data) == 0 {
+		return
+	}
 
-    switch data[0] {
-    case '=', '|', '&', '(', ')':
-        advance = 1
-        token = data[0:1]
-        return
-    case ' ', '\n', '\r', '\t':
-        advance = 1
-        token = []byte{' '}
-        return
-    default:
-        if atEOF {
-            advance = 1
-            token = data[0:1]
-            return
-        }
-        if len(data) < 2 {
-            return 0, nil, nil
-        }
-        if endsDelimiter(data[1]) {
-            advance = 2
-            token = data[0:2]
-            return
-        } else {
-            advance = 1
-            token = data[0:1]
-            return
-        }
-    }
+	switch data[0] {
+	case '=', '|', '&', '(', ')':
+		advance = 1
+		token = data[0:1]
+		return
+	case ' ', '\n', '\r', '\t':
+		advance = 1
+		token = []byte{' '}
+		return
+	default:
+		if atEOF {
+			advance = 1
+			token = data[0:1]
+			return
+		}
+		if len(data) < 2 {
+			return 0, nil, nil
+		}
+		if endsDelimiter(data[1]) {
+			advance = 2
+			token = data[0:2]
+			return
+		} else {
+			advance = 1
+			token = data[0:1]
+			return
+		}
+	}
 }
 
 // wordSplitFunc is the SplitFunc for word tokens. It adds characters to its output token
 // until it encounters the start of a delimiter or the EOF.
 func wordSplitFunc(data []byte, atEOF bool) (advance int, token []byte, err error) {
-    if len(data) == 0 {
-        return
-    }
+	if len(data) == 0 {
+		return
+	}
 
-    for i := range data {
-        if startsDelimiter(data[i]) {
-            token = data[:advance]
-            return
-        } else {
-            advance++
-        }
-    }
-    if atEOF {
-        token = data[:advance]
-        return
-    }
-    return 0, nil, nil
+	for i := range data {
+		if startsDelimiter(data[i]) {
+			token = data[:advance]
+			return
+		} else {
+			advance++
+		}
+	}
+	if atEOF {
+		token = data[:advance]
+		return
+	}
+	return 0, nil, nil
 }
 
 // Split function for tokenization of the conditionalData. (For more info, see bufio.SplitFunc)
@@ -173,17 +173,17 @@ func wordSplitFunc(data []byte, atEOF bool) (advance int, token []byte, err erro
 // * Delimiter tokens delimit other tokens (word tokens and delimiter tokens). Delimiter tokens
 //   consist of all logical operators, comparison operators, parentheses, and white space characters.
 func conditionalSplitFunc(data []byte, atEOF bool) (advance int, token []byte, err error) {
-    if len(data) == 0 {
-        return
-    }
+	if len(data) == 0 {
+		return
+	}
 
-    // Our grammar is simple, so we can check whether we are dealing with a delimiter
-    // by looking at the first character.
-    if startsDelimiter(data[0]) {
-        return delimiterSplitFunc(data, atEOF)
-    } else {
-        return wordSplitFunc(data, atEOF)
-    }
+	// Our grammar is simple, so we can check whether we are dealing with a delimiter
+	// by looking at the first character.
+	if startsDelimiter(data[0]) {
+		return delimiterSplitFunc(data, atEOF)
+	} else {
+		return wordSplitFunc(data, atEOF)
+	}
 }
 
 // TokenizeConditional tokenizes the given conditional. Note that the tokenization is "loose":
@@ -194,22 +194,22 @@ func conditionalSplitFunc(data []byte, atEOF bool) (advance int, token []byte, e
 //
 // Limitations: Only ASCII is supported. May give strange results on fancy Unicode strings.
 func TokenizeConditional(condExpression string) ([]string, error) {
-    var condTokens []string
+	var condTokens []string
 
-    s := bufio.NewScanner(strings.NewReader(condExpression))
+	s := bufio.NewScanner(strings.NewReader(condExpression))
 
-    split := conditionalSplitFunc
-    s.Split(split)
+	split := conditionalSplitFunc
+	s.Split(split)
 
-    for s.Scan() {
-        tok := string(s.Bytes())
-        if tok != " " {
-            condTokens = append(condTokens, tok)
-        }
-    }
-    if err := s.Err(); err != nil {
-        return condTokens, err
-    }
+	for s.Scan() {
+		tok := string(s.Bytes())
+		if tok != " " {
+			condTokens = append(condTokens, tok)
+		}
+	}
+	if err := s.Err(); err != nil {
+		return condTokens, err
+	}
 
-    return condTokens, nil
+	return condTokens, nil
 }

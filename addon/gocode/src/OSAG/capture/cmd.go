@@ -128,13 +128,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Initialize DPI library
-	if err := goProbe.InitDPI(); err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to initialize DPI: %s\n", err)
-		os.Exit(1)
-	}
-	defer goProbe.DeleteDPI()
-
 	// Config file
 	var err error
 	config, err = capconfig.ParseFile(flagConfigFile)

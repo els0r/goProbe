@@ -167,7 +167,6 @@ func dbData(iface string, timestamp int64, aggFlowMap AggFlowMap) ([COLIDX_COUNT
 		dbData[DIP_COLIDX] = append(dbData[DIP_COLIDX], K.Dip[:]...)
 		dbData[SIP_COLIDX] = append(dbData[SIP_COLIDX], K.Sip[:]...)
 		dbData[DPORT_COLIDX] = append(dbData[DPORT_COLIDX], K.Dport[:]...)
-		dbData[L7PROTO_COLIDX] = append(dbData[L7PROTO_COLIDX], K.L7proto[:]...)
 		dbData[PROTO_COLIDX] = append(dbData[PROTO_COLIDX], K.Protocol)
 	}
 

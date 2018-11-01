@@ -40,8 +40,6 @@ const (
 	OUTCOL_DIP
 	OUTCOL_DPORT
 	OUTCOL_PROTO
-	OUTCOL_L7PROTOID
-	OUTCOL_L7PROTOCATEGORY
 	OUTCOL_INPKTS
 	OUTCOL_INPKTSPERCENT
 	OUTCOL_INBYTES
@@ -87,9 +85,6 @@ func columns(hasAttrTime, hasAttrIface bool, attributes []goDB.Attribute, d Dire
 			cols = append(cols, OUTCOL_PROTO)
 		case "dport":
 			cols = append(cols, OUTCOL_DPORT)
-		case "l7proto":
-			// for the l7proto field, there are two output columns
-			cols = append(cols, OUTCOL_L7PROTOID, OUTCOL_L7PROTOCATEGORY)
 		}
 	}
 
@@ -174,10 +169,6 @@ func extract(format Formatter, ips2domains map[string]string, totals Counts, e E
 		return format.String(goDB.DportAttribute{}.ExtractStrings(&e.k)[0])
 	case OUTCOL_PROTO:
 		return format.String(goDB.ProtoAttribute{}.ExtractStrings(&e.k)[0])
-	case OUTCOL_L7PROTOID:
-		return format.String(goDB.L7ProtoAttribute{}.ExtractStrings(&e.k)[0])
-	case OUTCOL_L7PROTOCATEGORY:
-		return format.String(goDB.L7ProtoAttribute{}.ExtractStrings(&e.k)[1])
 
 	case OUTCOL_INBYTES, OUTCOL_BOTHBYTESRCVD:
 		return format.Size(e.nBr)
@@ -359,8 +350,6 @@ func NewCSVTablePrinter(b basePrinter) *CSVTablePrinter {
 		"dip",
 		"dport",
 		"proto",
-		"l7proto",
-		"category",
 		"packets", "%", "data vol.", "%",
 		"packets", "%", "data vol.", "%",
 		"packets", "%", "data vol.", "%",
@@ -452,8 +441,6 @@ var jsonKeys = [COUNT_OUTCOL]string{
 	"dip",
 	"dport",
 	"proto",
-	"l7proto",
-	"category",
 	"packets", "packets_percent", "bytes", "bytes_percent",
 	"packets", "packets_percent", "bytes", "bytes_percent",
 	"packets", "packets_percent", "bytes", "bytes_percent",
@@ -624,8 +611,6 @@ func NewTextTablePrinter(b basePrinter, numFlows int, resolveTimeout time.Durati
 		"dip",
 		"dport",
 		"proto",
-		"l7proto",
-		"category",
 		"in", "%", "in", "%",
 		"out", "%", "out", "%",
 		"in+out", "%", "in+out", "%",
@@ -751,8 +736,6 @@ var influxDBKeys = [COUNT_OUTCOL]string{
 	"dip",
 	"dport",
 	"proto",
-	"l7proto",
-	"category",
 	"packets", "packets_percent", "bytes", "bytes_percent",
 	"packets", "packets_percent", "bytes", "bytes_percent",
 	"packets", "packets_percent", "bytes", "bytes_percent",
@@ -832,8 +815,6 @@ func NewInfluxDBTablePrinter(b basePrinter) *InfluxDBTablePrinter {
 	isFieldCol[OUTCOL_DIP] = true
 	isFieldCol[OUTCOL_DPORT] = true
 	isTagCol[OUTCOL_PROTO] = true
-	isTagCol[OUTCOL_L7PROTOID] = true
-	isTagCol[OUTCOL_L7PROTOCATEGORY] = true
 	isFieldCol[OUTCOL_INPKTS] = true
 	// ignore OUTCOL_INPKTSPERCENT
 	isFieldCol[OUTCOL_INBYTES] = true

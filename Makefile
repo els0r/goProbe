@@ -32,28 +32,28 @@
 # We use the 'OSAG' build tag to switch between implementations. When the OSAG
 # tag is specified, we use the internal/confidential code, otherwise the
 # public code is used.
+GO_BUILDTAGS     = netcgo public
+GO_LDFLAGS       = -X OSAG/version.version=$(VERSION) -X OSAG/version.commit=$(GIT_DIRTY)$(GIT_COMMIT) -X OSAG/version.builddate=$(TODAY)
+
+# easy to use build command for everything related goprobe
+GPBUILD     = go build -tags '$(GO_BUILDTAGS)' -ldflags '$(GO_LDFLAGS)' -a
+GPTESTBUILD = go test -c -tags '$(GO_BUILDTAGS)' -ldflags '$(GO_LDFLAGS)' -a
 
 SHELL := /bin/bash
 
 PKG    = goProbe
 PREFIX = /opt/ntm
 
-GO_BUILDTAGS     = netcgo public
-GO_LDFLAGS       = -X OSAG/version.version=$(VERSION) -X OSAG/version.commit=$(GIT_DIRTY)$(GIT_COMMIT) -X OSAG/version.builddate=$(TODAY) -X OSAG/query.goprobeConfigPath=$(PREFIX)/$(PKG)/etc/goprobe.conf
-
-# easy to use build command for everything related goprobe
-GPBUILD     = go build -tags '$(GO_BUILDTAGS)' -ldflags '$(GO_LDFLAGS)' -a
-GPTESTBUILD = go test -c -tags '$(GO_BUILDTAGS)' -ldflags '$(GO_LDFLAGS)' -a
-
 # downloader used for grabbing the external code. Change this if it does not
-# correspond to the usual way you download files on your system DOWNLOAD	= curl --progress-bar -L --url
+# correspond to the usual way you download files on your system
+DOWNLOAD	= curl --progress-bar -L --url
 
 # GoLang main version
 GO_PRODUCT	    = goProbe
 GO_QUERY        = goQuery
 
 GOLANG		    = go1.11.1.linux-amd64
-GOLANG_SITE	    = https://storage.googleapis.com/golang
+GOLANG_SITE	  = https://storage.googleapis.com/golang
 GO_SRCDIR	    = $(PWD)/addon/gocode/src
 
 # for providing the go compiler with the right env vars
@@ -81,7 +81,7 @@ LIBTRACE_DIR	:= $(PWD)/$(LIBTRACE)
 LIBPROTOIDENT	= libprotoident-2.0.7
 LPIDENT_SITE	= http://research.wand.net.nz/software/libprotoident
 LPIDENT_DIR	    := $(PWD)/$(LIBPROTOIDENT)
-export LD_LIBRARY_PATH := $(PWD)/$(PCAP):$(PWD)/$(LIBPROTOIDENT)/lib/.libs:$(PWD)/$(LIBTRACE)/lib/.libs:$(PWD)/addon/dpi
+export LD_LIBRARY_PATH := $(PWD)/$(PCAP)
 
 # for building with cgo
 export CGO_CFLAGS := -I$(PCAP_DIR) -I$(GO_SRCDIR)/OSAG/goDB/lz4
@@ -100,13 +100,6 @@ fetch:
 	echo "*** downloading $(PCAP) ***"
 	$(DOWNLOAD) $(PCAP_SITE)/$(PCAP).tar.gz -O
 
-	echo "*** downloading $(LIBTRACE) ***"
-	$(DOWNLOAD) $(LIBTRACE_SITE)/$(LIBTRACE).tar.bz2 -O
-
-	echo "*** downloading/patching $(LIBPROTOIDENT) ***"
-	$(DOWNLOAD) $(LPIDENT_SITE)/$(LIBPROTOIDENT).tar.gz -O
-
-
 unpack:
 	echo "*** unpacking $(GOLANG) ***"
 	tar xf $(GOLANG).tar.gz
@@ -121,12 +114,6 @@ unpack:
 	echo "*** unpacking dependency $(PCAP) ***"
 	tar xf $(PCAP).tar.gz
 
-	echo "*** unpacking $(LIBTRACE) ***"
-	tar xf $(LIBTRACE).tar.bz2
-
-	echo "*** unpacking $(LIBPROTOIDENT) ***"
-	tar xf $(LIBPROTOIDENT).tar.gz
-
 patch:
 	echo "*** patching dependency gopacket_$(GOPACKET) ***"
 	patch -Np0 < addon/gopacket-v$(GOPACKET).patch
@@ -138,9 +125,6 @@ patch:
 
 	echo "*** patching dependency $(PCAP) ***"
 	patch -Np0 < addon/libpcap-$(PCAP_VERSION).patch
-
-	echo "*** patching dependency $(LIBPROTOIDENT) ***"
-	patch -Np0 < addon/libprotoident.patch
 
 configure:
 	echo "*** configuring dependency $(PCAP) ***"
@@ -156,21 +140,9 @@ compile:
 	echo "*** compiling lz4 ***"
 	cd $(GO_SRCDIR)/OSAG/goDB/lz4; make -s >> /dev/null;
 
-	echo "*** configuring/compiling $(LIBTRACE) ***"
-	cd $(LIBTRACE); sh configure --prefix=$(PREFIX)/$(PKG) CFLAGS='-I$(PCAP_DIR)' CPPFLAGS='-I$(PCAP_DIR)' LDFLAGS='-L$(PCAP_DIR) -lpcap' --quiet >> /dev/null
-	cd $(LIBTRACE); make -s >> /dev/null
-
-	echo "*** configuring/compiling dependency $(LIBPROTOIDENT) ***"
-	cd $(LIBPROTOIDENT); sh configure --with-tools=no --prefix=$(PREFIX)/$(PKG) CXXFLAGS='-I$(LIBTRACE_DIR)/lib' LDFLAGS='-L$(LIBTRACE_DIR)/lib/.libs' --quiet >> /dev/null
-	cd $(LIBPROTOIDENT); make -j2 -s >> /dev/null
-
-	echo "*** compiling ProtoId C-Wrapper ***"
-	cd addon/dpi; make -s >> /dev/null
-
 	# make the protocol-category mappings available to goquery using the
 	# compiled helper binary and a bash script for IP protocols
-	addon/dpi/serialize_prot_list > $(GO_SRCDIR)/OSAG/goDB/GPDPIProtocols.go
-	addon/dpi/serialize_ipprot_list.sh >> $(GO_SRCDIR)/OSAG/goDB/GPDPIProtocols.go
+	addon/serialize_ipprot_list.sh > $(GO_SRCDIR)/OSAG/goDB/GPDPIProtocols.go
 
 	# make all reverse lookup keys lowercase
 	sed -i 's/\"\(.*\)\": \([0-9]*\)/\L"\1": \2/g' $(GO_SRCDIR)/OSAG/goDB/GPDPIProtocols.go
@@ -204,15 +176,6 @@ go_install:
 	cp addon/goprobe.init absolute/etc/init.d/goprobe.init
 	sed "s#PREFIX=#PREFIX=$(PREFIX)#g" -i absolute/etc/init.d/goprobe.init
 
-	echo "*** installing $(LIBTRACE) ***"
-	cd $(LIBTRACE); make -s install DESTDIR=$(PWD)/absolute >> /dev/null
-
-	echo "*** installing $(LIBPROTOIDENT) ***"
-	cd $(LIBPROTOIDENT); make -s install DESTDIR=$(PWD)/absolute >> /dev/null
-
-	# move the libProtoId.so library and the protocol list to the correct location
-	cp addon/dpi/libProtoId.so absolute$(PREFIX)/$(PKG)/lib
-
 	echo "*** generating example configuration ***"
 	echo -e "{\n\t\"db_path\" : \"$(PREFIX)/$(PKG)/db\",\n\t\"interfaces\" : {\n\t\t\"eth0\" : {\n\t\t\t\"bpf_filter\" : \"not arp and not icmp\",\n\t\t\t\"buf_size\" : 2097152,\n\t\t\t\"promisc\" : false\n\t\t}\n\t}\n}" > absolute$(PREFIX)/$(PKG)/etc/goprobe.conf.example
 
@@ -228,10 +191,6 @@ go_install:
 	# binary cleaning
 	# libpcap binaries
 	rm -f absolute$(PREFIX)/$(PKG)/bin/pcap-config
-
-	# libtrace binaries
-	rm -f absolute$(PREFIX)/$(PKG)/bin/trace*
-	rm -f absolute$(PREFIX)/$(PKG)/bin/wandiocat
 
 	# library cleaning
 	rm -f absolute$(PREFIX)/$(PKG)/lib/*.la
@@ -272,15 +231,9 @@ clean:
 	rm -rf $(GO_SRCDIR)/$(GOPACKETDIR) gopacket-$(GOPACKET_REV) gopacket-$(GOPACKET) gopacket $(GO_SRCDIR)/code.google.com v$(GOPACKET).tar.gz $(GO_SRCDIR)/OSAG/capture/$(GO_PRODUCT) $(GO_SRCDIR)/OSAG/query/$(GO_QUERY)
 	rm -rf $(PCAP) $(PCAP).tar.gz
 
-	echo "*** removing $(LIBTRACE) and $(LIBPROTOIDENT) ***"
-	rm -rf $(LIBTRACE) $(LIBPROTOIDENT)
-	rm -f $(LIBTRACE).tar.bz2 $(LIBPROTOIDENT).tar.gz
-	rm -f l7protocols.json
-	rm -f addon/dpi/serialize_prot_list
-
 	rm -rf $(PKG).tar.bz2
 
-	cd addon/lz4; make clean > /dev/null
+	cd $(GO_SRCDIR)/OSAG/goDB/lz4; make clean > /dev/null
 
 all: clean fetch unpack patch configure compile install
 
