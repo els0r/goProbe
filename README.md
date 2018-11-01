@@ -210,7 +210,7 @@ _goquery() {
 goProbe is currently set up to run on Linux based systems. Tested versions include:
 
 * Ubuntu 14.04/15.04
-* Debian 7/8
+* Debian 7/8/9
 * Fedora 28
 
 Authors & Contributors
