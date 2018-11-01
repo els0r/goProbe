@@ -40,7 +40,7 @@ v2.0 lorenzb,els0r
     - add unit and system (i.e. output consistency) tests
     - extensive bash completion with support for condition grammar, interface names, query types, ...
 
-v2.1 fako1024,els0r
+v2.1.0 fako1024,els0r
     - code refresh from Open Systems (functionality additions to query tool)
     - upgrade to libpcap 1.9.0 and gopacket 1.1.15
     - remove layer 7 detection and all its dependencies (libprotoident, libtrace) - drastic improvements to compilation speed and system resource usage footprint
