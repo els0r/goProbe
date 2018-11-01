@@ -17,8 +17,8 @@ package goProbe
 import (
     "fmt"
 
-    "code.google.com/p/gopacket"
-    "code.google.com/p/gopacket/layers"
+    "github.com/google/gopacket"
+    "github.com/google/gopacket/layers"
 )
 
 var (
@@ -27,6 +27,12 @@ var (
     BYTE_ARR_4_ZERO  = [4]byte{0x00, 0x00, 0x00, 0x00}
     BYTE_ARR_16_ZERO = [16]byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
     BYTE_ARR_37_ZERO = [37]byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
+)
+
+const (
+    TCP byte = 6
+    UDP      = 17
+    ESP      = 50
 )
 
 // typedef that allows us to replace the type of hash
@@ -103,6 +109,9 @@ func (p *GPPacket) Populate(srcPacket gopacket.Packet) error {
         p.dirInbound = true
     }
 
+    // for ESP traffic (which lacks a transport layer)
+    var skipTransport bool
+
     // decode packet
     if srcPacket.NetworkLayer() != nil {
         nw_l := srcPacket.NetworkLayer().LayerContents()
@@ -129,20 +138,30 @@ func (p *GPPacket) Populate(srcPacket gopacket.Packet) error {
 
             p.protocol = nw_l[9]
 
-            // check for IP fragmentation
-            fragBits := (0xe0 & nw_l[6]) >> 5
-            fragOffset := (uint16(0x1f&nw_l[6]) << 8) | uint16(nw_l[7])
+            // only run the fragmentation checks on fragmented TCP/UDP packets. For
+            // ESP, we don't have any transport layer information so there's no
+            // need to distinguish between ESP fragments or other ESP traffic
+            //
+            // Note: an ESP fragment will carry fragmentation information like any
+            // other IP packet. The fragment offset will of be MTU - 20 bytes (IP layer).
+            if p.protocol == ESP {
+                skipTransport = true
+            } else {
+                // check for IP fragmentation
+                fragBits := (0xe0 & nw_l[6]) >> 5
+                fragOffset := (uint16(0x1f&nw_l[6]) << 8) | uint16(nw_l[7])
 
-            // return decoding error if the packet carries anything other than the
-            // first fragment, i.e. if the packet lacks a transport layer header
-            if fragOffset != 0 {
-                return fmt.Errorf("Fragmented IP packet: offset: %d flags: %d", fragOffset, fragBits)
+                // return decoding error if the packet carries anything other than the
+                // first fragment, i.e. if the packet lacks a transport layer header
+                if fragOffset != 0 {
+                    return fmt.Errorf("Fragmented IP packet: offset: %d flags: %d", fragOffset, fragBits)
+                }
             }
         case layers.LayerTypeIPv6:
             p.protocol = nw_l[6]
         }
 
-        if srcPacket.TransportLayer() != nil {
+        if !skipTransport && srcPacket.TransportLayer() != nil {
             // get layer contents
             tp_l := srcPacket.TransportLayer().LayerContents()
             tpHeaderSize = uint16(len(tp_l))
@@ -155,13 +174,13 @@ func (p *GPPacket) Populate(srcPacket gopacket.Packet) error {
             psrc, dsrc := srcPacket.TransportLayer().TransportFlow().Endpoints()
 
             // only get raw bytes if we actually have TCP or UDP
-            if p.protocol == 6 || p.protocol == 17 {
+            if p.protocol == TCP || p.protocol == UDP {
                 copy(p.sport[:], psrc.Raw())
                 copy(p.dport[:], dsrc.Raw())
             }
 
             // if the protocol is TCP, grab the flag information
-            if p.protocol == 6 {
+            if p.protocol == TCP {
                 if tpHeaderSize < 14 {
                     return fmt.Errorf("Incomplete TCP header: %d", tp_l)
                 }
@@ -179,7 +198,22 @@ func (p *GPPacket) Populate(srcPacket gopacket.Packet) error {
             p.l7payloadSize = p.numBytes - tpHeaderSize - nlHeaderSize
         }
     } else {
-        return fmt.Errorf("network layer decoding failed")
+
+        // extract error if available
+        if err := srcPacket.ErrorLayer(); err != nil {
+
+            // enrich it with concrete info about which layer failed
+            var layers string
+            for _, layer := range srcPacket.Layers() {
+                layers += layer.LayerType().String() + "/"
+            }
+            layers = layers[:len(layers)-1]
+            return fmt.Errorf("%s: %s", layers, err.Error())
+        }
+
+        // if the error layer is nil, the packet belongs to a protocol which does not contain
+        // IP layers and hence no useful information for goquery
+        return nil
     }
 
     p.computeEPHash()

@@ -119,21 +119,18 @@ var helpMap map[string]string = map[string]string{
 
         Lower / upper bound on flow timestamp. Allowed formats are:
           1357800683                            EPOCH
-          2006-01-02 15:04:05 -0700 MST         GO DEFAULT FORMAT
-          2006-01-02 15:04:05 CEST              GO ADAPTED FORMAT
-          2006-01-02 15:04 CEST
-          2006-01-02 15:04:05
-          2006-01-02 15:04
+          Mon Jan _2 15:04:05 2006              ANSIC
           Mon Jan 02 15:04:05 -0700 2006        RUBY DATE
-          02 Jan 06 15:04 MST                   RFC822
-          02 Jan 06 15:04 -0700                 RFC822Z
-          Monday, 02-Jan-06 15:04:05 MST        RFC850
-          Mon, 02 Jan 2006 15:04:05 MST         RFC1123
-          Mon, 02 Jan 2006 15:04:05 -0700       RFC1123Z
+          02 Jan 06 15:04 -0700                 RFC822 with numeric zone
+          2006-01-02T15:04:05Z07:00             RFC3339
+          02 Jan 06 15:04 -0700                 RFC822 with numeric zone
+          Mon, 02 Jan 2006 15:04:05 -0700       RFC1123 with numeric zone
 
           02.01.2006 15:04:05                   CUSTOM
           02.01.2006 15:04
           02.01.06 15:04
+          2006-01-02 15:04:05
+          2006-01-02 15:04
           2.1.06 15:04:05
           2.1.06 15:04
           2.1.2006 15:04:05

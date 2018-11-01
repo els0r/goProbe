@@ -17,9 +17,9 @@ import (
     "sync"
     "time"
 
-    "code.google.com/p/gopacket"
-    "code.google.com/p/gopacket/layers"
-    "code.google.com/p/gopacket/pcap"
+    "github.com/google/gopacket"
+    "github.com/google/gopacket/layers"
+    "github.com/google/gopacket/pcap"
 
     "OSAG/goDB"
 )
@@ -88,6 +88,16 @@ type CaptureStatus struct {
     Stats CaptureStats
 }
 
+type errorMap map[string]int
+
+func (e errorMap) String() string {
+    var str string
+    for err, count := range e {
+        str += fmt.Sprintf(" %s(%d);", err, count)
+    }
+    return str
+}
+
 //////////////////////// capture commands ////////////////////////
 
 // captureCommand is an interface implemented by (you guessed it...)
@@ -106,6 +116,10 @@ type captureCommandStatus struct {
     returnChan chan<- CaptureStatus
 }
 
+type captureCommandErrors struct {
+    returnChan chan<- errorMap
+}
+
 func (cmd captureCommandStatus) execute(c *Capture) {
     var result CaptureStatus
 
@@ -118,6 +132,10 @@ func (cmd captureCommandStatus) execute(c *Capture) {
     }
 
     cmd.returnChan <- result
+}
+
+func (cmd captureCommandErrors) execute(c *Capture) {
+    cmd.returnChan <- c.errMap
 }
 
 type captureCommandUpdate struct {
@@ -320,6 +338,9 @@ type Capture struct {
 
     pcapHandle   *pcap.Handle
     packetSource *gopacket.PacketSource
+
+    // error map for logging errors more properly
+    errMap errorMap
 }
 
 // NewCapture creates a new Capture associated with the given iface.
@@ -335,10 +356,11 @@ func NewCapture(iface string, config CaptureConfig) *Capture {
             Pcap:          &pcap.Stats{},
             PacketsLogged: 0,
         },
-        0,  // packetsLogged
+        0, // packetsLogged
         NewFlowLog(),
         nil, // pcapHandle
         nil, // packetSource
+        make(map[string]int),
     }
     go c.process()
     return c
@@ -389,10 +411,24 @@ func (c *Capture) process() {
         } else {
             errcount++
 
+            // collect the error. The errors value is the key here. Otherwise, the address
+            // of the error would be taken, which results in a non-minimal set of errors
+            if _, exists := c.errMap[err.Error()]; !exists {
+                // log the packet to the pcap error logs
+                if logerr := PacketLog.Log(c.iface, packet, CAPTURE_SNAPLEN); logerr != nil {
+                    SysLog.Info("failed to log faulty packet: " + logerr.Error())
+                }
+            }
+
+            c.errMap[err.Error()]++
+
             // shut down the interface thread if too many consecutive decoding failures
             // have been encountered
             if errcount > CAPTURE_ERROR_THRESHOLD {
-                return fmt.Errorf("The last %d packets could not be decoded", CAPTURE_ERROR_THRESHOLD)
+                return fmt.Errorf("The last %d packets could not be decoded: [%s ]",
+                    CAPTURE_ERROR_THRESHOLD,
+                    c.errMap.String(),
+                )
             }
         }
 
@@ -481,7 +517,10 @@ func (c *Capture) initialize() {
     // layers are only decoded once they are needed. Additionally, this is imperative
     // when GRE-encapsulated packets are decoded because otherwise the layers cannot
     // be detected correctly.
-    c.packetSource.DecodeOptions = gopacket.Lazy
+    // In addition to lazy decoding, the zeroCopy feature is enabled to avoid allocation
+    // of a full copy of each gopacket, just to copy over a few elements into a GPPacket
+    // structure afterwards.
+    c.packetSource.DecodeOptions = gopacket.DecodeOptions{Lazy: true, NoCopy: true}
 
     c.setState(CAPTURE_STATE_INITIALIZED)
 }
@@ -540,6 +579,10 @@ func (c *Capture) reset() {
     c.pcapHandle = nil
     c.packetSource = nil
     c.setState(CAPTURE_STATE_UNINITIALIZED)
+
+    // reset the error map. The GC will take care of the previous
+    // one
+    c.errMap = make(map[string]int)
 }
 
 // needReinitialization checks whether we need to reinitialize the capture
@@ -633,6 +676,20 @@ func (c *Capture) Status() (result CaptureStatus) {
 
     ch := make(chan CaptureStatus, 1)
     c.cmdChan <- captureCommandStatus{ch}
+    return <-ch
+}
+
+// Error map status call
+func (c *Capture) Errors() (result errorMap) {
+    c.mutex.Lock()
+    defer c.mutex.Unlock()
+
+    if c.closed {
+        panic("Capture is closed")
+    }
+
+    ch := make(chan errorMap, 1)
+    c.cmdChan <- captureCommandErrors{ch}
     return <-ch
 }
 

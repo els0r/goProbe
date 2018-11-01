@@ -40,7 +40,7 @@ var resolveTests = []struct {
     {
         "sip = google-public-dns-a.google.com | dip = google-public-dns-a.google.com", //
         2 * time.Second,
-        "((sip = 2001:4860:4860::8888 | sip = 8.8.8.8) | (dip = 2001:4860:4860::8888 | dip = 8.8.8.8))",
+        "((sip = 8.8.8.8 | sip = 2001:4860:4860::8888) | (dip = 8.8.8.8 | dip = 2001:4860:4860::8888))",
         true,
     },
     // do we leave non-sip and non-dip attributes untouched?
@@ -72,7 +72,7 @@ var resolveTests = []struct {
 //   change this at any moment.
 //
 // It's probably still better to have a slightly brittle test than to have no test.
-func TestResolve(t *testing.T) {
+func TestResolveInConditional(t *testing.T) {
     for _, test := range resolveTests {
         tokens, err := TokenizeConditional(test.conditional)
         if err != nil {

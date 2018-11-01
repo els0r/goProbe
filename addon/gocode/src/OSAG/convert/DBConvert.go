@@ -13,300 +13,390 @@
 package main
 
 import (
-    // OSAG DB packages
-    "OSAG/goDB"
+	// OSAG DB packages
+	"OSAG/goDB"
 
-    "bufio"
-    "os"
-    "os/exec"
-    "runtime"
-    "runtime/debug"
-    "strconv"
-    "strings"
+	"bufio"
+	"os"
+	"os/exec"
+	"runtime"
+	"runtime/debug"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
 
-    "flag"
-    "fmt"
+	"flag"
+	"fmt"
 )
 
 type Config struct {
-    Iface    string
-    FilePath string
-    SavePath string
-    NumLines int
+	FilePath string
+	SavePath string
+	Iface    string
+	Schema   string
+	NumLines int
 }
 
 // parameter governing the number of seconds that are covered by a block
-const DB_WRITE_INTERVAL int64 = 300
+const (
+	DB_WRITE_INTERVAL  int64 = 300
+	CSV_DEFAULT_SCHEMA       = "time,iface,sip,dip,dport,proto,l7proto,category,packets received,packets sent,%,data vol. received,data vol. sent,%"
+)
+
+type writeJob struct {
+	iface  string
+	tstamp int64
+	data   goDB.AggFlowMap
+}
+
+type CSVConverter struct {
+	// map field index to how it should be parsed
+	KeyParsers map[int]goDB.StringKeyParser
+	ValParsers map[int]goDB.StringValParser
+}
+
+func NewCSVConverter() *CSVConverter {
+	return &CSVConverter{
+		make(map[int]goDB.StringKeyParser),
+		make(map[int]goDB.StringValParser),
+	}
+}
+
+func (c *CSVConverter) readSchema(schema string) error {
+
+	fields := strings.Split(schema, ",")
+
+	var (
+		canParse  = make([]string, len(fields))
+		cantParse = make([]string, len(fields))
+	)
+
+	// first try to extract all attributes which need to be parsed
+	for ind, field := range fields {
+		parser := goDB.NewStringKeyParser(field)
+
+		// check if a NOP parser was created. If so, try to create
+		// a value parser from the field
+		if _, ok := parser.(*goDB.NOPStringParser); ok {
+			parser := goDB.NewStringValParser(field)
+
+			if _, ok := parser.(*goDB.NOPStringParser); ok {
+				cantParse = append(cantParse, field)
+			} else {
+				c.ValParsers[ind] = parser
+				canParse = append(canParse, field)
+			}
+		} else {
+			c.KeyParsers[ind] = parser
+			canParse = append(canParse, field)
+		}
+	}
+
+	// if only NOP parsers were created, it means that the
+	// schema is fully unreadable
+	if len(cantParse) == len(fields) {
+		return fmt.Errorf("not a single field can be parsed in the provided schema")
+	}
+
+	// print parseable/unparseable fields:
+	//    fmt.Println("SCHEMA:\n Can parse:\n\t", canParse, "\n Will not parse:\n\t", cantParse)
+	_, _ = canParse, cantParse
+	return nil
+}
+
+func (c *CSVConverter) parsesIface() bool {
+	for _, p := range c.KeyParsers {
+		if _, ok := p.(*goDB.IfaceStringParser); ok {
+			return true
+		}
+	}
+	return false
+}
 
 func parseCommandLineArgs(cfg *Config) {
-    flag.StringVar(&cfg.Iface, "i", "", "Interface from which the data originated")
-    flag.StringVar(&cfg.FilePath, "f", "", "CSV file from which the data should be read")
-    flag.StringVar(&cfg.SavePath, "s", "", "Folder to which the .gpf files should be written")
-    flag.IntVar(&cfg.NumLines, "n", 111222333444, "Number of rows to read from the CSV file")
-    flag.Parse()
+	flag.StringVar(&cfg.FilePath, "in", "", "CSV file from which the data should be read")
+	flag.StringVar(&cfg.SavePath, "out", "", "Folder to which the .gpf files should be written")
+	flag.StringVar(&cfg.Schema, "schema", "", "Structure of CSV file (e.g. \"sip,dip,dport,time\"")
+	flag.StringVar(&cfg.Iface, "iface", "", "Interface from which CSV data was created")
+	flag.IntVar(&cfg.NumLines, "n", 111222333444, "Number of rows to read from the CSV file")
+	flag.Parse()
+}
+
+func printUsage(msg string) {
+	fmt.Println(msg + ".\nUsage: ./goConvert -in <input file path> -out <output folder> [-n <number of lines to read> -schema <schema string> -iface <interface>]")
+	return
 }
 
 func main() {
 
-    // specify number of threads that can be used
-    numCpu := runtime.NumCPU()
-    runtime.GOMAXPROCS(numCpu)
+	// parse command line arguments
+	var config Config
+	parseCommandLineArgs(&config)
 
-    // parse command line arguments
-    var config Config
-    parseCommandLineArgs(&config)
+	// sanity check the input
+	if config.FilePath == "" || config.SavePath == "" {
+		printUsage("Empty path specified")
+		os.Exit(1)
+	}
 
-    // sanity check the input
-    if config.FilePath == "" || config.SavePath == "" {
-        fmt.Println("Empty path specified. Usage: ./goConvert -i <interface> -f <file path> -s <save path>")
-        return
-    }
+	// get number of lines to read in the specified file
+	cmd := exec.Command("wc", "-l", config.FilePath)
+	out, cmderr := cmd.Output()
+	if cmderr != nil {
+		fmt.Println("Could not obtain line count on file", config.FilePath)
+		os.Exit(1)
+	}
 
-    if config.Iface == "" {
-        fmt.Println("No interface specified. Usage: ./goConvert -i <interface> -f <file path> -s <save path>")
-        return
-    }
+	nlString := strings.Split(string(out), " ")
+	nlInFile, _ := strconv.ParseInt(nlString[0], 10, 32)
+	if int(nlInFile) < config.NumLines && nlInFile > 0 {
+		config.NumLines = int(nlInFile)
+	}
 
-    // get number of lines to read in the specified file
-    cmd := exec.Command("wc", "-l", config.FilePath)
-    out, cmderr := cmd.Output()
-    if cmderr != nil {
-        fmt.Println("Could not execute line count on file", config.FilePath)
-        return
-    }
+	fmt.Printf("Converting %d rows in file %s\n", config.NumLines, config.FilePath)
 
-    nlString := strings.Split(string(out), " ")
-    nl_in_file, _ := strconv.ParseInt(nlString[0], 10, 32)
-    if int(nl_in_file) < config.NumLines && nl_in_file > 0 {
-        config.NumLines = int(nl_in_file)
-    }
+	// init goprobe log
+	goDB.InitDBLog()
 
-    fmt.Printf("Converting %d rows in file %s\n", config.NumLines, config.FilePath)
+	// open file
+	var (
+		file *os.File
+		err  error
+	)
 
-    // create channel to pass to the storage writer
-    dataChan := make(chan goDB.DBData)
-    doneChan := make(chan bool)
+	if file, err = os.Open(config.FilePath); err != nil {
+		fmt.Println("File open error: " + err.Error())
+		os.Exit(1)
+	}
 
-    // init goprobe log
-    goDB.InitDBLog()
+	// create a CSV converter
+	var csvconv = NewCSVConverter()
+	if config.Schema != "" {
+		if err = csvconv.readSchema(config.Schema); err != nil {
+			fmt.Printf("Failed to read schema: %s\n", err.Error())
+			os.Exit(1)
+		}
+	}
 
-    // open file
-    var (
-        file                  *os.File
-        err                   error
-        br, bs, pr, ps        []byte
-        dip, sip              []byte
-        dport, l7proto, proto []byte
-    )
+	// map writers. There's one for each interface
+	var mapWriters = make(map[string]*goDB.DBWriter)
 
-    if file, err = os.Open(config.FilePath); err != nil {
-        fmt.Println("File open error: " + err.Error())
-    }
+	// scan file line by line
+	scanner := bufio.NewScanner(file)
+	var (
+		linesRead          = 1
+		percDone, prevPerc int
 
-    // spawn database writer
-    writer := goDB.NewDBStorageWrite(config.SavePath)
-    writer.WriteFlowsToDatabase(int64(0), dataChan, doneChan)
+		// flow map which is populated from the CSV file. This is a map of flow maps due to the fact
+		// that several interfaces may be handles in a single CSV file. Thus, there is one map per
+		// interface
+		//
+		// interface -> timestamp -> AggFlowMap
+		flowMaps   = make(map[string]map[int64]goDB.AggFlowMap)
+		rowKey     = goDB.ExtraKey{}
+		rowSummary goDB.InterfaceSummaryUpdate
+	)
 
-    fmt.Print("Progress:   0% |")
+	// try to read a summary file from the output folder. It may exist if data was previously written
+	// to the directory already.
+	summary := goDB.NewDBSummary()
+	summary, err = goDB.ReadDBSummary(config.SavePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			summary = goDB.NewDBSummary()
+		} else {
+			fmt.Printf("Summary file for DB exists but cannot be read: %s\n", err.Error())
+			os.Exit(1)
+		}
+	}
 
-    go func() {
-        // scan file line by line
-        scanner := bufio.NewScanner(file)
-        var lines_read int
-        var active_block_stamp int64
-        var perc_done, prev_perc int
+	// channel for passing flow maps to writer
+	writeChan := make(chan writeJob, 1024)
 
-        var prev_block_stamp int64
+	// writer routine accepting flow maps to write out
+	var wg sync.WaitGroup
+	go func(writeChan chan writeJob) {
+		wg.Add(1)
+		for fm := range writeChan {
+			if _, ok := mapWriters[fm.iface]; !ok {
+				mapWriters[fm.iface] = goDB.NewDBWriter(config.SavePath, fm.iface)
+			}
 
-        for scanner.Scan() {
-            if lines_read == config.NumLines {
-                break
-            }
+			// create an empty metadata block for this timestamp. Of course this
+			// isn't accurate, but we cannot recover the info from pcap anyhow at
+			// that moment
+			bm := goDB.BlockMetadata{Timestamp: fm.tstamp}
+			//        fmt.Println(fm.iface+": Writing:", fm.data)
+			if _, err = mapWriters[fm.iface].Write(fm.data, bm, fm.tstamp); err != nil {
+				fmt.Printf("Failed to write block at %d: %s\n", fm.tstamp, err.Error())
+				// TODO: bail here?
+				os.Exit(1)
+			}
+		}
+		wg.Done()
+	}(writeChan)
 
-            perc_done = int(float64(lines_read) / float64(config.NumLines) * 100)
-            if perc_done != prev_perc {
-                if perc_done%50 == 0 {
-                    fmt.Print(" 50% ")
-                    runtime.GC()
-                    debug.FreeOSMemory()
-                } else if perc_done%10 == 0 {
-                    fmt.Printf("|")
-                    runtime.GC()
-                    debug.FreeOSMemory()
-                } else if perc_done%2 == 0 {
-                    fmt.Printf("-")
-                    runtime.GC()
-                    debug.FreeOSMemory()
-                }
-            }
-            prev_perc = perc_done
+	fmt.Print("Progress:   0% |")
+	for scanner.Scan() {
 
-            fields := strings.Split(scanner.Text(), ",")
+		// create the parsers for the converter based on the title line provided in the CSV file
+		if linesRead == 1 {
+			if config.Schema == "" {
+				if err = csvconv.readSchema(scanner.Text()); err != nil {
+					fmt.Printf("Failed to read schema: %s. Schema title line needed in CSV\n", err.Error())
+					os.Exit(1)
+				}
 
-            // handle timestamp to find out when to ship the DBData to the channel
-            time, _ := strconv.ParseInt(fields[9], 10, 64)
+				// assign interface to row key if it was specified
+				if !csvconv.parsesIface() {
+					if config.Iface == "" {
+						fmt.Printf("Interface has not been specified by either data or -iface parameter. Aborting")
+						os.Exit(1)
+					}
 
-            // ignore all those lines which do not abide by the temporal ordering
-            if time < prev_block_stamp {
-                prev_block_stamp = time
-                continue
-            }
+					rowKey.Iface = config.Iface
+				}
 
-            cur_block_stamp := time - (time % DB_WRITE_INTERVAL)
+				linesRead++
+				config.NumLines++ // add a line since the schema does not count as actual data
+				continue
+			}
+		}
 
-            // if the timestamp is in another interval, create a new DBData block
-            if cur_block_stamp != active_block_stamp {
-                if active_block_stamp != 0 {
+		if linesRead == config.NumLines {
+			break
+		}
 
-                    var tstampArr = []byte{uint8(active_block_stamp >> 56),
-                        uint8(active_block_stamp >> 48),
-                        uint8(active_block_stamp >> 40),
-                        uint8(active_block_stamp >> 32),
-                        uint8(active_block_stamp >> 24),
-                        uint8(active_block_stamp >> 16),
-                        uint8(active_block_stamp >> 8),
-                        uint8(active_block_stamp & 0xff)}
+		// user status output
+		percDone = int(float64(linesRead) / float64(config.NumLines) * 100)
+		if percDone != prevPerc {
+			if percDone%50 == 0 {
+				fmt.Print(" 50% ")
+				runtime.GC()
+				debug.FreeOSMemory()
+			} else if percDone%10 == 0 {
+				fmt.Printf("|")
 
-                    // place the timestamp at the end of the arrays
-                    br = append(br, tstampArr...)
-                    bs = append(bs, tstampArr...)
-                    pr = append(pr, tstampArr...)
-                    ps = append(ps, tstampArr...)
+				if linesRead > 1000 {
+					// write out the current flow maps
+					for iface, tflows := range flowMaps {
+						recent := incompleteFlowMap(tflows)
+						if len(tflows) > 1 {
+							for stamp, flowMap := range tflows {
+								if stamp != recent {
+									// release flowMap for writing
+									writeChan <- writeJob{
+										iface:  iface,
+										tstamp: stamp,
+										data:   flowMap,
+									}
 
-                    dip = append(dip, tstampArr...)
-                    sip = append(sip, tstampArr...)
-                    dport = append(dport, tstampArr...)
-                    l7proto = append(l7proto, tstampArr...)
-                    proto = append(proto, tstampArr...)
+									// delete the map from tracking
+									delete(flowMaps[iface], stamp)
+								}
+							}
+						}
+					}
+				}
 
-                    // if the block was switched write out the current arrays
-                    dataChan <- goDB.NewDBData(br, bs, pr, ps, dip, sip, dport, l7proto, proto, active_block_stamp, config.Iface)
+				runtime.GC()
+				debug.FreeOSMemory()
+			} else if percDone%2 == 0 {
+				fmt.Printf("-")
+				runtime.GC()
+				debug.FreeOSMemory()
+			}
+		}
+		prevPerc = percDone
 
-                    // reset the arrays
-                    br, bs, pr, ps = []byte{}, []byte{}, []byte{}, []byte{}
-                    dip, sip = []byte{}, []byte{}
-                    dport, l7proto, proto = []byte{}, []byte{}, []byte{}
+		// fully parse the current line and load it into key and value objects
+		var rowVal = goDB.Val{}
+		fields := strings.Split(scanner.Text(), ",")
+		if len(fields) < len(csvconv.KeyParsers)+len(csvconv.ValParsers) {
+			fmt.Printf("Skipping incomplete data row: %s\n", scanner.Text())
+			continue
+		}
+		for ind, parser := range csvconv.KeyParsers {
+			if err := parser.ParseKey(fields[ind], &rowKey); err != nil {
+				fmt.Println(err)
+			}
+		}
+		for ind, parser := range csvconv.ValParsers {
+			if err := parser.ParseVal(fields[ind], &rowVal); err != nil {
+				fmt.Println(err)
+			}
+		}
 
-                    // the new timestamp becomes the active timestamp
-                    active_block_stamp = cur_block_stamp
+		// check if a new submap has to be created (e.g. if there's new data
+		// from another interface
+		if _, exists := flowMaps[rowKey.Iface]; !exists {
+			flowMaps[rowKey.Iface] = make(map[int64]goDB.AggFlowMap)
+		}
+		if _, exists := flowMaps[rowKey.Iface][rowKey.Time]; !exists {
+			flowMaps[rowKey.Iface][rowKey.Time] = make(goDB.AggFlowMap)
+		}
 
-                    var tstampArrNew = []byte{uint8(active_block_stamp >> 56),
-                        uint8(active_block_stamp >> 48),
-                        uint8(active_block_stamp >> 40),
-                        uint8(active_block_stamp >> 32),
-                        uint8(active_block_stamp >> 24),
-                        uint8(active_block_stamp >> 16),
-                        uint8(active_block_stamp >> 8),
-                        uint8(active_block_stamp & 0xff)}
+		// insert the key-value pair into the correct flow map
+		flowMaps[rowKey.Iface][rowKey.Time][goDB.Key{
+			Sip:      rowKey.Sip,
+			Dip:      rowKey.Dip,
+			Dport:    rowKey.Dport,
+			Protocol: rowKey.Protocol,
+			L7proto:  rowKey.L7proto,
+		}] = &rowVal
 
-                    // place the new timestamp at the beginning of the arrays
-                    br = append(br, tstampArrNew...)
-                    bs = append(bs, tstampArrNew...)
-                    pr = append(pr, tstampArrNew...)
-                    ps = append(ps, tstampArrNew...)
+		// fill the summary update for this flow record and update the summary
+		rowSummary.Interface = rowKey.Iface
+		rowSummary.FlowCount = 1
+		rowSummary.Traffic = rowVal.NBytesRcvd + rowVal.NBytesSent
+		rowSummary.Timestamp = time.Unix(rowKey.Time, 0)
 
-                    dip = append(dip, tstampArrNew...)
-                    sip = append(sip, tstampArrNew...)
-                    dport = append(dport, tstampArrNew...)
-                    l7proto = append(l7proto, tstampArrNew...)
-                    proto = append(proto, tstampArrNew...)
-                } else {
-                    active_block_stamp = cur_block_stamp
+		summary.Update(rowSummary)
 
-                    var tstampArr = []byte{uint8(active_block_stamp >> 56),
-                        uint8(active_block_stamp >> 48),
-                        uint8(active_block_stamp >> 40),
-                        uint8(active_block_stamp >> 32),
-                        uint8(active_block_stamp >> 24),
-                        uint8(active_block_stamp >> 16),
-                        uint8(active_block_stamp >> 8),
-                        uint8(active_block_stamp & 0xff)}
+		linesRead++
+	}
 
-                    // place the timestamp at the beginning of the arrays
-                    br = append(br, tstampArr...)
-                    bs = append(bs, tstampArr...)
-                    pr = append(pr, tstampArr...)
-                    ps = append(ps, tstampArr...)
+	// write out the last flows in the  maps
+	for iface, tflows := range flowMaps {
+		for stamp, flowMap := range tflows {
+			// release flowMap for writing
+			writeChan <- writeJob{
+				iface:  iface,
+				tstamp: stamp,
+				data:   flowMap,
+			}
+		}
+	}
 
-                    dip = append(dip, tstampArr...)
-                    sip = append(sip, tstampArr...)
-                    dport = append(dport, tstampArr...)
-                    l7proto = append(l7proto, tstampArr...)
-                    proto = append(proto, tstampArr...)
-                }
-            }
+	close(writeChan)
+	wg.Wait()
 
-            // handle counters
-            br_int, _ := strconv.ParseUint(fields[0], 10, 64)
-            br = append(br,
-                uint8(br_int>>56), uint8(br_int>>48),
-                uint8(br_int>>40), uint8(br_int>>32),
-                uint8(br_int>>24), uint8(br_int>>16),
-                uint8(br_int>>8), uint8(br_int&0xff))
-            bs_int, _ := strconv.ParseUint(fields[1], 10, 64)
-            bs = append(bs,
-                uint8(bs_int>>56), uint8(bs_int>>48),
-                uint8(bs_int>>40), uint8(bs_int>>32),
-                uint8(bs_int>>24), uint8(bs_int>>16),
-                uint8(bs_int>>8), uint8(bs_int&0xff))
-            pr_int, _ := strconv.ParseUint(fields[5], 10, 64)
-            pr = append(pr,
-                uint8(pr_int>>56), uint8(pr_int>>48),
-                uint8(pr_int>>40), uint8(pr_int>>32),
-                uint8(pr_int>>24), uint8(pr_int>>16),
-                uint8(pr_int>>8), uint8(pr_int&0xff))
-            ps_int, _ := strconv.ParseUint(fields[6], 10, 64)
-            ps = append(ps,
-                uint8(ps_int>>56), uint8(ps_int>>48),
-                uint8(ps_int>>40), uint8(ps_int>>32),
-                uint8(ps_int>>24), uint8(ps_int>>16),
-                uint8(ps_int>>8), uint8(ps_int&0xff))
+	// summary file update: this assumes that the summary was not modified during conversion
+	// of the CSV database. If a goProbe process were to write to the summary in the meantime,
+	// those changes would be overwritten.
+	err = goDB.ModifyDBSummary(config.SavePath, 10*time.Second,
+		func(summ *goDB.DBSummary) (*goDB.DBSummary, error) {
+			return summary, nil
+		},
+	)
+	if err != nil {
+		fmt.Printf("Failed to update summary: %s\n", err.Error())
+		os.Exit(1)
+	}
 
-            // handle ips
-            dip_str := strings.Split(fields[2], ".")
-            for i := 0; i < 16; i++ {
-                if i < 4 {
-                    octet, _ := strconv.Atoi(dip_str[i])
-                    dip = append(dip, uint8(octet))
-                } else {
-                    dip = append(dip, 0x00)
-                }
-            }
-            sip_str := strings.Split(fields[8], ".")
-            for i := 0; i < 16; i++ {
-                if i < 4 {
-                    octet, _ := strconv.Atoi(sip_str[i])
-                    sip = append(sip, uint8(octet))
-                } else {
-                    sip = append(sip, 0x00)
-                }
-            }
+	// return if the data write failed or exited
+	fmt.Print("| 100%")
+	fmt.Println("\nExiting")
+	os.Exit(0)
+}
 
-            // handle port and protos
-            prot_num, _ := strconv.Atoi(fields[7])
-            proto = append(proto, uint8(prot_num))
-
-            dport_num, _ := strconv.Atoi(fields[3])
-            dport = append(dport, uint8(dport_num>>8), uint8(dport_num&0xff))
-
-            l7p_num, _ := strconv.Atoi(fields[4])
-            l7proto = append(l7proto, uint8(l7p_num>>8), uint8(l7p_num&0xff))
-
-            lines_read++
-
-            prev_block_stamp = cur_block_stamp
-        }
-
-        // push empty DBData onto channel to signal that we are done
-        dataChan <- goDB.DBData{}
-
-        fmt.Print("| 100%")
-    }()
-    // return if the data write failed or exited
-    if <-doneChan {
-        fmt.Println("\nExiting")
-        return
-    }
-
-    return
+func incompleteFlowMap(m map[int64]goDB.AggFlowMap) int64 {
+	var recent int64
+	for k, _ := range m {
+		if k > recent {
+			recent = k
+		}
+	}
+	return recent
 }

@@ -47,7 +47,7 @@ Capturing is performed concurrently by goProbe on multiple interfaces. goProbe i
 The capturing probe can be run as a daemon via
 
 ```
-/etc/init.d/goprobe.init {start|stop|info|restart|reload|force-reload}
+/etc/init.d/goprobe.init {start|stop|status|restart|reload|force-reload}
 ```
 
 ### Configuration
@@ -157,17 +157,18 @@ Installation
 
 
 Before running the installer, make sure that you have the following dependencies installed:
-* flex
+* yacc
 * bison
 * curl
 * build-essential
+* flex
 * socat
 * rsync
 
 The package itself was designed to work out of the box. Thus, you do not even need the `go` environment. All of the dependencies are downloaded during package configuration. To install the package, go to the directory into which you cloned this repository and run the following commands:
 
 ```
-sudo apt-get install flex bison curl build-essential socat rsync
+sudo apt-get install yacc bison curl build-essential flex socat rsync
 make all
 ```
 

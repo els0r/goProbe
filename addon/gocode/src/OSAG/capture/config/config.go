@@ -12,52 +12,61 @@
 package config
 
 import (
-    "encoding/json"
-    "fmt"
-    "io/ioutil"
-    "os"
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
+	"os"
 
-    "OSAG/goProbe"
+	"OSAG/goProbe"
 )
 
 type Config struct {
-    DBPath     string                           `json:"db_path"`
-    Interfaces map[string]goProbe.CaptureConfig `json:"interfaces"`
+	DBPath      string                           `json:"db_path"`
+	Interfaces  map[string]goProbe.CaptureConfig `json:"interfaces"`
+	SyslogFlows bool                             `json:"syslog_flows"`
+}
+
+func NewConfig() *Config {
+	interfaces := make(map[string]goProbe.CaptureConfig)
+	return &Config{
+		Interfaces: interfaces,
+	}
 }
 
 func (c Config) Validate() error {
-    if c.DBPath == "" {
-        return fmt.Errorf("Database path must not be empty")
-    }
-    for iface, cc := range c.Interfaces {
-        if err := cc.Validate(); err != nil {
-            return fmt.Errorf("Interface '%s' has invalid configuration: %s", iface, err)
-        }
-    }
-    return nil
+	if c.DBPath == "" {
+		return fmt.Errorf("Database path must not be empty")
+	}
+	for iface, cc := range c.Interfaces {
+		err := cc.Validate()
+		if err != nil {
+			return fmt.Errorf("Interface '%s' has invalid configuration: %s", iface, err)
+		}
+	}
+	return nil
 }
 
 func ParseFile(path string) (*Config, error) {
-    var config Config
+	config := NewConfig()
 
-    fd, err := os.Open(path)
-    if err != nil {
-        return nil, err
-    }
-    defer fd.Close()
+	fd, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer fd.Close()
 
-    data, err := ioutil.ReadAll(fd)
-    if err != nil {
-        return nil, err
-    }
+	data, err := ioutil.ReadAll(fd)
+	if err != nil {
+		return nil, err
+	}
 
-    if err := json.Unmarshal(data, &config); err != nil {
-        return nil, err
-    }
+	if err := json.Unmarshal(data, config); err != nil {
+		return nil, err
+	}
 
-    if err := config.Validate(); err != nil {
-        return nil, err
-    }
+	if err := config.Validate(); err != nil {
+		return nil, err
+	}
 
-    return &config, nil
+	return config, nil
 }

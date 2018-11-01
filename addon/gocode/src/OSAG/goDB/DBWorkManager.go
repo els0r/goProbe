@@ -214,24 +214,29 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workload DBWorkload, resultMap map
     // The workload consists of timestamps whose blocks we should process.
     for b, tstamp := range workload.load {
 
-        var blocks [COLIDX_COUNT][]byte
+        var (
+            blocks [COLIDX_COUNT][]byte
+            blockBroken = false
+        )
 
         for _, colIdx := range query.columnIndizes {
+
+            // Read the block from the file
             if blocks[colIdx], err = columnFiles[colIdx].ReadTimedBlock(tstamp); err != nil {
-                return fmt.Errorf("[D %s; B %d] Failed to read %s.gpf: %s", dir, tstamp, columnFileNames[colIdx], err.Error())
+                blockBroken = true
+                SysLog.Warning(fmt.Sprintf("[D %s; B %d] Failed to read %s.gpf: %s", dir, tstamp, columnFileNames[colIdx], err.Error()))
+                break
             }
-        }
 
-        // Check whether timestamps contained in headers match
-        for _, colIdx := range query.columnIndizes {
+            // Check whether timestamps contained in headers match
             blockTstamp := bigendian.ReadInt64At(blocks[colIdx], 0) // The timestamp header is 8 bytes
             if tstamp != blockTstamp {
-                return fmt.Errorf("[Bl %d] Mismatch between timestamp in header [%d] of file [%s.gpf] and in block [%d]\n", b, tstamp, columnFileNames[colIdx], blockTstamp)
+                blockBroken = true
+                SysLog.Warning(fmt.Sprintf("[Bl %d] Mismatch between timestamp in header [%d] of file [%s.gpf] and in block [%d]\n", b, tstamp, columnFileNames[colIdx], blockTstamp))
+                break
             }
-        }
 
-        // Cut off headers so we don't need to offset all later index calculations by 8
-        for _, colIdx := range query.columnIndizes {
+            // Cut off headers so we don't need to offset all later index calculations by 8
             blocks[colIdx] = blocks[colIdx][8:]
         }
 
@@ -248,11 +253,20 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workload DBWorkload, resultMap map
         for _, colIdx := range query.columnIndizes {
             l := len(blocks[colIdx]) - 8 // subtract timestamp
             if l/columnSizeofs[colIdx] != numEntries {
-                return fmt.Errorf("[Bl %d] Incorrect number of entries in file [%s.gpf]. Expected %d, found %d.\n", b, columnFileNames[colIdx], numEntries, l/columnSizeofs[colIdx])
+                blockBroken = true
+                SysLog.Warning(fmt.Sprintf("[Bl %d] Incorrect number of entries in file [%s.gpf]. Expected %d, found %d.\n", b, columnFileNames[colIdx], numEntries, l/columnSizeofs[colIdx]))
+                break
             }
             if l%columnSizeofs[colIdx] != 0 {
-                return fmt.Errorf("[Bl %d] Entry size does not evenly divide block size in file [%s.gpf]\n", b, columnFileNames[colIdx])
+                blockBroken = true
+                SysLog.Warning(fmt.Sprintf("[Bl %d] Entry size does not evenly divide block size in file [%s.gpf]\n", b, columnFileNames[colIdx]))
+                break
             }
+        }
+
+        // In case any error was observed during above sanity checks, skip this whole block
+        if blockBroken {
+            continue
         }
 
         // Iterate over block entries

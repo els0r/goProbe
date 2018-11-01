@@ -13,30 +13,6 @@
 
 package goDB
 
-type Key struct {
-    Sip      [16]byte
-    Dip      [16]byte
-    Dport    [2]byte
-    Protocol byte
-    L7proto  [2]byte
-}
-
-// ExtraKey is a key with extra information
-type ExtraKey struct {
-    Key
-    Time  int64
-    Iface string
-}
-
-type Val struct {
-    NBytesRcvd uint64
-    NBytesSent uint64
-    NPktsRcvd  uint64
-    NPktsSent  uint64
-}
-
-type AggFlowMap map[Key]*Val
-
 type DBData struct {
     // counters
     Bytes_rcvd []byte

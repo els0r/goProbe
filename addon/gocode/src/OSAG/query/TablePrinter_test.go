@@ -99,6 +99,8 @@ func TryLookupTest(t *testing.T) {
 
 var extractTestsEntry = Entry{
     goDB.ExtraKey{
+        1455531929, // 02/15/2016 @ 10:25am (UTC)
+        "eth1",
         goDB.Key{
             [16]byte{192, 168, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, // 192.168.0.1
             [16]byte{10, 11, 12, 13, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, // 10.11.12.13
@@ -106,8 +108,6 @@ var extractTestsEntry = Entry{
             6,                                                            // TCP
             [2]byte{0, 141},                                              // Minecraft (category: Gaming)
         },
-        1455531929, // 02/15/2016 @ 10:25am (UTC)
-        "eth1",
     },
     40 * 1024, // nBr
     20 * 1024, // nBs
@@ -225,9 +225,11 @@ func TestExtractTotal(t *testing.T) {
     }
 }
 
-var printerTestsEntries = []Entry{
+var printerAnsiTestsEntries = []Entry{
     {
         goDB.ExtraKey{
+            1455531929, // 02/15/2016 @ 10:25am (UTC)
+            "eth1",
             goDB.Key{
                 [16]byte{172, 4, 12, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},  // 172.4.12.2
                 [16]byte{10, 11, 12, 13, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, // 10.11.12.13
@@ -235,8 +237,43 @@ var printerTestsEntries = []Entry{
                 6,                                                            // TCP
                 [2]byte{0, 141},                                              // Minecraft (category: Gaming)
             },
+        },
+        0,  // nBr
+        5,  // nBs
+        0,  // nPr
+        2,  // nPs
+    },
+    {
+        goDB.ExtraKey{
+            1455531429, // 02/15/2016 @ 10:17am (UTC)
+            "eth1",
+            goDB.Key{
+                [16]byte{172, 8, 12, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},  // 172.8.12.2
+                [16]byte{10, 11, 12, 14, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, // 10.11.12.14
+                [2]byte{0x29, 0x45},                                          // 10565
+                6,                                                            // TCP
+                [2]byte{0, 141},                                              // Minecraft (category: Gaming)
+            },
+        },
+        2094476019, // nBr
+        262155310,  // nBs
+        1578601,    // nPr
+        81144,      // nPs
+    },
+}
+
+var printerTestsEntries = []Entry{
+    {
+        goDB.ExtraKey{
             1455531929, // 02/15/2016 @ 10:25am (UTC)
             "eth1",
+            goDB.Key{
+                [16]byte{172, 4, 12, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},  // 172.4.12.2
+                [16]byte{10, 11, 12, 13, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, // 10.11.12.13
+                [2]byte{0x29, 0x45},                                          // 10565
+                6,                                                            // TCP
+                [2]byte{0, 141},                                              // Minecraft (category: Gaming)
+            },
         },
         7004484352, // nBr
         323451416,  // nBs
@@ -245,6 +282,8 @@ var printerTestsEntries = []Entry{
     },
     {
         goDB.ExtraKey{
+            1455531429, // 02/15/2016 @ 10:17am (UTC)
+            "eth1",
             goDB.Key{
                 [16]byte{172, 8, 12, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},  // 172.8.12.2
                 [16]byte{10, 11, 12, 14, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, // 10.11.12.14
@@ -252,8 +291,6 @@ var printerTestsEntries = []Entry{
                 6,                                                            // TCP
                 [2]byte{0, 141},                                              // Minecraft (category: Gaming)
             },
-            1455531429, // 02/15/2016 @ 10:17am (UTC)
-            "eth1",
         },
         2094476019, // nBr
         262155310,  // nBs
@@ -276,6 +313,56 @@ type printerTest struct {
     // We don't check the footer lines here but in TestTextTablePrinterFooter
     textOutputLines []string
     influxDbOutput  string
+}
+
+var printerAnsiTests = []printerTest{
+    {   // direction in
+        SORT_TRAFFIC,
+        DIRECTION_IN,
+        "sip,dip,dport,proto,l7proto",
+        map[string]string{},
+        12427491, 9790521, 10105124299, 2133066153,
+        5,
+        "eth1",
+        printerAnsiTestsEntries,
+        "",
+        make(map[string]interface{}),
+        []string{
+            ``,
+            `                                                              packets           bytes`,
+            `         sip          dip  dport  proto    l7proto  category       in      %       in      %`,
+            "  172.4.12.2  10.11.12.13  10565    TCP  Minecraft    Gaming   " + ANSI_SET_BOLD + "0.00  " + ANSI_RESET + "   " + ANSI_SET_BOLD + "0.00" + ANSI_RESET + "  " + ANSI_SET_BOLD + "0.00  B" + ANSI_RESET + "   " + ANSI_SET_BOLD + "0.00" + ANSI_RESET,
+            `  172.8.12.2  10.11.12.14  10565    TCP  Minecraft    Gaming   1.58 M  12.70  1.95 GB  20.73`,
+            `                                                                  ...             ...`,
+            `                                                              12.43 M         9.41 GB`,
+            ``,
+            `Timespan / Interface`,
+        },
+        "",
+    },
+    {   // direction out
+        SORT_TRAFFIC,
+        DIRECTION_OUT,
+        "sip,dip,dport,proto,l7proto",
+        map[string]string{},
+        12427491, 9790521, 10105124299, 2133066153,
+        5,
+        "eth1",
+        printerAnsiTestsEntries,
+        "",
+        make(map[string]interface{}),
+        []string{
+            ``,
+            `                                                              packets            bytes`,
+            `         sip          dip  dport  proto    l7proto  category      out     %        out      %`,
+            `  172.4.12.2  10.11.12.13  10565    TCP  Minecraft    Gaming   2.00    0.00    5.00  B   0.00`,
+            `  172.8.12.2  10.11.12.14  10565    TCP  Minecraft    Gaming  81.14 k  0.83  250.01 MB  12.29`,
+            ``,
+            `                                                               9.79 M          1.99 GB`,
+            ``,
+        },
+        "",
+    },
 }
 
 var printerTests = []printerTest{
@@ -767,6 +854,35 @@ func TestPrinters(t *testing.T) {
     output = os.Stdout
 }
 
+func TestAnsiPrinters(t *testing.T) {
+    bp := func(test printerTest) basePrinter {
+        attribs, hasAttrTime, hasAttrIface, err := goDB.ParseQueryType(test.queryType)
+        if err != nil {
+            t.Fatalf("Unexpected error: %s", err)
+        }
+        b := makeBasePrinter(
+            test.sort,
+            hasAttrTime, hasAttrIface,
+            test.direction,
+            attribs,
+            test.ips2domains,
+            test.totalInPkts, test.totalOutPkts, test.totalInBytes, test.totalOutBytes,
+            test.iface,
+        )
+        return b
+    }
+
+    for _, test := range printerAnsiTests {
+        buf := &bytes.Buffer{}
+        output = buf
+        testTextTablePrinter(t, test, bp(test), buf)
+
+    }
+
+    // set output back to os.Stdout in case other tests depend on it.
+    output = os.Stdout
+}
+
 var textTablePrinterFooterTests = []struct {
     sort                                           SortOrder
     hasAttrTime                                    bool
@@ -861,7 +977,7 @@ var textFormatterSizeTests = []struct {
     size   uint64
     output string
 }{
-    {0, "0.00  B"},
+    {0, ANSI_SET_BOLD + "0.00  B" + ANSI_RESET},
     {125, "125.00  B"},
     {11*1024 + 15, "11.01 kB"},
     {(11*1024 + 15) * 1024, "11.01 MB"},
@@ -882,7 +998,7 @@ var textFormatterCountTests = []struct {
     size   uint64
     output string
 }{
-    {0, "0.00  "},
+    {0, ANSI_SET_BOLD + "0.00  " + ANSI_RESET},
     {125, "125.00  "},
     {1250, "1.25 k"},
     {1250000, "1.25 M"},

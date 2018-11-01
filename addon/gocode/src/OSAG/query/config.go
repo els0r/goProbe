@@ -41,4 +41,5 @@ type Config struct {
     Resolve        bool
     ResolveRows    int
     ResolveTimeout time.Duration
+    ShowMgmtTraffic bool
 }

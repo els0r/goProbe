@@ -21,16 +21,11 @@ import (
 
 // Utility variables and functions for time parsing -----------------------------
 var TimeFormats []string = []string{
-    time.ANSIC,
-    time.UnixDate,
-    time.RubyDate,
-    time.RFC822,
-    time.RFC822Z,
-    time.RFC850,
-    time.RFC1123,
-    time.RFC1123Z,
-    time.RFC3339,
-    time.RFC3339Nano,
+    time.ANSIC,    // "Mon Jan _2 15:04:05 2006"
+    time.RubyDate, // "Mon Jan 02 15:04:05 -0700 2006"
+    time.RFC822Z,  // "02 Jan 06 15:04 -0700" // RFC822 with numeric zone
+    time.RFC1123Z, // "Mon, 02 Jan 2006 15:04:05 -0700" // RFC1123 with numeric zone
+    time.RFC3339,  // "2006-01-02T15:04:05Z07:00"
 
     // custom additions for MC
     "2006-01-02 15:04:05 -0700",

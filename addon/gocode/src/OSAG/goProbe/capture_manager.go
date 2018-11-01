@@ -2,7 +2,8 @@
 //
 // capture_manager.go
 //
-// Written by Lorenz Breidenbach lob@open.ch, December 2015
+// Written by Lorenz Breidenbach lob@open.ch,
+//            Lennart Elsen lel@open.ch, December 2015
 // Copyright (c) 2015 Open Systems AG, Switzerland
 // All Rights Reserved.
 //
@@ -33,6 +34,7 @@ type TaggedAggFlowMap struct {
 // CaptureManager manages a set of Capture instances.
 // Each interface can be associated with up to one Capture.
 type CaptureManager struct {
+    sync.Mutex
     captures map[string]*Capture
 }
 
@@ -40,15 +42,19 @@ type CaptureManager struct {
 // returns a pointer to it.
 func NewCaptureManager() *CaptureManager {
     return &CaptureManager{
-        make(map[string]*Capture),
+        captures: make(map[string]*Capture),
     }
 }
 
 func (cm *CaptureManager) ifaceNames() []string {
     ifaces := make([]string, 0, len(cm.captures))
+
+    cm.Lock()
     for iface, _ := range cm.captures {
         ifaces = append(ifaces, iface)
     }
+    cm.Unlock()
+
     return ifaces
 }
 
@@ -56,14 +62,14 @@ func (cm *CaptureManager) enable(ifaces map[string]CaptureConfig) {
     var rg RunGroup
 
     for iface, config := range ifaces {
-        if _, exists := cm.captures[iface]; exists {
-            capture, config := cm.captures[iface], config
+        if cm.captureExists(iface) {
+            capture, config := cm.getCapture(iface), config
             rg.Run(func() {
                 capture.Update(config)
             })
         } else {
             capture := NewCapture(iface, config)
-            cm.captures[iface] = capture
+            cm.setCapture(iface, capture)
 
             SysLog.Info(fmt.Sprintf("Added interface '%s' to capture list.", iface))
 
@@ -88,7 +94,7 @@ func (cm *CaptureManager) EnableAll() {
 
     var rg RunGroup
 
-    for _, capture := range cm.captures {
+    for _, capture := range cm.capturesCopy() {
         capture := capture
         rg.Run(func() {
             capture.Enable()
@@ -106,10 +112,50 @@ func (cm *CaptureManager) disable(ifaces []string) {
     for _, iface := range ifaces {
         iface := iface
         rg.Run(func() {
-            cm.captures[iface].Disable()
+            cm.getCapture(iface).Disable()
         })
     }
     rg.Wait()
+}
+
+func (cm *CaptureManager) getCapture(iface string) *Capture {
+    cm.Lock()
+    c := cm.captures[iface]
+    cm.Unlock()
+
+    return c
+}
+
+func (cm *CaptureManager) setCapture(iface string, capture *Capture) {
+    cm.Lock()
+    cm.captures[iface] = capture
+    cm.Unlock()
+}
+
+func (cm *CaptureManager) delCapture(iface string) {
+    cm.Lock()
+    delete(cm.captures, iface)
+    cm.Unlock()
+}
+
+func (cm *CaptureManager) captureExists(iface string) bool {
+    cm.Lock()
+    _, exists := cm.captures[iface]
+    cm.Unlock()
+
+    return exists
+}
+
+func (cm *CaptureManager) capturesCopy() map[string]*Capture {
+    copyMap := make(map[string]*Capture)
+
+    cm.Lock()
+    for iface, capture := range cm.captures {
+        copyMap[iface] = capture
+    }
+    cm.Unlock()
+
+    return copyMap
 }
 
 // DisableAll disables all managed Capture instances.
@@ -149,11 +195,14 @@ func (cm *CaptureManager) Update(ifaces map[string]CaptureConfig, returnChan cha
 
     // Contains the names of all interfaces we are shutting down and deleting.
     var disableIfaces []string
+
+    cm.Lock()
     for iface, _ := range cm.captures {
         if _, exists := ifaceSet[iface]; !exists {
             disableIfaces = append(disableIfaces, iface)
         }
     }
+    cm.Unlock()
 
     var rg RunGroup
     // disableIfaces and ifaces are disjunct, so we can run these in parallel.
@@ -166,7 +215,7 @@ func (cm *CaptureManager) Update(ifaces map[string]CaptureConfig, returnChan cha
     rg.Wait()
 
     for _, iface := range disableIfaces {
-        iface, capture := iface, cm.captures[iface]
+        iface, capture := iface, cm.getCapture(iface)
         rg.Run(func() {
             aggFlowMap, stats := capture.Rotate()
             returnChan <- TaggedAggFlowMap{
@@ -178,7 +227,7 @@ func (cm *CaptureManager) Update(ifaces map[string]CaptureConfig, returnChan cha
             capture.Close()
         })
 
-        delete(cm.captures, iface)
+        cm.delCapture(iface)
         SysLog.Info(fmt.Sprintf("Deleted interface '%s' from capture list.", iface))
     }
     rg.Wait()
@@ -192,7 +241,7 @@ func (cm *CaptureManager) StatusAll() map[string]CaptureStatus {
     statusmap := make(map[string]CaptureStatus)
 
     var rg RunGroup
-    for iface, capture := range cm.captures {
+    for iface, capture := range cm.capturesCopy() {
         iface, capture := iface, capture
         rg.Run(func() {
             status := capture.Status()
@@ -206,6 +255,26 @@ func (cm *CaptureManager) StatusAll() map[string]CaptureStatus {
     return statusmap
 }
 
+// ErrorsAll() returns the error maps of all managed Capture instances.
+func (cm *CaptureManager) ErrorsAll() map[string]errorMap {
+    errmapMutex := sync.Mutex{}
+    errormap := make(map[string]errorMap)
+
+    var rg RunGroup
+    for iface, capture := range cm.capturesCopy() {
+        iface, capture := iface, capture
+        rg.Run(func() {
+            errs := capture.Errors()
+            errmapMutex.Lock()
+            errormap[iface] = errs
+            errmapMutex.Unlock()
+        })
+    }
+    rg.Wait()
+
+    return errormap
+}
+
 // RotateAll() returns the state of all managed Capture instances.
 //
 // The resulting TaggedAggFlowMaps will be sent over returnChan and
@@ -215,7 +284,7 @@ func (cm *CaptureManager) RotateAll(returnChan chan TaggedAggFlowMap) {
 
     var rg RunGroup
 
-    for iface, capture := range cm.captures {
+    for iface, capture := range cm.capturesCopy() {
         iface, capture := iface, capture
         rg.Run(func() {
             aggFlowMap, stats := capture.Rotate()
@@ -236,14 +305,16 @@ func (cm *CaptureManager) RotateAll(returnChan chan TaggedAggFlowMap) {
 func (cm *CaptureManager) CloseAll() {
     var rg RunGroup
 
-    for _, capture := range cm.captures {
+    for _, capture := range cm.capturesCopy() {
         capture := capture
         rg.Run(func() {
             capture.Close()
         })
     }
 
+    cm.Lock()
     cm.captures = make(map[string]*Capture)
+    cm.Unlock()
 
     rg.Wait()
 }

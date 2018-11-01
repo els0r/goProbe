@@ -18,8 +18,8 @@ import (
     "fmt"
     "io"
     "os"
+    "osag/tabwriter"
     "sort"
-    "text/tabwriter"
     "time"
 
     "OSAG/goDB"
@@ -61,6 +61,8 @@ const (
     OUTCOL_BOTHBYTESSENT
     OUTCOL_BOTHBYTESPERCENT
     COUNT_OUTCOL
+    ANSI_SET_BOLD = "\x1b[1m"
+    ANSI_RESET    = "\x1b[0m"
 )
 
 // columns returns the list of OutputColumns that (might) be printed.
@@ -531,6 +533,9 @@ func (_ TextFormatter) Size(size uint64) string {
         sizeF /= 1024.0
         count++
     }
+    if sizeF == 0 {
+        return fmt.Sprintf("%s%.2f %s%s", ANSI_SET_BOLD, sizeF, units[count], ANSI_RESET)
+    }
 
     return fmt.Sprintf("%.2f %s", sizeF, units[count])
 }
@@ -559,11 +564,17 @@ func (_ TextFormatter) Count(val uint64) string {
         valF /= 1000.0
         count++
     }
+    if valF == 0 {
+        return fmt.Sprintf("%s%.2f %s%s", ANSI_SET_BOLD, valF, units[count], ANSI_RESET)
+    }
 
     return fmt.Sprintf("%.2f %s", valF, units[count])
 }
 
 func (_ TextFormatter) Float(f float64) string {
+    if f == 0 {
+        return fmt.Sprintf("%s%.2f%s", ANSI_SET_BOLD, f, ANSI_RESET)
+    }
     return fmt.Sprintf("%.2f", f)
 }
 

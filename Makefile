@@ -39,8 +39,8 @@ DOWNLOAD	= curl --progress-bar -L --url
 GO_PRODUCT	    = goProbe
 GO_QUERY        = goQuery
 
-GOLANG		    = go1.7.1.linux-amd64
-GOLANG_SITE	  = https://storage.googleapis.com/golang
+GOLANG		    = go1.11.1.linux-amd64
+GOLANG_SITE	    = https://storage.googleapis.com/golang
 GO_SRCDIR	    = $(PWD)/addon/gocode/src
 
 # for providing the go compiler with the right env vars
@@ -49,13 +49,13 @@ export PATH := $(GOROOT)/bin:$(PATH)
 export GOPATH := $(PWD)/addon/gocode
 
 # gopacket and gopcap
-GOPACKET	    = 1.1.9
-GOPACKET_REV	= 1.1.9
-GOPACKET_SITE	= https://github.com/google/gopacket/archive
-GOPACKETDIR	    = code.google.com/p
+GOPACKET      = 1.1.15
+GOPACKET_REV  = 1.1.15
+GOPACKET_SITE = https://github.com/google/gopacket/archive
+GOPACKETDIR   = github.com/google
 
 # pcap libraries
-PCAP_VERSION = 1.5.3
+PCAP_VERSION = 1.9.0
 PCAP		 = libpcap-$(PCAP_VERSION)
 PCAP_SITE	 = http://www.tcpdump.org/release
 PCAP_DIR	 := $(PWD)/$(PCAP)
@@ -156,11 +156,9 @@ go_install:
 
 	# additional directories
 	echo "*** creating binary tree ***"
-	mkdir -p absolute$(PREFIX)/$(PKG)/bin    && chmod 755 absolute$(PREFIX)/$(PKG)/bin
 	mkdir -p absolute$(PREFIX)/$(PKG)/etc    && chmod 755 absolute$(PREFIX)/$(PKG)/etc
 	mkdir -p absolute$(PREFIX)/$(PKG)/shared && chmod 755 absolute$(PREFIX)/$(PKG)/shared
 	mkdir -p absolute/etc/init.d             && chmod 755 absolute/etc/init.d
-	mkdir -p absolute/etc/systemd/system     && chmod 755 absolute/etc/systemd/system
 
 	echo "*** installing $(GO_PRODUCT) and $(GO_QUERY) ***"
 	cd $(PCAP); make -s install DESTDIR=$(PWD)/absolute >> /dev/null
@@ -168,16 +166,10 @@ go_install:
 	cp $(GO_SRCDIR)/OSAG/capture/$(GO_PRODUCT) absolute$(PREFIX)/$(PKG)/bin
 	cp $(GO_SRCDIR)/OSAG/query/$(GO_QUERY)     absolute$(PREFIX)/$(PKG)/bin
 	cp addon/gp_status.pl                      absolute$(PREFIX)/$(PKG)/shared
-	cp addon/goprobe.targets                   absolute$(PREFIX)/$(PKG)/shared
 
 	# change the prefix variable in the init script
 	cp addon/goprobe.init absolute/etc/init.d/goprobe.init
 	sed "s#PREFIX=#PREFIX=$(PREFIX)#g" -i absolute/etc/init.d/goprobe.init
-
-	# change the prefix variable in the systemd script
-	cp addon/goprobe.service absolute/etc/systemd/system/goprobe.service
-	sed "s#PREFIX#$(PREFIX)#g" -i absolute/etc/systemd/system/goprobe.service
-	sed "s#PREFIX#$(PREFIX)#g" -i absolute$(PREFIX)/$(PKG)/shared/goprobe.targets
 
 	echo "*** installing $(LIBTRACE) ***"
 	cd $(LIBTRACE); make -s install DESTDIR=$(PWD)/absolute >> /dev/null
@@ -227,7 +219,6 @@ go_package:
 
 deploy:
 
-	# commands for deploying goProbe on the same system on which it was compiled
 	if [ "$(USER)" != "root" ]; \
 	then \
 		echo "*** [deploy] Error: command must be run as root"; \
@@ -236,8 +227,6 @@ deploy:
 		rsync -a absolute/ /; \
 		ln -sf $(PREFIX)/$(PKG)/bin/goQuery /usr/local/bin/goquery; \
 		chown root.root /etc/init.d/goprobe.init; \
-		chown root.root /etc/systemd/system/goprobe.service; \
-		systemctl daemon-reload > /dev/null 2>&1; \
 	fi
 
 clean:

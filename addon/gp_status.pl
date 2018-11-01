@@ -95,7 +95,6 @@ my $iface_states;
 # this script reads from STDIN
 while(<>) {
     chomp($_);
-    next if $_ =~ /^$/;
     if ($lnum == 0) {
         ($detailed, $time_elapsed) = split(" ", $_);
         $lnum++; next;
@@ -120,7 +119,7 @@ my $last_write = "${time_elapsed}s ago";
 
 print "Interface Capture Statistics:\n
        last writeout: ", sprintf("%-s%-s", " "x($MAX_WIDTH-length($last_write)), $last_write),"
-    packets received: ", humanize(".2", "1000", $t_rcv_pcap),"
+    packets received: ", humanize(".2", "1000", $t_rcv_gp),"
      dropped by pcap: ", humanize(".2", "1000", $t_drop_pcap),"
     dropped by iface: ", humanize(".2", "1000", $t_ifdrop),"\n\n";
 

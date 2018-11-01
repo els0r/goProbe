@@ -1,8 +1,6 @@
 package goDB
 
 /*
-#cgo linux CFLAGS: -I../../../../../addon/lz4
-#cgo linux LDFLAGS: ../../../../../addon/lz4/liblz4.a
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -213,7 +211,7 @@ func (f *GPFile) WriteTimedBlock(timestamp int64, data []byte, comp int) error {
     for new_pos = 0; new_pos < N_ELEM; new_pos++ {
         cur_timestamp := f.timestamps[new_pos]
         if cur_timestamp == timestamp {
-            return errors.New("Timestamp " + strconv.Itoa(int(cur_timestamp)) + " already exists")
+            return errors.New("Timestamp" + strconv.Itoa(int(cur_timestamp)) + " already exists in file " + f.filename)
         } else if cur_timestamp == 0 {
             if new_pos != 0 {
                 nextFreeBlock = f.blocks[new_pos-1]

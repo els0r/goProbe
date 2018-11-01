@@ -40,8 +40,8 @@ DAEMON_CONF=$PREFIX/goProbe/etc/goprobe.conf
 DAEMON_ARGS="-config $DAEMON_CONF"
 SCRIPTNAME=/etc/init.d/goprobe.init
 
-# DB Path is extracted from the configuration file
-DB_PATH=$( grep db_path $DAEMON_CONF | cut -d ':' -f 2 | sed 's/[",]//g' )
+# DB Path is set by the config (the default path may not exist)
+DB_PATH=$PREFIX/goProbe/db
 
 # Exit if the package is not installed
 [ -x "$DAEMON" ] || exit 0
@@ -86,10 +86,6 @@ do_start()
     #   2 if daemon could not be started
     start-stop-daemon --start --background --make-pidfile --quiet --pidfile $PIDFILE --exec $DAEMON --test > /dev/null \
         || return 1
-
-    # Remove stale control socket if it exists
-    [ -e $DB_PATH/control.sock ] && rm -f $DB_PATH/control.sock
-
     start-stop-daemon --start --background --make-pidfile --quiet --pidfile $PIDFILE --exec $DAEMON -- \
         $DAEMON_ARGS \
         || return 2
@@ -142,7 +138,7 @@ case "$1" in
         2) [ "$VERBOSE" != no ] && log_end_msg 1 ;;
     esac
     ;;
-  info)
+  status)
     retval=0
     echo -n "Checking for running daemon ............... "
     pid=`pgrep -f "$DAEMON $DAEMON_ARGS"`

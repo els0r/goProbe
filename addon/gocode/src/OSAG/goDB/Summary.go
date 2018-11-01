@@ -11,103 +11,109 @@
 package goDB
 
 import (
-    "encoding/json"
-    "fmt"
-    "os"
-    "path/filepath"
-    "time"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"time"
 )
 
 const (
-    SUMMARY_FILE_NAME      = "summary.json"
-    SUMMARY_LOCK_FILE_NAME = "summary.lock"
+	SUMMARY_FILE_NAME      = "summary.json"
+	SUMMARY_LOCK_FILE_NAME = "summary.lock"
 )
 
 // Summary for a single interface
 type InterfaceSummary struct {
-    // Number of flows
-    FlowCount uint64 `json:"flowcount"`
-    // Total traffic volume in byte
-    Traffic uint64 `json:"traffic"`
-    Begin   int64  `json:"begin"`
-    End     int64  `json:"end"`
+	// Number of flows
+	FlowCount uint64 `json:"flowcount"`
+	// Total traffic volume in byte
+	Traffic uint64 `json:"traffic"`
+	Begin   int64  `json:"begin"`
+	End     int64  `json:"end"`
 }
 
 type InterfaceSummaryUpdate struct {
-    // Name of the interface. For example, "eth0".
-    Interface string
-    // Number of flows
-    FlowCount uint64
-    // Traffic volume in bytes
-    Traffic   uint64
-    Timestamp time.Time
+	// Name of the interface. For example, "eth0".
+	Interface string
+	// Number of flows
+	FlowCount uint64
+	// Traffic volume in bytes
+	Traffic   uint64
+	Timestamp time.Time
 }
 
 // Summary for an entire database
 type DBSummary struct {
-    Interfaces map[string]InterfaceSummary `json:"interfaces"`
+	Interfaces map[string]InterfaceSummary `json:"interfaces"`
 }
 
 func NewDBSummary() *DBSummary {
-    return &DBSummary{
-        make(map[string]InterfaceSummary),
-    }
+	summ := new(DBSummary)
+	interfaces := make(map[string]InterfaceSummary)
+	summ.Interfaces = interfaces
+	return summ
 }
 
 // LockDBSummary tries to acquire a lockfile for the database summary.
 // Its return values indicate whether it successfully acquired the lock
 // and whether a file system error occurred.
 func LockDBSummary(dbpath string) (acquired bool, err error) {
-    f, err := os.OpenFile(filepath.Join(dbpath, SUMMARY_LOCK_FILE_NAME), os.O_EXCL|os.O_CREATE, 0666)
-    if err != nil {
-        if os.IsExist(err) {
-            return false, nil
-        } else {
-            return false, err
-        }
-    } else {
-        f.Close()
-        return true, nil
-    }
+	f, err := os.OpenFile(filepath.Join(dbpath, SUMMARY_LOCK_FILE_NAME), os.O_EXCL|os.O_CREATE, 0666)
+	if err != nil {
+		if os.IsExist(err) {
+			return false, nil
+		} else {
+			return false, err
+		}
+	} else {
+		f.Close()
+		return true, nil
+	}
 }
 
 // LockDBSummary removes the lockfile for the database summary.
 // Its return values indicates whether a file system error occurred.
 func UnlockDBSummary(dbpath string) (err error) {
-    err = os.Remove(filepath.Join(dbpath, SUMMARY_LOCK_FILE_NAME))
-    return
+	err = os.Remove(filepath.Join(dbpath, SUMMARY_LOCK_FILE_NAME))
+	return
 }
 
 // Reads the summary of the given database.
 // If multiple processes might be operating on
 // the summary simultaneously, you should lock it first.
 func ReadDBSummary(dbpath string) (*DBSummary, error) {
-    var result DBSummary
+	result := NewDBSummary()
+	var err error
 
-    f, err := os.Open(filepath.Join(dbpath, SUMMARY_FILE_NAME))
-    if err != nil {
-        return nil, err
-    }
-    defer f.Close()
+	f, err := os.Open(filepath.Join(dbpath, SUMMARY_FILE_NAME))
+	if err != nil {
+		return result, err
+	}
+	defer f.Close()
 
-    if err := json.NewDecoder(f).Decode(&result); err != nil {
-        return nil, err
-    }
+	err = json.NewDecoder(f).Decode(result)
+	if err != nil {
+		return result, err
+	}
+	if result.Interfaces == nil {
+		result = NewDBSummary()
+	}
 
-    return &result, nil
+	return result, err
 }
 
 // Writes a new summary for the given database.
 // If multiple processes might be operating on
 // the summary simultaneously, you should lock it first.
 func WriteDBSummary(dbpath string, summ *DBSummary) error {
-    f, err := os.Create(filepath.Join(dbpath, SUMMARY_FILE_NAME))
-    if err != nil {
-        return err
-    }
-    defer f.Close()
+	f, err := os.Create(filepath.Join(dbpath, SUMMARY_FILE_NAME))
+	if err != nil {
+		return err
+	}
+	defer f.Close()
 
-    return json.NewEncoder(f).Encode(summ)
+	return json.NewEncoder(f).Encode(summ)
 }
 
 // Safely modifies the database summary when there are multiple processes accessing it.
@@ -120,70 +126,70 @@ func WriteDBSummary(dbpath string, summ *DBSummary) error {
 // * Since the summary is locked while modify is
 //   running, modify shouldn't take longer than roughly half a second.
 func ModifyDBSummary(dbpath string, timeout time.Duration, modify func(*DBSummary) (*DBSummary, error)) (modErr error) {
-    // Back off exponentially in case of failure.
-    // Retry for at most timeout time.
-    wait := 50 * time.Millisecond
-    waited := time.Duration(0)
-    for {
-        // lock
-        acquired, err := LockDBSummary(dbpath)
-        if err != nil {
-            return err
-        }
+	// Back off exponentially in case of failure.
+	// Retry for at most timeout time.
+	wait := 50 * time.Millisecond
+	waited := time.Duration(0)
+	for {
+		// lock
+		acquired, err := LockDBSummary(dbpath)
+		if err != nil {
+			return err
+		}
 
-        if !acquired {
-            if waited+wait <= timeout {
-                time.Sleep(wait)
-                waited += wait
-                wait *= 2
-                continue
-            } else {
-                break
-            }
-        }
+		if !acquired {
+			if waited+wait <= timeout {
+				time.Sleep(wait)
+				waited += wait
+				wait *= 2
+				continue
+			} else {
+				break
+			}
+		}
 
-        // deferred unlock
-        defer func() {
-            if err := UnlockDBSummary(dbpath); err != nil {
-                modErr = err
-            }
-        }()
+		// deferred unlock
+		defer func() {
+			if err := UnlockDBSummary(dbpath); err != nil {
+				modErr = err
+			}
+		}()
 
-        // read
-        summ, err := ReadDBSummary(dbpath)
-        if err != nil {
-            if os.IsNotExist(err) {
-                summ = nil
-            } else {
-                return err
-            }
-        }
+		// read
+		summ, err := ReadDBSummary(dbpath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				summ = NewDBSummary()
+			} else {
+				return err
+			}
+		}
 
-        // change
-        summ, err = modify(summ)
-        if err != nil {
-            return err
-        }
+		// change
+		summ, err = modify(summ)
+		if err != nil {
+			return err
+		}
 
-        // write
-        return WriteDBSummary(dbpath, summ)
-    }
+		// write
+		return WriteDBSummary(dbpath, summ)
+	}
 
-    return fmt.Errorf("Failed to acquire database summary lockfile")
+	return fmt.Errorf("Failed to acquire database summary lockfile")
 }
 
 func (s *DBSummary) Update(u InterfaceSummaryUpdate) {
-    is, exists := s.Interfaces[u.Interface]
-    if !exists {
-        is.Begin = u.Timestamp.Unix()
-    }
-    if u.Timestamp.Unix() < is.Begin {
-        is.Begin = u.Timestamp.Unix()
-    }
-    is.FlowCount += u.FlowCount
-    is.Traffic += u.Traffic
-    if is.End < u.Timestamp.Unix() {
-        is.End = u.Timestamp.Unix()
-    }
-    s.Interfaces[u.Interface] = is
+	is, exists := s.Interfaces[u.Interface]
+	if !exists {
+		is.Begin = u.Timestamp.Unix()
+	}
+	if u.Timestamp.Unix() < is.Begin {
+		is.Begin = u.Timestamp.Unix()
+	}
+	is.FlowCount += u.FlowCount
+	is.Traffic += u.Traffic
+	if is.End < u.Timestamp.Unix() {
+		is.End = u.Timestamp.Unix()
+	}
+	s.Interfaces[u.Interface] = is
 }

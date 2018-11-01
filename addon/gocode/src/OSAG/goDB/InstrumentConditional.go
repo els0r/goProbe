@@ -348,7 +348,7 @@ func conditionBytesAndNetmask(condition conditionNode) ([]byte, int, error) {
 
             condBytes = []byte{uint8(num >> 8), uint8(num & 0xff)}
         case "dip", "sip":
-            if condBytes, err = ipStringToBytes(value); err != nil {
+            if condBytes, err = IPStringToBytes(value); err != nil {
                 return nil, 0, errors.New("Could not parse IP address: " + value)
             }
         case "dnet", "snet":
@@ -376,7 +376,7 @@ func conditionBytesAndNetmask(condition conditionNode) ([]byte, int, error) {
             }
 
             // get ip bytes and apply netmask
-            if condBytes, err = ipStringToBytes(cidr[0]); err != nil {
+            if condBytes, err = IPStringToBytes(cidr[0]); err != nil {
                 return nil, 0, errors.New("Could not parse ip address: " + value)
             }
 
@@ -413,7 +413,7 @@ func conditionBytesAndNetmask(condition conditionNode) ([]byte, int, error) {
 }
 
 // Condition conversion utility functions ------------------------------------------------
-func ipStringToBytes(ip string) ([]byte, error) {
+func IPStringToBytes(ip string) ([]byte, error) {
     var is_ipv4 bool = strings.Contains(ip, ".")
 
     ipaddr := net.ParseIP(ip)

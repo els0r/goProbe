@@ -38,6 +38,8 @@ type GPFlow struct {
     // store the layer 7 payload coming from a return packet
     pktPayloadOtherDirection    [4]byte
     pktPayloadLenOtherDirection uint32
+
+    canDPI bool
 }
 
 func updateDirection(packet *GPPacket) bool {
@@ -63,6 +65,7 @@ func NewGPFlow(packet *GPPacket) *GPFlow {
         layer7proto                                  uint16
         payloadOtherDir                              [4]byte
         payloadLenOtherDir                           uint32
+        canDPI                                       bool
     )
 
     // set packet and byte counters with respect to its interface direction
@@ -84,20 +87,27 @@ func NewGPFlow(packet *GPPacket) *GPFlow {
     // try to get the packet direction
     directionSet := updateDirection(packet)
 
-    // try to get the layer 7 protocol
-    layer7proto = dpiPtr.GetLayer7Proto(packet.l7payload,
-        [4]byte{0x00, 0x00, 0x00, 0x00},
-        uint32(packet.l7payloadSize),
-        uint32(0),
-        dport,
-        sport,
-        packet.protocol,
-        uint32(packet.l7payloadSize),
-        uint32(0),
-        packet.dip,
-        packet.sip)
+    if packet.protocol == TCP || packet.protocol == UDP {
+        canDPI = true
+    }
 
-    return &GPFlow{packet.sip, packet.dip, packet.sport, packet.dport, packet.protocol, layer7proto, bytes_rcvd, bytes_sent, pkts_rcvd, pkts_sent, directionSet, payloadOtherDir, payloadLenOtherDir}
+    // try to get the layer 7 protocol only if there's a transport
+    // layer for the packet
+    if canDPI {
+        layer7proto = dpiPtr.GetLayer7Proto(packet.l7payload,
+            [4]byte{0x00, 0x00, 0x00, 0x00},
+            uint32(packet.l7payloadSize),
+            uint32(0),
+            dport,
+            sport,
+            packet.protocol,
+            uint32(packet.l7payloadSize),
+            uint32(0),
+            packet.dip,
+            packet.sip)
+    }
+
+    return &GPFlow{packet.sip, packet.dip, packet.sport, packet.dport, packet.protocol, layer7proto, bytes_rcvd, bytes_sent, pkts_rcvd, pkts_sent, directionSet, payloadOtherDir, payloadLenOtherDir, canDPI}
 }
 
 // here, the values are incremented if the packet belongs to an existing flow
@@ -116,29 +126,29 @@ func (f *GPFlow) UpdateFlow(packet *GPPacket) {
     dport := uint16(packet.dport[0])<<8 | uint16(packet.dport[1])
 
     // update layer 7 protocol in case it was not detected with the first packet
-    if !(f.hasIdentifiedL7Proto()) {
-        f.l7proto = dpiPtr.GetLayer7Proto(packet.l7payload,
-            f.pktPayloadOtherDirection,
-            uint32(packet.l7payloadSize),
-            f.pktPayloadLenOtherDirection,
-            dport,
-            sport,
-            packet.protocol,
-            uint32(packet.l7payloadSize),
-            f.pktPayloadLenOtherDirection,
-            packet.dip,
-            packet.sip)
+    if f.canDPI {
+        if !(f.hasIdentifiedL7Proto()) {
+            f.l7proto = dpiPtr.GetLayer7Proto(packet.l7payload,
+                f.pktPayloadOtherDirection,
+                uint32(packet.l7payloadSize),
+                f.pktPayloadLenOtherDirection,
+                dport,
+                sport,
+                packet.protocol,
+                uint32(packet.l7payloadSize),
+                f.pktPayloadLenOtherDirection,
+                packet.dip,
+                packet.sip)
+        }
+        // assign current packet payload to the other direction
+        f.pktPayloadOtherDirection = packet.l7payload
+        f.pktPayloadLenOtherDirection = uint32(packet.l7payloadSize)
     }
 
     // try to update direction if necessary
     if !(f.pktDirectionSet) {
         f.pktDirectionSet = updateDirection(packet)
     }
-
-    // assign current packet payload to the other direction
-    f.pktPayloadOtherDirection = packet.l7payload
-    f.pktPayloadLenOtherDirection = uint32(packet.l7payloadSize)
-
 }
 
 // routine that a flow uses to check whether it has any interesting layer 7 info

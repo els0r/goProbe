@@ -15,7 +15,7 @@ import (
     "testing"
 )
 
-var ipStringToBytesTests = []struct {
+var IPStringToBytesTests = []struct {
     input   string
     outIp   []byte
     success bool
@@ -27,20 +27,20 @@ var ipStringToBytesTests = []struct {
 }
 
 func TestIpStringToBytes(t *testing.T) {
-    for _, test := range ipStringToBytesTests {
-        outIp, err := ipStringToBytes(test.input)
+    for _, test := range IPStringToBytesTests {
+        outIp, err := IPStringToBytes(test.input)
         if !test.success {
             if err == nil {
-                t.Fatalf("ipStringToBytes is expected to fail on input %v but it didn't. Instead it output %v",
+                t.Fatalf("IPStringToBytes is expected to fail on input %v but it didn't. Instead it output %v",
                     test.input, outIp)
             }
         } else {
             if err != nil {
-                t.Fatalf("ipStringToBytes unexpectedly failed on input %v. The error is: %s",
+                t.Fatalf("IPStringToBytes unexpectedly failed on input %v. The error is: %s",
                     test.input, err)
             }
             if !reflect.DeepEqual(test.outIp, outIp) {
-                t.Fatalf("ipStringToBytes returned an unexpected output. Expected output: %v. Actual output: %v",
+                t.Fatalf("IPStringToBytes returned an unexpected output. Expected output: %v. Actual output: %v",
                     test.outIp, outIp)
             }
         }

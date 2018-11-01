@@ -1,8 +1,10 @@
 /////////////////////////////////////////////////////////////////////////////////
 //
-// exclude_management_net_public.go
+// syslogConsts_public.go
 //
-// Written by Fabian Kohn fko@open.ch, February 2016
+// Constants for location of syslog socket file
+//
+// Written by Lennart Elsen lel@open.ch, June 2016
 // Copyright (c) 2016 Open Systems AG, Switzerland
 // All Rights Reserved.
 //
@@ -10,12 +12,8 @@
 
 // +build !OSAG
 
-package main
+package goDB
 
-func excludeManagementNet(conditional string) string {
-    return conditional
-}
-
-func hideManagementTraffic(conditional string) string {
-    return conditional
-}
+const (
+    SOCKET_PATH = "/var/run/goprobe.sock"
+)
