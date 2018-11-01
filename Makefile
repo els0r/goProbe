@@ -26,6 +26,19 @@
 # along with goProbe; if not, write to the Free Software
 # Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
+# Build tags for go compilation
+# 'netcgo' tells go to use the system resolver for name resolution.
+# (See https://golang.org/pkg/net/#pkg-overview)
+# We use the 'OSAG' build tag to switch between implementations. When the OSAG
+# tag is specified, we use the internal/confidential code, otherwise the
+# public code is used.
+GO_BUILDTAGS     = netcgo public
+GO_LDFLAGS       = -X OSAG/version.version=$(VERSION) -X OSAG/version.commit=$(GIT_DIRTY)$(GIT_COMMIT) -X OSAG/version.builddate=$(TODAY)
+
+# easy to use build command for everything related goprobe
+GPBUILD     = go build -tags '$(GO_BUILDTAGS)' -ldflags '$(GO_LDFLAGS)' -a
+GPTESTBUILD = go test -c -tags '$(GO_BUILDTAGS)' -ldflags '$(GO_LDFLAGS)' -a
+
 SHELL := /bin/bash
 
 PKG    = goProbe
@@ -70,48 +83,64 @@ LPIDENT_SITE	= http://research.wand.net.nz/software/libprotoident
 LPIDENT_DIR	    := $(PWD)/$(LIBPROTOIDENT)
 export LD_LIBRARY_PATH := $(PWD)/$(PCAP):$(PWD)/$(LIBPROTOIDENT)/lib/.libs:$(PWD)/$(LIBTRACE)/lib/.libs:$(PWD)/addon/dpi
 
-configure:
+# for building with cgo
+export CGO_CFLAGS := -I$(PCAP_DIR) -I$(GO_SRCDIR)/OSAG/goDB/lz4
+export CGO_LDFLAGS := -L$(PCAP_DIR) $(GO_SRCDIR)/OSAG/goDB/lz4/liblz4.a
 
+fetch:
 	## GO SETUP ##
 	echo "*** downloading $(GOLANG) ***"
 	$(DOWNLOAD) $(GOLANG_SITE)/$(GOLANG).tar.gz -O
 	# Useful for debugging:
 	# cp ~/$(GOLANG).tar.gz .
 
-	echo "*** unpacking $(GOLANG) ***"
-	tar xf $(GOLANG).tar.gz
-
 	echo "*** downloading gopacket_$(GOPACKET) ***"
 	$(DOWNLOAD) $(GOPACKET_SITE)/v$(GOPACKET).tar.gz -O
 
-	echo "*** unpacking/patching dependency gopacket_$(GOPACKET) ***"
+	echo "*** downloading $(PCAP) ***"
+	$(DOWNLOAD) $(PCAP_SITE)/$(PCAP).tar.gz -O
+
+	echo "*** downloading $(LIBTRACE) ***"
+	$(DOWNLOAD) $(LIBTRACE_SITE)/$(LIBTRACE).tar.bz2 -O
+
+	echo "*** downloading/patching $(LIBPROTOIDENT) ***"
+	$(DOWNLOAD) $(LPIDENT_SITE)/$(LIBPROTOIDENT).tar.gz -O
+
+unpack:
+	echo "*** unpacking $(GOLANG) ***"
+	tar xf $(GOLANG).tar.gz
+
+	echo "*** unpacking dependency gopacket_$(GOPACKET) ***"
 	tar xf v$(GOPACKET).tar.gz
 	mv gopacket-$(GOPACKET) gopacket
 
-	patch -Np0 < addon/gopacket-v$(GOPACKET).patch
+	echo "*** unpacking dependency $(PCAP) ***"
+	tar xf $(PCAP).tar.gz
 
+	echo "*** unpacking $(LIBTRACE) ***"
+	tar xf $(LIBTRACE).tar.bz2
+
+	echo "*** unpacking $(LIBPROTOIDENT) ***"
+	tar xf $(LIBPROTOIDENT).tar.gz
+
+patch:
+	echo "*** patching dependency gopacket_$(GOPACKET) ***"
+	patch -Np0 < addon/gopacket-v$(GOPACKET).patch
 	# change the library path inside pcap.go
 	sed -i -e 's#LIBPCAPPATH#$(PCAP_DIR)#g' gopacket/pcap/pcap.go
 
 	mkdir -p $(GO_SRCDIR)/$(GOPACKETDIR)
 	mv gopacket $(GO_SRCDIR)/$(GOPACKETDIR)
 
-	echo "*** downloading $(PCAP) ***"
-	$(DOWNLOAD) $(PCAP_SITE)/$(PCAP).tar.gz -O
-	echo "*** unpacking/patching/configuring dependency $(PCAP) ***"
-	tar xf $(PCAP).tar.gz
+	echo "*** patching dependency $(PCAP) ***"
 	patch -Np0 < addon/libpcap-$(PCAP_VERSION).patch
-	cd $(PCAP); sh configure --prefix=$(PREFIX)/$(PKG) --quiet >> /dev/null
 
-	echo "*** downloading $(LIBTRACE) ***"
-	$(DOWNLOAD) $(LIBTRACE_SITE)/$(LIBTRACE).tar.bz2 -O
-	tar xf $(LIBTRACE).tar.bz2
-
-	echo "*** downloading/patching $(LIBPROTOIDENT) ***"
-	$(DOWNLOAD) $(LPIDENT_SITE)/$(LIBPROTOIDENT).tar.gz -O
-
-	tar xf $(LIBPROTOIDENT).tar.gz
+	echo "*** patching dependency $(LIBPROTOIDENT) ***"
 	patch -Np0 < addon/libprotoident.patch
+
+configure:
+	echo "*** configuring dependency $(PCAP) ***"
+	cd $(PCAP); sh configure --prefix=$(PREFIX)/$(PKG) --quiet >> /dev/null
 
 compile:
 
@@ -121,7 +150,7 @@ compile:
 	cd $(PCAP); make -s > /dev/null; rm libpcap.a; ln -sf libpcap.so.$(PCAP_VERSION) libpcap.so; ln -sf libpcap.so.$(PCAP_VERSION) libpcap.so.1
 
 	echo "*** compiling lz4 ***"
-	cd addon/lz4; make -s > /dev/null
+	cd $(GO_SRCDIR)/OSAG/goDB/lz4; make -s >> /dev/null;
 
 	echo "*** configuring/compiling $(LIBTRACE) ***"
 	cd $(LIBTRACE); sh configure --prefix=$(PREFIX)/$(PKG) CFLAGS='-I$(PCAP_DIR)' CPPFLAGS='-I$(PCAP_DIR)' LDFLAGS='-L$(PCAP_DIR) -lpcap' --quiet >> /dev/null
@@ -143,10 +172,10 @@ compile:
 	sed -i 's/\"\(.*\)\": \([0-9]*\)/\L"\1": \2/g' $(GO_SRCDIR)/OSAG/goDB/GPDPIProtocols.go
 
 	echo "*** compiling $(GO_PRODUCT) ***"
-	cd $(GO_SRCDIR)/OSAG/capture; CGO_CFLAGS='-I$(PCAP_DIR)' CGO_LDFLAGS='-L$(PCAP_DIR)' go build -a -o $(GO_PRODUCT)   # build the goProbe binary
+	cd $(GO_SRCDIR)/OSAG/capture; $(GPBUILD) -o $(GO_PRODUCT)   # build the goProbe binary
 
 	echo "*** compiling $(GO_QUERY) ***"
-	cd $(GO_SRCDIR)/OSAG/query; go build -tags public -ldflags="-X main.goprobeConfigPath=$(PREFIX)/$(PKG)/etc/goprobe.conf" -a -o $(GO_QUERY)
+	 cd $(GO_SRCDIR)/OSAG/query; $(GPBUILD) -o $(GO_QUERY)      # build the goquery binary
 
 install: go_install
 
@@ -249,6 +278,6 @@ clean:
 
 	cd addon/lz4; make clean > /dev/null
 
-all: clean configure compile install
+all: clean fetch unpack patch configure compile install
 
 .SILENT:
