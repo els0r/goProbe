@@ -109,7 +109,7 @@ unpack:
 	mv gopacket-$(GOPACKET) gopacket
 
 	echo "*** fetching gopacket dependencies"
-	go get -x github.com/mdlayher/raw
+	go get github.com/mdlayher/raw
 
 	echo "*** unpacking dependency $(PCAP) ***"
 	tar xf $(PCAP).tar.gz
