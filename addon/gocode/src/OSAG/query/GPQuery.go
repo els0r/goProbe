@@ -273,7 +273,7 @@ func ReadFlags(config *Config) error {
 		var dberr error
 		config.BaseDir, dberr = getDefaultDBDir()
 		if dberr != nil {
-			return dberr
+			return fmt.Errorf("could not get DBDir: %s", dberr.Error())
 		}
 	}
 

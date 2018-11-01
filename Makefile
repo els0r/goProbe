@@ -32,21 +32,21 @@
 # We use the 'OSAG' build tag to switch between implementations. When the OSAG
 # tag is specified, we use the internal/confidential code, otherwise the
 # public code is used.
-GO_BUILDTAGS     = netcgo public
-GO_LDFLAGS       = -X OSAG/version.version=$(VERSION) -X OSAG/version.commit=$(GIT_DIRTY)$(GIT_COMMIT) -X OSAG/version.builddate=$(TODAY)
-
-# easy to use build command for everything related goprobe
-GPBUILD     = go build -tags '$(GO_BUILDTAGS)' -ldflags '$(GO_LDFLAGS)' -a
-GPTESTBUILD = go test -c -tags '$(GO_BUILDTAGS)' -ldflags '$(GO_LDFLAGS)' -a
 
 SHELL := /bin/bash
 
 PKG    = goProbe
 PREFIX = /opt/ntm
 
+GO_BUILDTAGS     = netcgo public
+GO_LDFLAGS       = -X OSAG/version.version=$(VERSION) -X OSAG/version.commit=$(GIT_DIRTY)$(GIT_COMMIT) -X OSAG/version.builddate=$(TODAY) -X OSAG/query.goprobeConfigPath=$(PREFIX)/$(PKG)/etc/goprobe.conf
+
+# easy to use build command for everything related goprobe
+GPBUILD     = go build -tags '$(GO_BUILDTAGS)' -ldflags '$(GO_LDFLAGS)' -a
+GPTESTBUILD = go test -c -tags '$(GO_BUILDTAGS)' -ldflags '$(GO_LDFLAGS)' -a
+
 # downloader used for grabbing the external code. Change this if it does not
-# correspond to the usual way you download files on your system
-DOWNLOAD	= curl --progress-bar -L --url
+# correspond to the usual way you download files on your system DOWNLOAD	= curl --progress-bar -L --url
 
 # GoLang main version
 GO_PRODUCT	    = goProbe
@@ -106,6 +106,7 @@ fetch:
 	echo "*** downloading/patching $(LIBPROTOIDENT) ***"
 	$(DOWNLOAD) $(LPIDENT_SITE)/$(LIBPROTOIDENT).tar.gz -O
 
+
 unpack:
 	echo "*** unpacking $(GOLANG) ***"
 	tar xf $(GOLANG).tar.gz
@@ -113,6 +114,9 @@ unpack:
 	echo "*** unpacking dependency gopacket_$(GOPACKET) ***"
 	tar xf v$(GOPACKET).tar.gz
 	mv gopacket-$(GOPACKET) gopacket
+
+	echo "*** fetching gopacket dependencies"
+	go get github.com/mdlayher/raw
 
 	echo "*** unpacking dependency $(PCAP) ***"
 	tar xf $(PCAP).tar.gz
