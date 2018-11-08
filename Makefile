@@ -64,7 +64,7 @@ export GOPATH := $(PWD)/addon/gocode
 # gopacket and gopcap
 GOPACKET      = 1.1.15
 GOPACKET_REV  = 1.1.15
-GOPACKET_SITE = https://github.com/google/gopacket/archive
+GOPACKET_SITE = https://github.com/fako1024/gopacket/archive
 GOPACKETDIR   = github.com/google
 
 # pcap libraries

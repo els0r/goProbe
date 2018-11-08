@@ -45,3 +45,6 @@ v2.1.0 fako1024,els0r
     - upgrade to libpcap 1.9.0 and gopacket 1.1.15
     - remove layer 7 detection and all its dependencies (libprotoident, libtrace) - drastic improvements to compilation speed and system resource usage footprint
     - static inclusion of precompiled lz4 library
+
+UNRELEASED fako1024
+    - replace all occurrences of github.com/google/gopacket imports with forked repo under github.com/fako1024/gopacket
