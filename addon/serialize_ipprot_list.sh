@@ -1,5 +1,12 @@
 #!/bin/bash
 
+if [[ $( uname -a | grep -i darwin ) ]]; then
+	echo -e "// +build darwin\n"
+elif [[ $( uname -a | grep -i linux ) ]]; then
+	echo -e "// +build linux\n"
+fi
+
+
 echo -e "package goDB\n\nvar IPProtocols = map[int] string {"
 egrep -v "^#" /etc/protocols | egrep -v "^ip\s+0\s+IP" | egrep -v "^(\s+)?$" | sort -unk2 | awk '{print "  " $2 ": \"" $3 "\","}'
 echo -e "  255: \"UNKNOWN\",\n}\n\nfunc GetIPProto(id int) string {\n  return IPProtocols[id]\n}\n"
