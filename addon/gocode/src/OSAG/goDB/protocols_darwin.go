@@ -3,6 +3,7 @@
 package goDB
 
 var IPProtocols = map[int]string{
+	0:   "HOPOPT", // added to fit consistency tests
 	1:   "ICMP",
 	2:   "IGMP",
 	3:   "GGP",
@@ -150,6 +151,7 @@ func GetIPProto(id int) string {
 }
 
 var IPProtocolIDs = map[string]int{
+	"hopopt":          0, // added to fit consistency tests
 	"icmp":            1,
 	"igmp":            2,
 	"ggp":             3,

@@ -1,1 +1,0 @@
-[["-sum", "-i", "eth1", "-d", "$TESTDB", "-f", "1456428000", "-l", "1456473000", "-e", "json", "dip,dport,iface,l7proto,proto,sip,time"]]
