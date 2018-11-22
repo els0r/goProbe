@@ -35,10 +35,6 @@
 GO_BUILDTAGS     = netcgo public
 GO_LDFLAGS       = -X OSAG/version.version=$(VERSION) -X OSAG/version.commit=$(GIT_DIRTY)$(GIT_COMMIT) -X OSAG/version.builddate=$(TODAY)
 
-# easy to use build command for everything related goprobe
-GPBUILD     = go build -tags '$(GO_BUILDTAGS)' -ldflags '$(GO_LDFLAGS)' -a
-GPTESTBUILD = go test -c -tags '$(GO_BUILDTAGS)' -ldflags '$(GO_LDFLAGS)' -a
-
 SHELL := /bin/bash
 
 PKG    = goProbe
@@ -58,7 +54,13 @@ GOLANG_SITE	    = https://storage.googleapis.com/golang
 GO_SRCDIR	    = $(PWD)/addon/gocode/src
 
 # get the operating system
-UNAME_OS := $(shell uname -o | tr '[:upper:]' '[:lower:]')
+UNAME_OS := $(shell uname -s | tr '[:upper:]' '[:lower:]')
+
+# easy to use build command for everything related goprobe
+GO_BUILDTAGS = netcgo public $(UNAME_OS)
+GPBUILD      = go build -tags '$(GO_BUILDTAGS)' -ldflags '$(GO_LDFLAGS)' -a
+GPTESTBUILD  = go test -c -tags '$(GO_BUILDTAGS)' -ldflags '$(GO_LDFLAGS)' -a
+
 
 # for providing the go compiler with the right env vars
 export GOROOT := $(PWD)/go
@@ -127,6 +129,7 @@ configure:
 	cd $(PCAP); sh configure --prefix=$(PREFIX)/$(PKG) --quiet >> /dev/null
 
 compile:
+
 
 	## GO CODE COMPILATION ##
 	# first, compile libpcap and libprotoident because the go code depends on it
