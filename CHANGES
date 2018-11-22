@@ -45,3 +45,7 @@ v2.1.0 fako1024,els0r
     - upgrade to libpcap 1.9.0 and gopacket 1.1.15
     - remove layer 7 detection and all its dependencies (libprotoident, libtrace) - drastic improvements to compilation speed and system resource usage footprint
     - static inclusion of precompiled lz4 library
+
+v2.1.1 els0r
+	- included static lz4 libraries and protocols list for darwin (coincides with /etc/protocols on FreeBSD). goQuery is buildable on MAC OS X now
+	- fixed e2e tests which were still testing for Layer 7
