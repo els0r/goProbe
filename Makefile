@@ -35,10 +35,6 @@
 GO_BUILDTAGS     = netcgo public
 GO_LDFLAGS       = -X OSAG/version.version=$(VERSION) -X OSAG/version.commit=$(GIT_DIRTY)$(GIT_COMMIT) -X OSAG/version.builddate=$(TODAY)
 
-# easy to use build command for everything related goprobe
-GPBUILD     = go build -tags '$(GO_BUILDTAGS)' -ldflags '$(GO_LDFLAGS)' -a
-GPTESTBUILD = go test -c -tags '$(GO_BUILDTAGS)' -ldflags '$(GO_LDFLAGS)' -a
-
 SHELL := /bin/bash
 
 PKG    = goProbe
@@ -52,9 +48,19 @@ DOWNLOAD	= curl --progress-bar -L --url
 GO_PRODUCT	    = goProbe
 GO_QUERY        = goQuery
 
-GOLANG		    = go1.11.1.linux-amd64
-GOLANG_SITE	  = https://storage.googleapis.com/golang
+GOLANG		    = go1.11.1.
+GOLANG_PROC		= amd64
+GOLANG_SITE	    = https://storage.googleapis.com/golang
 GO_SRCDIR	    = $(PWD)/addon/gocode/src
+
+# get the operating system
+UNAME_OS := $(shell uname -s | tr '[:upper:]' '[:lower:]')
+
+# easy to use build command for everything related goprobe
+GO_BUILDTAGS = netcgo public $(UNAME_OS)
+GPBUILD      = go build -tags '$(GO_BUILDTAGS)' -ldflags '$(GO_LDFLAGS)' -a
+GPTESTBUILD  = go test -c -tags '$(GO_BUILDTAGS)' -ldflags '$(GO_LDFLAGS)' -a
+
 
 # for providing the go compiler with the right env vars
 export GOROOT := $(PWD)/go
@@ -73,14 +79,6 @@ PCAP		 = libpcap-$(PCAP_VERSION)
 PCAP_SITE	 = http://www.tcpdump.org/release
 PCAP_DIR	 := $(PWD)/$(PCAP)
 
-# libprotoident libraries
-LIBTRACE	    = libtrace-3.0.20
-LIBTRACE_SITE	= http://research.wand.net.nz/software/libtrace
-LIBTRACE_DIR	:= $(PWD)/$(LIBTRACE)
-
-LIBPROTOIDENT	= libprotoident-2.0.7
-LPIDENT_SITE	= http://research.wand.net.nz/software/libprotoident
-LPIDENT_DIR	    := $(PWD)/$(LIBPROTOIDENT)
 export LD_LIBRARY_PATH := $(PWD)/$(PCAP)
 
 # for building with cgo
@@ -89,8 +87,8 @@ export CGO_LDFLAGS := -L$(PCAP_DIR)
 
 fetch:
 	## GO SETUP ##
-	echo "*** downloading $(GOLANG) ***"
-	$(DOWNLOAD) $(GOLANG_SITE)/$(GOLANG).tar.gz -O
+	echo "*** downloading $(GOLANG)$(UNAME_OS)-$(GOLANG_PROC) ***"
+	$(DOWNLOAD) $(GOLANG_SITE)/$(GOLANG)$(UNAME_OS)-$(GOLANG_PROC).tar.gz -O
 	# Useful for debugging:
 	# cp ~/$(GOLANG).tar.gz .
 
@@ -102,7 +100,7 @@ fetch:
 
 unpack:
 	echo "*** unpacking $(GOLANG) ***"
-	tar xf $(GOLANG).tar.gz
+	tar xf $(GOLANG)$(UNAME_OS)-$(GOLANG_PROC).tar.gz
 
 	echo "*** unpacking dependency gopacket_$(GOPACKET) ***"
 	tar xf v$(GOPACKET).tar.gz
@@ -132,17 +130,11 @@ configure:
 
 compile:
 
+
 	## GO CODE COMPILATION ##
 	# first, compile libpcap and libprotoident because the go code depends on it
 	echo "*** compiling $(PCAP) ***"
 	cd $(PCAP); make -s > /dev/null; rm libpcap.a; ln -sf libpcap.so.$(PCAP_VERSION) libpcap.so; ln -sf libpcap.so.$(PCAP_VERSION) libpcap.so.1
-
-	# make the protocol-category mappings available to goquery using the
-	# compiled helper binary and a bash script for IP protocols
-	addon/serialize_ipprot_list.sh > $(GO_SRCDIR)/OSAG/goDB/GPDPIProtocols.go
-
-	# make all reverse lookup keys lowercase
-	sed -i 's/\"\(.*\)\": \([0-9]*\)/\L"\1": \2/g' $(GO_SRCDIR)/OSAG/goDB/GPDPIProtocols.go
 
 	echo "*** compiling $(GO_PRODUCT) ***"
 	cd $(GO_SRCDIR)/OSAG/capture; $(GPBUILD) -o $(GO_PRODUCT)   # build the goProbe binary
@@ -223,10 +215,12 @@ clean:
 	echo "*** removing binary tree ***"
 	rm -rf absolute
 
-	echo "*** removing $(GOLANG), gopacket and $(PCAP) ***"
-	rm -rf go $(GOLANG).tar.gz
+	echo "*** removing $(GOLANG)$(UNAME_OS)-$(GOLANG_PROC), gopacket and $(PCAP) ***"
+	rm -rf go $(GOLANG)$(UNAME_OS)-$(GOLANG_PROC).tar.gz
 	rm -rf $(GO_SRCDIR)/$(GOPACKETDIR) gopacket-$(GOPACKET_REV) gopacket-$(GOPACKET) gopacket $(GO_SRCDIR)/code.google.com v$(GOPACKET).tar.gz $(GO_SRCDIR)/OSAG/capture/$(GO_PRODUCT) $(GO_SRCDIR)/OSAG/query/$(GO_QUERY)
 	rm -rf $(PCAP) $(PCAP).tar.gz
+	rm -rf addon/gocode/pkg/darwin_amd64/
+	rm -rf addon/gocode/src/golang.org/
 
 	rm -rf $(PKG).tar.bz2
 

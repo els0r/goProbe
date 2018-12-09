@@ -21,7 +21,6 @@ var testKey = ExtraKey{
 		Dip:      [16]byte{3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5, 8, 9, 7, 9, 3},
 		Dport:    [2]byte{0xCB, 0xF1},
 		Protocol: 6,
-		L7proto:  [2]byte{0, 141},
 	},
 	Time: 0,
 }
@@ -36,7 +35,6 @@ var tests = []struct {
 	{DipAttribute{}, "dip", 0, []string{"301:401:509:206:503:508:907:903"}},
 	{DportAttribute{}, "dport", 0, []string{"52209"}},
 	{ProtoAttribute{}, "proto", 0, []string{"TCP"}},
-	{L7ProtoAttribute{}, "l7proto", 1, []string{"Minecraft", "Gaming"}},
 }
 
 func TestAttributes(t *testing.T) {
@@ -54,7 +52,7 @@ func TestAttributes(t *testing.T) {
 }
 
 func TestNewAttribute(t *testing.T) {
-	for _, name := range []string{"sip", "dip", "dport", "proto", "l7proto"} {
+	for _, name := range []string{"sip", "dip", "dport", "proto"} {
 		attrib, err := NewAttribute(name)
 		if err != nil {
 			t.Fatalf("Unexpected error: %s", err)
@@ -105,7 +103,7 @@ var parseQueryTypeTests = []struct {
 	{"sip,dip,time,dip,sip,dport", []Attribute{SipAttribute{}, DipAttribute{}, DportAttribute{}}, true, false, true},
 	{"talk_src,dip", []Attribute{SipAttribute{}, DipAttribute{}, DportAttribute{}}, false, false, false},
 	{"talk_src,src", []Attribute{SipAttribute{}, DipAttribute{}, DportAttribute{}}, false, false, false},
-	{"raw", []Attribute{SipAttribute{}, DipAttribute{}, DportAttribute{}, ProtoAttribute{}, L7ProtoAttribute{}}, true, true, true},
+	{"raw", []Attribute{SipAttribute{}, DipAttribute{}, DportAttribute{}, ProtoAttribute{}}, true, true, true},
 }
 
 func TestParseQueryType(t *testing.T) {
