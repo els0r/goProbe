@@ -49,7 +49,10 @@ v2.1.0 fako1024,els0r
 v2.1.1 els0r
 	- included static lz4 libraries and protocols list for darwin (coincides with /etc/protocols on FreeBSD). goQuery is buildable on MAC OS X now
 	- fixed e2e tests which were still testing for Layer 7
-  
-UNRELEASED fako1024
+
+UNRELEASED fako1024,els0r
     - replace all occurrences of github.com/google/gopacket imports with forked repo under github.com/fako1024/gopacket
     - remove obsolete patches and markers for gopacket / pcap dependencies
+    - start fetching fako's gopacket via go get
+    - get rid of fetching golang, effectively making a go installation a pre-requisite
+    - remove all mentions of libpcap from the repository
