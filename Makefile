@@ -48,9 +48,6 @@ DOWNLOAD	= curl --progress-bar -L --url
 GO_PRODUCT	    = goProbe
 GO_QUERY        = goQuery
 
-GOLANG		    = go1.11.1.
-GOLANG_PROC		= amd64
-GOLANG_SITE	    = https://storage.googleapis.com/golang
 GO_SRCDIR	    = $(PWD)/addon/gocode/src
 
 # get the operating system
@@ -61,80 +58,23 @@ GO_BUILDTAGS = netcgo public $(UNAME_OS)
 GPBUILD      = go build -tags '$(GO_BUILDTAGS)' -ldflags '$(GO_LDFLAGS)' -a
 GPTESTBUILD  = go test -c -tags '$(GO_BUILDTAGS)' -ldflags '$(GO_LDFLAGS)' -a
 
-
 # for providing the go compiler with the right env vars
-export GOROOT := $(PWD)/go
-export PATH := $(GOROOT)/bin:$(PATH)
 export GOPATH := $(PWD)/addon/gocode
 
 # gopacket and gopcap
-GOPACKET      = 1.1.15
-GOPACKET_REV  = 1.1.15
-GOPACKET_SITE = https://github.com/fako1024/gopacket/archive
-GOPACKETDIR   = github.com/google
-
-# pcap libraries
-PCAP_VERSION = 1.9.0
-PCAP		 = libpcap-$(PCAP_VERSION)
-PCAP_SITE	 = http://www.tcpdump.org/release
-PCAP_DIR	 := $(PWD)/$(PCAP)
-
-export LD_LIBRARY_PATH := $(PWD)/$(PCAP)
-
-# for building with cgo
-export CGO_CFLAGS := -I$(PCAP_DIR)
-export CGO_LDFLAGS := -L$(PCAP_DIR)
+GOPACKET_SRC = github.com/fako1024/gopacket
 
 fetch:
-	## GO SETUP ##
-	echo "*** downloading $(GOLANG)$(UNAME_OS)-$(GOLANG_PROC) ***"
-	$(DOWNLOAD) $(GOLANG_SITE)/$(GOLANG)$(UNAME_OS)-$(GOLANG_PROC).tar.gz -O
-	# Useful for debugging:
-	# cp ~/$(GOLANG).tar.gz .
-
-	echo "*** downloading gopacket_$(GOPACKET) ***"
-	$(DOWNLOAD) $(GOPACKET_SITE)/v$(GOPACKET).tar.gz -O
-
-	echo "*** downloading $(PCAP) ***"
-	$(DOWNLOAD) $(PCAP_SITE)/$(PCAP).tar.gz -O
-
-unpack:
-	echo "*** unpacking $(GOLANG) ***"
-	tar xf $(GOLANG)$(UNAME_OS)-$(GOLANG_PROC).tar.gz
-
-	echo "*** unpacking dependency gopacket_$(GOPACKET) ***"
-	tar xf v$(GOPACKET).tar.gz
-	mv gopacket-$(GOPACKET) gopacket
 
 	echo "*** fetching gopacket dependencies"
 	go get github.com/mdlayher/raw
 
-	echo "*** unpacking dependency $(PCAP) ***"
-	tar xf $(PCAP).tar.gz
-
-patch:
-	echo "*** patching dependency gopacket_$(GOPACKET) ***"
-	patch -Np0 < addon/gopacket-v$(GOPACKET).patch
-	# change the library path inside pcap.go
-	sed -i -e 's#LIBPCAPPATH#$(PCAP_DIR)#g' gopacket/pcap/pcap.go
-
-	mkdir -p $(GO_SRCDIR)/$(GOPACKETDIR)
-	mv gopacket $(GO_SRCDIR)/$(GOPACKETDIR)
-
-	echo "*** patching dependency $(PCAP) ***"
-	patch -Np0 < addon/libpcap-$(PCAP_VERSION).patch
-
-configure:
-	echo "*** configuring dependency $(PCAP) ***"
-	cd $(PCAP); sh configure --prefix=$(PREFIX)/$(PKG) --quiet >> /dev/null
+	echo "*** fetching modified gopacket ***"
+	go get $(GOPACKET_SRC)
 
 compile:
 
-
 	## GO CODE COMPILATION ##
-	# first, compile libpcap and libprotoident because the go code depends on it
-	echo "*** compiling $(PCAP) ***"
-	cd $(PCAP); make -s > /dev/null; rm libpcap.a; ln -sf libpcap.so.$(PCAP_VERSION) libpcap.so; ln -sf libpcap.so.$(PCAP_VERSION) libpcap.so.1
 
 	echo "*** compiling $(GO_PRODUCT) ***"
 	cd $(GO_SRCDIR)/OSAG/capture; $(GPBUILD) -o $(GO_PRODUCT)   # build the goProbe binary
@@ -150,13 +90,12 @@ go_install:
 
 	# additional directories
 	echo "*** creating binary tree ***"
+	mkdir -p absolute$(PREFIX)/$(PKG)/bin    && chmod 755 absolute$(PREFIX)/$(PKG)/bin
 	mkdir -p absolute$(PREFIX)/$(PKG)/etc    && chmod 755 absolute$(PREFIX)/$(PKG)/etc
 	mkdir -p absolute$(PREFIX)/$(PKG)/shared && chmod 755 absolute$(PREFIX)/$(PKG)/shared
 	mkdir -p absolute/etc/init.d             && chmod 755 absolute/etc/init.d
 
 	echo "*** installing $(GO_PRODUCT) and $(GO_QUERY) ***"
-	cd $(PCAP); make -s install DESTDIR=$(PWD)/absolute >> /dev/null
-
 	cp $(GO_SRCDIR)/OSAG/capture/$(GO_PRODUCT) absolute$(PREFIX)/$(PKG)/bin
 	cp $(GO_SRCDIR)/OSAG/query/$(GO_QUERY)     absolute$(PREFIX)/$(PKG)/bin
 	cp addon/gp_status.pl                      absolute$(PREFIX)/$(PKG)/shared
@@ -168,29 +107,19 @@ go_install:
 	echo "*** generating example configuration ***"
 	echo -e "{\n\t\"db_path\" : \"$(PREFIX)/$(PKG)/db\",\n\t\"interfaces\" : {\n\t\t\"eth0\" : {\n\t\t\t\"bpf_filter\" : \"not arp and not icmp\",\n\t\t\t\"buf_size\" : 2097152,\n\t\t\t\"promisc\" : false\n\t\t}\n\t}\n}" > absolute$(PREFIX)/$(PKG)/etc/goprobe.conf.example
 
-	# set the appropriate permissions
+	#set the appropriate permissions
 	chmod -R 755 absolute$(PREFIX)/$(PKG)/bin \
 		absolute$(PREFIX)/$(PKG)/shared \
 		absolute$(PREFIX)/$(PKG)/etc \
-		absolute$(PREFIX)/$(PKG)/lib \
 		absolute/etc/init.d \
 
 	echo "*** cleaning unneeded files ***"
 
-	# binary cleaning
-	# libpcap binaries
-	rm -f absolute$(PREFIX)/$(PKG)/bin/pcap-config
-
-	# library cleaning
-	rm -f absolute$(PREFIX)/$(PKG)/lib/*.la
-	rm -f absolute$(PREFIX)/$(PKG)/lib/*.lai
-	rm -f absolute$(PREFIX)/$(PKG)/lib/*.a
-	rm -rf absolute$(PREFIX)/$(PKG)/include
-	rm -rf absolute$(PREFIX)/$(PKG)/share
-	rm -rf absolute$(PREFIX)/$(PKG)/lib/libpacketdump*
-
 	# strip binaries
-	strip --strip-unneeded absolute$(PREFIX)/$(PKG)/bin/*
+	if [ "$(UNAME_OS)" != "darwin" ]; \
+	then \
+		strip --strip-unneeded absolute$(PREFIX)/$(PKG)/bin/*; \
+	fi
 
 package: go_package
 
@@ -215,15 +144,13 @@ clean:
 	echo "*** removing binary tree ***"
 	rm -rf absolute
 
-	echo "*** removing $(GOLANG)$(UNAME_OS)-$(GOLANG_PROC), gopacket and $(PCAP) ***"
-	rm -rf go $(GOLANG)$(UNAME_OS)-$(GOLANG_PROC).tar.gz
-	rm -rf $(GO_SRCDIR)/$(GOPACKETDIR) gopacket-$(GOPACKET_REV) gopacket-$(GOPACKET) gopacket $(GO_SRCDIR)/code.google.com v$(GOPACKET).tar.gz $(GO_SRCDIR)/OSAG/capture/$(GO_PRODUCT) $(GO_SRCDIR)/OSAG/query/$(GO_QUERY)
-	rm -rf $(PCAP) $(PCAP).tar.gz
-	rm -rf addon/gocode/pkg/darwin_amd64/
+	echo "*** removing dependencies and binaries ***"
+	rm -rf $(GO_SRCDIR)/OSAG/capture/$(GO_PRODUCT) $(GO_SRCDIR)/OSAG/query/$(GO_QUERY)
 	rm -rf addon/gocode/src/golang.org/
+	rm -rf addon/gocode/src/github.com
 
 	rm -rf $(PKG).tar.bz2
 
-all: clean fetch unpack patch configure compile install
+all: clean fetch compile install
 
 .SILENT:
