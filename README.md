@@ -155,30 +155,29 @@ Installation
 
 
 Before running the installer, make sure that you have the following dependencies installed:
-* yacc
-* bison
-* curl
-* build-essential
-* flex
-* socat
-* rsync
+* golang
+* socat (for init script usage only)
+* rsync (for deploy target only)
 
-The package itself was designed to work out of the box. Thus, you do not even need the `go` environment. All of the dependencies are downloaded during package configuration. To install the package, go to the directory into which you cloned this repository and run the following commands:
+The package itself now requires a fully set up  `go` environment. To build everything via Makefile, run
 
 ```
-sudo apt-get install yacc bison curl build-essential flex socat rsync
 make all
 ```
+
+Otherwise, running install/build will suffice
+
+```
+go build -a -o goConvert $(PWD)/addon/gocode/src/OSAG/convert/DBConvert.go
+```
+
+
 
 Additional Makefile targets for deployment are:
 * `make deploy`: syncs the binary tree to the root directory. *Note:* this is only a good idea if you want to run goProbe on the system where you compiled it.
 * `make package`: creates a tarball for deployment on another system.
 
-By default, `goConvert` is not compiled. If you wish to do so, add the following line to the `install` target in the Makefile:
 
-```
-go build -a -o goConvert $(PWD)/addon/gocode/src/OSAG/convert/DBConvert.go
-```
 The binary will reside in the directory specified in the above command.
 
 ### Bash autocompletion

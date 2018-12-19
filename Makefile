@@ -59,7 +59,7 @@ GPBUILD      = go build -tags '$(GO_BUILDTAGS)' -ldflags '$(GO_LDFLAGS)' -a
 GPTESTBUILD  = go test -c -tags '$(GO_BUILDTAGS)' -ldflags '$(GO_LDFLAGS)' -a
 
 # for providing the go compiler with the right env vars
-export GOPATH := $(PWD)/addon/gocode
+#export GOPATH := $(PWD)/addon/gocode
 
 # gopacket and gopcap
 GOPACKET_SRC = github.com/fako1024/gopacket
@@ -77,10 +77,13 @@ compile:
 	## GO CODE COMPILATION ##
 
 	echo "*** compiling $(GO_PRODUCT) ***"
-	cd $(GO_SRCDIR)/OSAG/capture; $(GPBUILD) -o $(GO_PRODUCT)   # build the goProbe binary
+	cd cmd/$(GO_PRODUCT); $(GPBUILD) -o $(GO_PRODUCT)   # build the goProbe binary
 
 	echo "*** compiling $(GO_QUERY) ***"
-	 cd $(GO_SRCDIR)/OSAG/query; $(GPBUILD) -o $(GO_QUERY)      # build the goquery binary
+	cd cmd/$(GO_QUERY); $(GPBUILD) -o $(GO_QUERY)      # build the goquery binary
+
+	echo "*** compiling goConvert ***"
+	cd cmd/goConvert; $(GPBUILD) -o goConvert			# build the conversion tool
 
 install: go_install
 
@@ -96,9 +99,10 @@ go_install:
 	mkdir -p absolute/etc/init.d             && chmod 755 absolute/etc/init.d
 
 	echo "*** installing $(GO_PRODUCT) and $(GO_QUERY) ***"
-	cp $(GO_SRCDIR)/OSAG/capture/$(GO_PRODUCT) absolute$(PREFIX)/$(PKG)/bin
-	cp $(GO_SRCDIR)/OSAG/query/$(GO_QUERY)     absolute$(PREFIX)/$(PKG)/bin
-	cp addon/gp_status.pl                      absolute$(PREFIX)/$(PKG)/shared
+	mv cmd/goProbe/$(GO_PRODUCT) absolute$(PREFIX)/$(PKG)/bin
+	mv cmd/goQuery/$(GO_QUERY)   absolute$(PREFIX)/$(PKG)/bin
+	mv cmd/goConvert/goConvert   absolute$(PREFIX)/$(PKG)/bin
+	cp addon/gp_status.pl        absolute$(PREFIX)/$(PKG)/shared
 
 	# change the prefix variable in the init script
 	cp addon/goprobe.init absolute/etc/init.d/goprobe.init
@@ -145,9 +149,7 @@ clean:
 	rm -rf absolute
 
 	echo "*** removing dependencies and binaries ***"
-	rm -rf $(GO_SRCDIR)/OSAG/capture/$(GO_PRODUCT) $(GO_SRCDIR)/OSAG/query/$(GO_QUERY)
-	rm -rf addon/gocode/src/golang.org/
-	rm -rf addon/gocode/src/github.com
+	rm -rf cmd/$(GO_PRODUCT)/$(GO_PRODUCT) cmd/$(GO_QUERY)/$(GO_QUERY) cmd/goConvert/goConvert
 
 	rm -rf $(PKG).tar.bz2
 
