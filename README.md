@@ -168,7 +168,9 @@ make all
 Otherwise, running install/build will suffice
 
 ```
-go build -a -o goConvert $(PWD)/addon/gocode/src/OSAG/convert/DBConvert.go
+go install -i github.com/els0r/goProbe/cmd/goProbe
+go install -i github.com/els0r/goProbe/cmd/goQuery
+go install -i github.com/els0r/goProbe/cmd/goConvert
 ```
 
 
