@@ -32,34 +32,29 @@
 # We use the 'OSAG' build tag to switch between implementations. When the OSAG
 # tag is specified, we use the internal/confidential code, otherwise the
 # public code is used.
-GO_BUILDTAGS     = netcgo public
-GO_LDFLAGS       = -X OSAG/version.version=$(VERSION) -X OSAG/version.commit=$(GIT_DIRTY)$(GIT_COMMIT) -X OSAG/version.builddate=$(TODAY)
-
 SHELL := /bin/bash
 
 PKG    = goProbe
 PREFIX = /opt/ntm
 
-# downloader used for grabbing the external code. Change this if it does not
-# correspond to the usual way you download files on your system
-DOWNLOAD	= curl --progress-bar -L --url
-
 # GoLang main version
+BASEPATH		= github.com/els0r/goProbe
 GO_PRODUCT	    = goProbe
 GO_QUERY        = goQuery
 
-GO_SRCDIR	    = $(PWD)/addon/gocode/src
-
-# get the operating system
+# get the operating system and git variables for versioning
 UNAME_OS := $(shell uname -s | tr '[:upper:]' '[:lower:]')
+GIT_COMMIT := $(shell git rev-parse HEAD)
+GIT_VERSION := $(shell git describe --tags)
+BUILD_DATE  := $(shell date +%FT%T%z)
 
 # easy to use build command for everything related goprobe
-GO_BUILDTAGS = netcgo public $(UNAME_OS)
-GPBUILD      = go build -tags '$(GO_BUILDTAGS)' -ldflags '$(GO_LDFLAGS)' -a
-GPTESTBUILD  = go test -c -tags '$(GO_BUILDTAGS)' -ldflags '$(GO_LDFLAGS)' -a
+VERSION_PATH = $(BASEPATH)/pkg/version
 
-# for providing the go compiler with the right env vars
-#export GOPATH := $(PWD)/addon/gocode
+GO_BUILDTAGS = netcgo public $(UNAME_OS)
+GO_LDFLAGS   = -ldflags '-X $(VERSION_PATH).version=$(GIT_VERSION) -X $(VERSION_PATH).commit=$(GIT_COMMIT) -X $(VERSION_PATH).builddate=$(BUILD_DATE)'
+GPBUILD      = go install -i -tags '$(GO_BUILDTAGS)' $(GO_LDFLAGS)
+GPTESTBUILD  = go test -c -tags '$(GO_BUILDTAGS)'
 
 # gopacket and gopcap
 GOPACKET_SRC = github.com/fako1024/gopacket
@@ -75,15 +70,14 @@ fetch:
 compile:
 
 	## GO CODE COMPILATION ##
-
 	echo "*** compiling $(GO_PRODUCT) ***"
-	cd cmd/$(GO_PRODUCT); $(GPBUILD) -o $(GO_PRODUCT)   # build the goProbe binary
+	$(GPBUILD) $(BASEPATH)/cmd/$(GO_PRODUCT)   # build the goProbe binary
 
 	echo "*** compiling $(GO_QUERY) ***"
-	cd cmd/$(GO_QUERY); $(GPBUILD) -o $(GO_QUERY)      # build the goquery binary
+	$(GPBUILD) $(BASEPATH)/cmd/$(GO_QUERY)     # build the goquery binary
 
 	echo "*** compiling goConvert ***"
-	cd cmd/goConvert; $(GPBUILD) -o goConvert			# build the conversion tool
+	$(GPBUILD) $(BASEPATH)/cmd/goConvert 		# build the conversion tool
 
 install: go_install
 
@@ -99,13 +93,13 @@ go_install:
 	mkdir -p absolute/etc/init.d             && chmod 755 absolute/etc/init.d
 
 	echo "*** installing $(GO_PRODUCT) and $(GO_QUERY) ***"
-	mv cmd/goProbe/$(GO_PRODUCT) absolute$(PREFIX)/$(PKG)/bin
-	mv cmd/goQuery/$(GO_QUERY)   absolute$(PREFIX)/$(PKG)/bin
-	mv cmd/goConvert/goConvert   absolute$(PREFIX)/$(PKG)/bin
-	cp addon/gp_status.pl        absolute$(PREFIX)/$(PKG)/shared
+	mv $(GOPATH)/bin/goProbe 	absolute$(PREFIX)/$(PKG)/bin
+	mv $(GOPATH)/bin/goQuery   	absolute$(PREFIX)/$(PKG)/bin
+	mv $(GOPATH)/bin/goConvert  absolute$(PREFIX)/$(PKG)/bin
+	cp gp_status.pl 	        absolute$(PREFIX)/$(PKG)/shared
 
 	# change the prefix variable in the init script
-	cp addon/goprobe.init absolute/etc/init.d/goprobe.init
+	cp goprobe.init absolute/etc/init.d/goprobe.init
 	sed "s#PREFIX=#PREFIX=$(PREFIX)#g" -i absolute/etc/init.d/goprobe.init
 
 	echo "*** generating example configuration ***"

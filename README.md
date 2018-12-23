@@ -19,6 +19,26 @@ The [NetFlow](http://www.ietf.org/rfc/rfc3954.txt) standard was introduced to ad
 
 goProbe deviates from traditional NetFlow as flow capturing and collection is run on the same device and the flow fields reduced. It was designed as a lightweight, standalone system, providing both optimized packet capture and a storage backend tailored to the flow data.
 
+Quick Start
+------------
+
+See the installation section for more details.
+
+The package itself now requires a fully set up  `go` environment. Running install/build will suffice
+
+```
+go install -i github.com/els0r/goProbe/cmd/goProbe
+go install -i github.com/els0r/goProbe/cmd/goQuery
+go install -i github.com/els0r/goProbe/cmd/goConvert
+```
+
+The addon folder provides a Makefile for building the software suit. To use it, run
+
+```
+cd addon
+make all
+```
+
 goProbe
 -------------------------
 `goProbe` captures packets using [libpcap](http://www.tcpdump.org/) and [gopacket](https://code.google.com/p/gopacket/) and extracts several attributes which are used to classify the packet in a flow-like data structure:

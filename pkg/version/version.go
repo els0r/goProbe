@@ -18,7 +18,7 @@ import (
 )
 
 // these variables are set during build by the command
-// go build -ldflags "-X OSAG/version.version=3.14 ..."
+// go build -ldflags "-X pkg/version.version=3.14 ..."
 var (
 	version   = "unknown"
 	commit    = "unknown"
