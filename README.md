@@ -23,17 +23,19 @@ goProbe deviates from traditional NetFlow as flow capturing and collection is ru
 Quick Start
 ------------
 
+```
+go get github.com/els0r/goProbe/...
+```
+
 See the installation section for more details.
 
-The package itself now requires a fully set up  `go` environment. Running install/build will suffice
+The package itself now requires a fully set up  `go` environment. Running install/build will suffice to build the binaries goProbe, goQuery and goConvert.
 
 ```
-go install -i github.com/els0r/goProbe/cmd/goProbe
-go install -i github.com/els0r/goProbe/cmd/goQuery
-go install -i github.com/els0r/goProbe/cmd/goConvert
+go install -i github.com/els0r/goProbe/...
 ```
 
-The addon folder provides a Makefile for building the software suit. To use it, run
+The addon folder provides a Makefile for building the software suite. To use it, run
 
 ```
 cd addon
