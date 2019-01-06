@@ -1,6 +1,6 @@
 /////////////////////////////////////////////////////////////////////////////////
 //
-// cmd.go
+// goProbe.go
 //
 // Written by Lorenz Breidenbach lob@open.ch, December 2015
 // Copyright (c) 2015 Open Systems AG, Switzerland
@@ -19,6 +19,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -26,6 +27,7 @@ import (
 	"github.com/els0r/goProbe/pkg/capture"
 	"github.com/els0r/goProbe/pkg/goDB"
 	"github.com/els0r/goProbe/pkg/version"
+	"github.com/els0r/status"
 
 	capconfig "github.com/els0r/goProbe/cmd/goProbe/config"
 )
@@ -45,9 +47,9 @@ const (
 	CONTROL_CMD_RELOAD = "RELOAD"
 	CONTROL_CMD_ERRORS = "ERRORS"
 
-	CONTROL_REPLY_DONE       = "DONE"
-	CONTROL_REPLY_ERROR      = "ERROR"
-	CONTROL_REPY_UNKNOWN_CMD = "UNKNOWN COMMAND"
+	CONTROL_REPLY_DONE        = "DONE"
+	CONTROL_REPLY_ERROR       = "ERROR"
+	CONTROL_REPLY_UNKNOWN_CMD = "UNKNOWN COMMAND"
 )
 
 // flag handling
@@ -161,6 +163,7 @@ func main() {
 	}
 
 	// Open control socket
+	_ = os.RemoveAll(filepath.Join(dbpath, CONTROL_SOCKET))
 	listener, err := net.Listen("unix", filepath.Join(dbpath, CONTROL_SOCKET))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to listen on control socket '%s': %s\n", CONTROL_SOCKET, err)
@@ -384,11 +387,15 @@ func handleControlSocket(listener net.Listener, writeoutsChan chan<- writeout) {
 				_, writeError = io.WriteString(conn, msg+"\n")
 			}
 
+			// set status output to socket
+			status.SetOutput(conn)
+
 			scanner := bufio.NewScanner(conn)
 			for scanner.Scan() {
 				switch scanner.Text() {
 				case CONTROL_CMD_RELOAD:
 					configMutex.Lock()
+					status.Line("Reloading configuration")
 					if err := reloadConfig(); err == nil {
 						captureManagerMutex.Lock()
 						woChan := make(chan capture.TaggedAggFlowMap, MAX_IFACES)
@@ -397,61 +404,104 @@ func handleControlSocket(listener net.Listener, writeoutsChan chan<- writeout) {
 						close(woChan)
 						captureManagerMutex.Unlock()
 
-						writeLn(CONTROL_REPLY_DONE)
+						status.Ok("")
 					} else {
 						capture.SysLog.Err(err.Error())
-						writeLn(CONTROL_REPLY_ERROR)
+						status.Fail(err.Error())
 					}
 					configMutex.Unlock()
 				case CONTROL_CMD_STATUS, CONTROL_CMD_DEBUGSTATUS:
 					captureManagerMutex.Lock()
-					writeLn(fmt.Sprintf("%.0f", time.Now().Sub(lastRotation).Seconds()))
-					for iface, status := range captureManager.StatusAll() {
-						var stateStr string
-						switch scanner.Text() {
-						case CONTROL_CMD_STATUS:
-							stateStr = stateMessage(status.State)
-						case CONTROL_CMD_DEBUGSTATUS:
-							stateStr = status.State.String()
+
+					stats := captureManager.StatusAll()
+
+					writeLn("Interface and pcap statistics")
+
+					// print info for each interface
+					var loggedRcvd, pcapRcvd, pcapDrop, pcapIfDrop uint64
+					var numActive int
+					for _, stat := range stats {
+						if stat.Stats.Pcap != nil {
+							loggedRcvd += uint64(stat.Stats.PacketsLogged)
+							pcapRcvd += uint64(stat.Stats.Pcap.PacketsReceived)
+							pcapDrop += uint64(stat.Stats.Pcap.PacketsDropped)
+							pcapIfDrop += uint64(stat.Stats.Pcap.PacketsIfDropped)
 						}
-						if status.Stats.Pcap == nil {
-							writeLn(fmt.Sprintf("%s %s %d NA NA NA",
-								iface,
-								stateStr,
-								status.Stats.PacketsLogged,
-							))
+						if stat.State == capture.CAPTURE_STATE_ACTIVE {
+							numActive++
+						}
+					}
+					writeLn(fmt.Sprintf(
+						`
+   last writeout: %.0fs ago
+  packets logged: %d
+
+   pcap received: %d
+         dropped: %d
+   iface dropped: %d`,
+						time.Now().Sub(lastRotation).Seconds(),
+						loggedRcvd, pcapRcvd, pcapDrop, pcapIfDrop))
+
+					if scanner.Text() == CONTROL_CMD_DEBUGSTATUS {
+						writeLn(fmt.Sprintf("\n%s   RCVD     DROP   IFDROP", strings.Repeat(" ", status.StatusLineIndent+8+4)))
+
+						for iface, stat := range stats {
+							var pcapInfoStr string
+							if stat.Stats.Pcap != nil {
+								pcapInfoStr = fmt.Sprintf("%8d %8d %8d",
+									stat.Stats.Pcap.PacketsReceived,
+									stat.Stats.Pcap.PacketsDropped,
+									stat.Stats.Pcap.PacketsIfDropped)
+							}
+
+							status.Line(iface)
+							switch stat.State {
+							case capture.CAPTURE_STATE_UNINITIALIZED:
+								status.Warn("unitialized")
+							case capture.CAPTURE_STATE_INITIALIZED:
+								status.Warn("initialized")
+							case capture.CAPTURE_STATE_ACTIVE:
+								status.Ok(pcapInfoStr)
+							case capture.CAPTURE_STATE_ERROR:
+								status.Fail("error")
+							default:
+								status.Custom(status.White, "NONE", "Unknown capture state")
+							}
+
+							pcapInfoStr = ""
+						}
+					}
+
+					writeLn("")
+					status.Line("Total")
+
+					activeStr := fmt.Sprintf("%d/%d interfaces active", numActive, len(stats))
+					if numActive != len(stats) {
+						if numActive == 0 {
+							status.Fail(activeStr)
 						} else {
-							writeLn(fmt.Sprintf("%s %s %d %d %d %d",
-								iface,
-								stateStr,
-								status.Stats.PacketsLogged,
-								status.Stats.Pcap.PacketsReceived,
-								status.Stats.Pcap.PacketsDropped,
-								status.Stats.Pcap.PacketsIfDropped,
-							))
+							status.Warn(activeStr)
 						}
+					} else {
+						status.Ok(activeStr)
 					}
 					captureManagerMutex.Unlock()
 
-					writeLn(CONTROL_REPLY_DONE)
 				case CONTROL_CMD_ERRORS:
 					captureManagerMutex.Lock()
 					for iface, errs := range captureManager.ErrorsAll() {
+						status.Line(iface)
 						if len(errs) > 0 {
-							writeLn(fmt.Sprintf("%s:", iface))
 							for errString, count := range errs {
-								writeLn(fmt.Sprintf(" [%8d] %s", count, errString))
+								status.Warnf(" [%8d] %s", count, errString)
 							}
 						} else {
-							writeLn(fmt.Sprintf("%s:\n no errors", iface))
+							status.Ok("no errors")
 						}
 					}
-
 					captureManagerMutex.Unlock()
-
-					writeLn(CONTROL_REPLY_DONE)
 				default:
-					writeLn(CONTROL_REPY_UNKNOWN_CMD)
+					writeLn(CONTROL_REPLY_UNKNOWN_CMD)
 				}
 			}
 			if writeError != nil {
