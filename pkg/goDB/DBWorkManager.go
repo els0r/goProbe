@@ -15,7 +15,6 @@ package goDB
 
 import (
 	"errors"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -24,6 +23,7 @@ import (
 	"time"
 
 	"github.com/els0r/goProbe/pkg/goDB/bigendian"
+	"github.com/els0r/log"
 )
 
 const (
@@ -42,15 +42,18 @@ type DBWorkManager struct {
 	iface              string
 	workloads          []DBWorkload
 	numProcessingUnits int
+
+	logger log.Logger
 }
 
 func NewDBWorkManager(dbpath string, iface string, numProcessingUnits int) (*DBWorkManager, error) {
 	// whenever a new workload is created the logging facility is set up
-	if err := InitDBLog(); err != nil {
+	l, err := log.NewConsoleLogger()
+	if err != nil {
 		return nil, err
 	}
 
-	return &DBWorkManager{filepath.Join(dbpath, iface), iface, []DBWorkload{}, numProcessingUnits}, nil
+	return &DBWorkManager{filepath.Join(dbpath, iface), iface, []DBWorkload{}, numProcessingUnits, l}, nil
 }
 
 // make number of workloads available to the outside world for loop bounds etc.
@@ -138,7 +141,7 @@ func (w *DBWorkManager) grabAndProcessWorkload(workloadChan <-chan DBWorkload, m
 
 		// if there is an error during one of the read jobs, throw a syslog message and terminate
 		if err = w.readBlocksAndEvaluate(workload, resultMap); err != nil {
-			SysLog.Err(err.Error())
+			w.logger.Err(err.Error())
 			mapChan <- nil
 			wg.Done()
 		}
@@ -221,7 +224,7 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workload DBWorkload, resultMap map
 			// Read the block from the file
 			if blocks[colIdx], err = columnFiles[colIdx].ReadTimedBlock(tstamp); err != nil {
 				blockBroken = true
-				SysLog.Warning(fmt.Sprintf("[D %s; B %d] Failed to read %s.gpf: %s", dir, tstamp, columnFileNames[colIdx], err.Error()))
+				w.logger.Warnf("[D %s; B %d] Failed to read %s.gpf: %s", dir, tstamp, columnFileNames[colIdx], err.Error())
 				break
 			}
 
@@ -229,7 +232,7 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workload DBWorkload, resultMap map
 			blockTstamp := bigendian.ReadInt64At(blocks[colIdx], 0) // The timestamp header is 8 bytes
 			if tstamp != blockTstamp {
 				blockBroken = true
-				SysLog.Warning(fmt.Sprintf("[Bl %d] Mismatch between timestamp in header [%d] of file [%s.gpf] and in block [%d]\n", b, tstamp, columnFileNames[colIdx], blockTstamp))
+				w.logger.Warnf("[Bl %d] Mismatch between timestamp in header [%d] of file [%s.gpf] and in block [%d]\n", b, tstamp, columnFileNames[colIdx], blockTstamp)
 				break
 			}
 
@@ -251,12 +254,12 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workload DBWorkload, resultMap map
 			l := len(blocks[colIdx]) - 8 // subtract timestamp
 			if l/columnSizeofs[colIdx] != numEntries {
 				blockBroken = true
-				SysLog.Warning(fmt.Sprintf("[Bl %d] Incorrect number of entries in file [%s.gpf]. Expected %d, found %d.\n", b, columnFileNames[colIdx], numEntries, l/columnSizeofs[colIdx]))
+				w.logger.Warnf("[Bl %d] Incorrect number of entries in file [%s.gpf]. Expected %d, found %d", b, columnFileNames[colIdx], numEntries, l/columnSizeofs[colIdx])
 				break
 			}
 			if l%columnSizeofs[colIdx] != 0 {
 				blockBroken = true
-				SysLog.Warning(fmt.Sprintf("[Bl %d] Entry size does not evenly divide block size in file [%s.gpf]\n", b, columnFileNames[colIdx]))
+				w.logger.Warnf("[Bl %d] Entry size does not evenly divide block size in file [%s.gpf]", b, columnFileNames[colIdx])
 				break
 			}
 		}

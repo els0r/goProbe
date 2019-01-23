@@ -25,6 +25,7 @@ import (
 
 	"github.com/els0r/goProbe/pkg/capture"
 	"github.com/els0r/goProbe/pkg/goDB"
+	"github.com/els0r/log"
 	"github.com/els0r/goProbe/pkg/version"
 
 	capconfig "github.com/els0r/goProbe/cmd/goProbe/config"
@@ -106,6 +107,8 @@ func reloadConfig() error {
 }
 
 func main() {
+	var err error
+
 	// A general note on error handling: Any errors encountered during startup that make it
 	// impossible to run are logged to stderr before the program terminates with a
 	// non-zero exit code.
@@ -123,30 +126,37 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Initialize logger
-	if err := capture.InitGPLog(); err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to initialize Logger. Exiting!\n")
-		os.Exit(1)
-	}
-
 	// Config file
-	var err error
 	config, err = capconfig.ParseFile(flagConfigFile)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, fmt.Sprintf("Failed to load config file: %s\n", err))
 		os.Exit(1)
 	}
+
+	// Initialize logger
+	var logger log.Logger
+
+	logger, err = log.NewFromString( // other loggers can be injected here
+		config.Logging.Destination,
+		log.WithLevel(log.GetLevel(config.Logging.Level)),
+	)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to initialize Logger: %s. Exiting!\n", err.Error())
+		os.Exit(1)
+	}
+	defer logger.Close()
+
 	dbpath = config.DBPath
-	capture.SysLog.Debug("Loaded config file")
+	logger.Debug("Loaded config file")
 
 	// It doesn't make sense to monitor zero interfaces
 	if len(config.Interfaces) == 0 {
-		fmt.Fprintf(os.Stderr, "No interfaces have been specified in the configuration file.\n")
+		logger.Err("No interfaces have been specified in the configuration file")
 		os.Exit(1)
 	}
 	// Limit the number of interfaces
 	if len(config.Interfaces) > MAX_IFACES {
-		fmt.Fprintf(os.Stderr, "Cannot monitor more than %d interfaces.\n", MAX_IFACES)
+		logger.Errf("Cannot monitor more than %d interfaces", MAX_IFACES)
 		os.Exit(1)
 	}
 
@@ -156,14 +166,14 @@ func main() {
 
 	// Create DB directory if it doesn't exist already.
 	if err := os.MkdirAll(dbpath, 0755); err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to create database directory: '%s'\n", err)
+		logger.Errf("Failed to create database directory: '%s'", err)
 		os.Exit(1)
 	}
 
 	// Open control socket
 	listener, err := net.Listen("unix", filepath.Join(dbpath, CONTROL_SOCKET))
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to listen on control socket '%s': %s\n", CONTROL_SOCKET, err)
+		logger.Errf("Failed to listen on control socket '%s': %s", CONTROL_SOCKET, err)
 		os.Exit(1)
 	}
 	defer listener.Close()
@@ -179,31 +189,31 @@ func main() {
 	defer capture.PacketLog.Close()
 
 	// None of the initialization steps failed.
-	capture.SysLog.Info("Started goProbe")
+	logger.Info("Started goProbe")
 
 	// Start goroutine for writeouts
 	writeoutsChan := make(chan writeout, WRITEOUTSCHAN_DEPTH)
 	completedWriteoutsChan := make(chan struct{})
-	go handleWriteouts(writeoutsChan, completedWriteoutsChan, config.SyslogFlows)
+	go handleWriteouts(writeoutsChan, completedWriteoutsChan, config.SyslogFlows, logger)
 
 	lastRotation = time.Now()
 
-	captureManager = capture.NewCaptureManager()
+	captureManager = capture.NewCaptureManager(logger)
 	// No captures are being deleted here, so we can safely discard the channel we pass
 	captureManagerMutex.Lock()
 	captureManager.Update(config.Interfaces, make(chan capture.TaggedAggFlowMap))
 	captureManagerMutex.Unlock()
 
 	// We're ready to accept commands on the control socket
-	go handleControlSocket(listener, writeoutsChan)
+	go handleControlSocket(listener, writeoutsChan, logger)
 
 	// Start regular rotations
-	go handleRotations(writeoutsChan)
+	go handleRotations(writeoutsChan, logger)
 
 	// Wait for signal to exit
 	<-sigExitChan
 
-	capture.SysLog.Debug("Shutting down")
+	logger.Debug("Shutting down")
 
 	// We intentionally don't unlock the mutex hereafter,
 	// because the program exits anyways. This ensures that there
@@ -225,14 +235,14 @@ func main() {
 	return
 }
 
-func handleRotations(writeoutsChan chan<- writeout) {
+func handleRotations(writeoutsChan chan<- writeout, logger log.Logger) {
 	// One rotation every DB_WRITE_INTERVAL seconds...
 	ticker := time.NewTicker(time.Second * time.Duration(DB_WRITE_INTERVAL))
 	for {
 		select {
 		case <-ticker.C:
 			captureManagerMutex.Lock()
-			capture.SysLog.Debug("Initiating flow data flush")
+			logger.Debug("Initiating flow data flush")
 
 			lastRotation = time.Now()
 			woChan := make(chan capture.TaggedAggFlowMap, MAX_IFACES)
@@ -242,20 +252,20 @@ func handleRotations(writeoutsChan chan<- writeout) {
 
 			if len(writeoutsChan) > 2 {
 				if len(writeoutsChan) > WRITEOUTSCHAN_DEPTH {
-					capture.SysLog.Err(fmt.Sprintf("Writeouts are lagging behind too much: Queue length is %d", len(writeoutsChan)))
+					logger.Err(fmt.Sprintf("Writeouts are lagging behind too much: Queue length is %d", len(writeoutsChan)))
 					os.Exit(1)
 				}
-				capture.SysLog.Warning(fmt.Sprintf("Writeouts are lagging behind: Queue length is %d", len(writeoutsChan)))
+				logger.Warn(fmt.Sprintf("Writeouts are lagging behind: Queue length is %d", len(writeoutsChan)))
 			}
 
-			capture.SysLog.Debug("Restarting any interfaces that have encountered errors.")
+			logger.Debug("Restarting any interfaces that have encountered errors.")
 			captureManager.EnableAll()
 			captureManagerMutex.Unlock()
 		}
 	}
 }
 
-func handleWriteouts(writeoutsChan <-chan writeout, doneChan chan<- struct{}, logToSyslog bool) {
+func handleWriteouts(writeoutsChan <-chan writeout, doneChan chan<- struct{}, logToSyslog bool, logger log.Logger) {
 	writeoutsCount := 0
 	dbWriters := make(map[string]*goDB.DBWriter)
 	lastWrite := make(map[string]int)
@@ -266,7 +276,7 @@ func handleWriteouts(writeoutsChan <-chan writeout, doneChan chan<- struct{}, lo
 		if syslogWriter, err = goDB.NewSyslogDBWriter(); err != nil {
 			// we are not failing here due to the fact that a DB write out should still be attempted.
 			// TODO: consider making a hard fail configurable
-			capture.SysLog.Err(fmt.Sprintf("Failed to create syslog based flow writer: %s", err.Error()))
+			logger.Err(fmt.Sprintf("Failed to create syslog based flow writer: %s", err.Error()))
 		}
 	}
 
@@ -299,7 +309,7 @@ func handleWriteouts(writeoutsChan <-chan writeout, doneChan chan<- struct{}, lo
 			update, err := dbWriters[taggedMap.Iface].Write(taggedMap.Map, meta, writeout.Timestamp.Unix())
 			lastWrite[taggedMap.Iface] = writeoutsCount
 			if err != nil {
-				capture.SysLog.Err(fmt.Sprintf("Error during writeout: %s", err.Error()))
+				logger.Err(fmt.Sprintf("Error during writeout: %s", err.Error()))
 			} else {
 				summaryUpdates = append(summaryUpdates, update)
 			}
@@ -309,11 +319,11 @@ func handleWriteouts(writeoutsChan <-chan writeout, doneChan chan<- struct{}, lo
 				if syslogWriter != nil {
 					syslogWriter.Write(taggedMap.Map, taggedMap.Iface, writeout.Timestamp.Unix())
 				} else {
-					capture.SysLog.Err("Cannot write flows to <nil> syslog writer. Attempting reinitialization.")
+					logger.Err("Cannot write flows to <nil> syslog writer. Attempting reinitialization.")
 
 					// try to reinitialize the writer
 					if syslogWriter, err = goDB.NewSyslogDBWriter(); err != nil {
-						capture.SysLog.Err(fmt.Sprintf("Failed to reinitialize syslog writer: %s", err.Error()))
+						logger.Err(fmt.Sprintf("Failed to reinitialize syslog writer: %s", err.Error()))
 					}
 				}
 			}
@@ -332,7 +342,7 @@ func handleWriteouts(writeoutsChan <-chan writeout, doneChan chan<- struct{}, lo
 			return summ, nil
 		})
 		if err != nil {
-			capture.SysLog.Err(fmt.Sprintf("Error updating summary: %s", err.Error()))
+			logger.Err(fmt.Sprintf("Error updating summary: %s", err.Error()))
 		}
 
 		// Clean up dead writers. We say that a writer is dead
@@ -349,10 +359,10 @@ func handleWriteouts(writeoutsChan <-chan writeout, doneChan chan<- struct{}, lo
 		}
 
 		writeoutsCount++
-		capture.SysLog.Debug(fmt.Sprintf("Completed writeout (count: %d) in %s", count, time.Now().Sub(t0)))
+		logger.Debug(fmt.Sprintf("Completed writeout (count: %d) in %s", count, time.Now().Sub(t0)))
 	}
 
-	capture.SysLog.Debug("Completed all writeouts")
+	logger.Debug("Completed all writeouts")
 	doneChan <- struct{}{}
 }
 
@@ -362,15 +372,15 @@ func handleWriteouts(writeoutsChan <-chan writeout, doneChan chan<- struct{}, lo
 // There is no mechanism for graceful termination because we don't need one:
 // We never stop listening on the control socket once we have started until the program
 // terminates anyways and/or listener.Accept() fails.
-func handleControlSocket(listener net.Listener, writeoutsChan chan<- writeout) {
+func handleControlSocket(listener net.Listener, writeoutsChan chan<- writeout, logger log.Logger) {
 	for {
 		conn, err := listener.Accept()
 
 		if err != nil {
-			capture.SysLog.Info(fmt.Sprintf("Stopped listening on control socket because: %s.", err))
+			logger.Info(fmt.Sprintf("Stopped listening on control socket because: %s.", err))
 			return
 		}
-		capture.SysLog.Debug(fmt.Sprintf("Accepted connection on control socket."))
+		logger.Debug(fmt.Sprintf("Accepted connection on control socket."))
 
 		// handle connection
 		go func(conn net.Conn) {
@@ -399,7 +409,7 @@ func handleControlSocket(listener net.Listener, writeoutsChan chan<- writeout) {
 
 						writeLn(CONTROL_REPLY_DONE)
 					} else {
-						capture.SysLog.Err(err.Error())
+						logger.Err(err.Error())
 						writeLn(CONTROL_REPLY_ERROR)
 					}
 					configMutex.Unlock()
@@ -455,11 +465,11 @@ func handleControlSocket(listener net.Listener, writeoutsChan chan<- writeout) {
 				}
 			}
 			if writeError != nil {
-				capture.SysLog.Debug(fmt.Sprintf("Error on control socket: %s", writeError))
+				logger.Debug(fmt.Sprintf("Error on control socket: %s", writeError))
 				return
 			}
 			if scanner.Err() != nil {
-				capture.SysLog.Debug(fmt.Sprintf("Error on control socket: %s", scanner.Err()))
+				logger.Debug(fmt.Sprintf("Error on control socket: %s", scanner.Err()))
 				return
 			}
 		}(conn)

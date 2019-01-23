@@ -2,8 +2,8 @@
 //
 // GPLog.go
 //
-// Logging Interface that all other interfaces get access to in order to write
-// error messages to the underlying system logging facilities
+// Facility to log packets to disk to a pcap file in case they caused an error in
+// the flow processing pipeline
 //
 // Written by Lennart Elsen lel@open.ch, May 2014
 // Copyright (c) 2014 Open Systems AG, Switzerland
@@ -15,7 +15,6 @@ package capture
 
 import (
 	"fmt"
-	"log/syslog"
 	"os"
 	"sync"
 
@@ -35,22 +34,7 @@ type PcapWriter struct {
 	pcapWriter *pcapgo.Writer
 }
 
-var SysLog *syslog.Writer
 var PacketLog *PacketLogWriter
-
-const (
-	SLOG_ADDR = "127.0.0.1"
-	SLOG_PORT = "514"
-)
-
-func InitGPLog() error {
-
-	var err error
-	if SysLog, err = syslog.Dial("udp", SLOG_ADDR+":"+SLOG_PORT, syslog.LOG_NOTICE, "goProbe"); err != nil {
-		return err
-	}
-	return nil
-}
 
 func InitPacketLog(dbpath string, ifaces []string) {
 
