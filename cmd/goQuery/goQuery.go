@@ -320,7 +320,7 @@ func throwMsg(msg string, external bool, fmtSpec string) {
 			if err != nil {
 				return
 			}
-			logger.Err(msg)
+			logger.Error(msg)
 		}
 		message := map[string]string{
 			"status":        status,

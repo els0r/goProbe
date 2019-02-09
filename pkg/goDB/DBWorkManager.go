@@ -141,7 +141,7 @@ func (w *DBWorkManager) grabAndProcessWorkload(workloadChan <-chan DBWorkload, m
 
 		// if there is an error during one of the read jobs, throw a syslog message and terminate
 		if err = w.readBlocksAndEvaluate(workload, resultMap); err != nil {
-			w.logger.Err(err.Error())
+			w.logger.Error(err.Error())
 			mapChan <- nil
 			wg.Done()
 		}

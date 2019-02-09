@@ -151,12 +151,12 @@ func main() {
 
 	// It doesn't make sense to monitor zero interfaces
 	if len(config.Interfaces) == 0 {
-		logger.Err("No interfaces have been specified in the configuration file")
+		logger.Error("No interfaces have been specified in the configuration file")
 		os.Exit(1)
 	}
 	// Limit the number of interfaces
 	if len(config.Interfaces) > MAX_IFACES {
-		logger.Errf("Cannot monitor more than %d interfaces", MAX_IFACES)
+		logger.Errorf("Cannot monitor more than %d interfaces", MAX_IFACES)
 		os.Exit(1)
 	}
 
@@ -166,14 +166,14 @@ func main() {
 
 	// Create DB directory if it doesn't exist already.
 	if err := os.MkdirAll(dbpath, 0755); err != nil {
-		logger.Errf("Failed to create database directory: '%s'", err)
+		logger.Errorf("Failed to create database directory: '%s'", err)
 		os.Exit(1)
 	}
 
 	// Open control socket
 	listener, err := net.Listen("unix", filepath.Join(dbpath, CONTROL_SOCKET))
 	if err != nil {
-		logger.Errf("Failed to listen on control socket '%s': %s", CONTROL_SOCKET, err)
+		logger.Errorf("Failed to listen on control socket '%s': %s", CONTROL_SOCKET, err)
 		os.Exit(1)
 	}
 	defer listener.Close()
@@ -252,7 +252,7 @@ func handleRotations(writeoutsChan chan<- writeout, logger log.Logger) {
 
 			if len(writeoutsChan) > 2 {
 				if len(writeoutsChan) > WRITEOUTSCHAN_DEPTH {
-					logger.Err(fmt.Sprintf("Writeouts are lagging behind too much: Queue length is %d", len(writeoutsChan)))
+					logger.Error(fmt.Sprintf("Writeouts are lagging behind too much: Queue length is %d", len(writeoutsChan)))
 					os.Exit(1)
 				}
 				logger.Warn(fmt.Sprintf("Writeouts are lagging behind: Queue length is %d", len(writeoutsChan)))
@@ -276,7 +276,7 @@ func handleWriteouts(writeoutsChan <-chan writeout, doneChan chan<- struct{}, lo
 		if syslogWriter, err = goDB.NewSyslogDBWriter(); err != nil {
 			// we are not failing here due to the fact that a DB write out should still be attempted.
 			// TODO: consider making a hard fail configurable
-			logger.Err(fmt.Sprintf("Failed to create syslog based flow writer: %s", err.Error()))
+			logger.Error(fmt.Sprintf("Failed to create syslog based flow writer: %s", err.Error()))
 		}
 	}
 
@@ -309,7 +309,7 @@ func handleWriteouts(writeoutsChan <-chan writeout, doneChan chan<- struct{}, lo
 			update, err := dbWriters[taggedMap.Iface].Write(taggedMap.Map, meta, writeout.Timestamp.Unix())
 			lastWrite[taggedMap.Iface] = writeoutsCount
 			if err != nil {
-				logger.Err(fmt.Sprintf("Error during writeout: %s", err.Error()))
+				logger.Error(fmt.Sprintf("Error during writeout: %s", err.Error()))
 			} else {
 				summaryUpdates = append(summaryUpdates, update)
 			}
@@ -319,11 +319,11 @@ func handleWriteouts(writeoutsChan <-chan writeout, doneChan chan<- struct{}, lo
 				if syslogWriter != nil {
 					syslogWriter.Write(taggedMap.Map, taggedMap.Iface, writeout.Timestamp.Unix())
 				} else {
-					logger.Err("Cannot write flows to <nil> syslog writer. Attempting reinitialization.")
+					logger.Error("Cannot write flows to <nil> syslog writer. Attempting reinitialization.")
 
 					// try to reinitialize the writer
 					if syslogWriter, err = goDB.NewSyslogDBWriter(); err != nil {
-						logger.Err(fmt.Sprintf("Failed to reinitialize syslog writer: %s", err.Error()))
+						logger.Error(fmt.Sprintf("Failed to reinitialize syslog writer: %s", err.Error()))
 					}
 				}
 			}
@@ -342,7 +342,7 @@ func handleWriteouts(writeoutsChan <-chan writeout, doneChan chan<- struct{}, lo
 			return summ, nil
 		})
 		if err != nil {
-			logger.Err(fmt.Sprintf("Error updating summary: %s", err.Error()))
+			logger.Error(fmt.Sprintf("Error updating summary: %s", err.Error()))
 		}
 
 		// Clean up dead writers. We say that a writer is dead
@@ -409,7 +409,7 @@ func handleControlSocket(listener net.Listener, writeoutsChan chan<- writeout, l
 
 						writeLn(CONTROL_REPLY_DONE)
 					} else {
-						logger.Err(err.Error())
+						logger.Error(err.Error())
 						writeLn(CONTROL_REPLY_ERROR)
 					}
 					configMutex.Unlock()

@@ -443,7 +443,7 @@ func (c *Capture) process() {
 		if c.state == CAPTURE_STATE_ACTIVE {
 			if err := capturePacket(); err != nil {
 				c.setState(CAPTURE_STATE_ERROR)
-				c.logger.Errf("Interface '%s': %s", c.iface, err.Error())
+				c.logger.Errorf("Interface '%s': %s", c.iface, err.Error())
 			}
 
 			select {
@@ -474,7 +474,7 @@ func (c *Capture) process() {
 // transitions into state CAPTURE_STATE_ERROR.
 func (c *Capture) initialize() {
 	initializationErr := func(msg string, args ...interface{}) {
-		c.logger.Errf(msg, args...)
+		c.logger.Errorf(msg, args...)
 		c.setState(CAPTURE_STATE_ERROR)
 		return
 	}
@@ -603,7 +603,7 @@ func (c *Capture) tryGetPcapStats() *pcap.Stats {
 	if c.pcapHandle != nil {
 		pcapStats, err = c.pcapHandle.Stats()
 		if err != nil {
-			c.logger.Errf("Interface '%s': error while requesting pcap stats: %s", err.Error())
+			c.logger.Errorf("Interface '%s': error while requesting pcap stats: %s", err.Error())
 		}
 	}
 	return pcapStats

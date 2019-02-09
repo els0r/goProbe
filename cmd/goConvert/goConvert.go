@@ -155,9 +155,6 @@ func main() {
 
 	fmt.Printf("Converting %d rows in file %s\n", config.NumLines, config.FilePath)
 
-	// init goprobe log
-	goDB.InitDBLog()
-
 	// open file
 	var (
 		file *os.File
