@@ -48,7 +48,7 @@ type DBWorkManager struct {
 
 func NewDBWorkManager(dbpath string, iface string, numProcessingUnits int) (*DBWorkManager, error) {
 	// whenever a new workload is created the logging facility is set up
-	l, err := log.NewConsoleLogger()
+	l, err := log.NewFromString("syslog")
 	if err != nil {
 		return nil, err
 	}

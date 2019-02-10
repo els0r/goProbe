@@ -28,8 +28,8 @@ import (
 	"time"
 
 	"github.com/els0r/goProbe/pkg/goDB"
-	"github.com/els0r/log"
 	"github.com/els0r/goProbe/pkg/version"
+	"github.com/els0r/log"
 	//    "runtime/pprof"
 )
 
@@ -315,8 +315,7 @@ func throwMsg(msg string, external bool, fmtSpec string) {
 	if fmtSpec == "json" {
 		// If called non-interactively, write full error message to message log
 		if external {
-			// TODO: change this to syslog
-			logger, err := log.NewConsoleLogger()
+			logger, err := log.NewFromString("syslog")
 			if err != nil {
 				return
 			}

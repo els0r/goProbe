@@ -25,8 +25,8 @@ import (
 
 	"github.com/els0r/goProbe/pkg/capture"
 	"github.com/els0r/goProbe/pkg/goDB"
-	"github.com/els0r/log"
 	"github.com/els0r/goProbe/pkg/version"
+	"github.com/els0r/log"
 
 	capconfig "github.com/els0r/goProbe/cmd/goProbe/config"
 )
@@ -112,7 +112,10 @@ func main() {
 	// A general note on error handling: Any errors encountered during startup that make it
 	// impossible to run are logged to stderr before the program terminates with a
 	// non-zero exit code.
-	// Issues encountered during capture will be logged to syslog.
+	// Issues encountered during capture will be logged to syslog by default
+
+	// logger for the initial setup phase (logs to stdout)
+	var initLogger = log.NewTextLogger()
 
 	flag.Parse()
 	if flagVersion {
@@ -121,7 +124,7 @@ func main() {
 	}
 
 	if flagConfigFile == "" {
-		fmt.Fprintf(os.Stderr, "Please specify a config file.\n")
+		initLogger.Error("Please specify a config file")
 		flag.PrintDefaults()
 		os.Exit(1)
 	}
@@ -129,21 +132,23 @@ func main() {
 	// Config file
 	config, err = capconfig.ParseFile(flagConfigFile)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, fmt.Sprintf("Failed to load config file: %s\n", err))
+		initLogger.Errorf("Failed to load config file: %s", err)
 		os.Exit(1)
 	}
 
 	// Initialize logger
 	var logger log.Logger
 
-	logger, err = log.NewFromString( // other loggers can be injected here
+	// other loggers can be injected here
+	logger, err = log.NewFromString(
 		config.Logging.Destination,
 		log.WithLevel(log.GetLevel(config.Logging.Level)),
 	)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to initialize Logger: %s. Exiting!\n", err.Error())
+		initLogger.Errorf("Failed to initialize Logger: %s. Exiting!", err)
 		os.Exit(1)
 	}
+	initLogger.Close()
 	defer logger.Close()
 
 	dbpath = config.DBPath
