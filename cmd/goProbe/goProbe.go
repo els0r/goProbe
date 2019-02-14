@@ -163,7 +163,12 @@ func main() {
 	}
 
 	// Open control socket
-	_ = os.RemoveAll(filepath.Join(dbpath, CONTROL_SOCKET))
+	err = os.RemoveAll(filepath.Join(dbpath, CONTROL_SOCKET))
+	if err != nil {
+		// just log the error, don't bail out, since goProbe's main tasks are not affected
+		fmt.Fprintf(os.Stderr, "Failed to clean up old control socket '%s': %s\n", CONTROL_SOCKET, err)
+	}
+
 	listener, err := net.Listen("unix", filepath.Join(dbpath, CONTROL_SOCKET))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to listen on control socket '%s': %s\n", CONTROL_SOCKET, err)
