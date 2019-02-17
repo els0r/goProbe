@@ -21,9 +21,6 @@ import (
 )
 
 const (
-	// Used for compression applied by GPFile.
-	COMPRESSION_LEVEL = 512
-
 	METADATA_FILE_NAME = "meta.json"
 )
 
@@ -83,7 +80,7 @@ func (w *DBWriter) writeBlock(timestamp int64, column string, data []byte) error
 	}
 	defer gpfile.Close()
 
-	if err := gpfile.WriteTimedBlock(timestamp, data, COMPRESSION_LEVEL); err != nil {
+	if err := gpfile.WriteTimedBlock(timestamp, data); err != nil {
 		return err
 	}
 
