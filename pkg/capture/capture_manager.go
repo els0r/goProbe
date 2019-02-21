@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/els0r/goProbe/pkg/goDB"
+	"github.com/els0r/log"
 )
 
 // TaggedAggFlowMap represents an aggregated
@@ -36,13 +37,15 @@ type TaggedAggFlowMap struct {
 type CaptureManager struct {
 	sync.Mutex
 	captures map[string]*Capture
+	logger   log.Logger
 }
 
 // NewCaptureManager creates a new CaptureManager and
 // returns a pointer to it.
-func NewCaptureManager() *CaptureManager {
+func NewCaptureManager(logger log.Logger) *CaptureManager {
 	return &CaptureManager{
 		captures: make(map[string]*Capture),
+		logger:   logger,
 	}
 }
 
@@ -68,10 +71,10 @@ func (cm *CaptureManager) enable(ifaces map[string]CaptureConfig) {
 				capture.Update(config)
 			})
 		} else {
-			capture := NewCapture(iface, config)
+			capture := NewCapture(iface, config, cm.logger)
 			cm.setCapture(iface, capture)
 
-			SysLog.Info(fmt.Sprintf("Added interface '%s' to capture list.", iface))
+			cm.logger.Info(fmt.Sprintf("Added interface '%s' to capture list.", iface))
 
 			rg.Run(func() {
 				capture.Enable()
@@ -103,7 +106,7 @@ func (cm *CaptureManager) EnableAll() {
 
 	rg.Wait()
 
-	SysLog.Debug(fmt.Sprintf("Completed interface capture check in %s", time.Now().Sub(t0)))
+	cm.logger.Debug(fmt.Sprintf("Completed interface capture check in %s", time.Now().Sub(t0)))
 }
 
 func (cm *CaptureManager) disable(ifaces []string) {
@@ -168,7 +171,7 @@ func (cm *CaptureManager) DisableAll() {
 
 	cm.disable(cm.ifaceNames())
 
-	SysLog.Info(fmt.Sprintf("Disabled all captures in %s", time.Now().Sub(t0)))
+	cm.logger.Info(fmt.Sprintf("Disabled all captures in %s", time.Now().Sub(t0)))
 }
 
 // Update attempts to enable all Capture instances given by
@@ -228,11 +231,11 @@ func (cm *CaptureManager) Update(ifaces map[string]CaptureConfig, returnChan cha
 		})
 
 		cm.delCapture(iface)
-		SysLog.Info(fmt.Sprintf("Deleted interface '%s' from capture list.", iface))
+		cm.logger.Info(fmt.Sprintf("Deleted interface '%s' from capture list.", iface))
 	}
 	rg.Wait()
 
-	SysLog.Debug(fmt.Sprintf("Updated interface list in %s", time.Now().Sub(t0)))
+	cm.logger.Debug(fmt.Sprintf("Updated interface list in %s", time.Now().Sub(t0)))
 }
 
 // StatusAll() returns the statuses of all managed Capture instances.
@@ -297,7 +300,7 @@ func (cm *CaptureManager) RotateAll(returnChan chan TaggedAggFlowMap) {
 	}
 	rg.Wait()
 
-	SysLog.Debug(fmt.Sprintf("Completed rotation of all captures in %s", time.Now().Sub(t0)))
+	cm.logger.Debug(fmt.Sprintf("Completed rotation of all captures in %s", time.Now().Sub(t0)))
 }
 
 // CloseAll() closes and deletes all Capture instances managed by the

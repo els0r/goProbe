@@ -24,16 +24,24 @@ type Config struct {
 	DBPath      string                           `json:"db_path"`
 	Interfaces  map[string]capture.CaptureConfig `json:"interfaces"`
 	SyslogFlows bool                             `json:"syslog_flows"`
+	Logging     LogConfig                        `json:"logging"`
 }
 
-func NewConfig() *Config {
+type LogConfig struct {
+	Destination string `json:"destination"`
+	Level       string `json:"level"`
+}
+
+func New() *Config {
 	interfaces := make(map[string]capture.CaptureConfig)
+
 	return &Config{
 		Interfaces: interfaces,
+		Logging:    LogConfig{"syslog", "info"}, // default config is syslog
 	}
 }
 
-func (c Config) Validate() error {
+func (c *Config) Validate() error {
 	if c.DBPath == "" {
 		return fmt.Errorf("Database path must not be empty")
 	}
@@ -47,7 +55,7 @@ func (c Config) Validate() error {
 }
 
 func ParseFile(path string) (*Config, error) {
-	config := NewConfig()
+	config := New()
 
 	fd, err := os.Open(path)
 	if err != nil {

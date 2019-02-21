@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/els0r/goProbe/pkg/goDB"
+	"github.com/els0r/log"
 	"github.com/fako1024/gopacket"
 	"github.com/fako1024/gopacket/layers"
 	"github.com/fako1024/gopacket/pcap"
@@ -170,7 +171,7 @@ func (cmd captureCommandUpdate) execute(c *Capture) {
 		c.initialize()
 	}
 
-	SysLog.Debug(fmt.Sprintf("Interface '%s': (re)initialized for configuration update", c.iface))
+	c.logger.Debugf("Interface '%s': (re)initialized for configuration update", c.iface)
 
 	// If initialization in last step succeeded, activate
 	if c.state == CAPTURE_STATE_INITIALIZED {
@@ -340,10 +341,13 @@ type Capture struct {
 
 	// error map for logging errors more properly
 	errMap errorMap
+
+	// logging
+	logger log.Logger
 }
 
 // NewCapture creates a new Capture associated with the given iface.
-func NewCapture(iface string, config CaptureConfig) *Capture {
+func NewCapture(iface string, config CaptureConfig, logger log.Logger) *Capture {
 	c := &Capture{
 		iface,
 		sync.Mutex{},
@@ -356,10 +360,11 @@ func NewCapture(iface string, config CaptureConfig) *Capture {
 			PacketsLogged: 0,
 		},
 		0, // packetsLogged
-		NewFlowLog(),
+		NewFlowLog(logger),
 		nil, // pcapHandle
 		nil, // packetSource
 		make(map[string]int),
+		logger,
 	}
 	go c.process()
 	return c
@@ -369,7 +374,7 @@ func NewCapture(iface string, config CaptureConfig) *Capture {
 // a Capture. It also logs the state change.
 func (c *Capture) setState(s CaptureState) {
 	c.state = s
-	SysLog.Debug(fmt.Sprintf("Interface '%s': entered capture state %s", c.iface, s))
+	c.logger.Debugf("Interface '%s': entered capture state %s", c.iface, s)
 }
 
 // process is the heart of the Capture. It listens for network traffic on the
@@ -415,7 +420,7 @@ func (c *Capture) process() {
 			if _, exists := c.errMap[err.Error()]; !exists {
 				// log the packet to the pcap error logs
 				if logerr := PacketLog.Log(c.iface, packet, CAPTURE_SNAPLEN); logerr != nil {
-					SysLog.Info("failed to log faulty packet: " + logerr.Error())
+					c.logger.Info("failed to log faulty packet: " + logerr.Error())
 				}
 			}
 
@@ -438,7 +443,7 @@ func (c *Capture) process() {
 		if c.state == CAPTURE_STATE_ACTIVE {
 			if err := capturePacket(); err != nil {
 				c.setState(CAPTURE_STATE_ERROR)
-				SysLog.Err(fmt.Sprintf("Interface '%s': %s", c.iface, err.Error()))
+				c.logger.Errorf("Interface '%s': %s", c.iface, err.Error())
 			}
 
 			select {
@@ -469,7 +474,7 @@ func (c *Capture) process() {
 // transitions into state CAPTURE_STATE_ERROR.
 func (c *Capture) initialize() {
 	initializationErr := func(msg string, args ...interface{}) {
-		SysLog.Err(fmt.Sprintf(msg, args...))
+		c.logger.Errorf(msg, args...)
 		c.setState(CAPTURE_STATE_ERROR)
 		return
 	}
@@ -539,7 +544,7 @@ func (c *Capture) activate() {
 		panic("Need state CAPTURE_STATE_INITIALIZED")
 	}
 	c.setState(CAPTURE_STATE_ACTIVE)
-	SysLog.Debug(fmt.Sprintf("Interface '%s': capture active. Link type: %s", c.iface, c.pcapHandle.LinkType()))
+	c.logger.Debugf("Interface '%s': capture active. Link type: %s", c.iface, c.pcapHandle.LinkType())
 }
 
 // deactivate transitions from CAPTURE_STATE_ACTIVE
@@ -549,7 +554,7 @@ func (c *Capture) deactivate() {
 		panic("Need state CAPTURE_STATE_ACTIVE")
 	}
 	c.setState(CAPTURE_STATE_INITIALIZED)
-	SysLog.Debug(fmt.Sprintf("Interface '%s': deactivated", c.iface))
+	c.logger.Debugf("Interface '%s': deactivated", c.iface)
 }
 
 // recoverError transitions from CAPTURE_STATE_ERROR
@@ -598,7 +603,7 @@ func (c *Capture) tryGetPcapStats() *pcap.Stats {
 	if c.pcapHandle != nil {
 		pcapStats, err = c.pcapHandle.Stats()
 		if err != nil {
-			SysLog.Err(fmt.Sprintf("Interface '%s': error while requesting pcap stats: %s", err.Error()))
+			c.logger.Errorf("Interface '%s': error while requesting pcap stats: %s", err.Error())
 		}
 	}
 	return pcapStats

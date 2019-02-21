@@ -29,6 +29,7 @@ import (
 
 	"github.com/els0r/goProbe/pkg/goDB"
 	"github.com/els0r/goProbe/pkg/version"
+	"github.com/els0r/log"
 	//    "runtime/pprof"
 )
 
@@ -314,10 +315,11 @@ func throwMsg(msg string, external bool, fmtSpec string) {
 	if fmtSpec == "json" {
 		// If called non-interactively, write full error message to message log
 		if external {
-			if goDB.InitDBLog() != nil {
+			logger, err := log.NewFromString("syslog")
+			if err != nil {
 				return
 			}
-			goDB.SysLog.Err(msg)
+			logger.Error(msg)
 		}
 		message := map[string]string{
 			"status":        status,

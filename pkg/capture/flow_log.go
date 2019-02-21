@@ -13,17 +13,21 @@
 
 package capture
 
-import "github.com/els0r/goProbe/pkg/goDB"
+import (
+	"github.com/els0r/goProbe/pkg/goDB"
+	"github.com/els0r/log"
+)
 
 // A FlowLog stores flows. It is NOT threadsafe.
 type FlowLog struct {
 	// TODO(lob): Consider making this map[EPHash]GPFlow to reduce GC load
 	flowMap map[EPHash]*GPFlow
+	logger  log.Logger
 }
 
 // NewFlowLog creates a new flow log for storing flows.
-func NewFlowLog() *FlowLog {
-	return &FlowLog{make(map[EPHash]*GPFlow)}
+func NewFlowLog(logger log.Logger) *FlowLog {
+	return &FlowLog{make(map[EPHash]*GPFlow), logger}
 }
 
 // Add a packet to the flow log. If the packet belongs to a flow
@@ -47,7 +51,7 @@ func (fm *FlowLog) Add(packet *GPPacket) {
 // Returns an AggFlowMap containing all flows since the last call to Rotate.
 func (fm *FlowLog) Rotate() (agg goDB.AggFlowMap) {
 	if len(fm.flowMap) == 0 {
-		SysLog.Debug("There are currently no flow records available")
+		fm.logger.Debug("There are currently no flow records available")
 	}
 
 	fm.flowMap, agg = fm.transferAndAggregate()
