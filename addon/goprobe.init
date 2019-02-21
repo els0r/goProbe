@@ -70,11 +70,11 @@ gp_fetch_stats() {
         return 1
     fi
 
-    states=$( echo "STATUS" | socat - UNIX-CONNECT:$DB_PATH/control.sock | sed 's/^DONE$//' )
+    states=$( echo "STATUS" | socat - UNIX-CONNECT:$DB_PATH/control.sock )
     if [ "$states" = "" ]; then
        retval=1
     fi
-    echo "$states"
+    echo -e "$states"
     return $retval
 }
 
@@ -150,7 +150,7 @@ case "$1" in
             exit 1
           fi
 
-           echo "1 $out" | $PREFIX/goProbe/shared/gp_status.pl
+           echo -e "$out"
     else
           echo -e "\e[00;31mFAIL\e[00m (not running)"
       retval=1
