@@ -5,12 +5,10 @@ case $1 in
     /bin/echo "RELOAD" | /usr/bin/socat - UNIX-CONNECT:PREFIX/goProbe/db/control.sock > /dev/null
     ;;
   status)
-    output=$( /bin/echo "STATUS" | /usr/bin/socat - UNIX-CONNECT:/opt/ntm/goProbe/db/control.sock | sed 's/DONE//g' )
-    echo "0 $output" | PREFIX/goProbe/shared/gp_status.pl
+    /bin/echo "STATUS" | /usr/bin/socat - UNIX-CONNECT:/opt/ntm/goProbe/db/control.sock
     ;;
   debug)
-    output=$( /bin/echo "STATUS" | /usr/bin/socat - UNIX-CONNECT:/opt/ntm/goProbe/db/control.sock | sed 's/DONE//g' )
-    echo "1 $output" | PREFIX/goProbe/shared/gp_status.pl
+    /bin/echo "STATUS" | /usr/bin/socat - UNIX-CONNECT:/opt/ntm/goProbe/db/control.sock
     ;;
   *)
     ;;

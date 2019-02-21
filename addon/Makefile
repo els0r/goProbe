@@ -61,11 +61,10 @@ GOPACKET_SRC = github.com/fako1024/gopacket
 
 fetch:
 
-	echo "*** fetching gopacket dependencies"
+	echo "*** fetching dependencies"
 	go get github.com/mdlayher/raw
-
-	echo "*** fetching modified gopacket ***"
 	go get $(GOPACKET_SRC)
+	go get github.com/els0r/status
 
 compile:
 
@@ -89,14 +88,12 @@ go_install:
 	echo "*** creating binary tree ***"
 	mkdir -p absolute$(PREFIX)/$(PKG)/bin    && chmod 755 absolute$(PREFIX)/$(PKG)/bin
 	mkdir -p absolute$(PREFIX)/$(PKG)/etc    && chmod 755 absolute$(PREFIX)/$(PKG)/etc
-	mkdir -p absolute$(PREFIX)/$(PKG)/shared && chmod 755 absolute$(PREFIX)/$(PKG)/shared
 	mkdir -p absolute/etc/init.d             && chmod 755 absolute/etc/init.d
 
 	echo "*** installing $(GO_PRODUCT) and $(GO_QUERY) ***"
 	mv $(GOPATH)/bin/goProbe 	absolute$(PREFIX)/$(PKG)/bin
 	mv $(GOPATH)/bin/goQuery   	absolute$(PREFIX)/$(PKG)/bin
 	mv $(GOPATH)/bin/goConvert  absolute$(PREFIX)/$(PKG)/bin
-	cp gp_status.pl 	        absolute$(PREFIX)/$(PKG)/shared
 
 	# change the prefix variable in the init script
 	cp goprobe.init absolute/etc/init.d/goprobe.init
@@ -107,7 +104,6 @@ go_install:
 
 	#set the appropriate permissions
 	chmod -R 755 absolute$(PREFIX)/$(PKG)/bin \
-		absolute$(PREFIX)/$(PKG)/shared \
 		absolute$(PREFIX)/$(PKG)/etc \
 		absolute/etc/init.d \
 
