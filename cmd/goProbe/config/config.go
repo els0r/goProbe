@@ -14,11 +14,14 @@ package config
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
+	"sync"
 
 	"github.com/els0r/goProbe/pkg/capture"
 )
+
+// Expose global lock for the configuration
+var Mutex sync.Mutex
 
 type Config struct {
 	DBPath      string                           `json:"db_path"`
@@ -63,12 +66,7 @@ func ParseFile(path string) (*Config, error) {
 	}
 	defer fd.Close()
 
-	data, err := ioutil.ReadAll(fd)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := json.Unmarshal(data, config); err != nil {
+	if err := json.NewDecoder(fd).Decode(config); err != nil {
 		return nil, err
 	}
 
@@ -76,5 +74,20 @@ func ParseFile(path string) (*Config, error) {
 		return nil, err
 	}
 
+	// set the runtime DB path
+	if !runtimeDBPath.pathSet {
+		runtimeDBPath.path = config.DBPath
+	}
+
 	return config, nil
+}
+
+var runtimeDBPath = struct {
+	pathSet bool
+	path    string
+}{}
+
+// RuntimeDBPath returns the DB path set at the beginning of program execution
+func RuntimeDBPath() string {
+	return runtimeDBPath.path
 }

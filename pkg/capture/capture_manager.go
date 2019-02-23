@@ -20,11 +20,18 @@ import (
 	"github.com/els0r/log"
 )
 
+const (
+	// MAX_IFACES is the maximum number of interfaces we can monitor
+	MAX_IFACES = 1024
+
+	WRITEOUTSCHAN_DEPTH = 100
+)
+
 // TaggedAggFlowMap represents an aggregated
 // flow map tagged with CaptureStats and an
 // an interface name.
 //
-// Used by CaptureManager to return the results of
+// Used by Manager to return the results of
 // RotateAll() and Update().
 type TaggedAggFlowMap struct {
 	Map   goDB.AggFlowMap
@@ -32,24 +39,49 @@ type TaggedAggFlowMap struct {
 	Iface string
 }
 
-// CaptureManager manages a set of Capture instances.
-// Each interface can be associated with up to one Capture.
-type CaptureManager struct {
-	sync.Mutex
-	captures map[string]*Capture
-	logger   log.Logger
+// Writeout consists of a channel over which the individual
+// interfaces' TaggedAggFlowMaps are sent and is tagged with
+// the timestamp of when it was triggered.
+type Writeout struct {
+	Chan      <-chan TaggedAggFlowMap
+	Timestamp time.Time
 }
 
-// NewCaptureManager creates a new CaptureManager and
-// returns a pointer to it.
-func NewCaptureManager(logger log.Logger) *CaptureManager {
-	return &CaptureManager{
-		captures: make(map[string]*Capture),
-		logger:   logger,
+type WriteoutHandler struct {
+	CompletedChan chan struct{}
+	WriteoutChan  chan Writeout
+}
+
+// NewWriteoutHandler prepares a new handler for initiating flow writeouts
+func NewWriteoutHandler() *WriteoutHandler {
+	return &WriteoutHandler{
+		CompletedChan: make(chan struct{}),
+		WriteoutChan:  make(chan Writeout, WRITEOUTSCHAN_DEPTH),
 	}
 }
 
-func (cm *CaptureManager) ifaceNames() []string {
+// Manager manages a set of Capture instances.
+// Each interface can be associated with up to one Capture.
+type Manager struct {
+	sync.Mutex
+	captures        map[string]*Capture
+	logger          log.Logger
+	LastRotation    time.Time
+	WriteoutHandler *WriteoutHandler
+}
+
+// NewManager creates a new Manager and
+// returns a pointer to it.
+func NewManager(logger log.Logger) *Manager {
+	return &Manager{
+		captures:        make(map[string]*Capture),
+		logger:          logger,
+		LastRotation:    time.Now(),
+		WriteoutHandler: NewWriteoutHandler(),
+	}
+}
+
+func (cm *Manager) ifaceNames() []string {
 	ifaces := make([]string, 0, len(cm.captures))
 
 	cm.Lock()
@@ -61,7 +93,7 @@ func (cm *CaptureManager) ifaceNames() []string {
 	return ifaces
 }
 
-func (cm *CaptureManager) enable(ifaces map[string]CaptureConfig) {
+func (cm *Manager) enable(ifaces map[string]CaptureConfig) {
 	var rg RunGroup
 
 	for iface, config := range ifaces {
@@ -92,7 +124,7 @@ func (cm *CaptureManager) enable(ifaces map[string]CaptureConfig) {
 // that a Capture is supposed to monitor ceases to exist. Use
 // StateAll() to find out wheter the Capture instances encountered
 // an error.
-func (cm *CaptureManager) EnableAll() {
+func (cm *Manager) EnableAll() {
 	t0 := time.Now()
 
 	var rg RunGroup
@@ -109,7 +141,7 @@ func (cm *CaptureManager) EnableAll() {
 	cm.logger.Debug(fmt.Sprintf("Completed interface capture check in %s", time.Now().Sub(t0)))
 }
 
-func (cm *CaptureManager) disable(ifaces []string) {
+func (cm *Manager) disable(ifaces []string) {
 	var rg RunGroup
 
 	for _, iface := range ifaces {
@@ -121,7 +153,7 @@ func (cm *CaptureManager) disable(ifaces []string) {
 	rg.Wait()
 }
 
-func (cm *CaptureManager) getCapture(iface string) *Capture {
+func (cm *Manager) getCapture(iface string) *Capture {
 	cm.Lock()
 	c := cm.captures[iface]
 	cm.Unlock()
@@ -129,19 +161,19 @@ func (cm *CaptureManager) getCapture(iface string) *Capture {
 	return c
 }
 
-func (cm *CaptureManager) setCapture(iface string, capture *Capture) {
+func (cm *Manager) setCapture(iface string, capture *Capture) {
 	cm.Lock()
 	cm.captures[iface] = capture
 	cm.Unlock()
 }
 
-func (cm *CaptureManager) delCapture(iface string) {
+func (cm *Manager) delCapture(iface string) {
 	cm.Lock()
 	delete(cm.captures, iface)
 	cm.Unlock()
 }
 
-func (cm *CaptureManager) captureExists(iface string) bool {
+func (cm *Manager) captureExists(iface string) bool {
 	cm.Lock()
 	_, exists := cm.captures[iface]
 	cm.Unlock()
@@ -149,7 +181,7 @@ func (cm *CaptureManager) captureExists(iface string) bool {
 	return exists
 }
 
-func (cm *CaptureManager) capturesCopy() map[string]*Capture {
+func (cm *Manager) capturesCopy() map[string]*Capture {
 	copyMap := make(map[string]*Capture)
 
 	cm.Lock()
@@ -166,7 +198,7 @@ func (cm *CaptureManager) capturesCopy() map[string]*Capture {
 // Returns once all instances have been disabled.
 // The instances are not deleted, so you may later enable them again;
 // for example, by calling EnableAll().
-func (cm *CaptureManager) DisableAll() {
+func (cm *Manager) DisableAll() {
 	t0 := time.Now()
 
 	cm.disable(cm.ifaceNames())
@@ -178,17 +210,17 @@ func (cm *CaptureManager) DisableAll() {
 // ifaces. If an instance doesn't exist, it will be created.
 // If an instance has encountered an error or an instance's configuration
 // differs from the one specified in ifaces, it will be re-enabled.
-// Finally, if the CaptureManager manages an instance for an iface that does
+// Finally, if the Manager manages an instance for an iface that does
 // not occur in ifaces, the following actions are performed on the instance:
 // (1) the instance will be disabled,
 // (2) the instance will be rotated,
 // (3) the resulting flow data will be sent over returnChan,
 // (tagged with the interface name and stats),
 // (4) the instance will be closed,
-// and (5) the instance will be completely removed from the CaptureManager.
+// and (5) the instance will be completely removed from the Manager.
 //
 // Returns once all the above actions have been completed.
-func (cm *CaptureManager) Update(ifaces map[string]CaptureConfig, returnChan chan TaggedAggFlowMap) {
+func (cm *Manager) Update(ifaces map[string]CaptureConfig, returnChan chan TaggedAggFlowMap) {
 	t0 := time.Now()
 
 	ifaceSet := make(map[string]struct{})
@@ -239,7 +271,7 @@ func (cm *CaptureManager) Update(ifaces map[string]CaptureConfig, returnChan cha
 }
 
 // StatusAll() returns the statuses of all managed Capture instances.
-func (cm *CaptureManager) StatusAll() map[string]CaptureStatus {
+func (cm *Manager) StatusAll() map[string]CaptureStatus {
 	statusmapMutex := sync.Mutex{}
 	statusmap := make(map[string]CaptureStatus)
 
@@ -259,7 +291,7 @@ func (cm *CaptureManager) StatusAll() map[string]CaptureStatus {
 }
 
 // ErrorsAll() returns the error maps of all managed Capture instances.
-func (cm *CaptureManager) ErrorsAll() map[string]errorMap {
+func (cm *Manager) ErrorsAll() map[string]errorMap {
 	errmapMutex := sync.Mutex{}
 	errormap := make(map[string]errorMap)
 
@@ -282,7 +314,7 @@ func (cm *CaptureManager) ErrorsAll() map[string]errorMap {
 //
 // The resulting TaggedAggFlowMaps will be sent over returnChan and
 // be tagged with the given timestamp.
-func (cm *CaptureManager) RotateAll(returnChan chan TaggedAggFlowMap) {
+func (cm *Manager) RotateAll(returnChan chan TaggedAggFlowMap) {
 	t0 := time.Now()
 
 	var rg RunGroup
@@ -304,8 +336,8 @@ func (cm *CaptureManager) RotateAll(returnChan chan TaggedAggFlowMap) {
 }
 
 // CloseAll() closes and deletes all Capture instances managed by the
-// CaptureManager
-func (cm *CaptureManager) CloseAll() {
+// Manager
+func (cm *Manager) CloseAll() {
 	var rg RunGroup
 
 	for _, capture := range cm.capturesCopy() {

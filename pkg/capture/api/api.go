@@ -1,0 +1,147 @@
+// Package api provides the methods for goProbe's control server
+//
+// Base path: /goProbe/
+//
+// Program metrics for instrumentation (GET)
+// Path: /metrics
+// - /debug/vars
+//    Returns all metrics exposed via the "expvar" library
+//
+// Path: v1/
+// Access to API version 1 functions
+
+package api
+
+import (
+	"expvar"
+	"fmt"
+	"net/http"
+	"time"
+
+	"github.com/els0r/goProbe/pkg/capture"
+	"github.com/els0r/goProbe/pkg/capture/api/v1"
+	log "github.com/els0r/log"
+
+	"github.com/go-chi/chi"
+	"github.com/go-chi/chi/middleware"
+)
+
+// API is any type that exposes its URL paths via chi.Routes
+type API interface {
+	// Routes returns the accessible functions of the API
+	Routes() *chi.Mux
+
+	// Version returns the API version
+	Version() string
+}
+
+type Server struct {
+	location string // what the server binds to
+	root     string // document root
+
+	router chi.Router
+	apis   []API
+
+	logger  log.Logger
+	metrics bool
+}
+
+type Option func(*Server)
+
+func WithLogger(l log.Logger) Option {
+	return func(s *Server) {
+		s.logger = l
+	}
+}
+
+func WithMetricsExport() Option {
+	return func(s *Server) {
+		s.metrics = true
+	}
+}
+
+func getLoggerHandler(logger log.Logger) func(next http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		fn := func(w http.ResponseWriter, r *http.Request) {
+			logger.Debugf("%s %s", r.Method, r.URL.Path)
+			next.ServeHTTP(w, r)
+		}
+		return http.HandlerFunc(fn)
+	}
+}
+
+func getMetrics(w http.ResponseWriter, r *http.Request) {
+	expvar.Handler().ServeHTTP(w, r)
+}
+
+// New creates a base router for goProbe's APIs and provides the metrics export out of the box
+func New(host, port string, manager *capture.Manager, opts ...Option) (*Server, error) {
+
+	s := &Server{root: "/goProbe"}
+
+	if host == "" {
+		host = "localhost"
+	}
+	if port == "" {
+		return nil, fmt.Errorf("no port provided")
+	}
+	s.location = host + ":" + port
+
+	// apply options
+	for _, opt := range opts {
+		opt(s)
+	}
+
+	// initialize currently supported APIs
+	s.apis = append(s.apis, v1.New(manager, v1.WithLogger(s.logger)))
+
+	r := chi.NewRouter()
+
+	// setup a good base middleware stack
+	r.Use(middleware.RequestID)
+	r.Use(middleware.RealIP)
+
+	// only use the logging middleware if a logger was specifically provides
+	if s.logger != nil {
+		r.Use(getLoggerHandler(s.logger))
+	}
+	r.Use(middleware.Recoverer)
+
+	// Set a timeout value on the request context (ctx), that will signal
+	// through ctx.Done() that the request has timed out and further
+	// processing should be stopped.
+	r.Use(middleware.Timeout(60 * time.Second))
+
+	// set up request routing
+	r.Route(s.root, func(r chi.Router) {
+
+		// mount all APIs
+		for _, api := range s.apis {
+			// route base on the API version
+			r.Mount("/api/"+api.Version(), api.Routes())
+		}
+	})
+
+	// expose metrics if needed
+	if s.metrics {
+		if s.logger != nil {
+			s.logger.Debugf("Enabling metrics export on http://%s:%s%s/metrics/debug/vars", host, port, s.root)
+		}
+
+		// specify metrics subrouter
+		r.Mount(s.root+"/metrics", metricsRouter())
+	}
+
+	s.router = r
+	return s, nil
+}
+
+func metricsRouter() http.Handler {
+	r := chi.NewRouter()
+	r.Get("/debug/vars", getMetrics)
+	return r
+}
+
+func (s *Server) Run() {
+	go http.ListenAndServe(s.location, s.router)
+}

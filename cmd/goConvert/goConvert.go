@@ -23,6 +23,9 @@ import (
 	"sync"
 	"time"
 
+	// for metrics export to metricsbeat
+	_ "expvar"
+
 	"github.com/els0r/goProbe/pkg/goDB"
 
 	"flag"

@@ -20,12 +20,16 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"runtime"
 	"runtime/debug"
 	"sort"
 	"strings"
 	"time"
+
+	// for metrics export to metricsbeat
+	_ "expvar"
 
 	"github.com/els0r/goProbe/pkg/goDB"
 	"github.com/els0r/goProbe/pkg/version"
@@ -477,6 +481,9 @@ func main() {
 		throwMsg(parseErr.Error(), false, "txt")
 		return
 	}
+
+	// start metrics server
+	go http.ListenAndServe(":6060", http.DefaultServeMux)
 
 	// verify config format
 	switch queryConfig.Format {
