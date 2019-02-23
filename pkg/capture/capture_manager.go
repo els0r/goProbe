@@ -28,14 +28,14 @@ const (
 )
 
 // TaggedAggFlowMap represents an aggregated
-// flow map tagged with CaptureStats and an
+// flow map tagged with Stats and an
 // an interface name.
 //
 // Used by Manager to return the results of
 // RotateAll() and Update().
 type TaggedAggFlowMap struct {
 	Map   goDB.AggFlowMap
-	Stats CaptureStats
+	Stats Stats
 	Iface string
 }
 
@@ -93,7 +93,7 @@ func (cm *Manager) ifaceNames() []string {
 	return ifaces
 }
 
-func (cm *Manager) enable(ifaces map[string]CaptureConfig) {
+func (cm *Manager) enable(ifaces map[string]Config) {
 	var rg RunGroup
 
 	for iface, config := range ifaces {
@@ -220,7 +220,7 @@ func (cm *Manager) DisableAll() {
 // and (5) the instance will be completely removed from the Manager.
 //
 // Returns once all the above actions have been completed.
-func (cm *Manager) Update(ifaces map[string]CaptureConfig, returnChan chan TaggedAggFlowMap) {
+func (cm *Manager) Update(ifaces map[string]Config, returnChan chan TaggedAggFlowMap) {
 	t0 := time.Now()
 
 	ifaceSet := make(map[string]struct{})
@@ -271,9 +271,9 @@ func (cm *Manager) Update(ifaces map[string]CaptureConfig, returnChan chan Tagge
 }
 
 // StatusAll() returns the statuses of all managed Capture instances.
-func (cm *Manager) StatusAll() map[string]CaptureStatus {
+func (cm *Manager) StatusAll() map[string]Status {
 	statusmapMutex := sync.Mutex{}
-	statusmap := make(map[string]CaptureStatus)
+	statusmap := make(map[string]Status)
 
 	var rg RunGroup
 	for iface, capture := range cm.capturesCopy() {

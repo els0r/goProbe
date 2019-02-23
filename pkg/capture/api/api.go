@@ -46,14 +46,17 @@ type Server struct {
 	metrics bool
 }
 
+// Option allows to set optional parameters in the server
 type Option func(*Server)
 
+// WithLogger provides the api with access to the program level logger. It is recommended to use this option
 func WithLogger(l log.Logger) Option {
 	return func(s *Server) {
 		s.logger = l
 	}
 }
 
+// WithMetricsExport switches on metrics export
 func WithMetricsExport() Option {
 	return func(s *Server) {
 		s.metrics = true
@@ -101,16 +104,16 @@ func New(host, port string, manager *capture.Manager, opts ...Option) (*Server, 
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 
-	// only use the logging middleware if a logger was specifically provides
+	// only use the logging middleware if a logger was specifically provided
 	if s.logger != nil {
-		r.Use(getLoggerHandler(s.logger))
+		r.Use(middleware.Logger) // prints to stdout at the moment
 	}
 	r.Use(middleware.Recoverer)
 
 	// Set a timeout value on the request context (ctx), that will signal
 	// through ctx.Done() that the request has timed out and further
 	// processing should be stopped.
-	r.Use(middleware.Timeout(60 * time.Second))
+	r.Use(middleware.Timeout(30 * time.Second))
 
 	// set up request routing
 	r.Route(s.root, func(r chi.Router) {

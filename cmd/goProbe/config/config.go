@@ -24,10 +24,10 @@ import (
 var Mutex sync.Mutex
 
 type Config struct {
-	DBPath      string                           `json:"db_path"`
-	Interfaces  map[string]capture.CaptureConfig `json:"interfaces"`
-	SyslogFlows bool                             `json:"syslog_flows"`
-	Logging     LogConfig                        `json:"logging"`
+	DBPath      string                    `json:"db_path"`
+	Interfaces  map[string]capture.Config `json:"interfaces"`
+	SyslogFlows bool                      `json:"syslog_flows"`
+	Logging     LogConfig                 `json:"logging"`
 }
 
 type LogConfig struct {
@@ -36,7 +36,7 @@ type LogConfig struct {
 }
 
 func New() *Config {
-	interfaces := make(map[string]capture.CaptureConfig)
+	interfaces := make(map[string]capture.Config)
 
 	return &Config{
 		Interfaces: interfaces,

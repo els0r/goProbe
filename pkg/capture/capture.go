@@ -38,32 +38,32 @@ const (
 
 //////////////////////// Ancillary types ////////////////////////
 
-type CaptureConfig struct {
+type Config struct {
 	BufSize   int    `json:"buf_size"` // in bytes
 	BPFFilter string `json:"bpf_filter"`
 	Promisc   bool   `json:"promisc"`
 }
 
-// Validate (partially) checks that the given CaptureConfig contains no bogus settings.
+// Validate (partially) checks that the given Config contains no bogus settings.
 //
 // Note that the BPFFilter field isn't checked.
-func (cc CaptureConfig) Validate() error {
+func (cc Config) Validate() error {
 	if !(MIN_PCAP_BUF_SIZE <= cc.BufSize && cc.BufSize <= MAX_PCAP_BUF_SIZE) {
 		return fmt.Errorf("Invalid configuration entry BufSize. Value must be in range [%d, %d].", MIN_PCAP_BUF_SIZE, MAX_PCAP_BUF_SIZE)
 	}
 	return nil
 }
 
-type CaptureState byte
+type State byte
 
 const (
-	CAPTURE_STATE_UNINITIALIZED CaptureState = iota + 1
+	CAPTURE_STATE_UNINITIALIZED State = iota + 1
 	CAPTURE_STATE_INITIALIZED
 	CAPTURE_STATE_ACTIVE
 	CAPTURE_STATE_ERROR
 )
 
-func (cs CaptureState) String() string {
+func (cs State) String() string {
 	switch cs {
 	case CAPTURE_STATE_UNINITIALIZED:
 		return "CAPTURE_STATE_UNINITIALIZED"
@@ -78,14 +78,14 @@ func (cs CaptureState) String() string {
 	}
 }
 
-type CaptureStats struct {
-	Pcap          *pcap.Stats
-	PacketsLogged int
+type Stats struct {
+	Pcap          *pcap.Stats `json:"pcap"`
+	PacketsLogged int         `json:"packets_logged"`
 }
 
-type CaptureStatus struct {
-	State CaptureState
-	Stats CaptureStats
+type Status struct {
+	State State `json:"state"`
+	Stats Stats `json:"stats"`
 }
 
 type errorMap map[string]int
@@ -113,7 +113,7 @@ type captureCommand interface {
 }
 
 type captureCommandStatus struct {
-	returnChan chan<- CaptureStatus
+	returnChan chan<- Status
 }
 
 type captureCommandErrors struct {
@@ -121,12 +121,12 @@ type captureCommandErrors struct {
 }
 
 func (cmd captureCommandStatus) execute(c *Capture) {
-	var result CaptureStatus
+	var result Status
 
 	result.State = c.state
 
 	pcapStats := c.tryGetPcapStats()
-	result.Stats = CaptureStats{
+	result.Stats = Stats{
 		Pcap:          subPcapStats(pcapStats, c.lastRotationStats.Pcap),
 		PacketsLogged: c.packetsLogged - c.lastRotationStats.PacketsLogged,
 	}
@@ -139,7 +139,7 @@ func (cmd captureCommandErrors) execute(c *Capture) {
 }
 
 type captureCommandUpdate struct {
-	config     CaptureConfig
+	config     Config
 	returnChan chan<- struct{}
 }
 
@@ -185,7 +185,7 @@ func (cmd captureCommandUpdate) execute(c *Capture) {
 // of Rotate
 type rotateResult struct {
 	agg   goDB.AggFlowMap
-	stats CaptureStats
+	stats Stats
 }
 
 type captureCommandRotate struct {
@@ -199,12 +199,12 @@ func (cmd captureCommandRotate) execute(c *Capture) {
 
 	pcapStats := c.tryGetPcapStats()
 
-	result.stats = CaptureStats{
+	result.stats = Stats{
 		Pcap:          subPcapStats(pcapStats, c.lastRotationStats.Pcap),
 		PacketsLogged: c.packetsLogged - c.lastRotationStats.PacketsLogged,
 	}
 
-	c.lastRotationStats = CaptureStats{
+	c.lastRotationStats = Stats{
 		Pcap:          pcapStats,
 		PacketsLogged: c.packetsLogged,
 	}
@@ -317,16 +317,16 @@ type Capture struct {
 	// has Close been called on the Capture?
 	closed bool
 
-	state CaptureState
+	state State
 
-	config CaptureConfig
+	config Config
 
 	// channel over which commands are passed to process()
 	// close(cmdChan) is used to tell process() to stop
 	cmdChan chan captureCommand
 
 	// stats from the last rotation or reset (needed for Status)
-	lastRotationStats CaptureStats
+	lastRotationStats Stats
 
 	// Counts the total number of logged packets (since the creation of the
 	// Capture)
@@ -347,7 +347,7 @@ type Capture struct {
 }
 
 // NewCapture creates a new Capture associated with the given iface.
-func NewCapture(iface string, config CaptureConfig, logger log.Logger) *Capture {
+func NewCapture(iface string, config Config, logger log.Logger) *Capture {
 	c := &Capture{
 		iface,
 		sync.Mutex{},
@@ -355,7 +355,7 @@ func NewCapture(iface string, config CaptureConfig, logger log.Logger) *Capture 
 		CAPTURE_STATE_UNINITIALIZED,
 		config,
 		make(chan captureCommand, 1),
-		CaptureStats{
+		Stats{
 			Pcap:          &pcap.Stats{},
 			PacketsLogged: 0,
 		},
@@ -372,7 +372,7 @@ func NewCapture(iface string, config CaptureConfig, logger log.Logger) *Capture 
 
 // setState provides write access to the state field of
 // a Capture. It also logs the state change.
-func (c *Capture) setState(s CaptureState) {
+func (c *Capture) setState(s State) {
 	c.state = s
 	c.logger.Debugf("Interface '%s': entered capture state %s", c.iface, s)
 }
@@ -591,7 +591,7 @@ func (c *Capture) reset() {
 
 // needReinitialization checks whether we need to reinitialize the capture
 // to apply the given config.
-func (c *Capture) needReinitialization(config CaptureConfig) bool {
+func (c *Capture) needReinitialization(config Config) bool {
 	return c.config != config
 }
 
@@ -662,7 +662,7 @@ func setupInactiveHandle(iface string, bufSize int, promisc bool) (*pcap.Inactiv
 
 //////////////////////// public functions ////////////////////////
 
-// Status returns the current CaptureState as well as the statistics
+// Status returns the current State as well as the statistics
 // collected since the last call to Rotate()
 //
 // Note: If the Capture was reinitialized since the last rotation,
@@ -670,7 +670,7 @@ func setupInactiveHandle(iface string, bufSize int, promisc bool) (*pcap.Inactiv
 //
 // Note: result.Stats.Pcap may be null if there was an error fetching the
 // stats of the underlying pcap handle.
-func (c *Capture) Status() (result CaptureStatus) {
+func (c *Capture) Status() (result Status) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
@@ -678,7 +678,7 @@ func (c *Capture) Status() (result CaptureStatus) {
 		panic("Capture is closed")
 	}
 
-	ch := make(chan CaptureStatus, 1)
+	ch := make(chan Status, 1)
 	c.cmdChan <- captureCommandStatus{ch}
 	return <-ch
 }
@@ -701,7 +701,7 @@ func (c *Capture) Errors() (result errorMap) {
 // CAPTURE_STATE_ACTIVE with the given config.
 // If the Capture is already active with the given config
 // Update will detect this and do no work.
-func (c *Capture) Update(config CaptureConfig) {
+func (c *Capture) Update(config Config) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
@@ -754,7 +754,7 @@ func (c *Capture) Disable() {
 //
 // Note: stats.Pcap may be null if there was an error fetching the
 // stats of the underlying pcap handle.
-func (c *Capture) Rotate() (agg goDB.AggFlowMap, stats CaptureStats) {
+func (c *Capture) Rotate() (agg goDB.AggFlowMap, stats Stats) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
