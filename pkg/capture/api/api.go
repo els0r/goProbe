@@ -1,13 +1,12 @@
 // Package api provides the methods for goProbe's control server
 //
-// Base path: /goProbe/
+// Base path: /
 //
 // Program metrics for instrumentation (GET)
-// Path: /metrics
-// - /debug/vars
+// Path: /debug/vars
 //    Returns all metrics exposed via the "expvar" library
 //
-// Path: v1/
+// Path: api/v1/
 // Access to API version 1 functions
 
 package api
@@ -80,7 +79,7 @@ func getMetrics(w http.ResponseWriter, r *http.Request) {
 // New creates a base router for goProbe's APIs and provides the metrics export out of the box
 func New(host, port string, manager *capture.Manager, opts ...Option) (*Server, error) {
 
-	s := &Server{root: "/goProbe"}
+	s := &Server{root: "/"}
 
 	if host == "" {
 		host = "localhost"
@@ -106,7 +105,7 @@ func New(host, port string, manager *capture.Manager, opts ...Option) (*Server, 
 
 	// only use the logging middleware if a logger was specifically provided
 	if s.logger != nil {
-		r.Use(middleware.Logger) // prints to stdout at the moment
+		r.Use(reqLogger) // prints to stdout at the moment
 	}
 	r.Use(middleware.Recoverer)
 
@@ -128,21 +127,15 @@ func New(host, port string, manager *capture.Manager, opts ...Option) (*Server, 
 	// expose metrics if needed
 	if s.metrics {
 		if s.logger != nil {
-			s.logger.Debugf("Enabling metrics export on http://%s:%s%s/metrics/debug/vars", host, port, s.root)
+			s.logger.Debugf("Enabling metrics export on http://%s:%s%sdebug/vars", host, port, s.root)
 		}
 
-		// specify metrics subrouter
-		r.Mount(s.root+"/metrics", metricsRouter())
+		// specify metrics location
+		r.Get("/debug/vars", getMetrics)
 	}
 
 	s.router = r
 	return s, nil
-}
-
-func metricsRouter() http.Handler {
-	r := chi.NewRouter()
-	r.Get("/debug/vars", getMetrics)
-	return r
 }
 
 func (s *Server) Run() {
