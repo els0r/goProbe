@@ -27,11 +27,7 @@ import (
 	capconfig "github.com/els0r/goProbe/cmd/goProbe/config"
 )
 
-const (
-	DB_WRITE_INTERVAL = 300 // seconds
-
-	MetricsServerPort = "6060"
-)
+const DB_WRITE_INTERVAL = 300 // seconds
 
 var (
 	// cfg may be potentially accessed from multiple goroutines,
@@ -132,10 +128,21 @@ func main() {
 	// Start goroutine for writeouts
 	go handleWriteouts(captureManager.WriteoutHandler, config.SyslogFlows, logger)
 
-	var server *api.Server
-	server, err = api.New("localhost", MetricsServerPort, captureManager,
-		api.WithLogger(logger),
-		api.WithMetricsExport(),
+	// configure api server
+	var (
+		server     *api.Server
+		apiOptions []api.Option
+	)
+
+	if config.API.Metrics {
+		apiOptions = append(apiOptions, api.WithMetricsExport())
+	}
+	if config.API.Logging {
+		apiOptions = append(apiOptions, api.WithLogger(logger))
+	}
+
+	server, err = api.New("localhost", config.API.Port, captureManager,
+		apiOptions...,
 	)
 	if err != nil {
 		logger.Errorf("failed to spawn API server: %s", err)

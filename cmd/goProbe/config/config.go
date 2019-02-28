@@ -28,6 +28,7 @@ type Config struct {
 	Interfaces  map[string]capture.Config `json:"interfaces"`
 	SyslogFlows bool                      `json:"syslog_flows"`
 	Logging     LogConfig                 `json:"logging"`
+	API         APIConfig                 `json:"api"`
 }
 
 type LogConfig struct {
@@ -35,12 +36,26 @@ type LogConfig struct {
 	Level       string `json:"level"`
 }
 
+type APIConfig struct {
+	Port    string `json:"port"`
+	Metrics bool   `json:"metrics"`
+	Logging bool   `json:"request_logging"`
+}
+
 func New() *Config {
 	interfaces := make(map[string]capture.Config)
 
 	return &Config{
 		Interfaces: interfaces,
-		Logging:    LogConfig{"syslog", "info"}, // default config is syslog
+		// default config is syslog
+		Logging: LogConfig{
+			Destination: "syslog",
+			Level:       "info",
+		},
+		// default API config
+		API: APIConfig{
+			Port: "6060",
+		},
 	}
 }
 
@@ -54,6 +69,10 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("Interface '%s' has invalid configuration: %s", iface, err)
 		}
 	}
+	if c.API.Port == "" {
+		return fmt.Errorf("No port specified for API server")
+	}
+
 	return nil
 }
 
