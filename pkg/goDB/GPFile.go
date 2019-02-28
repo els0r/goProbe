@@ -1,36 +1,21 @@
 package goDB
 
-/*
-#cgo CFLAGS: -O3
-#define LZ4_STATIC_LINKING_ONLY
-
-#include <stdlib.h>
-#include <stdio.h>
-#include "lz4/lz4hc.h"
-#include "lz4/lz4.h"
-
-int cCompress(int len, char *input, char *output, int level) {
-  return LZ4_compressHC2(input, output, len, level);
-}
-
-int cUncompress(char *output, int out_len, char *input) {
-  return LZ4_decompress_fast(input, output, out_len);
-}
-*/
-import "C"
-
 import (
 	"errors"
 	"os"
 	"strconv"
-	"unsafe"
+
+	"github.com/els0r/goProbe/pkg/goDB/lz4"
 )
 
 const (
 	BUF_SIZE = 4096         // 512 * 64bit
 	N_ELEM   = BUF_SIZE / 8 // 512
+
+	LZ4_COMPRESSION_LEVEL = 512
 )
 
+// GPFile defines the binary on-disk storage format for goProbe data
 type GPFile struct {
 	// The file header //
 	// Contains 512 64 bit addresses pointing to the end
@@ -47,6 +32,9 @@ type GPFile struct {
 	w_buf    []byte
 
 	last_seek_pos int64
+
+	// governs how data blocks are (de-)compressed
+	encoder Encoder
 }
 
 type GPFiler interface {
@@ -59,7 +47,18 @@ type GPFiler interface {
 	Close() error
 }
 
-func NewGPFile(p string) (*GPFile, error) {
+// GPFileOption defines optional arguments to GPFile
+type GPFileOption func(*GPFile)
+
+// WithGPFileEncoding allows to set the compression and decompression implementation.
+func WithGPFileEncoding(e Encoder) GPFileOption {
+	return func(gpf *GPFile) {
+		gpf.encoder = e
+		return
+	}
+}
+
+func NewGPFile(p string, opts ...GPFileOption) (*GPFile, error) {
 	var (
 		buf_h            = make([]byte, BUF_SIZE)
 		buf_ts           = make([]byte, BUF_SIZE)
@@ -122,7 +121,15 @@ func NewGPFile(p string) (*GPFile, error) {
 		pos += 8
 	}
 
-	return &GPFile{h, ts, le, p, f, make([]byte, BUF_SIZE*3), 0}, nil
+	// the GP File uses LZ4 data block compression by default
+	gpf := &GPFile{h, ts, le, p, f, make([]byte, BUF_SIZE*3), 0, lz4.New()}
+
+	// apply functional options
+	for _, opt := range opts {
+		opt(gpf)
+	}
+
+	return gpf, nil
 }
 
 func (f *GPFile) BlocksUsed() (int, error) {
@@ -143,7 +150,6 @@ func (f *GPFile) ReadBlock(block int) ([]byte, error) {
 		err      error
 		seek_pos int64 = BUF_SIZE * 3
 		read_len int64
-		n_read   int
 	)
 
 	// Check if file has already been opened for reading. If not, open it
@@ -170,19 +176,14 @@ func (f *GPFile) ReadBlock(block int) ([]byte, error) {
 		f.last_seek_pos = seek_pos
 	}
 
-	buf_comp := make([]byte, read_len)
-	if n_read, err = f.cur_file.Read(buf_comp); err != nil {
-		return nil, err
-	}
+	// prepare data slices for decompression
+	var (
+		uncomp_len int
+		buf_comp   = make([]byte, read_len)
+		buf        = make([]byte, f.lengths[block])
+	)
 
-	if int64(n_read) != read_len {
-		return nil, errors.New("Incorrect number of bytes read from file")
-	}
-
-	buf := make([]byte, f.lengths[block])
-
-	var uncomp_len int = int(C.cUncompress((*C.char)(unsafe.Pointer(&buf[0])), C.int(f.lengths[block]), (*C.char)(unsafe.Pointer(&buf_comp[0]))))
-
+	uncomp_len, err = f.encoder.Decompress(buf_comp, buf, f.cur_file)
 	if int64(uncomp_len) != read_len {
 		return nil, errors.New("Incorrect number of bytes read for decompression")
 	}
@@ -200,11 +201,10 @@ func (f *GPFile) ReadTimedBlock(timestamp int64) ([]byte, error) {
 	return nil, errors.New("Timestamp " + strconv.Itoa(int(timestamp)) + " not found")
 }
 
-func (f *GPFile) WriteTimedBlock(timestamp int64, data []byte, comp int) error {
+func (f *GPFile) WriteTimedBlock(timestamp int64, data []byte) error {
 	var (
 		nextFreeBlock = int64(-1)
 		cur_wfile     *os.File
-		buf           []byte
 		err           error
 		n_write       int
 		new_pos       int64
@@ -228,24 +228,15 @@ func (f *GPFile) WriteTimedBlock(timestamp int64, data []byte, comp int) error {
 		return errors.New("File is full")
 	}
 
-	// LZ4 states that non-compressible data can be expanded to up to 0.4%.
-	// This length bound is the conservative version of the bound specified in the LZ4 source
-	buf = make([]byte, int((1.004*float64(len(data)))+16))
-	var comp_len int = int(C.cCompress(C.int(len(data)), (*C.char)(unsafe.Pointer(&data[0])), (*C.char)(unsafe.Pointer(&buf[0])), C.int(comp)))
-
 	if cur_wfile, err = os.OpenFile(f.filename, os.O_APPEND|os.O_WRONLY, 0600); err != nil {
 		return err
 	}
 
-	// sanity check whether the computed worst case has been exceeded in C call
-	if len(buf) < comp_len {
-		return errors.New("Buffer size mismatch for compressed data")
-	}
-
-	if n_write, err = cur_wfile.Write(buf[0:comp_len]); err != nil {
+	// compress the data
+	n_write, err = f.encoder.Compress(data, cur_wfile)
+	if err != nil {
 		return err
 	}
-
 	cur_wfile.Close()
 
 	// Update header
