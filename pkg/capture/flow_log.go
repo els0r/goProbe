@@ -15,18 +15,33 @@ package capture
 
 import (
 	"encoding/json"
+	"fmt"
+	"text/tabwriter"
 
 	"github.com/els0r/goProbe/pkg/goDB"
 	"github.com/els0r/log"
 )
 
-// A FlowLog stores flows. It is NOT threadsafe.
+// constants for table printing
+const (
+	headerStrUpper = "\t\t\t\t\t\t\tbytes\tbytes\tpackets\tpackets\t"
+	headerStr      = "\tsip\tsport\t\tdip\tdport\tproto\trcvd\tsent\trcvd\tsent\t"
+	fmtStr         = "%s\t%s\t%d\t←―→\t%s\t%d\t%s\t%d\t%d\t%d\t%d\t\n"
+)
+
+// FlowLog stores flows. It is NOT threadsafe.
 type FlowLog struct {
 	// TODO(lob): Consider making this map[EPHash]GPFlow to reduce GC load
 	flowMap map[EPHash]*GPFlow
 	logger  log.Logger
 }
 
+// NewFlowLog creates a new flow log for storing flows.
+func NewFlowLog(logger log.Logger) *FlowLog {
+	return &FlowLog{make(map[EPHash]*GPFlow), logger}
+}
+
+// MarshalJSON implements the json.Marshaler interface
 func (f *FlowLog) MarshalJSON() ([]byte, error) {
 	var toMarshal []interface{}
 	for _, v := range f.flowMap {
@@ -35,9 +50,45 @@ func (f *FlowLog) MarshalJSON() ([]byte, error) {
 	return json.Marshal(toMarshal)
 }
 
-// NewFlowLog creates a new flow log for storing flows.
-func NewFlowLog(logger log.Logger) *FlowLog {
-	return &FlowLog{make(map[EPHash]*GPFlow), logger}
+// Len returns the number of flows in the FlowLog
+func (f *FlowLog) Len() int {
+	return len(f.flowMap)
+}
+
+// Flows provides an iterator for the internal flow map
+func (f *FlowLog) Flows() map[EPHash]*GPFlow {
+	return f.flowMap
+}
+
+// TablePrint pretty prints the flows in a formatted table
+func (f *FlowLog) TablePrint(w *tabwriter.Writer) error {
+	fmt.Fprintln(w, headerStrUpper)
+	fmt.Fprintln(w, headerStr)
+	for _, g := range f.Flows() {
+		prefix := "["
+		var state string
+		if g.HasBeenIdle() {
+			state += "!"
+		}
+		if g.pktDirectionSet {
+			state += "*"
+		}
+		if state == "" {
+			prefix = ""
+		} else {
+			prefix += state + "]"
+		}
+
+		fmt.Fprintf(w, fmtStr,
+			prefix,
+			goDB.RawIpToString(g.sip[:]),
+			uint16(uint16(g.sport[0])<<8|uint16(g.sport[1])),
+			goDB.RawIpToString(g.dip[:]),
+			uint16(uint16(g.dport[0])<<8|uint16(g.dport[1])),
+			goDB.GetIPProto(int(g.protocol)),
+			g.nBytesRcvd, g.nBytesSent, g.nPktsRcvd, g.nPktsSent)
+	}
+	return w.Flush()
 }
 
 // Add a packet to the flow log. If the packet belongs to a flow

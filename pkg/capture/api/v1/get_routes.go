@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"text/tabwriter"
 	"time"
 
 	"github.com/els0r/goProbe/pkg/capture"
@@ -16,12 +17,13 @@ import (
 func (a *API) getRequestRoutes() *chi.Mux {
 	r := chi.NewRouter()
 
+	// for statistics about the capture
 	r.Route("/stats", func(r chi.Router) {
-		// list actions here
 		r.Get("/packets", a.getPacketStats)
 		r.Get("/errors", a.getErrors)
 	})
 
+	// inspection of flows
 	r.Route("/flows", func(r chi.Router) {
 		r.Route("/{ifaceName}", func(r chi.Router) {
 			r.With(a.IfaceCtx).Get("/", a.getActiveFlows)
@@ -46,18 +48,42 @@ func (a *API) IfaceCtx(next http.Handler) http.Handler {
 }
 
 func (a *API) getActiveFlows(w http.ResponseWriter, r *http.Request) {
+	var (
+		pretty bool
+		err    error
+	)
+
 	ctx := r.Context()
-	flows, ok := ctx.Value("activeFlows").(map[string]*capture.FlowLog)
+	flowLog, ok := ctx.Value("activeFlows").(map[string]*capture.FlowLog)
 	if !ok {
 		http.Error(w, http.StatusText(422), 422)
 		return
 	}
 
+	// check pretty printing
+	pretty = (r.FormValue("pretty") == "1")
+
 	// encode answer
-	err := json.NewEncoder(w).Encode(&flows)
-	if err != nil {
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		return
+	if !pretty {
+		err := json.NewEncoder(w).Encode(&flowLog)
+		if err != nil {
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return
+		}
+	} else {
+		// range over all flow maps
+		for iface, f := range flowLog {
+
+			tw := tabwriter.NewWriter(w, 0, 0, 3, ' ', tabwriter.AlignRight)
+
+			// table header
+			fmt.Fprintf(w, "%s (%d flows):\n", iface, f.Len())
+			err = f.TablePrint(tw)
+			if err != nil {
+				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+				return
+			}
+		}
 	}
 }
 
