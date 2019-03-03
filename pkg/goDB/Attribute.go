@@ -43,7 +43,7 @@ func (_ SipAttribute) ExtraColumns() []string {
 	return nil
 }
 func (_ SipAttribute) ExtractStrings(key *ExtraKey) []string {
-	return []string{rawIpToString(key.Sip[:])}
+	return []string{RawIpToString(key.Sip[:])}
 }
 func (_ SipAttribute) attributeMarker() {}
 
@@ -56,7 +56,7 @@ func (_ DipAttribute) ExtraColumns() []string {
 	return nil
 }
 func (_ DipAttribute) ExtractStrings(key *ExtraKey) []string {
-	return []string{rawIpToString(key.Dip[:])}
+	return []string{RawIpToString(key.Dip[:])}
 }
 func (_ DipAttribute) attributeMarker() {}
 

@@ -12,6 +12,12 @@
 
 package capture
 
+import (
+	"encoding/json"
+
+	"github.com/els0r/goProbe/pkg/goDB"
+)
+
 type GPFlower interface {
 	UpdateFlow()
 	IsWorthKeeping() bool
@@ -33,6 +39,30 @@ type GPFlow struct {
 	nPktsRcvd       uint64
 	nPktsSent       uint64
 	pktDirectionSet bool
+}
+
+func (g *GPFlow) MarshalJSON() ([]byte, error) {
+	return json.Marshal(
+		struct {
+			Sip      string `json:"sip"`
+			Dip      string `json:"dip"`
+			Sport    uint16 `json:"sport"`
+			Dport    uint16 `json:"dport"`
+			Protocol string `json:"ip_protocol"`
+
+			// Hash Map Value variables
+			NBytesRcvd uint64 `json:"bytes_rcvd"`
+			NBytesSent uint64 `json:"bytes_sent"`
+			NPktsRcvd  uint64 `json:"packets_rcvd"`
+			NPktsSent  uint64 `json:"packets_sent"`
+		}{
+			goDB.RawIpToString(g.sip[:]),
+			goDB.RawIpToString(g.dip[:]),
+			uint16(uint16(g.sport[0])<<8 | uint16(g.sport[1])),
+			uint16(uint16(g.dport[0])<<8 | uint16(g.dport[1])),
+			goDB.GetIPProto(int(g.protocol)),
+			g.nBytesRcvd, g.nBytesSent, g.nPktsRcvd, g.nPktsSent},
+	)
 }
 
 func updateDirection(packet *GPPacket) bool {

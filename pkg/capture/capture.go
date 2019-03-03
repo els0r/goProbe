@@ -120,6 +120,10 @@ type captureCommandErrors struct {
 	returnChan chan<- errorMap
 }
 
+type captureCommandFlows struct {
+	returnChan chan<- *FlowLog
+}
+
 func (cmd captureCommandStatus) execute(c *Capture) {
 	var result Status
 
@@ -136,6 +140,10 @@ func (cmd captureCommandStatus) execute(c *Capture) {
 
 func (cmd captureCommandErrors) execute(c *Capture) {
 	cmd.returnChan <- c.errMap
+}
+
+func (cmd captureCommandFlows) execute(c *Capture) {
+	cmd.returnChan <- c.flowLog
 }
 
 type captureCommandUpdate struct {
@@ -694,6 +702,20 @@ func (c *Capture) Errors() (result errorMap) {
 
 	ch := make(chan errorMap, 1)
 	c.cmdChan <- captureCommandErrors{ch}
+	return <-ch
+}
+
+// Active flows status call
+func (c *Capture) Flows() (result *FlowLog) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	if c.closed {
+		panic("Capture is closed")
+	}
+
+	ch := make(chan *FlowLog, 1)
+	c.cmdChan <- captureCommandFlows{ch}
 	return <-ch
 }
 

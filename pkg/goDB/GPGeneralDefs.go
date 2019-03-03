@@ -75,7 +75,7 @@ func itod(i uint) string {
 // convert the ip byte arrays to string. The formatting logic for IPv6
 // is directly copied over from the go IP package in order to save an
 // additional import just for string operations
-func rawIpToString(ip []byte) string {
+func RawIpToString(ip []byte) string {
 	var (
 		numZeros uint8 = 0
 		iplen    int   = len(ip)

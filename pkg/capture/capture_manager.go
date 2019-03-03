@@ -35,8 +35,8 @@ const (
 // RotateAll() and Update().
 type TaggedAggFlowMap struct {
 	Map   goDB.AggFlowMap
-	Stats Stats
-	Iface string
+	Stats Stats  `json:"stats,omitempty"`
+	Iface string `json:"iface"`
 }
 
 // Writeout consists of a channel over which the individual
@@ -288,6 +288,33 @@ func (cm *Manager) StatusAll() map[string]Status {
 	rg.Wait()
 
 	return statusmap
+}
+
+// ActiveFlows returns a copy of the current in-memory flow map. If iface is "all", flows for every interface are returned
+func (cm *Manager) ActiveFlows(iface string) (map[string]*FlowLog, error) {
+	var rg RunGroup
+
+	ifaceFlows := make(map[string]*FlowLog)
+	ifaceFlowsMutex := sync.Mutex{}
+
+	for i, capture := range cm.capturesCopy() {
+		i, capture := i, capture
+
+		if iface == i || iface == "all" {
+			rg.Run(func() {
+				f := capture.Flows()
+				ifaceFlowsMutex.Lock()
+				ifaceFlows[i] = f
+				ifaceFlowsMutex.Unlock()
+			})
+		}
+	}
+	rg.Wait()
+
+	if len(ifaceFlows) == 0 {
+		return nil, fmt.Errorf("no active flows found for interface \"%s\"", iface)
+	}
+	return ifaceFlows, nil
 }
 
 // ErrorsAll() returns the error maps of all managed Capture instances.

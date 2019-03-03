@@ -14,6 +14,8 @@
 package capture
 
 import (
+	"encoding/json"
+
 	"github.com/els0r/goProbe/pkg/goDB"
 	"github.com/els0r/log"
 )
@@ -23,6 +25,14 @@ type FlowLog struct {
 	// TODO(lob): Consider making this map[EPHash]GPFlow to reduce GC load
 	flowMap map[EPHash]*GPFlow
 	logger  log.Logger
+}
+
+func (f *FlowLog) MarshalJSON() ([]byte, error) {
+	var toMarshal []interface{}
+	for _, v := range f.flowMap {
+		toMarshal = append(toMarshal, v)
+	}
+	return json.Marshal(toMarshal)
 }
 
 // NewFlowLog creates a new flow log for storing flows.

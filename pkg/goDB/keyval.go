@@ -13,7 +13,10 @@
 
 package goDB
 
-import "fmt"
+import (
+	"encoding/json"
+	"fmt"
+)
 
 type Key struct {
 	Sip      [16]byte
@@ -30,10 +33,10 @@ type ExtraKey struct {
 }
 
 type Val struct {
-	NBytesRcvd uint64
-	NBytesSent uint64
-	NPktsRcvd  uint64
-	NPktsSent  uint64
+	NBytesRcvd uint64 `json:"bytes_rcvd"`
+	NBytesSent uint64 `json:"bytes_sent"`
+	NPktsRcvd  uint64 `json:"packets_rcvd"`
+	NPktsSent  uint64 `json:"packets_sent"`
 }
 
 type AggFlowMap map[Key]*Val
@@ -44,10 +47,26 @@ type AggFlowMap map[Key]*Val
 // print the key as a comma separated attribute list
 func (k Key) String() string {
 	return fmt.Sprintf("%s,%s,%d,%s",
-		rawIpToString(k.Sip[:]),
-		rawIpToString(k.Dip[:]),
+		RawIpToString(k.Sip[:]),
+		RawIpToString(k.Dip[:]),
 		int(uint16(k.Dport[0])<<8|uint16(k.Dport[1])),
 		GetIPProto(int(k.Protocol)),
+	)
+}
+
+func (k Key) MarshalJSON() ([]byte, error) {
+	return json.Marshal(
+		struct {
+			SIP   string `json:"sip"`
+			DIP   string `json:"dip"`
+			Dport uint16 `json:"dport"`
+			Proto string `json:"ip_protocol"`
+		}{
+			RawIpToString(k.Sip[:]),
+			RawIpToString(k.Dip[:]),
+			uint16(uint16(k.Dport[0])<<8 | uint16(k.Dport[1])),
+			GetIPProto(int(k.Protocol)),
+		},
 	)
 }
 
@@ -58,4 +77,18 @@ func (v *Val) String() string {
 		v.NBytesRcvd,
 		v.NBytesSent,
 	)
+}
+
+func (a AggFlowMap) MarshalJSON() ([]byte, error) {
+	var toMarshal []interface{}
+
+	for k, v := range a {
+		toMarshal = append(toMarshal,
+			struct {
+				Attributes Key  `json:"attributes"`
+				Counters   *Val `json:"counters"`
+			}{k, v},
+		)
+	}
+	return json.Marshal(toMarshal)
 }
