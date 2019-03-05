@@ -140,7 +140,7 @@ func main() {
 		apiOptions = append(apiOptions, api.WithLogger(logger))
 	}
 
-	server, err = api.New("localhost", config.API.Port, captureManager,
+	server, err = api.New(config.API.Host, config.API.Port, captureManager,
 		apiOptions...,
 	)
 	if err != nil {

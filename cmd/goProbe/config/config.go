@@ -40,6 +40,7 @@ type LogConfig struct {
 
 // APIConfig stores goProbe's API configuration
 type APIConfig struct {
+	Host    string `json:"host"`
 	Port    string `json:"port"`
 	Metrics bool   `json:"metrics"`
 	Logging bool   `json:"request_logging"`
@@ -58,6 +59,7 @@ func New() *Config {
 		},
 		// default API config
 		API: APIConfig{
+			Host: "localhost",
 			Port: "6060",
 		},
 	}
