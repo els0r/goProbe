@@ -45,6 +45,8 @@
 package v1
 
 import (
+	"net/http"
+
 	"github.com/els0r/goProbe/pkg/capture"
 	"github.com/go-chi/chi"
 
@@ -101,4 +103,8 @@ func (a *API) Routes() *chi.Mux {
 	})
 
 	return r
+}
+
+func printPretty(r *http.Request) bool {
+	return r.FormValue("pretty") == "1"
 }

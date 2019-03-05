@@ -33,6 +33,11 @@ type Server struct {
 
 	logger  log.Logger
 	metrics bool
+
+	// throttling parameters
+	perMinRateLimit       int
+	burstLimit            int
+	concurrentAccessLimit int
 }
 
 // Option allows to set optional parameters in the server
@@ -49,6 +54,15 @@ func WithLogger(l log.Logger) Option {
 func WithMetricsExport() Option {
 	return func(s *Server) {
 		s.metrics = true
+	}
+}
+
+// WithRateLimits applies custom request rate limits to the API. Setting any of the values to zero deactivates the rate limiting for that particular part.
+func WithRateLimits(perMin, burst, concurrentRequests int) Option {
+	return func(s *Server) {
+		s.perMinRateLimit = perMin
+		s.burstLimit = burst
+		s.concurrentAccessLimit = concurrentRequests
 	}
 }
 
@@ -69,7 +83,12 @@ func getMetrics(w http.ResponseWriter, r *http.Request) {
 // New creates a base router for goProbe's APIs and provides the metrics export out of the box
 func New(host, port string, manager *capture.Manager, opts ...Option) (*Server, error) {
 
-	s := &Server{root: "/"}
+	s := &Server{
+		root:                  "/",
+		perMinRateLimit:       defaultPerMinRateLimit,
+		burstLimit:            defaultBurstLimit,
+		concurrentAccessLimit: defaultConcurrentAccessLimit,
+	}
 
 	if host == "" {
 		host = "localhost"
@@ -106,12 +125,25 @@ func New(host, port string, manager *capture.Manager, opts ...Option) (*Server, 
 
 	// set up request routing
 	r.Route(s.root, func(r chi.Router) {
+		r.Route("/api", func(r chi.Router) {
 
-		// mount all APIs
-		for _, api := range s.apis {
-			// route base on the API version
-			r.Mount("/api/"+api.Version(), api.Routes())
-		}
+			// attach rate-limiting middlewares
+			if !(s.perMinRateLimit == 0 || s.burstLimit == 0) {
+				r.Use(s.RateLimiter(s.perMinRateLimit, s.burstLimit))
+			}
+			if s.concurrentAccessLimit != 0 {
+				r.Use(middleware.Throttle(s.concurrentAccessLimit))
+			}
+
+			s.logger.Debugf("Set up rate limiter middleware: req/min=%d, burst=%d, concurrent req=%d", s.perMinRateLimit, s.burstLimit, s.concurrentAccessLimit)
+
+			// mount all APIs
+			for _, api := range s.apis {
+
+				// route base on the API version
+				r.Mount("/"+api.Version(), api.Routes())
+			}
+		})
 	})
 
 	// expose metrics if needed

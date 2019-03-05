@@ -55,10 +55,7 @@ func (a *API) IfaceCtx(next http.Handler) http.Handler {
 }
 
 func (a *API) getActiveFlows(w http.ResponseWriter, r *http.Request) {
-	var (
-		pretty bool
-		err    error
-	)
+	var err error
 
 	ctx := r.Context()
 	flowLog, ok := ctx.Value(activeFlowsKey).(map[string]*capture.FlowLog)
@@ -67,11 +64,8 @@ func (a *API) getActiveFlows(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// check pretty printing
-	pretty = (r.FormValue("pretty") == "1")
-
 	// encode answer
-	if !pretty {
+	if !printPretty(r) {
 		err := json.NewEncoder(w).Encode(&flowLog)
 		if err != nil {
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
@@ -90,19 +84,13 @@ func (a *API) getActiveFlows(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 				return
 			}
+			fmt.Fprintf(w, "\n")
 		}
 	}
 }
 
 func (a *API) getPacketStats(w http.ResponseWriter, r *http.Request) {
-	var (
-		pretty string
-		err    error
-	)
-	pretty = r.FormValue("pretty")
-	if pretty == "" {
-		pretty = "0"
-	}
+	var err error
 
 	stats := a.c.StatusAll()
 
@@ -138,14 +126,13 @@ func (a *API) getPacketStats(w http.ResponseWriter, r *http.Request) {
 		AggregatedStats.Ifaces = stats
 	}
 
-	if pretty == "0" {
+	if !printPretty(r) {
 		err = json.NewEncoder(w).Encode(&AggregatedStats)
 		if err != nil {
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		}
-	}
-	if pretty == "1" {
+	} else {
 		status.SetOutput(w)
 		writeLn := func(msg string) {
 			_, writeErr := fmt.Fprint(w, msg+"\n")
@@ -219,25 +206,16 @@ func (a *API) getPacketStats(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) getErrors(w http.ResponseWriter, r *http.Request) {
-	var (
-		pretty string
-		err    error
-	)
-	pretty = r.FormValue("pretty")
-	if pretty == "" {
-		pretty = "0"
-	}
+	var err error
 
 	errors := a.c.ErrorsAll()
 
-	if pretty == "0" {
+	if !printPretty(r) {
 		err = json.NewEncoder(w).Encode(errors)
 		if err != nil {
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		}
-	}
-
-	if pretty == "1" {
+	} else {
 		status.SetOutput(w)
 
 		for iface, errs := range errors {
