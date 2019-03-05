@@ -37,44 +37,49 @@ import (
 	//    "runtime/pprof"
 )
 
+// Variables for manual garbage collection calls
 const (
-	// Variables for manual garbage collection calls
-	GOGCINTERVAL     = 5 * time.Second
-	GOGCLIMIT        = 6291456 // Limit for GC call, in bytes
-	MEMCHECKINTERVAL = 1 * time.Second
-	// Default value for -mem flag
-	MAXMEMPERCENTDEFAULT = 60
+	GOGCINTERVAL = 5 * time.Second
+	GOGCLIMIT    = 6291456 // Limit for GC call, in bytes
 
-	ERROR_NORESULTS = "Query returned no results"
 )
+
+// Default values for -mem flag
+const (
+	MemCheckInterval     = 1 * time.Second
+	MaxMemPercentDefault = 60
+)
+
+const errorNoResults = "Query returned no results"
 
 // Direction indicates the counters of which flow direction we should print.
 type Direction int
 
+// Directions for counters printing and summation
 const (
-	DIRECTION_SUM  Direction = iota // sum of inbound and outbound counters
-	DIRECTION_IN                    // inbound counters
-	DIRECTION_OUT                   // outbound counters
-	DIRECTION_BOTH                  // inbound and outbound counters
+	DirectionSum  Direction = iota // sum of inbound and outbound counters
+	DirectionIn                    // inbound counters
+	DirectionOut                   // outbound counters
+	DirectionBoth                  // inbound and outbound counters
 )
 
 // SortOrder indicates by what the entries are sorted.
 type SortOrder int
 
+// Values that can be sorted
 const (
-	SORT_PACKETS SortOrder = iota
-	SORT_TRAFFIC
-	SORT_TIME
+	SortPackets SortOrder = iota
+	SortTraffic
+	SortTime
 )
 
-// convenience wrapper around the summed counters
+// Counts is a convenience wrapper around the summed counters
 type Counts struct {
 	PktsRcvd, PktsSent   uint64
 	BytesRcvd, BytesSent uint64
 }
 
-// For the sorting we refer to closures to be able so sort by whatever value
-// struct field we want
+// Entry is a wrapper around a flow entry and is used for sorting
 type Entry struct {
 	k        goDB.ExtraKey
 	nBr, nBs uint64
@@ -97,105 +102,99 @@ func (b by) Sort(entries []Entry) {
 	sort.Sort(es)
 }
 
-// Len is part of sort.Interface.
+// Len is part of sort interface.
 func (s *entrySorter) Len() int {
 	return len(s.entries)
 }
 
-// Swap is part of sort.Interface.
+// Swap is part of sort interface.
 func (s *entrySorter) Swap(i, j int) {
 	s.entries[i], s.entries[j] = s.entries[j], s.entries[i]
 }
 
-// Less is part of sort.Interface. It is implemented by calling the "by" closure in the sorter.
+// Less is part of sort interface. It is implemented by calling the "by" closure in the sorter.
 func (s *entrySorter) Less(i, j int) bool {
 	return s.less(&s.entries[i], &s.entries[j])
 }
 
+// By is part of the sort interface
 func By(sort SortOrder, direction Direction, ascending bool) by {
 	switch sort {
-	case SORT_PACKETS:
+	case SortPackets:
 		switch direction {
-		case DIRECTION_BOTH, DIRECTION_SUM:
+		case DirectionBoth, DirectionSum:
 			if ascending {
 				return func(e1, e2 *Entry) bool {
 					return e1.nPs+e1.nPr < e2.nPs+e2.nPr
 				}
-			} else {
-				return func(e1, e2 *Entry) bool {
-					return e1.nPs+e1.nPr > e2.nPs+e2.nPr
-				}
 			}
-		case DIRECTION_IN:
+			return func(e1, e2 *Entry) bool {
+				return e1.nPs+e1.nPr > e2.nPs+e2.nPr
+			}
+		case DirectionIn:
 			if ascending {
 				return func(e1, e2 *Entry) bool {
 					return e1.nPr < e2.nPr
 				}
-			} else {
-				return func(e1, e2 *Entry) bool {
-					return e1.nPr > e2.nPr
-				}
 			}
-		case DIRECTION_OUT:
+			return func(e1, e2 *Entry) bool {
+				return e1.nPr > e2.nPr
+			}
+		case DirectionOut:
 			if ascending {
 				return func(e1, e2 *Entry) bool {
 					return e1.nPs < e2.nPs
 				}
-			} else {
-				return func(e1, e2 *Entry) bool {
-					return e1.nPs > e2.nPs
-				}
+			}
+			return func(e1, e2 *Entry) bool {
+				return e1.nPs > e2.nPs
 			}
 		}
-	case SORT_TRAFFIC:
+	case SortTraffic:
 		switch direction {
-		case DIRECTION_BOTH, DIRECTION_SUM:
+		case DirectionBoth, DirectionSum:
 			if ascending {
 				return func(e1, e2 *Entry) bool {
 					return e1.nBs+e1.nBr < e2.nBs+e2.nBr
 				}
-			} else {
-				return func(e1, e2 *Entry) bool {
-					return e1.nBs+e1.nBr > e2.nBs+e2.nBr
-				}
 			}
-		case DIRECTION_IN:
+			return func(e1, e2 *Entry) bool {
+				return e1.nBs+e1.nBr > e2.nBs+e2.nBr
+			}
+		case DirectionIn:
 			if ascending {
 				return func(e1, e2 *Entry) bool {
 					return e1.nBr < e2.nBr
 				}
-			} else {
-				return func(e1, e2 *Entry) bool {
-					return e1.nBr > e2.nBr
-				}
 			}
-		case DIRECTION_OUT:
+			return func(e1, e2 *Entry) bool {
+				return e1.nBr > e2.nBr
+			}
+		case DirectionOut:
 			if ascending {
 				return func(e1, e2 *Entry) bool {
 					return e1.nBs < e2.nBs
 				}
-			} else {
-				return func(e1, e2 *Entry) bool {
-					return e1.nBs > e2.nBs
-				}
+			}
+			return func(e1, e2 *Entry) bool {
+				return e1.nBs > e2.nBs
 			}
 		}
-	case SORT_TIME:
+	case SortTime:
 		if ascending {
 			return func(e1, e2 *Entry) bool {
 				return e1.k.Time < e2.k.Time
 			}
-		} else {
-			return func(e1, e2 *Entry) bool {
-				return e1.k.Time > e2.k.Time
-			}
+		}
+		return func(e1, e2 *Entry) bool {
+			return e1.k.Time > e2.k.Time
 		}
 	}
 
 	panic("Failed to generate Less func for sorting entries")
 }
 
-// Command line options parsing --------------------------------------------------
+// ReadFlags parses the command line options
 func ReadFlags(config *Config) error {
 
 	flagSet := flag.NewFlagSet("goquery", flag.ContinueOnError)
@@ -231,7 +230,7 @@ func ReadFlags(config *Config) error {
 
 	// intentionally undocumented flag to set maximum percentage of physical memory
 	// to be used before program terminates itself.
-	flagSet.IntVar(&config.MaxMemPercent, "mem", MAXMEMPERCENTDEFAULT, "")
+	flagSet.IntVar(&config.MaxMemPercent, "mem", MaxMemPercentDefault, "")
 
 	// choose the last 30 days as default value for the time span, ensuring that
 	// queries never run over data covering more than a month by default. Of course
@@ -301,25 +300,26 @@ func wipeDB(dbPath string) error {
 
 // Message handling --------------------------------------------------------------
 func throwMsg(msg string, external bool, fmtSpec string) {
-	customer_text := "An error occurred while retrieving the requested information"
-	out_level := os.Stderr
+	customerText := "An error occurred while retrieving the requested information"
+	outLevel := os.Stderr
 	status := "error"
 
-	if strings.HasPrefix(msg, ERROR_NORESULTS) {
-		out_level = os.Stdout
+	if strings.HasPrefix(msg, errorNoResults) {
+		outLevel = os.Stdout
 		status = "empty"
 	}
 
 	// If called interactively, show full error message to user (otherwise show
 	// customer friendly generic message)
-	if !(msg != ERROR_NORESULTS && external) {
-		customer_text = msg
+	if !(msg != errorNoResults && external) {
+		customerText = msg
 	}
 
 	if fmtSpec == "json" {
 		// If called non-interactively, write full error message to message log
 		if external {
-			logger, err := log.NewFromString("syslog")
+			//logger, err := log.NewFromString("syslog")
+			logger, err := log.NewFromString("console")
 			if err != nil {
 				return
 			}
@@ -327,13 +327,13 @@ func throwMsg(msg string, external bool, fmtSpec string) {
 		}
 		message := map[string]string{
 			"status":        status,
-			"statusMessage": customer_text,
+			"statusMessage": customerText,
 		}
 
-		json_out, _ := json.Marshal(message)
-		fmt.Fprintf(out_level, "%s", json_out)
+		jsonOut, _ := json.Marshal(message)
+		fmt.Fprintf(outLevel, "%s", jsonOut)
 	} else {
-		fmt.Fprintf(out_level, "%s\n", customer_text)
+		fmt.Fprintf(outLevel, "%s\n", customerText)
 	}
 }
 
@@ -347,7 +347,7 @@ func parseIfaceList(dbPath string, ifacelist string) (ifaces []string, err error
 		if err != nil {
 			return nil, err
 		}
-		for iface, _ := range summary.Interfaces {
+		for iface := range summary.Interfaces {
 			ifaces = append(ifaces, iface)
 		}
 	} else {
@@ -434,7 +434,7 @@ func aggregate(mapChan <-chan map[goDB.ExtraKey]goDB.Val, resultChan chan<- aggr
 
 	if len(finalMap) == 0 {
 		resultChan <- aggregateResult{
-			err: fmt.Errorf(ERROR_NORESULTS),
+			err: fmt.Errorf(errorNoResults),
 		}
 		return
 	}
@@ -450,26 +450,26 @@ func main() {
 	//--------------------------------------------------------------------------------
 
 	// CPU Profiling Calls
-	//    runtime.SetBlockProfileRate(10000000) // PROFILING DEBUG
-	//    f, proferr := os.Create("GPCore.prof")    // PROFILING DEBUG
-	//    if proferr != nil {                       // PROFILING DEBUG
-	//        fmt.Println("Profiling error: "+proferr.Error()) // PROFILING DEBUG
-	//    } // PROFILING DEBUG
-	//    pprof.StartCPUProfile(f)     // PROFILING DEBUG
-	//    defer pprof.StopCPUProfile() // PROFILING DEBUG
+	//    runtime.SetBlockProfileRate(10000000) // PROFILInG DEBUG
+	//    f, proferr := os.Create("GPCore.prof")    // PROFILInG DEBUG
+	//    if proferr != nil {                       // PROFILInG DEBUG
+	//        fmt.Println("Profiling error: "+proferr.Error()) // PROFILInG DEBUG
+	//    } // PROFILInG DEBUG
+	//    pprof.StartCPUProfile(f)     // PROFILInG DEBUG
+	//    defer pprof.StopCPUProfile() // PROFILInG DEBUG
 
-	/// CPU & THREADING SETTINGS ///
-	numCpu := runtime.NumCPU()
-	runtime.GOMAXPROCS(numCpu)
+	/// CPU & THREADInG SETTInGS ///
+	numCPU := runtime.NumCPU()
+	runtime.GOMAXPROCS(numCPU)
 
-	/// WORKER SETTINGS
-	// explicitly decouple numCpus an numProcessingUnits (but still use numCpu at the moment)
-	numProcessingUnits := numCpu
+	/// WORKER SETTInGS
+	// explicitly decouple numCPUs an numProcessingUnits (but still use numCPU at the moment)
+	numProcessingUnits := numCPU
 
 	// Start timing
 	tStart := time.Now()
 
-	/// COMMAND LINE OPTIONS PARSING ///
+	/// COMMAND LInE OPTIONS PARSInG ///
 	var queryConfig Config
 	if parseErr := ReadFlags(&queryConfig); parseErr != nil {
 
@@ -509,7 +509,7 @@ func main() {
 	}
 
 	if queryConfig.Version {
-		fmt.Printf("goProbe %s\n", version.VersionText())
+		fmt.Printf("goProbe %s\n", version.Text())
 		return
 	}
 
@@ -635,25 +635,25 @@ func main() {
 	var direction Direction
 	switch {
 	case queryConfig.Sum:
-		direction = DIRECTION_SUM
+		direction = DirectionSum
 	case queryConfig.Incoming && !queryConfig.Outgoing:
-		direction = DIRECTION_IN
+		direction = DirectionIn
 	case !queryConfig.Incoming && queryConfig.Outgoing:
-		direction = DIRECTION_OUT
+		direction = DirectionOut
 	default:
-		direction = DIRECTION_BOTH
+		direction = DirectionBoth
 	}
 
 	var sortOrder SortOrder
 	switch queryConfig.Sort {
 	case "bytes":
-		sortOrder = SORT_TRAFFIC
+		sortOrder = SortTraffic
 	case "time":
-		sortOrder = SORT_TIME
+		sortOrder = SortTime
 	case "packets":
 		fallthrough
 	default:
-		sortOrder = SORT_PACKETS
+		sortOrder = SortPackets
 	}
 
 	// sanitize conditional if one was provided
@@ -685,7 +685,7 @@ func main() {
 	/// DATA ACQUISITION AND PREPARATION ///
 
 	// Start ticker to check memory consumption every second
-	memTicker := time.NewTicker(MEMCHECKINTERVAL)
+	memTicker := time.NewTicker(MemCheckInterval)
 	go func() {
 		m := runtime.MemStats{}
 		for ; true; <-memTicker.C {
@@ -748,7 +748,7 @@ func main() {
 	}
 
 	/// DATA PRESENATION ///
-	var mapEntries []Entry = make([]Entry, len(agg.aggregatedMap))
+	var mapEntries = make([]Entry, len(agg.aggregatedMap))
 	var val goDB.Val
 	count := 0
 

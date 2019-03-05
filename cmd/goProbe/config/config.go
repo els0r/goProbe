@@ -8,7 +8,7 @@
 //
 /////////////////////////////////////////////////////////////////////////////////
 
-// Package for parsing goprobe config files.
+// Package config is for parsing goprobe config files.
 package config
 
 import (
@@ -20,9 +20,10 @@ import (
 	"github.com/els0r/goProbe/pkg/capture"
 )
 
-// Expose global lock for the configuration
+// Mutex exposes a global lock for the configuration
 var Mutex sync.Mutex
 
+// Config stores goProbe's configuration
 type Config struct {
 	DBPath      string                    `json:"db_path"`
 	Interfaces  map[string]capture.Config `json:"interfaces"`
@@ -31,17 +32,20 @@ type Config struct {
 	API         APIConfig                 `json:"api"`
 }
 
+// LogConfig stores the logging configuration
 type LogConfig struct {
 	Destination string `json:"destination"`
 	Level       string `json:"level"`
 }
 
+// APIConfig stores goProbe's API configuration
 type APIConfig struct {
 	Port    string `json:"port"`
 	Metrics bool   `json:"metrics"`
 	Logging bool   `json:"request_logging"`
 }
 
+// New creates a new configuration struct with default settings
 func New() *Config {
 	interfaces := make(map[string]capture.Config)
 
@@ -59,6 +63,7 @@ func New() *Config {
 	}
 }
 
+// Validate checks all config parameters
 func (c *Config) Validate() error {
 	if c.DBPath == "" {
 		return fmt.Errorf("Database path must not be empty")
@@ -76,6 +81,8 @@ func (c *Config) Validate() error {
 	return nil
 }
 
+// ParseFile reads in a configuration from a file at `path`.
+// If provided, fields are overwritten from the default configuration
 func ParseFile(path string) (*Config, error) {
 	config := New()
 

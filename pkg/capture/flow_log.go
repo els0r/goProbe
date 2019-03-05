@@ -81,9 +81,9 @@ func (f *FlowLog) TablePrint(w *tabwriter.Writer) error {
 
 		fmt.Fprintf(w, fmtStr,
 			prefix,
-			goDB.RawIpToString(g.sip[:]),
+			goDB.RawIPToString(g.sip[:]),
 			uint16(uint16(g.sport[0])<<8|uint16(g.sport[1])),
-			goDB.RawIpToString(g.dip[:]),
+			goDB.RawIPToString(g.dip[:]),
 			uint16(uint16(g.dport[0])<<8|uint16(g.dport[1])),
 			goDB.GetIPProto(int(g.protocol)),
 			g.nBytesRcvd, g.nBytesSent, g.nPktsRcvd, g.nPktsSent)
@@ -94,37 +94,37 @@ func (f *FlowLog) TablePrint(w *tabwriter.Writer) error {
 // Add a packet to the flow log. If the packet belongs to a flow
 // already present in the log, the flow will be updated. Otherwise,
 // a new flow will be created.
-func (fm *FlowLog) Add(packet *GPPacket) {
+func (f *FlowLog) Add(packet *GPPacket) {
 	// update or assign the flow
-	if flowToUpdate, existsHash := fm.flowMap[packet.epHash]; existsHash {
+	if flowToUpdate, existsHash := f.flowMap[packet.epHash]; existsHash {
 		flowToUpdate.UpdateFlow(packet)
-	} else if flowToUpdate, existsReverseHash := fm.flowMap[packet.epHashReverse]; existsReverseHash {
+	} else if flowToUpdate, existsReverseHash := f.flowMap[packet.epHashReverse]; existsReverseHash {
 		flowToUpdate.UpdateFlow(packet)
 	} else {
-		fm.flowMap[packet.epHash] = NewGPFlow(packet)
+		f.flowMap[packet.epHash] = NewGPFlow(packet)
 	}
 }
 
-// Rotate the log. All flows are reset to no packets and traffic.
+// Rotate rotates the flow log. All flows are reset to no packets and traffic.
 // Moreover, any flows not worth keeping (according to GPFlow.IsWorthKeeping)
 // are discarded.
 //
 // Returns an AggFlowMap containing all flows since the last call to Rotate.
-func (fm *FlowLog) Rotate() (agg goDB.AggFlowMap) {
-	if len(fm.flowMap) == 0 {
-		fm.logger.Debug("There are currently no flow records available")
+func (f *FlowLog) Rotate() (agg goDB.AggFlowMap) {
+	if len(f.flowMap) == 0 {
+		f.logger.Debug("There are currently no flow records available")
 	}
 
-	fm.flowMap, agg = fm.transferAndAggregate()
+	f.flowMap, agg = f.transferAndAggregate()
 
 	return
 }
 
-func (fm *FlowLog) transferAndAggregate() (newFlowMap map[EPHash]*GPFlow, agg goDB.AggFlowMap) {
+func (f *FlowLog) transferAndAggregate() (newFlowMap map[EPHash]*GPFlow, agg goDB.AggFlowMap) {
 	newFlowMap = make(map[EPHash]*GPFlow)
 	agg = make(goDB.AggFlowMap)
 
-	for k, v := range fm.flowMap {
+	for k, v := range f.flowMap {
 
 		// check if the flow actually has any interesting information for us
 		if !v.HasBeenIdle() {

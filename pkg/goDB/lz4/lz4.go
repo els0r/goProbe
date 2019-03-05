@@ -1,3 +1,4 @@
+// Package lz4 implements goDB's Encoder interface for lz4 (de-)compression of flow data
 package lz4
 
 /*
@@ -31,6 +32,7 @@ type Encoder struct {
 	level int
 }
 
+// Option sets additional parameters on the Encoder
 type Option func(*Encoder)
 
 // New creates a new LZ4 Encoder that can be used to compress/decompress data

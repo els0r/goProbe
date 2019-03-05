@@ -15,25 +15,22 @@ import "fmt"
 func last(ss []string) string {
 	if len(ss) > 0 {
 		return ss[len(ss)-1]
-	} else {
-		return ""
 	}
+	return ""
 }
 
 func penultimate(ss []string) string {
 	if len(ss) > 1 {
 		return ss[len(ss)-2]
-	} else {
-		return ""
 	}
+	return ""
 }
 
 func antepenultimate(ss []string) string {
 	if len(ss) > 2 {
 		return ss[len(ss)-3]
-	} else {
-		return ""
 	}
+	return ""
 }
 
 type suggestions interface {
@@ -42,7 +39,7 @@ type suggestions interface {
 
 type unknownSuggestions struct{}
 
-func (_ unknownSuggestions) suggestionsMarker() {}
+func (unknownSuggestions) suggestionsMarker() {}
 
 type suggestion struct {
 	token         string
@@ -54,7 +51,7 @@ type knownSuggestions struct {
 	suggestions []suggestion
 }
 
-func (_ knownSuggestions) suggestionsMarker() {}
+func (knownSuggestions) suggestionsMarker() {}
 
 func complete(
 	tokenize func(string) []string,

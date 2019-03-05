@@ -20,38 +20,40 @@ type columnIndex int
 // Indizes for all column types
 const (
 	// First the attribute columns...
-	SIP_COLIDX, _ columnIndex = iota, iota
-	DIP_COLIDX, _
-	PROTO_COLIDX, _
-	DPORT_COLIDX, _
+	SipColIdx, _ columnIndex = iota, iota
+	DipColIdx, _
+	ProtoColIdx, _
+	DportColIdx, _
+
 	// ... and then the columns we aggregate
-	BYTESRCVD_COLIDX, COLIDX_ATTRIBUTE_COUNT
-	BYTESSENT_COLIDX, _
-	PKTSRCVD_COLIDX, _
-	PKTSSENT_COLIDX, _
-	COLIDX_COUNT, _
+	BytesRcvdColIdx, ColIdxAttributeCount
+	BytesSentColIdx, _
+	PacketsRcvdColIdx, _
+	PacketsSentColIdx, _
+	ColIdxCount, _
 )
 
 // Sizeof (entry) for all column types
 const (
-	SIP_SIZEOF       int = 16
-	DIP_SIZEOF       int = 16
-	PROTO_SIZEOF     int = 1
-	DPORT_SIZEOF     int = 2
-	BYTESRCVD_SIZEOF int = 8
-	BYTESSENT_SIZEOF int = 8
-	PKTSRCVD_SIZEOF  int = 8
-	PKTSSENT_SIZEOF  int = 8
+	SipSizeof         int = 16
+	DipSizeof         int = 16
+	ProtoSizeof       int = 1
+	DportSizeof       int = 2
+	BytesRcvdSizeof   int = 8
+	BytesSentSizeof   int = 8
+	PacketsRcvdSizeof int = 8
+	PacketsSentSizeof int = 8
 )
 
-var columnSizeofs = [COLIDX_COUNT]int{
-	SIP_SIZEOF, DIP_SIZEOF, PROTO_SIZEOF, DPORT_SIZEOF,
-	BYTESRCVD_SIZEOF, BYTESSENT_SIZEOF, PKTSRCVD_SIZEOF, PKTSSENT_SIZEOF}
+var columnSizeofs = [ColIdxCount]int{
+	SipSizeof, DipSizeof, ProtoSizeof, DportSizeof,
+	BytesRcvdSizeof, BytesSentSizeof, PacketsRcvdSizeof, PacketsSentSizeof}
 
-var columnFileNames = [COLIDX_COUNT]string{
+var columnFileNames = [ColIdxCount]string{
 	"sip", "dip", "proto", "dport",
 	"bytes_rcvd", "bytes_sent", "pkts_rcvd", "pkts_sent"}
 
+// Query stores all relevant parameters for data selection
 type Query struct {
 	// list of attributes that will be compared, e.g. "dip" "sip"
 	// in a "talk_conv" query
@@ -64,14 +66,14 @@ type Query struct {
 	// They are populated during the call to NewQuery
 
 	// Set of indizes of all attributes used in the query, except for the special "time" attribute.
-	// Example: For query type talk_conv, queryAttributeIndizes would contain SIP_COLIDX and DIP_COLIDX
+	// Example: For query type talk_conv, queryAttributeIndizes would contain SipColIdx and DipColIdx
 	queryAttributeIndizes []columnIndex
 	// Set of indizes of all attributes used in the conditional.
 	// Example: For the conditional "dport = 80 & dnet = 0.0.0.0/0" conditionalAttributeIndizes
-	// would contain DIP_COLIDX and DPORT_COLIDX
+	// would contain DipColIdx and DportColIdx
 	conditionalAttributeIndizes []columnIndex
 	// Set containing the union of queryAttributeIndizes, conditionalAttributeIndizes, and
-	// {BYTESSENT_COLIDX, PKTSRCVD_COLIDX, PKTSSENT_COLIDX, COLIDX_COUNT}.
+	// {BytesSentColIdx, PacketsRcvdColIdx, PacketsSentColIdx, ColIdxCount}.
 	// The latter four elements are needed for every query since they contain the variables we aggregate.
 	columnIndizes []columnIndex
 }
@@ -82,10 +84,10 @@ type Query struct {
 // the condition attributes.
 func queryAttributeNameToColumnIndex(name string) (colIdx columnIndex) {
 	colIdx, ok := map[string]columnIndex{
-		"sip":   SIP_COLIDX,
-		"dip":   DIP_COLIDX,
-		"proto": PROTO_COLIDX,
-		"dport": DPORT_COLIDX}[name]
+		"sip":   SipColIdx,
+		"dip":   DipColIdx,
+		"proto": ProtoColIdx,
+		"dport": DportColIdx}[name]
 	if !ok {
 		panic("Unknown query attribute " + name)
 	}
@@ -96,18 +98,19 @@ func queryAttributeNameToColumnIndex(name string) (colIdx columnIndex) {
 // because snet and dnet are only allowed in conditionals.
 func conditionalAttributeNameToColumnIndex(name string) (colIdx columnIndex) {
 	colIdx, ok := map[string]columnIndex{
-		"sip":   SIP_COLIDX,
-		"snet":  SIP_COLIDX,
-		"dip":   DIP_COLIDX,
-		"dnet":  DIP_COLIDX,
-		"proto": PROTO_COLIDX,
-		"dport": DPORT_COLIDX}[name]
+		"sip":   SipColIdx,
+		"snet":  SipColIdx,
+		"dip":   DipColIdx,
+		"dnet":  DipColIdx,
+		"proto": ProtoColIdx,
+		"dport": DportColIdx}[name]
 	if !ok {
 		panic("Unknown conditional attribute " + name)
 	}
 	return
 }
 
+// NewQuery creates a new Query object based on the parsed command line parameters
 func NewQuery(attributes []Attribute, conditional Node, hasAttrTime, hasAttrIface bool) *Query {
 	q := &Query{
 		Attributes:   attributes,
@@ -117,7 +120,7 @@ func NewQuery(attributes []Attribute, conditional Node, hasAttrTime, hasAttrIfac
 	}
 
 	// Compute index sets
-	var isAttributeIndex [COLIDX_ATTRIBUTE_COUNT]bool // temporary variable for computing set union
+	var isAttributeIndex [ColIdxAttributeCount]bool // temporary variable for computing set union
 
 	for _, attrib := range q.Attributes {
 		colIdx := queryAttributeNameToColumnIndex(attrib.Name())
@@ -126,19 +129,19 @@ func NewQuery(attributes []Attribute, conditional Node, hasAttrTime, hasAttrIfac
 	}
 
 	if q.Conditional != nil {
-		for attribName, _ := range q.Conditional.attributes() {
+		for attribName := range q.Conditional.attributes() {
 			colIdx := conditionalAttributeNameToColumnIndex(attribName)
 			q.conditionalAttributeIndizes = append(q.conditionalAttributeIndizes, colIdx)
 			isAttributeIndex[colIdx] = true
 		}
 	}
-	for colIdx := columnIndex(0); colIdx < COLIDX_ATTRIBUTE_COUNT; colIdx++ {
+	for colIdx := columnIndex(0); colIdx < ColIdxAttributeCount; colIdx++ {
 		if isAttributeIndex[colIdx] {
 			q.columnIndizes = append(q.columnIndizes, colIdx)
 		}
 	}
 	q.columnIndizes = append(q.columnIndizes,
-		BYTESRCVD_COLIDX, BYTESSENT_COLIDX, PKTSRCVD_COLIDX, PKTSSENT_COLIDX)
+		BytesRcvdColIdx, BytesSentColIdx, PacketsRcvdColIdx, PacketsSentColIdx)
 
 	return q
 }

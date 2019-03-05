@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/els0r/goProbe/pkg/goDB"
+	log "github.com/els0r/log"
 
 	"bufio"
 	"bytes"
@@ -16,11 +17,11 @@ import (
 )
 
 const (
-	SIP_DIP_SCHEMA             = "time,iface,sip,dip,packets received,packets sent,%,data vol. received,data vol. sent,%"
-	SIP_DIP_DPORT_PROTO_SCHEMA = "time,iface,sip,dip,dport,proto,packets received,packets sent,%,data vol. received,data vol. sent,%"
-	RAW_SCHEMA                 = "time,iface,sip,dip,dport,proto,packets received,packets sent,%,data vol. received,data vol. sent,%"
+	sipDipSchema      = "time,iface,sip,dip,packets received,packets sent,%,data vol. received,data vol. sent,%"
+	sipDipProtoSchema = "time,iface,sip,dip,dport,proto,packets received,packets sent,%,data vol. received,data vol. sent,%"
+	rawSchema         = "time,iface,sip,dip,dport,proto,packets received,packets sent,%,data vol. received,data vol. sent,%"
 
-	DBPATH = "./csvtestdb"
+	dbPath = "./csvtestdb"
 )
 
 var parserTests = []struct {
@@ -29,7 +30,7 @@ var parserTests = []struct {
 	outKey goDB.ExtraKey
 	outVal goDB.Val
 }{
-	{SIP_DIP_SCHEMA,
+	{sipDipSchema,
 		"1460362502,eth2,213.156.236.211,213.156.236.255,2,0,0.00,525,0,0.00",
 		goDB.ExtraKey{
 			int64(1460362502),
@@ -38,7 +39,7 @@ var parserTests = []struct {
 		},
 		goDB.Val{NBytesRcvd: uint64(525), NBytesSent: uint64(0), NPktsRcvd: uint64(2), NPktsSent: uint64(0)},
 	},
-	{SIP_DIP_DPORT_PROTO_SCHEMA,
+	{sipDipProtoSchema,
 		"1460362502,eth2,213.156.236.211,213.156.236.255,8080,TCP,2,0,0.00,525,0,0.00",
 		goDB.ExtraKey{
 			int64(1460362502),
@@ -47,7 +48,7 @@ var parserTests = []struct {
 		},
 		goDB.Val{NBytesRcvd: uint64(525), NBytesSent: uint64(0), NPktsRcvd: uint64(2), NPktsSent: uint64(0)},
 	},
-	{RAW_SCHEMA,
+	{rawSchema,
 		"1460362502,eth2,213.156.236.211,213.156.236.255,8080,TCP,2,0,0.00,525,0,0.00",
 		goDB.ExtraKey{
 			int64(1460362502),
@@ -58,7 +59,7 @@ var parserTests = []struct {
 	},
 }
 
-var inputCSV string = `time,iface,sip,dip,dport,proto,packets received,packets sent,%,data vol. received,data vol. sent,%
+var inputCSV = `time,iface,sip,dip,dport,proto,packets received,packets sent,%,data vol. received,data vol. sent,%
 1464051037,t4_12759,213.156.234.4,224.0.0.5,0,OSPFIGP,21,0,0.78,1760,0,0.33
 1464051037,eth0,169.254.204.142,169.254.255.255,137,UDP3,0,0.11,276,0,0.05
 1464051037,eth0,169.254.169.121,169.254.255.255,138,UDP1,0,0.04,243,0,0.05
@@ -165,23 +166,24 @@ Sent data volume (bytes),154985
 Sorting and flow direction,first packet time
 Interface,any`
 
-const MAGIC_ENV_VAR = "GOTEST_argumentsMain"
+const magicEnvVar = "GOTEST_argumentsMain"
 
 func TestMain(m *testing.M) {
 	var err error
 
 	// remove any current test databases
-	if err = os.RemoveAll(DBPATH); err != nil {
+	if err = os.RemoveAll(dbPath); err != nil {
 		fmt.Printf("Failed to remove old databases: %s", err.Error())
 		os.Exit(1)
 	}
 
+	// run tests
 	os.Exit(m.Run())
 }
 
 func callMain(arg ...string) *exec.Cmd {
 	cmd := exec.Command(os.Args[0], "-test.run=TestCallMain")
-	cmd.Env = append(os.Environ(), fmt.Sprintf("%s=%s", MAGIC_ENV_VAR, arg))
+	cmd.Env = append(os.Environ(), fmt.Sprintf("%s=%s", magicEnvVar, arg))
 	return cmd
 }
 
@@ -191,7 +193,7 @@ func TestConversion(t *testing.T) {
 		t.Fatalf("Failed to set up test data: %s", err.Error())
 	}
 
-	output, err := callMain("-in", "data.csv", "-out", DBPATH).CombinedOutput()
+	output, err := callMain("-in", "data.csv", "-out", dbPath).CombinedOutput()
 	if err != nil {
 		t.Fatalf("Error running conversion: Error %s\n, Output:%s\n", err.Error(), output)
 	}
@@ -207,7 +209,7 @@ func TestConversion(t *testing.T) {
 	//    }
 	//
 	//    // run goquery with arguments to produce above CSV file
-	//    goqueryOutput, err := exec.Command("goquery", "-d", DBPATH, "-i", "any", "-e", "csv", "raw").CombinedOutput()
+	//    goqueryOutput, err := exec.Command("goquery", "-d", dbPath, "-i", "any", "-e", "csv", "raw").CombinedOutput()
 	//    if err != nil {
 	//        t.Fatalf("Error during goquery call: %s", err.Error())
 	//    }
@@ -246,8 +248,8 @@ func compareLinesWithInput(convertedOutput []byte) (string, bool) {
 }
 
 func TestCallMain(t *testing.T) {
-	if args := os.Getenv(MAGIC_ENV_VAR); args != "" {
-		os.Args = []string{os.Args[0], "-in", "data.csv", "-out", DBPATH}
+	if args := os.Getenv(magicEnvVar); args != "" {
+		os.Args = []string{os.Args[0], "-in", "data.csv", "-out", dbPath}
 		main()
 		return
 	}
@@ -260,9 +262,11 @@ func TestParsers(t *testing.T) {
 		rowVal goDB.Val
 	)
 
+	logger, _ := log.NewFromString("console", log.WithLevel(log.DEBUG))
+
 	t.Parallel()
 	for _, tt := range parserTests {
-		conv := NewCSVConverter()
+		conv := NewCSVConverter(WithLogger(logger))
 		if err = conv.readSchema(tt.schema); err != nil {
 			t.Fatalf("Unable to read schema: %s", err.Error())
 		}

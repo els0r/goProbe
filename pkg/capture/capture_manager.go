@@ -21,10 +21,11 @@ import (
 )
 
 const (
-	// MAX_IFACES is the maximum number of interfaces we can monitor
-	MAX_IFACES = 1024
+	// MaxIfaces is the maximum number of interfaces we can monitor
+	MaxIfaces = 1024
 
-	WRITEOUTSCHAN_DEPTH = 100
+	// WriteoutsChanDepth sets the maximum amount of writeouts that can be queued
+	WriteoutsChanDepth = 100
 )
 
 // TaggedAggFlowMap represents an aggregated
@@ -47,6 +48,7 @@ type Writeout struct {
 	Timestamp time.Time
 }
 
+// WriteoutHandler provides the writeout and completion channels for external callers
 type WriteoutHandler struct {
 	CompletedChan chan struct{}
 	WriteoutChan  chan Writeout
@@ -56,7 +58,7 @@ type WriteoutHandler struct {
 func NewWriteoutHandler() *WriteoutHandler {
 	return &WriteoutHandler{
 		CompletedChan: make(chan struct{}),
-		WriteoutChan:  make(chan Writeout, WRITEOUTSCHAN_DEPTH),
+		WriteoutChan:  make(chan Writeout, WriteoutsChanDepth),
 	}
 }
 
@@ -85,7 +87,7 @@ func (cm *Manager) ifaceNames() []string {
 	ifaces := make([]string, 0, len(cm.captures))
 
 	cm.Lock()
-	for iface, _ := range cm.captures {
+	for iface := range cm.captures {
 		ifaces = append(ifaces, iface)
 	}
 	cm.Unlock()
@@ -232,7 +234,7 @@ func (cm *Manager) Update(ifaces map[string]Config, returnChan chan TaggedAggFlo
 	var disableIfaces []string
 
 	cm.Lock()
-	for iface, _ := range cm.captures {
+	for iface := range cm.captures {
 		if _, exists := ifaceSet[iface]; !exists {
 			disableIfaces = append(disableIfaces, iface)
 		}
@@ -270,7 +272,7 @@ func (cm *Manager) Update(ifaces map[string]Config, returnChan chan TaggedAggFlo
 	cm.logger.Debug(fmt.Sprintf("Updated interface list in %s", time.Now().Sub(t0)))
 }
 
-// StatusAll() returns the statuses of all managed Capture instances.
+// StatusAll returns the statuses of all managed Capture instances.
 func (cm *Manager) StatusAll() map[string]Status {
 	statusmapMutex := sync.Mutex{}
 	statusmap := make(map[string]Status)
@@ -317,10 +319,10 @@ func (cm *Manager) ActiveFlows(iface string) (map[string]*FlowLog, error) {
 	return ifaceFlows, nil
 }
 
-// ErrorsAll() returns the error maps of all managed Capture instances.
-func (cm *Manager) ErrorsAll() map[string]errorMap {
+// ErrorsAll returns the error maps of all managed Capture instances.
+func (cm *Manager) ErrorsAll() map[string]ErrorMap {
 	errmapMutex := sync.Mutex{}
-	errormap := make(map[string]errorMap)
+	errormap := make(map[string]ErrorMap)
 
 	var rg RunGroup
 	for iface, capture := range cm.capturesCopy() {
@@ -337,7 +339,7 @@ func (cm *Manager) ErrorsAll() map[string]errorMap {
 	return errormap
 }
 
-// RotateAll() returns the state of all managed Capture instances.
+// RotateAll returns the state of all managed Capture instances.
 //
 // The resulting TaggedAggFlowMaps will be sent over returnChan and
 // be tagged with the given timestamp.
@@ -362,7 +364,7 @@ func (cm *Manager) RotateAll(returnChan chan TaggedAggFlowMap) {
 	cm.logger.Debug(fmt.Sprintf("Completed rotation of all captures in %s", time.Now().Sub(t0)))
 }
 
-// CloseAll() closes and deletes all Capture instances managed by the
+// CloseAll closes and deletes all Capture instances managed by the
 // Manager
 func (cm *Manager) CloseAll() {
 	var rg RunGroup

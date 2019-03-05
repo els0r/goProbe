@@ -1,3 +1,4 @@
+// Package flags is for parsing goProbe's command line parameters.
 package flags
 
 import (
@@ -5,6 +6,7 @@ import (
 	"flag"
 )
 
+// Flags stores goProbe's command line parameters
 type Flags struct {
 	Config  string
 	Version bool

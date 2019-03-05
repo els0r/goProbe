@@ -17,7 +17,7 @@ package main
 import "fmt"
 import "sort"
 
-var helpBase string = `USAGE:
+var helpBase = `USAGE:
 
     goquery -i <interfaces> [-hax] [-in|-out|-sum] [-n <max_n>] [-resolve]
     [-e txt|csv|json|influxdb] [-d <db-path>] [-f <timestamp>] [-l <timestamp>]
@@ -53,7 +53,7 @@ var helpBase string = `USAGE:
           raw             a raw dump of all flows, including timestamps and interfaces
                           (equiv. to columns "time,iface,sip,dip,dport,proto")
 `
-var examples string = `
+var examples = `
 EXAMPLES
 
     * Show the top 5 (-n) IP pairs (talk_conv) over the default data presentation period
@@ -81,7 +81,7 @@ EXAMPLES
 
         goquery -i eth0 -f "-9999d" -c "snet = 172.27.0.0/16 | dnet = 172.27.0.0/16" -n 10 "sip,dip"
 `
-var admin string = `
+var admin = `
     Advanced maintenance options (should not be used in interactive mode):
 
     -clean <timestamp>
@@ -94,7 +94,7 @@ var admin string = `
         Handle with utmost care, all changes are permanent and cannot be undone!
 `
 
-var helpMap map[string]string = map[string]string{
+var helpMap = map[string]string{
 	"i": `
     -i <interfaces>
 
@@ -368,8 +368,9 @@ var helpMap map[string]string = map[string]string{
         the DNS resolver and network! Default: 25
 `}
 
+// PrintFlagGenerator selects the help text for a given flag
 func PrintFlagGenerator(external bool) func(affectedFlag string) {
-	var helpString string = helpBase
+	var helpString = helpBase
 	if !external {
 		return func(affectedFlag string) {
 			if affectedFlag == "" {
@@ -390,16 +391,16 @@ func PrintFlagGenerator(external bool) func(affectedFlag string) {
 	}
 }
 
-// Returns a function that prints the usage information if external is false and a
+// PrintUsageGenerator returns a function that prints the usage information if external is false and a
 // function that prints nothing if external is true.
 // Note that the usage information doesn't contain the admin help.
 func PrintUsageGenerator(external bool) func() {
-	var helpString string = helpBase
+	var helpString = helpBase
 	if !external {
 		// sort the map alphabetically
 		sorted := make([]string, len(helpMap))
 		i := 0
-		for k, _ := range helpMap {
+		for k := range helpMap {
 			sorted[i] = k
 			i++
 		}

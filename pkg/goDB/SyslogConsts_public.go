@@ -15,5 +15,5 @@
 package goDB
 
 const (
-	SOCKET_PATH = "/var/run/goprobe.sock"
+	socketPath = "/var/run/goprobe.sock"
 )

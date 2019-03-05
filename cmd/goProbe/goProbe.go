@@ -8,6 +8,7 @@
 //
 /////////////////////////////////////////////////////////////////////////////////
 
+// Binary for the lightweight packet aggregation tool goProbe
 package main
 
 import (
@@ -18,16 +19,14 @@ import (
 	"time"
 
 	"github.com/els0r/goProbe/cmd/goProbe/flags"
+	"github.com/els0r/goProbe/pkg/api"
 	"github.com/els0r/goProbe/pkg/capture"
-	"github.com/els0r/goProbe/pkg/capture/api"
 	"github.com/els0r/goProbe/pkg/goDB"
 	"github.com/els0r/goProbe/pkg/version"
 	"github.com/els0r/log"
 
 	capconfig "github.com/els0r/goProbe/cmd/goProbe/config"
 )
-
-const DB_WRITE_INTERVAL = 300 // seconds
 
 var (
 	// cfg may be potentially accessed from multiple goroutines,
@@ -56,7 +55,7 @@ func main() {
 		os.Exit(1)
 	}
 	if flags.CmdLine.Version {
-		fmt.Printf("goProbe %s\n", version.VersionText())
+		fmt.Printf("goProbe %s\n", version.Text())
 		os.Exit(0)
 	}
 
@@ -91,8 +90,8 @@ func main() {
 	}
 
 	// Limit the number of interfaces
-	if len(config.Interfaces) > capture.MAX_IFACES {
-		logger.Errorf("Cannot monitor more than %d interfaces", capture.MAX_IFACES)
+	if len(config.Interfaces) > capture.MaxIfaces {
+		logger.Errorf("Cannot monitor more than %d interfaces", capture.MaxIfaces)
 		os.Exit(1)
 	}
 
@@ -109,7 +108,7 @@ func main() {
 	// Initialize packet logger
 	ifaces := make([]string, len(config.Interfaces))
 	i := 0
-	for k, _ := range config.Interfaces {
+	for k := range config.Interfaces {
 		ifaces[i] = k
 		i++
 	}
@@ -163,12 +162,12 @@ func main() {
 	// can be no new Rotations/Updates/etc... while we're shutting down.
 	var (
 		writeoutsChan          chan<- capture.Writeout = captureManager.WriteoutHandler.WriteoutChan
-		completedWriteoutsChan chan struct{}           = captureManager.WriteoutHandler.CompletedChan
+		completedWriteoutsChan                         = captureManager.WriteoutHandler.CompletedChan
 	)
 	captureManager.DisableAll()
 
 	// One last writeout
-	woChan := make(chan capture.TaggedAggFlowMap, capture.MAX_IFACES)
+	woChan := make(chan capture.TaggedAggFlowMap, capture.MaxIfaces)
 	writeoutsChan <- capture.Writeout{woChan, time.Now()}
 	captureManager.RotateAll(woChan)
 	close(woChan)
@@ -184,21 +183,21 @@ func main() {
 func handleRotations(manager *capture.Manager, logger log.Logger) {
 	var writeoutsChan chan<- capture.Writeout = manager.WriteoutHandler.WriteoutChan
 
-	// One rotation every DB_WRITE_INTERVAL seconds...
-	ticker := time.NewTicker(time.Second * time.Duration(DB_WRITE_INTERVAL))
+	// One rotation every DBWriteInterval seconds...
+	ticker := time.NewTicker(time.Second * time.Duration(goDB.DBWriteInterval))
 	for {
 		select {
 		case <-ticker.C:
 			logger.Debug("Initiating flow data flush")
 
 			manager.LastRotation = time.Now()
-			woChan := make(chan capture.TaggedAggFlowMap, capture.MAX_IFACES)
+			woChan := make(chan capture.TaggedAggFlowMap, capture.MaxIfaces)
 			writeoutsChan <- capture.Writeout{woChan, captureManager.LastRotation}
 			manager.RotateAll(woChan)
 			close(woChan)
 
 			if len(writeoutsChan) > 2 {
-				if len(writeoutsChan) > capture.WRITEOUTSCHAN_DEPTH {
+				if len(writeoutsChan) > capture.WriteoutsChanDepth {
 					logger.Error(fmt.Sprintf("Writeouts are lagging behind too much: Queue length is %d", len(writeoutsChan)))
 					os.Exit(1)
 				}

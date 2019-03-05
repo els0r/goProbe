@@ -62,28 +62,28 @@ func TestSanitizeUserInput(t *testing.T) {
 
 type splitFuncTest struct {
 	inputData  []byte
-	inputAtEof bool
+	inputAtEOF bool
 	outAdvance int
 	outToken   []byte
 }
 
 func testSplitFunc(t *testing.T, f bufio.SplitFunc, test splitFuncTest) {
-	outAdvance, outToken, err := f(test.inputData, test.inputAtEof)
+	outAdvance, outToken, err := f(test.inputData, test.inputAtEOF)
 	if err != nil {
 		t.Fatalf("Failed on input (%v, %v). The error is: %s",
-			test.inputData, test.inputAtEof, err)
+			test.inputData, test.inputAtEOF, err)
 	}
 	if !reflect.DeepEqual(test.outToken, outToken) {
 		t.Fatalf("Data: '%s' AtEof: %v Output variable token: Expected output: %v. Actual output: %s",
-			test.inputData, test.inputAtEof, test.outToken, outToken)
+			test.inputData, test.inputAtEOF, test.outToken, outToken)
 	}
 	if test.outAdvance != outAdvance {
 		t.Fatalf("Data: '%s' AtEof: %v Output variable advance: Expected output: %d. Actual output: %d",
-			test.inputData, test.inputAtEof, test.outAdvance, outAdvance)
+			test.inputData, test.inputAtEOF, test.outAdvance, outAdvance)
 	}
 	if !reflect.DeepEqual(test.outToken, outToken) {
 		t.Fatalf("Data: '%s' AtEof: %v Output variable token: Expected output: %v. Actual output: %s",
-			test.inputData, test.inputAtEof, test.outToken, outToken)
+			test.inputData, test.inputAtEOF, test.outToken, outToken)
 	}
 }
 

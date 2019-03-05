@@ -17,76 +17,80 @@ import (
 	"strings"
 )
 
-// Interface for attributes
-// This interface is not meant to be implemented by structs
+// Attribute interface. It is not meant to be implemented by structs
 // outside this package
 type Attribute interface {
 	Name() string
-	// Some attributes use more than a single output column.
-	ExtraColumns() []string
+
 	// ExtractStrings() extracts a list of records representing the
 	// attribute from a given key.
-	// You may assume that the length of the returned list is always
-	// the length of ExtraColumns() + 1.
 	ExtractStrings(key *ExtraKey) []string
+
 	// Ensures that this interface cannot be implemented outside this
 	// package.
 	attributeMarker()
 }
 
+// SipAttribute implements the source IP attribute
 type SipAttribute struct{}
 
-func (_ SipAttribute) Name() string {
+// Name returns the attributes name
+func (SipAttribute) Name() string {
 	return "sip"
 }
-func (_ SipAttribute) ExtraColumns() []string {
-	return nil
-}
-func (_ SipAttribute) ExtractStrings(key *ExtraKey) []string {
-	return []string{RawIpToString(key.Sip[:])}
-}
-func (_ SipAttribute) attributeMarker() {}
 
+// ExtractStrings converts the sip byte slice into a human-readable IP address
+func (SipAttribute) ExtractStrings(key *ExtraKey) []string {
+	return []string{RawIPToString(key.Sip[:])}
+}
+
+func (SipAttribute) attributeMarker() {}
+
+// DipAttribute implements the destination IP attribute
 type DipAttribute struct{}
 
-func (_ DipAttribute) Name() string {
+// Name returns the attribute's name
+func (DipAttribute) Name() string {
 	return "dip"
 }
-func (_ DipAttribute) ExtraColumns() []string {
-	return nil
-}
-func (_ DipAttribute) ExtractStrings(key *ExtraKey) []string {
-	return []string{RawIpToString(key.Dip[:])}
-}
-func (_ DipAttribute) attributeMarker() {}
 
+// ExtractStrings converts the dip byte slice into a human-readable IP address
+func (DipAttribute) ExtractStrings(key *ExtraKey) []string {
+	return []string{RawIPToString(key.Dip[:])}
+}
+func (DipAttribute) attributeMarker() {}
+
+// ProtoAttribute implements the IP protocol attribute
 type ProtoAttribute struct{}
 
-func (_ ProtoAttribute) Name() string {
+// Name returns the attribute's name
+func (ProtoAttribute) Name() string {
 	return "proto"
 }
-func (_ ProtoAttribute) ExtraColumns() []string {
-	return nil
-}
-func (_ ProtoAttribute) ExtractStrings(key *ExtraKey) []string {
+
+// ExtractStrings converts the numeric IP protocol into a human-readable name (e.g. "UDP")
+func (ProtoAttribute) ExtractStrings(key *ExtraKey) []string {
 	return []string{GetIPProto(int(key.Protocol))}
 }
-func (_ ProtoAttribute) attributeMarker() {}
 
+func (ProtoAttribute) attributeMarker() {}
+
+// DportAttribute implements the destination port attribute
 type DportAttribute struct{}
 
-func (_ DportAttribute) Name() string {
+// Name returns the attribute's name
+func (DportAttribute) Name() string {
 	return "dport"
 }
-func (_ DportAttribute) ExtraColumns() []string {
-	return nil
-}
-func (_ DportAttribute) ExtractStrings(key *ExtraKey) []string {
+
+// ExtractStrings converts the dport byte slice into a numeric port number (e.g. 443)
+func (DportAttribute) ExtractStrings(key *ExtraKey) []string {
 	return []string{strconv.Itoa(int(uint16(key.Dport[0])<<8 | uint16(key.Dport[1])))}
 }
-func (_ DportAttribute) attributeMarker() {}
 
-// Returns an Attribute for the given name. If no such attribute
+func (DportAttribute) attributeMarker() {}
+
+// NewAttribute returns an Attribute for the given name. If no such attribute
 // exists, an error is returned.
 func NewAttribute(name string) (Attribute, error) {
 	switch name {
@@ -103,7 +107,7 @@ func NewAttribute(name string) (Attribute, error) {
 	}
 }
 
-// Parses the given query type into a list of attributes.
+// ParseQueryType parses the given query type into a list of attributes.
 // The returned list is guaranteed to have no duplicates.
 // A valid query type can either be a comma-separated list of
 // attribute names (e.g. "sip,dip,dport") or something like
@@ -154,7 +158,7 @@ func ParseQueryType(queryType string) (attributes []Attribute, hasAttrTime, hasA
 	return
 }
 
-// Find out if any of the attributes are usable for a reverse DNS lookup
+// HasDNSAttributes finds out if any of the attributes are usable for a reverse DNS lookup
 // (e.g. check for IP attributes)
 func HasDNSAttributes(attributes []Attribute) bool {
 	for _, attr := range attributes {

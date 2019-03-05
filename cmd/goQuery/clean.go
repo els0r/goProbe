@@ -55,7 +55,7 @@ func cleanIfaceDir(dbPath string, timestamp int64, iface string) (result cleanIf
 		}
 
 		entryPath := filepath.Join(dbPath, iface, entry.Name())
-		metaFilePath := filepath.Join(entryPath, goDB.METADATA_FILE_NAME)
+		metaFilePath := filepath.Join(entryPath, goDB.MetadataFileName)
 
 		if dirTimestamp < dayTimestamp {
 			// delete directory
@@ -98,7 +98,7 @@ func cleanIfaceDir(dbPath string, timestamp int64, iface string) (result cleanIf
 // recorded at timestamp or later.
 func cleanOldDBDirs(dbPath string, timestamp int64) error {
 	if timestamp >= time.Now().Unix() {
-		return fmt.Errorf("I can only clean up database entries from the past.")
+		return fmt.Errorf("only database entries from the past can be cleaned")
 	}
 
 	ifaces, err := ioutil.ReadDir(dbPath)
@@ -123,7 +123,7 @@ func cleanOldDBDirs(dbPath string, timestamp int64) error {
 
 	return goDB.ModifyDBSummary(dbPath, 10*time.Second, func(summ *goDB.DBSummary) (*goDB.DBSummary, error) {
 		if summ == nil {
-			return summ, fmt.Errorf("Cannot update summary: Summary missing")
+			return summ, fmt.Errorf("cannot update summary: summary missing")
 		}
 
 		for iface, change := range ifaceResults {
