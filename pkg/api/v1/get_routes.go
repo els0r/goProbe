@@ -36,7 +36,7 @@ type key int
 
 // context keys for this api
 const (
-	activeFlowsKey key = iota
+	activeFlowsCtxKey key = iota
 )
 
 // IfaceCtx obtains the flow map for the queried interface and stores it in the request context
@@ -49,7 +49,7 @@ func (a *API) IfaceCtx(next http.Handler) http.Handler {
 			http.Error(w, http.StatusText(404), 404)
 			return
 		}
-		ctx := context.WithValue(r.Context(), activeFlowsKey, flows)
+		ctx := context.WithValue(r.Context(), activeFlowsCtxKey, flows)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
@@ -58,7 +58,7 @@ func (a *API) getActiveFlows(w http.ResponseWriter, r *http.Request) {
 	var err error
 
 	ctx := r.Context()
-	flowLog, ok := ctx.Value(activeFlowsKey).(map[string]*capture.FlowLog)
+	flowLog, ok := ctx.Value(activeFlowsCtxKey).(map[string]*capture.FlowLog)
 	if !ok {
 		http.Error(w, http.StatusText(422), 422)
 		return

@@ -139,7 +139,11 @@ func main() {
 	if config.API.Logging {
 		apiOptions = append(apiOptions, api.WithLogger(logger))
 	}
+	if len(config.API.Keys) > 0 {
+		apiOptions = append(apiOptions, api.WithKeys(config.API.Keys))
+	}
 
+	// create server and start listening for requests
 	server, err = api.New(config.API.Host, config.API.Port, captureManager,
 		apiOptions...,
 	)

@@ -40,10 +40,11 @@ type LogConfig struct {
 
 // APIConfig stores goProbe's API configuration
 type APIConfig struct {
-	Host    string `json:"host"`
-	Port    string `json:"port"`
-	Metrics bool   `json:"metrics"`
-	Logging bool   `json:"request_logging"`
+	Host    string   `json:"host"`
+	Port    string   `json:"port"`
+	Metrics bool     `json:"metrics"`
+	Logging bool     `json:"request_logging"`
+	Keys    []string `json:"keys"`
 }
 
 // New creates a new configuration struct with default settings
@@ -78,6 +79,13 @@ func (c *Config) Validate() error {
 	}
 	if c.API.Port == "" {
 		return fmt.Errorf("No port specified for API server")
+	}
+
+	// check API key constraints
+	for i, key := range c.API.Keys {
+		if len(key) < 32 {
+			return fmt.Errorf("API key %d considered insecure: insufficient length %d", i+1, len(key))
+		}
 	}
 
 	return nil

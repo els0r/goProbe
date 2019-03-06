@@ -25,12 +25,18 @@ type API interface {
 
 // Server is the entry path for goProbe's http server and holds all API versions and routes
 type Server struct {
+	// base config
 	location string // what the server binds to
 	root     string // document root
 
+	// path setup
 	router chi.Router
 	apis   []API
 
+	// authentication
+	keys map[string]struct{}
+
+	// info
 	logger  log.Logger
 	metrics bool
 
@@ -40,8 +46,32 @@ type Server struct {
 	concurrentAccessLimit int
 }
 
+// APIKeys allows for quick key validation
+type APIKeys map[string]struct{}
+
+// unique keys for context setting
+type key int
+
+const (
+	apiKeyCtxKey key = iota
+)
+
+// errors
+const (
+	errContextCanceled = "Context was canceled."
+)
+
 // Option allows to set optional parameters in the server
 type Option func(*Server)
+
+// WithKeys registers API authentication keys with the server
+func WithKeys(keys []string) Option {
+	return func(s *Server) {
+		for _, key := range keys {
+			s.keys[key] = struct{}{}
+		}
+	}
+}
 
 // WithLogger provides the api with access to the program level logger. It is recommended to use this option
 func WithLogger(l log.Logger) Option {
@@ -85,9 +115,11 @@ func New(host, port string, manager *capture.Manager, opts ...Option) (*Server, 
 
 	s := &Server{
 		root:                  "/",
+		keys:                  make(map[string]struct{}),
 		perMinRateLimit:       defaultPerMinRateLimit,
 		burstLimit:            defaultBurstLimit,
 		concurrentAccessLimit: defaultConcurrentAccessLimit,
+		logger:                log.NewDevNullLogger(), // default is logging to nothing
 	}
 
 	if host == "" {
@@ -113,7 +145,9 @@ func New(host, port string, manager *capture.Manager, opts ...Option) (*Server, 
 	r.Use(middleware.RealIP)
 
 	// only use the logging middleware if a logger was specifically provided
-	if s.logger != nil {
+	switch s.logger.(type) {
+	case *log.DevNullLogger:
+	default:
 		r.Use(reqLogger) // prints to stdout at the moment
 	}
 	r.Use(middleware.Recoverer)
@@ -137,6 +171,14 @@ func New(host, port string, manager *capture.Manager, opts ...Option) (*Server, 
 
 			s.logger.Debugf("Set up rate limiter middleware: req/min=%d, burst=%d, concurrent req=%d", s.perMinRateLimit, s.burstLimit, s.concurrentAccessLimit)
 
+			// attach API authentication handler
+			if len(s.keys) > 0 {
+				r.Use(s.AuthenticationHandler(s.keys))
+				s.logger.Debugf("API authentication handler registered %d key(s)", len(s.keys))
+			} else {
+				s.logger.Warn("running API without authentication keys exposes it to any (potentially malicious) third-party")
+			}
+
 			// mount all APIs
 			for _, api := range s.apis {
 
@@ -148,9 +190,7 @@ func New(host, port string, manager *capture.Manager, opts ...Option) (*Server, 
 
 	// expose metrics if needed
 	if s.metrics {
-		if s.logger != nil {
-			s.logger.Debugf("Enabling metrics export on http://%s:%s%sdebug/vars", host, port, s.root)
-		}
+		s.logger.Debugf("Enabling metrics export on http://%s:%s%sdebug/vars", host, port, s.root)
 
 		// specify metrics location
 		r.Get("/debug/vars", getMetrics)
@@ -163,4 +203,9 @@ func New(host, port string, manager *capture.Manager, opts ...Option) (*Server, 
 // Run launches the server to listen on a specified locations (e.g. 127.0.0.1:6060)
 func (s *Server) Run() {
 	go http.ListenAndServe(s.location, s.router)
+}
+
+// ReturnStatus is a wrapper around the default http.Error method
+func ReturnStatus(w http.ResponseWriter, code int) {
+	http.Error(w, http.StatusText(code), code)
 }
