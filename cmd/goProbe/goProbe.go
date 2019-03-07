@@ -124,9 +124,6 @@ func main() {
 	logger.Debug("Updating capture manager configuration")
 	captureManager.Update(config.Interfaces, make(chan capture.TaggedAggFlowMap))
 
-	// Start goroutine for writeouts
-	go handleWriteouts(captureManager.WriteoutHandler, config.SyslogFlows, logger)
-
 	// configure api server
 	var (
 		server     *api.Server
@@ -150,8 +147,42 @@ func main() {
 	if err != nil {
 		logger.Errorf("failed to spawn API server: %s", err)
 	} else {
+		// handle -docgen flag
+		if flags.CmdLine.DocGen {
+			var mdRoutes, jsonRoutes *os.File
+
+			logger.Info("generating API docs and quitting")
+
+			// open files
+			fname := "pkg/api/apidoc"
+			mdRoutes, err = os.OpenFile(fname+".md", os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0755)
+			if err != nil {
+				logger.Errorf("failed to open '%s.md' for writing: %s", fname, err)
+				os.Exit(1)
+			}
+			jsonRoutes, err = os.OpenFile(fname+".json", os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0755)
+			if err != nil {
+				logger.Errorf("failed to open '%s.json' for writing: %s", fname, err)
+				os.Exit(1)
+			}
+
+			// generate the documentation
+			err = server.GenerateAPIDocs(jsonRoutes, mdRoutes)
+			if err != nil {
+				logger.Errorf("docgen failed: %s", err)
+				os.Exit(1)
+			}
+
+			// exit program
+			os.Exit(0)
+		}
+
+		// start server
 		server.Run()
 	}
+
+	// Start goroutine for writeouts
+	go handleWriteouts(captureManager.WriteoutHandler, config.SyslogFlows, logger)
 
 	// Start regular rotations
 	go handleRotations(captureManager, logger)

@@ -3,6 +3,7 @@ package api
 import (
 	"expvar"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
+	"github.com/go-chi/docgen"
 )
 
 // API is any type that exposes its URL paths via chi.Routes
@@ -197,7 +199,27 @@ func New(host, port string, manager *capture.Manager, opts ...Option) (*Server, 
 	}
 
 	s.router = r
+
 	return s, nil
+}
+
+// GenerateAPIDocs generates the API documentation
+func (s *Server) GenerateAPIDocs(json, md io.Writer) error {
+	var err, jerr, mderr error
+
+	// opportunistically write both documentations
+	_, jerr = fmt.Fprintf(json, docgen.JSONRoutesDoc(s.router))
+	if jerr != nil {
+		err = fmt.Errorf("json docgen: %s", jerr)
+	}
+	_, mderr = fmt.Fprintf(md, docgen.MarkdownRoutesDoc(s.router, docgen.MarkdownOpts{
+		ProjectPath: "github.com/els0r/goProbe",
+		Intro:       mdApiDocIntro,
+	}))
+	if mderr != nil {
+		err = fmt.Errorf("%s; md docgen: %s", err, mderr)
+	}
+	return err
 }
 
 // Run launches the server to listen on a specified locations (e.g. 127.0.0.1:6060)

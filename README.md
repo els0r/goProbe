@@ -1,5 +1,5 @@
 goProbe
-[![GoDoc](https://godoc.org/github.com/els0r/goProbe?status.svg)](https://godoc.org/github.com/els0r/goProbe) [![Go Report Card](https://goreportcard.com/badge/github.com/els0r/goProbe)](https://goreportcard.com/report/github.com/els0r/goProbe)
+[![GoDoc](https://godoc.org/github.com/els0r/goProbe?status.svg)](https://godoc.org/github.com/els0r/goProbe/) [![Go Report Card](https://goreportcard.com/badge/github.com/els0r/goProbe)](https://goreportcard.com/report/github.com/els0r/goProbe)
 ===========
 
 This package comprises:
@@ -18,7 +18,7 @@ Today, targeted analyses of network traffic patterns have become increasingly di
 
 The [NetFlow](http://www.ietf.org/rfc/rfc3954.txt) standard was introduced to address this reduction. It uses the concept of flows, which combine packets based on a set of shared packet attributes. NetFlow information is usually captured on one device and collected in a central database on another device. Several software probes are available, implementing NetFlow exporters and collectors.
 
-goProbe deviates from traditional NetFlow as flow capturing and collection is run on the same device and the flow fields reduced. It was designed as a lightweight, standalone system, providing both optimized packet capture and a storage backend tailored to the flow data.
+goProbe deviates from traditional NetFlow as flow capturing and collection is run on the same device and the flow fields reduced. It was designed as a lightweight, standalone system, providing both optimized packet capture and a storage backend tailored to the flow data in order to provide lightning-fast analysis queries.
 
 Quick Start
 ------------
@@ -76,26 +76,61 @@ The capturing probe can be run as a daemon via
 
 You must configure goProbe. By default, the relevant configuration file resides in
 `/opt/ntm/goProbe/etc/goprobe.conf`.
-The configuration is stored as JSON and looks like this:
+
+The config covers three aspects of goProbe: capturing, logging and the API.
+
+An example configuration file is created during installation at `/opt/ntm/goProbe/etc/goprobe.conf.example`.
+
+#### DB location
+
+The location of the goDB database to which flows are written is configured with `dbpath` , e.g. `"db_path" : "/path/to/database"`
+
+#### Interface
+
+The interface configuration is stored as JSON and looks as follows:
 ```
-{
-  "db_path" : "/path/to/database",
-  "interfaces" : { // configure each interface we want to listen on
-    "eth0" : {
-      "bpf_filter" : "not arp and not icmp", // bpf filter string like for tcpdump
-      "buf_size" : 2097152,                  // pcap buffer size
-      "promisc" : false                      // enable promiscuous mode
-    },
-    "eth1" : {
-      "bpf_filter" : "not arp and not icmp",
-      "buf_size" : 1048576,
-      "promisc" : true
-    }
+"interfaces" : {                           // configure each interface we want to listen on
+  "eth0" : {
+    "bpf_filter" : "not arp and not icmp", // bpf filter string like for tcpdump
+    "buf_size" : 2097152,                  // pcap buffer size
+    "promisc" : false                      // enable promiscuous mode
+  },
+  "eth1" : {
+    "bpf_filter" : "not arp and not icmp",
+    "buf_size" : 1048576,
+    "promisc" : true
   }
 }
 ```
 
-An example configuration file is created during installation at `/opt/ntm/goProbe/etc/goprobe.conf.example`.
+#### Logging
+
+goProbe has flexible logging capabilities. It uses the `Logger` interface from third-party package [log](https://github.com/els0r/log), which is compatible with most third-party logging frameworks. Hence, other loggers can be injected into goProbe.
+
+The default configuration has goProbe log to syslog with level "info". The config blocks looks as follows:
+```
+"logging" : {
+    "destination" : "console", // will write log messages to stdout/stderr
+    "level" : "debug"          // more verbose logging
+}
+```
+
+#### API
+
+By default, goProbe spawns a command-and-control HTTP API server. For more information on the capabilities of the API, see [API documentation](https://github.com/els0r/goProbe/tree/master/pkg/api/apidoc.md).
+
+The API itself is configured via the following parameters:
+```
+"api" : {
+    "host" : "localhost",
+    "port" : "6060",          // port to bind to
+    "request_logging" : true, // log API usage
+    "keys" : [                // auth via pre-shared keys (don't use below in production!)
+        "da53ae3fb482db63d9606a9324a694bf51f7ad47623c04ab7b97a811f2a78e05",
+        "9e3b84ae1437a73154ac5c48a37d5085a3f6e68621b56b626f81620de271a2f6"
+    ]
+}
+```
 
 goDB
 --------------------------
@@ -159,30 +194,17 @@ If you use `goConvert`, you need to make sure that the data which you are import
 ```
 You _must_ abide by this structure, otherwise the conversion will fail.
 
-Logging Facilities
-------------------
-
-Both goProbe and goDB write to the Syslog facility. However, the log output is passed to syslog via UDP packets to destination port 514. You will have to make sure that your syslog daemon supports logging via UDP. On most platforms uncommenting the following in `/etc/rsyslog.conf` should suffice:
-
-```
-$ModLoad imudp
-$UDPServerRun 514
-```
-
-Changes should take effect after rebooting the machine.
-
 Installation
 ------------
 
 *Note*: the default directory for `goProbe` is `/opt/ntm/goProbe`. If you wish to change this, change the `PREFIX` variable in the `Makefile` to a destination of your choosing.
-
 
 Before running the installer, make sure that you have the following dependencies installed:
 * golang
 * socat (for init script usage only)
 * rsync (for deploy target only)
 
-The package itself now requires a fully set up  `go` environment. To build everything via Makefile, run
+The package is designed to only require a fully set up `go` environment. To build everything via Makefile, run
 
 ```
 make all
@@ -196,12 +218,9 @@ go install -i github.com/els0r/goProbe/cmd/goQuery
 go install -i github.com/els0r/goProbe/cmd/goConvert
 ```
 
-
-
 Additional Makefile targets for deployment are:
 * `make deploy`: syncs the binary tree to the root directory. *Note:* this is only a good idea if you want to run goProbe on the system where you compiled it.
 * `make package`: creates a tarball for deployment on another system.
-
 
 The binary will reside in the directory specified in the above command.
 
@@ -231,11 +250,12 @@ _goquery() {
 
 ### Supported Operating Systems
 
-goProbe is currently set up to run on Linux based systems. Tested versions include:
+goProbe is currently set up to run on Linux based systems and Mac OS X. Tested versions include:
 
 * Ubuntu 14.04/15.04
 * Debian 7/8/9
 * Fedora 28
+* Mac OS X 10.14.3
 
 Authors & Contributors
 ----------------------
@@ -245,6 +265,11 @@ Authors & Contributors
 * Lorenz Breidenbach, Open Systems AG
 
 This software was developed at [Open Systems AG](https://www.open.ch/) in close collaboration with the [Distributed Computing Group](http://www.disco.ethz.ch/) at the [Swiss Federal Institute of Technology](https://www.ethz.ch/en.html).
+
+Bug Reports
+-----------
+
+Please use the [issue tracker](https://github.com/els0r/goProbe/issues) for bugs and feature requests.
 
 License
 -------
