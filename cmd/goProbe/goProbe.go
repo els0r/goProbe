@@ -154,13 +154,13 @@ func main() {
 			logger.Info("generating API docs and quitting")
 
 			// open files
-			fname := "pkg/api/apidoc"
-			mdRoutes, err = os.OpenFile(fname+".md", os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0755)
+			fname := "pkg/api/"
+			mdRoutes, err = os.OpenFile(fname+"README.md", os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0755)
 			if err != nil {
 				logger.Errorf("failed to open '%s.md' for writing: %s", fname, err)
 				os.Exit(1)
 			}
-			jsonRoutes, err = os.OpenFile(fname+".json", os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0755)
+			jsonRoutes, err = os.OpenFile(fname+"routes.json", os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0755)
 			if err != nil {
 				logger.Errorf("failed to open '%s.json' for writing: %s", fname, err)
 				os.Exit(1)

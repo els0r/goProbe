@@ -75,9 +75,7 @@ The capturing probe can be run as a daemon via
 ### Configuration
 
 You must configure goProbe. By default, the relevant configuration file resides in
-`/opt/ntm/goProbe/etc/goprobe.conf`.
-
-The config covers three aspects of goProbe: capturing, logging and the API.
+`/opt/ntm/goProbe/etc/goprobe.conf`. The config covers three aspects of goProbe: capturing, logging and the API.
 
 An example configuration file is created during installation at `/opt/ntm/goProbe/etc/goprobe.conf.example`.
 
@@ -117,7 +115,7 @@ The default configuration has goProbe log to syslog with level "info". The confi
 
 #### API
 
-By default, goProbe spawns a command-and-control HTTP API server. For more information on the capabilities of the API, see [API documentation](https://github.com/els0r/goProbe/tree/master/pkg/api/apidoc.md).
+By default, goProbe spawns a command-and-control HTTP API server. For more information on the capabilities of the API, see [API documentation](https://github.com/els0r/goProbe/tree/master/pkg/api/README.md).
 
 The API itself is configured via the following parameters:
 ```
