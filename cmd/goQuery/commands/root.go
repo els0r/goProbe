@@ -10,8 +10,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var supportedCmds = "{QUERY TYPE|COLUMNS|admin|examples|list|version}"
+
 var rootCmd = &cobra.Command{
-	Use:   "goQuery [flags] [{QUERY TYPE|COLUMNS|examples|admin|version|list}]",
+	Use:   "goQuery [flags] [" + supportedCmds + "]",
 	Short: helpBase,
 	Long:  helpBaseLong,
 	// entry point for goQuery
@@ -23,7 +25,7 @@ var rootCmd = &cobra.Command{
 // any commands other than query type will be hooked up to this command
 var subRootCmd = &cobra.Command{}
 
-// Execute is the main entrypoint and runs the query
+// Execute is the main entrypoint and runs the CLI tool
 func Execute() {
 	err := rootCmd.Execute()
 	if err != nil {
@@ -97,8 +99,8 @@ func entrypoint(cmd *cobra.Command, args []string) error {
 
 	// check that query type or other subcommands were provided
 	if len(args) == 0 {
-		err := errors.New("the query type is required")
-		fmt.Fprintf(os.Stderr, "Query preparation failed: %s\n", err)
+		err := errors.New("No query type or command provided")
+		fmt.Fprintf(os.Stderr, "%s\n%s\n", err, cmd.Long)
 		return err
 	}
 	if args[0] == "help" {

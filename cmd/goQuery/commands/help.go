@@ -1,9 +1,9 @@
 package commands
 
 var helpBase = `
-  goquery -i <interfaces> [-hax] [-in|-out|-sum] [-n <max_n>] [-resolve]
+  goquery -i <interfaces> [-hax] [--in|--out|--sum] [-n <max_n>] [--resolve]
   [-e txt|csv|json|influxdb] [-d <db-path>] [-f <timestamp>] [-l <timestamp>]
-  [-c <conditions>] [-s <column>] {COLUMNS|QUERY_TYPE}
+  [-c <conditions>] [-s <column>] ` + supportedCmds + `
 
   Flow database query tool to extract flow statistics from the goDB database
   created by goProbe. By default, output is written to STDOUT, sorted by overall
