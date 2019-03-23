@@ -169,7 +169,7 @@ func main() {
 	// get logger
 	logger, err := log.NewFromString("console", log.WithLevel(log.DEBUG))
 	if err != nil {
-		fmt.Printf("failed to spawn logger: %s", err)
+		fmt.Fprintf(os.Stderr, "failed to spawn logger: %s\n", err)
 		os.Exit(1)
 	}
 

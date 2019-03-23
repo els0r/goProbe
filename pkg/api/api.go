@@ -46,6 +46,9 @@ type Server struct {
 	perMinRateLimit       int
 	burstLimit            int
 	concurrentAccessLimit int
+
+	// timeouts
+	timeout time.Duration
 }
 
 // APIKeys allows for quick key validation
@@ -63,40 +66,10 @@ const (
 	errContextCanceled = "Context was canceled."
 )
 
-// Option allows to set optional parameters in the server
-type Option func(*Server)
-
-// WithKeys registers API authentication keys with the server
-func WithKeys(keys []string) Option {
-	return func(s *Server) {
-		for _, key := range keys {
-			s.keys[key] = struct{}{}
-		}
-	}
-}
-
-// WithLogger provides the api with access to the program level logger. It is recommended to use this option
-func WithLogger(l log.Logger) Option {
-	return func(s *Server) {
-		s.logger = l
-	}
-}
-
-// WithMetricsExport switches on metrics export
-func WithMetricsExport() Option {
-	return func(s *Server) {
-		s.metrics = true
-	}
-}
-
-// WithRateLimits applies custom request rate limits to the API. Setting any of the values to zero deactivates the rate limiting for that particular part.
-func WithRateLimits(perMin, burst, concurrentRequests int) Option {
-	return func(s *Server) {
-		s.perMinRateLimit = perMin
-		s.burstLimit = burst
-		s.concurrentAccessLimit = concurrentRequests
-	}
-}
+const (
+	// request timeout in seconds
+	DefaultTimeout = 30
+)
 
 func getLoggerHandler(logger log.Logger) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
@@ -113,28 +86,32 @@ func getMetrics(w http.ResponseWriter, r *http.Request) {
 }
 
 // New creates a base router for goProbe's APIs and provides the metrics export out of the box
-func New(host, port string, manager *capture.Manager, opts ...Option) (*Server, error) {
+func New(port string, manager *capture.Manager, opts ...Option) (*Server, error) {
 
 	s := &Server{
 		root:                  "/",
 		keys:                  make(map[string]struct{}),
-		perMinRateLimit:       defaultPerMinRateLimit,
-		burstLimit:            defaultBurstLimit,
-		concurrentAccessLimit: defaultConcurrentAccessLimit,
+		timeout:               DefaultTimeout * time.Second,
+		perMinRateLimit:       DefaultPerMinRateLimit,
+		burstLimit:            DefaultBurstLimit,
+		concurrentAccessLimit: DefaultConcurrentAccessLimit,
 		logger:                log.NewDevNullLogger(), // default is logging to nothing
 	}
 
-	if host == "" {
-		host = "localhost"
-	}
 	if port == "" {
 		return nil, fmt.Errorf("no port provided")
 	}
-	s.location = host + ":" + port
+	s.location = ":" + port
+	location := s.location
 
 	// apply options
 	for _, opt := range opts {
 		opt(s)
+	}
+
+	// explicitly set host if not set by options
+	if s.location == location {
+		s.location = "localhost" + s.location
 	}
 
 	// initialize currently supported APIs
@@ -157,7 +134,7 @@ func New(host, port string, manager *capture.Manager, opts ...Option) (*Server, 
 	// Set a timeout value on the request context (ctx), that will signal
 	// through ctx.Done() that the request has timed out and further
 	// processing should be stopped.
-	r.Use(middleware.Timeout(30 * time.Second))
+	r.Use(middleware.Timeout(s.timeout))
 
 	// set up request routing
 	r.Route(s.root, func(r chi.Router) {
@@ -184,6 +161,8 @@ func New(host, port string, manager *capture.Manager, opts ...Option) (*Server, 
 			// mount all APIs
 			for _, api := range s.apis {
 
+				s.logger.Infof("Enabling API %s", api.Version())
+
 				// route base on the API version
 				r.Mount("/"+api.Version(), api.Routes())
 			}
@@ -192,7 +171,7 @@ func New(host, port string, manager *capture.Manager, opts ...Option) (*Server, 
 
 	// expose metrics if needed
 	if s.metrics {
-		s.logger.Debugf("Enabling metrics export on http://%s:%s%sdebug/vars", host, port, s.root)
+		s.logger.Debugf("Enabling metrics export on http://%s%sdebug/vars", s.location, s.root)
 
 		// specify metrics location
 		r.Get("/debug/vars", getMetrics)

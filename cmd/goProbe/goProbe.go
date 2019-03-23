@@ -139,11 +139,15 @@ func main() {
 	if len(config.API.Keys) > 0 {
 		apiOptions = append(apiOptions, api.WithKeys(config.API.Keys))
 	}
+	if config.API.Host != "" {
+		apiOptions = append(apiOptions, api.WithHost(config.API.Host))
+	}
+	if config.API.Timeout > 0 {
+		apiOptions = append(apiOptions, api.WithTimeout(config.API.Timeout))
+	}
 
 	// create server and start listening for requests
-	server, err = api.New(config.API.Host, config.API.Port, captureManager,
-		apiOptions...,
-	)
+	server, err = api.New(config.API.Port, captureManager, apiOptions...)
 	if err != nil {
 		logger.Errorf("failed to spawn API server: %s", err)
 	} else {

@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"strings"
 
@@ -12,16 +11,6 @@ import (
 func (k APIKeys) Exists(key string) bool {
 	_, exists := k[key]
 	return exists
-}
-
-func checkKeyConstraints(key string) error {
-	// enforce long API keys (e.g. SHA256)
-	if len(key) < 32 {
-		return fmt.Errorf("key considered insecure: insufficient key length %d", len(key))
-	}
-
-	// TODO: consider to check entropy of key
-	return nil
 }
 
 // authenticator implements the middleware http.Handler
@@ -34,7 +23,6 @@ type authenticator struct {
 // ServeHTTP checks a request for valid authorization parameters and calls the next handler if successful
 func (a *authenticator) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var (
-		err     error
 		authCtx context.Context
 		userKey string
 	)
@@ -56,18 +44,9 @@ func (a *authenticator) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		userKey = authHeader[1]
 
 		if !a.keys.Exists(userKey) {
-			a.logger.Debugf("user key denied: not registered")
+			a.logger.Debugf("user key '%s' denied: not registered")
 
 			ReturnStatus(w, http.StatusUnauthorized)
-			return
-		}
-
-		// enforce key constraints
-		err = checkKeyConstraints(userKey)
-		if err != nil {
-			a.logger.Infof("user key denied: %s", err)
-
-			ReturnStatus(w, http.StatusPreconditionFailed)
 			return
 		}
 

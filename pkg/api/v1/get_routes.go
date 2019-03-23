@@ -2,13 +2,13 @@ package v1
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
 	"text/tabwriter"
 	"time"
 
+	"github.com/els0r/goProbe/pkg/api/json"
 	"github.com/els0r/goProbe/pkg/capture"
 	"github.com/els0r/status"
 	"github.com/go-chi/chi"
@@ -66,7 +66,7 @@ func (a *API) getActiveFlows(w http.ResponseWriter, r *http.Request) {
 
 	// encode answer
 	if !printPretty(r) {
-		err := json.NewEncoder(w).Encode(&flowLog)
+		err := json.Response(w, &flowLog)
 		if err != nil {
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
@@ -127,7 +127,7 @@ func (a *API) getPacketStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !printPretty(r) {
-		err = json.NewEncoder(w).Encode(&AggregatedStats)
+		err = json.Response(w, &AggregatedStats)
 		if err != nil {
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
@@ -211,7 +211,7 @@ func (a *API) getErrors(w http.ResponseWriter, r *http.Request) {
 	errors := a.c.ErrorsAll()
 
 	if !printPretty(r) {
-		err = json.NewEncoder(w).Encode(errors)
+		err = json.Response(w, errors)
 		if err != nil {
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		}

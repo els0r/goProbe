@@ -7,11 +7,11 @@ import (
 	"github.com/throttled/throttled/store/memstore"
 )
 
-// default rate limits
+// Default rate limits
 const (
-	defaultPerMinRateLimit       = 10
-	defaultBurstLimit            = 5
-	defaultConcurrentAccessLimit = 1 // only one client can connect simultaneously
+	DefaultPerMinRateLimit       = 10
+	DefaultBurstLimit            = 5
+	DefaultConcurrentAccessLimit = 1 // only one client can connect simultaneously
 )
 
 // RateLimiter returns a middleware that rate limits access to the API paths

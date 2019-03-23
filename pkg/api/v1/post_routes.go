@@ -18,7 +18,7 @@ func (a *API) postRequestRoutes(r chi.Router) {
 }
 
 func (a *API) handleReload(w http.ResponseWriter, r *http.Request) {
-	pp := r.FormValue("pretty") == "1"
+	pp := printPretty(r)
 
 	if pp {
 		status.SetOutput(w)
@@ -27,8 +27,6 @@ func (a *API) handleReload(w http.ResponseWriter, r *http.Request) {
 
 	var writeoutsChan chan<- capture.Writeout = a.c.WriteoutHandler.WriteoutChan
 
-	capconfig.Mutex.Lock()
-	defer capconfig.Mutex.Unlock()
 	config, err := reloadConfig()
 	if err != nil {
 		if a.logger != nil {
@@ -59,6 +57,8 @@ func (a *API) handleReload(w http.ResponseWriter, r *http.Request) {
 // the global config if successful.
 func reloadConfig() (*capconfig.Config, error) {
 	c, err := capconfig.ParseFile(flags.CmdLine.Config)
+	c.Lock()
+	defer c.Unlock()
 	if err != nil {
 		return nil, fmt.Errorf("failed to reload config file: %s", err)
 	}

@@ -14,11 +14,7 @@ type Flags struct {
 }
 
 // CmdLine globally exposes the parsed flags
-var CmdLine *Flags
-
-func init() {
-	CmdLine = &Flags{}
-}
+var CmdLine = &Flags{}
 
 // Read reads in the command line parameters
 func Read() error {

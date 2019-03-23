@@ -77,11 +77,6 @@ func New(manager *capture.Manager, opts ...Option) *API {
 	for _, opt := range opts {
 		opt(a)
 	}
-
-	if a.logger != nil {
-		a.logger.Debugf("Enabling API %s", a.Version())
-	}
-
 	return a
 }
 

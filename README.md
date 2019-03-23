@@ -248,7 +248,7 @@ _goquery() {
 
 ### Supported Operating Systems
 
-goProbe is currently set up to run on Linux based systems and Mac OS X. Tested versions include:
+goProbe is currently set up to run on Linux based systems and Mac OS X. Tested versions include (but are most likely not limited to):
 
 * Ubuntu 14.04/15.04
 * Debian 7/8/9
