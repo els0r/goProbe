@@ -22,6 +22,7 @@ import (
 
 const (
 	METADATA_FILE_NAME = "meta.json"
+	QueryLogFile       = "query.log"
 )
 
 // DayTimestamp returns timestamp rounded down to the nearest day
@@ -89,10 +90,25 @@ func (w *DBWriter) writeBlock(timestamp int64, column string, data []byte) error
 
 func (w *DBWriter) Write(flowmap AggFlowMap, meta BlockMetadata, timestamp int64) (InterfaceSummaryUpdate, error) {
 	var (
-		dbdata [COLIDX_COUNT][]byte
-		update InterfaceSummaryUpdate
-		err    error
+		dbdata  [COLIDX_COUNT][]byte
+		update  InterfaceSummaryUpdate
+		logfile *os.File
+		err     error
 	)
+
+	// check if the query log exists and create it if necessary
+	qlogPath := filepath.Join(w.dbpath, QueryLogFile)
+	logfile, err = os.OpenFile(qlogPath, os.O_CREATE, 0666)
+	if err != nil {
+		err = fmt.Errorf("failed to create query log: %s", err)
+		return update, err
+	}
+	logfile.Close()
+	err = os.Chmod(qlogPath, 0666)
+	if err != nil {
+		err = fmt.Errorf("failed to set query log permissions: %s", err)
+		return update, err
+	}
 
 	if err = os.MkdirAll(w.dailyDir(timestamp), 0755); err != nil {
 		err = fmt.Errorf("Could not create daily directory: %s", err.Error())

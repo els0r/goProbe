@@ -13,7 +13,6 @@ package query
 import (
 	"bytes"
 	"encoding/json"
-	"os"
 	"reflect"
 	"regexp"
 	"strings"
@@ -537,7 +536,7 @@ var printerTests = []printerTest{
 	},
 }
 
-func testCSVTablePrinter(t *testing.T, test printerTest, b basePrinter, buf *bytes.Buffer) {
+func testCSVTablePrinter(t *testing.T, test printerTest, b basePrinter) {
 	c := NewCSVTablePrinter(b)
 	for _, entry := range test.entries {
 		c.AddRow(entry)
@@ -553,7 +552,7 @@ func testCSVTablePrinter(t *testing.T, test printerTest, b basePrinter, buf *byt
 	}
 }
 
-func testJSONTablePrinter(t *testing.T, test printerTest, b basePrinter, buf *bytes.Buffer) {
+func testJSONTablePrinter(t *testing.T, test printerTest, b basePrinter) {
 	j := NewJSONTablePrinter(b, test.queryType)
 	for _, entry := range test.entries {
 		j.AddRow(entry)
@@ -581,7 +580,7 @@ func testJSONTablePrinter(t *testing.T, test printerTest, b basePrinter, buf *by
 	}
 }
 
-func testTextTablePrinter(t *testing.T, test printerTest, b basePrinter, buf *bytes.Buffer) {
+func testTextTablePrinter(t *testing.T, test printerTest, b basePrinter) {
 	p := NewTextTablePrinter(b, test.numFlows, time.Duration(0))
 	for _, entry := range test.entries {
 		p.AddRow(entry)
@@ -603,7 +602,7 @@ func testTextTablePrinter(t *testing.T, test printerTest, b basePrinter, buf *by
 	}
 }
 
-func testInfluxDBTablePrinter(t *testing.T, test printerTest, b basePrinter, buf *bytes.Buffer) {
+func testInfluxDBTablePrinter(t *testing.T, test printerTest, b basePrinter) {
 	i := NewInfluxDBTablePrinter(b)
 	for _, entry := range test.entries {
 		i.AddRow(entry)
@@ -619,13 +618,21 @@ func testInfluxDBTablePrinter(t *testing.T, test printerTest, b basePrinter, buf
 	}
 }
 
+// for output capturing
+var buf = &bytes.Buffer{}
+
 func TestPrinters(t *testing.T) {
 	bp := func(test printerTest) basePrinter {
 		attribs, hasAttrTime, hasAttrIface, err := goDB.ParseQueryType(test.queryType)
 		if err != nil {
 			t.Fatalf("Unexpected error: %s", err)
 		}
+
+		// make sure the buffer is empty
+		buf.Reset()
+
 		b := makeBasePrinter(
+			buf,
 			test.sort,
 			hasAttrTime, hasAttrIface,
 			test.direction,
@@ -638,26 +645,11 @@ func TestPrinters(t *testing.T) {
 	}
 
 	for _, test := range printerTests {
-		buf := &bytes.Buffer{}
-		output = buf
-		testCSVTablePrinter(t, test, bp(test), buf)
-
-		buf = &bytes.Buffer{}
-		output = buf
-		testJSONTablePrinter(t, test, bp(test), buf)
-
-		buf = &bytes.Buffer{}
-		output = buf
-		testTextTablePrinter(t, test, bp(test), buf)
-
-		buf = &bytes.Buffer{}
-		output = buf
-		testInfluxDBTablePrinter(t, test, bp(test), buf)
-
+		testCSVTablePrinter(t, test, bp(test))
+		testJSONTablePrinter(t, test, bp(test))
+		testTextTablePrinter(t, test, bp(test))
+		testInfluxDBTablePrinter(t, test, bp(test))
 	}
-
-	// set output back to os.Stdout in case other tests depend on it.
-	output = os.Stdout
 }
 
 func TestAnsiPrinters(t *testing.T) {
@@ -666,7 +658,10 @@ func TestAnsiPrinters(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Unexpected error: %s", err)
 		}
+		buf.Reset()
+
 		b := makeBasePrinter(
+			buf,
 			test.sort,
 			hasAttrTime, hasAttrIface,
 			test.direction,
@@ -679,14 +674,9 @@ func TestAnsiPrinters(t *testing.T) {
 	}
 
 	for _, test := range printerAnsiTests {
-		buf := &bytes.Buffer{}
-		output = buf
-		testTextTablePrinter(t, test, bp(test), buf)
+		testTextTablePrinter(t, test, bp(test))
 
 	}
-
-	// set output back to os.Stdout in case other tests depend on it.
-	output = os.Stdout
 }
 
 var textTablePrinterFooterTests = []struct {
@@ -751,9 +741,9 @@ var textTablePrinterFooterTests = []struct {
 func TestTextTablePrinterFooter(t *testing.T) {
 	for _, test := range textTablePrinterFooterTests {
 		buf := &bytes.Buffer{}
-		output = buf
 
 		b := makeBasePrinter(
+			buf,
 			test.sort,
 			test.hasAttrTime, test.hasAttrIface,
 			test.direction,
@@ -774,9 +764,6 @@ func TestTextTablePrinterFooter(t *testing.T) {
 			t.Fatalf("Output doesn't match regexp. Output: \n%s`", bufbytes)
 		}
 	}
-
-	// set output back to os.Stdout in case other tests depend on it.
-	output = os.Stdout
 }
 
 var textFormatterSizeTests = []struct {

@@ -1,6 +1,7 @@
 package query
 
 import (
+	"encoding/json"
 	"sort"
 
 	"github.com/els0r/goProbe/pkg/goDB"
@@ -10,7 +11,8 @@ import (
 type SortOrder int
 
 const (
-	SORT_PACKETS SortOrder = iota
+	SORT_UNKNOWN SortOrder = iota
+	SORT_PACKETS
 	SORT_TRAFFIC
 	SORT_TIME
 )
@@ -28,6 +30,47 @@ type by func(e1, e2 *Entry) bool
 type entrySorter struct {
 	entries []Entry
 	less    func(e1, e2 *Entry) bool
+}
+
+// String implement human-readable printing of the sort order
+func (s SortOrder) String() string {
+	switch s {
+	case SORT_PACKETS:
+		return "packets"
+	case SORT_TRAFFIC:
+		return "bytes"
+	case SORT_TIME:
+		return "time"
+	}
+	return "unknown"
+}
+
+func SortOrderFromString(s string) SortOrder {
+	switch s {
+	case "packets":
+		return SORT_PACKETS
+	case "bytes":
+		return SORT_TRAFFIC
+	case "time":
+		return SORT_TIME
+	}
+	return SORT_UNKNOWN
+}
+
+// MarshalJSON implements the Marshaler interface for sort order
+func (s SortOrder) MarshalJSON() ([]byte, error) {
+	return json.Marshal(s.String())
+}
+
+// UnmarshalJSON implements the Unmarshaler interface
+func (s SortOrder) UnmarshalJSON(b []byte) error {
+	var str string
+	err := json.Unmarshal(b, &str)
+	if err != nil {
+		return err
+	}
+	s = SortOrderFromString(str)
+	return nil
 }
 
 // Sort is a method on the function type, By, that sorts the argument slice according to the function

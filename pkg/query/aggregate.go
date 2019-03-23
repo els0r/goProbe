@@ -15,10 +15,6 @@ const (
 	goGCLimit    = 6291456 // Limit for GC call, in bytes
 )
 
-const (
-	errorNoResults = "query returned no results"
-)
-
 type aggregateResult struct {
 	aggregatedMap map[goDB.ExtraKey]goDB.Val
 	totals        Counts
@@ -88,7 +84,7 @@ func aggregate(mapChan <-chan map[goDB.ExtraKey]goDB.Val, resultChan chan<- aggr
 
 	if len(finalMap) == 0 {
 		resultChan <- aggregateResult{
-			err: fmt.Errorf(errorNoResults),
+			err: errorNoResults,
 		}
 		return
 	}

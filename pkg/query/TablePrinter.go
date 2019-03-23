@@ -17,26 +17,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"os"
 	"sort"
 	"strings"
 	"text/tabwriter"
 	"time"
 
 	"github.com/els0r/goProbe/pkg/goDB"
-)
-
-// Make output stream a variable for easier testing
-var output io.Writer = os.Stdout
-
-// Direction indicates the counters of which flow direction we should print.
-type Direction int
-
-const (
-	DIRECTION_SUM  Direction = iota // sum of inbound and outbound counters
-	DIRECTION_IN                    // inbound counters
-	DIRECTION_OUT                   // outbound counters
-	DIRECTION_BOTH                  // inbound and outbound counters
 )
 
 // OutputColumn's domain ranges over all possible output columns.
@@ -273,6 +259,8 @@ type TablePrinter interface {
 // basePrinter encapsulates variables and methods used by all TablePrinter
 // implementations.
 type basePrinter struct {
+	output io.Writer
+
 	sort SortOrder
 
 	hasAttrTime, hasAttrIface bool
@@ -293,6 +281,7 @@ type basePrinter struct {
 }
 
 func makeBasePrinter(
+	output io.Writer,
 	sort SortOrder,
 	hasAttrTime, hasAttrIface bool,
 	direction Direction,
@@ -302,6 +291,7 @@ func makeBasePrinter(
 	ifaces string,
 ) basePrinter {
 	result := basePrinter{
+		output,
 		sort,
 		hasAttrTime, hasAttrIface,
 		direction,
@@ -350,7 +340,7 @@ type CSVTablePrinter struct {
 func NewCSVTablePrinter(b basePrinter) *CSVTablePrinter {
 	c := CSVTablePrinter{
 		b,
-		csv.NewWriter(output),
+		csv.NewWriter(b.output),
 		make([]string, 0, len(b.cols)),
 	}
 
@@ -515,7 +505,7 @@ func (j *JSONTablePrinter) Footer(conditional string, spanFirst, spanLast time.T
 
 func (j *JSONTablePrinter) Print() error {
 	j.data[j.queryType] = j.rows
-	return json.NewEncoder(output).Encode(j.data)
+	return json.NewEncoder(j.output).Encode(j.data)
 }
 
 type TextFormatter struct{}
@@ -596,8 +586,8 @@ type TextTablePrinter struct {
 func NewTextTablePrinter(b basePrinter, numFlows int, resolveTimeout time.Duration) *TextTablePrinter {
 	var t = &TextTablePrinter{
 		b,
-		tabwriter.NewWriter(output, 0, 1, 2, ' ', tabwriter.AlignRight),
-		tabwriter.NewWriter(output, 0, 4, 1, ' ', 0),
+		tabwriter.NewWriter(b.output, 0, 1, 2, ' ', tabwriter.AlignRight),
+		tabwriter.NewWriter(b.output, 0, 4, 1, ' ', 0),
 		numFlows,
 		resolveTimeout,
 		0,
@@ -724,11 +714,11 @@ func (t *TextTablePrinter) Footer(conditional string, spanFirst, spanLast time.T
 }
 
 func (t *TextTablePrinter) Print() error {
-	fmt.Fprintln(output) // newline between prompt and results
+	fmt.Fprintln(t.output) // newline between prompt and results
 	t.writer.Flush()
-	fmt.Fprintln(output)
+	fmt.Fprintln(t.output)
 	t.footwriter.Flush()
-	fmt.Fprintln(output)
+	fmt.Fprintln(t.output)
 
 	return nil
 }
@@ -871,34 +861,34 @@ func NewInfluxDBTablePrinter(b basePrinter) *InfluxDBTablePrinter {
 
 func (i *InfluxDBTablePrinter) AddRow(entry Entry) {
 	// Key + tags
-	fmt.Fprint(output, INFLUXDB_KEY)
+	fmt.Fprint(i.output, INFLUXDB_KEY)
 	for _, col := range i.tagCols {
-		fmt.Fprint(output, ",")
-		fmt.Fprint(output, influxDBKeys[col])
-		fmt.Fprint(output, "=")
-		fmt.Fprint(output, extract(TextFormatter{}, i.ips2domains, i.totals, entry, col))
+		fmt.Fprint(i.output, ",")
+		fmt.Fprint(i.output, influxDBKeys[col])
+		fmt.Fprint(i.output, "=")
+		fmt.Fprint(i.output, extract(TextFormatter{}, i.ips2domains, i.totals, entry, col))
 	}
 
-	fmt.Fprint(output, " ")
+	fmt.Fprint(i.output, " ")
 
 	// Fields
-	fmt.Fprint(output, influxDBKeys[i.fieldCols[0]])
-	fmt.Fprint(output, "=")
-	fmt.Fprint(output, extract(InfluxDBFormatter{}, i.ips2domains, i.totals, entry, i.fieldCols[0]))
+	fmt.Fprint(i.output, influxDBKeys[i.fieldCols[0]])
+	fmt.Fprint(i.output, "=")
+	fmt.Fprint(i.output, extract(InfluxDBFormatter{}, i.ips2domains, i.totals, entry, i.fieldCols[0]))
 	for _, col := range i.fieldCols[1:] {
-		fmt.Fprint(output, ",")
-		fmt.Fprint(output, influxDBKeys[col])
-		fmt.Fprint(output, "=")
-		fmt.Fprint(output, extract(InfluxDBFormatter{}, i.ips2domains, i.totals, entry, col))
+		fmt.Fprint(i.output, ",")
+		fmt.Fprint(i.output, influxDBKeys[col])
+		fmt.Fprint(i.output, "=")
+		fmt.Fprint(i.output, extract(InfluxDBFormatter{}, i.ips2domains, i.totals, entry, col))
 	}
 
 	// Time
 	if i.hasAttrTime {
-		fmt.Fprint(output, " ")
-		fmt.Fprint(output, extract(InfluxDBFormatter{}, i.ips2domains, i.totals, entry, OUTCOL_TIME))
+		fmt.Fprint(i.output, " ")
+		fmt.Fprint(i.output, extract(InfluxDBFormatter{}, i.ips2domains, i.totals, entry, OUTCOL_TIME))
 	}
 
-	fmt.Fprintln(output)
+	fmt.Fprintln(i.output)
 }
 
 func (_ *InfluxDBTablePrinter) Footer(conditional string, spanFirst, spanLast time.Time, queryDuration, resolveDuration time.Duration) {
@@ -913,6 +903,7 @@ func (_ *InfluxDBTablePrinter) Print() error {
 func (s *Statement) NewTablePrinter(ips2domains map[string]string, sums Counts, numFlows int) (TablePrinter, error) {
 
 	b := makeBasePrinter(
+		s.Output,
 		s.SortBy,
 		s.HasAttrTime, s.HasAttrIface,
 		s.Direction,
@@ -934,4 +925,9 @@ func (s *Statement) NewTablePrinter(ips2domains map[string]string, sums Counts, 
 	default:
 		return nil, fmt.Errorf("Unknown output format %s", s.Format)
 	}
+}
+
+type ErrorMsgExternal struct {
+	Status  string `json:"status"`
+	Message string `json:"statusMessage"`
 }

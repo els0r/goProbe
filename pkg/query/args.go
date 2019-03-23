@@ -2,6 +2,7 @@ package query
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"time"
@@ -9,6 +10,47 @@ import (
 	"github.com/els0r/goProbe/pkg/goDB"
 	"github.com/els0r/goProbe/pkg/query/dns"
 )
+
+// Defaults for query arguments
+var (
+	DefaultDBPath         = "/opt/ntm/goProbe/db"
+	DefaultFormat         = "txt"
+	DefaultIn             = false
+	DefaultMaxMemPct      = 60
+	DefaultNumResults     = 1000
+	DefaultOut            = false
+	DefaultResolveRows    = 25
+	DefaultResolveTimeout = 1 // seconds
+	DefaultSortBy         = "bytes"
+)
+
+// NewArgs creates new query arguments with the defaults set
+func NewArgs(query, ifaces string, opts ...Option) *Args {
+	a := &Args{
+		// required args
+		Query:  query,
+		Ifaces: ifaces,
+
+		// defaults
+		DBPath:         DefaultDBPath,
+		First:          time.Now().AddDate(0, -1, 0).Format(time.ANSIC),
+		Format:         DefaultFormat,
+		In:             DefaultIn,
+		Last:           time.Now().Format(time.ANSIC),
+		MaxMemPct:      DefaultMaxMemPct,
+		NumResults:     DefaultNumResults,
+		Out:            DefaultOut,
+		ResolveRows:    DefaultResolveRows,
+		ResolveTimeout: DefaultResolveTimeout,
+		SortBy:         DefaultSortBy,
+	}
+
+	// apply functional options
+	for _, opt := range opts {
+		opt(a)
+	}
+	return a
+}
 
 // Args bundles the command line/HTTP parameters required to prepare a query statement
 type Args struct {
@@ -36,7 +78,7 @@ type Args struct {
 	SortAscending bool
 	Output        string
 
-	// do-and-exit flags
+	// do-and-exit arguments
 	List    bool
 	Version bool
 
@@ -53,13 +95,47 @@ type Args struct {
 	Caller string
 }
 
-// Prepare takes the query Arguments, validates them and creates an executable statement
-func (a *Args) Prepare() (*Statement, error) {
+// String formats aruguments in human-readable form
+func (a *Args) String() string {
+	str := fmt.Sprintf("{type: %s, ifaces: %s",
+		a.Query,
+		a.Ifaces,
+	)
+	if a.Condition != "" {
+		str += fmt.Sprintf(", condition: %s", a.Condition)
+	}
+	str += fmt.Sprintf(", db: %s, limit: %d, from: %s, to: %s",
+		a.DBPath,
+		a.NumResults,
+		a.First,
+		a.Last,
+	)
+	if a.Resolve {
+		str += fmt.Sprintf(", dns-resolution: %t, dns-timeout: %ds, dns-rows-resolved: %d",
+			a.Resolve, a.ResolveTimeout, a.ResolveRows,
+		)
+	}
+	if a.Caller != "" {
+		str += fmt.Sprintf(", caller: %s", a.Caller)
+	}
+	str += "}"
+	return str
+}
+
+// Prepare takes the query Arguments, validates them and creates an executable statement. Optionally, additional writers can be passed to route query results to different destinations.
+func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
+
+	// if not already done beforehand, enforce defaults for args
+	if a.SortBy == "" {
+		a.SortBy = "packets"
+	}
+
 	s := &Statement{
 		QueryType:  a.Query,
 		Resolve:    a.Resolve,
 		Conditions: a.Condition,
 		Caller:     a.Caller,
+		Output:     os.Stdout, // by default, we write results to the console
 	}
 
 	var err error
@@ -199,6 +275,26 @@ func (a *Args) Prepare() (*Statement, error) {
 		return s, fmt.Errorf("the printed row limit must be greater than 0")
 	}
 	s.NumResults = a.NumResults
+
+	// handling of the output field
+	if a.Output != "" {
+		// check if multiple files were specified
+		outputs := strings.Split(a.Output, ",")
+
+		for _, output := range outputs {
+			// open file to write to
+			queryFile, err := os.OpenFile(output, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0755)
+			if err != nil {
+				return s, fmt.Errorf("failed to open output file: %s", err)
+			}
+			writers = append(writers, queryFile)
+		}
+	}
+
+	// fan-out query results in case multiple writers were supplied
+	if len(writers) > 0 {
+		s.Output = io.MultiWriter(writers...)
+	}
 
 	s.Query = goDB.NewQuery(queryAttributes, queryConditional, s.HasAttrTime, s.HasAttrIface)
 	return s, nil

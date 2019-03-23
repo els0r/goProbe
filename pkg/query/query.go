@@ -3,7 +3,9 @@ package query
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
+	"path/filepath"
 	"runtime"
 	"runtime/debug"
 	"time"
@@ -40,7 +42,7 @@ type Statement struct {
 	NumResults    int       `json:"limit"`
 	SortBy        SortOrder `json:"sort_by"`
 	SortAscending bool      `json:"sort_ascending,omitempty"`
-	Output        string    `json:"written_to,omitempty"`
+	Output        io.Writer `json:"-"`
 
 	// parameters for external calls
 	External bool   `json:"external,omitempty"` // for error messages
@@ -65,9 +67,23 @@ type Statement struct {
 // QueryError encloses an error encountered during processing
 type QueryError struct{ err error }
 
-// Error implements the error interface
-func (q *QueryError) Error() string {
-	return fmt.Sprintf("%s", q.err)
+func (q *QueryError) Error() string { return q.err.Error() }
+
+type internalError int
+
+// enumeration of processing errors
+const (
+	errorNoResults internalError = iota + 1
+)
+
+// Error implements the error interface for query processing errors
+func (i internalError) Error() string {
+	var s string
+	switch i {
+	case errorNoResults:
+		s = "query returned no results"
+	}
+	return s
 }
 
 // MarshalJSON implements the Marshaler interface for human-readable error logging
@@ -109,7 +125,9 @@ func (s *Statement) String() string {
 		tTo.Format(time.ANSIC),
 	)
 	if s.Resolve {
-		str += fmt.Sprintf(", dns-resolution: %t, dns-timeout: %ds, dns-rows-resolved: %d")
+		str += fmt.Sprintf(", dns-resolution: %t, dns-timeout: %ds, dns-rows-resolved: %d",
+			s.Resolve, s.ResolveTimeout, s.ResolveRows,
+		)
 	}
 	// print statistics
 	str += fmt.Sprintf(", stats: %s", s.Stats)
@@ -121,14 +139,14 @@ func (s *Statement) String() string {
 func (s *Statement) log() {
 
 	// open the file in append mode
-	querylog, err := os.OpenFile(s.DBPath+"/query.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0777)
+	querylog, err := os.OpenFile(filepath.Join(s.DBPath, goDB.QueryLogFile), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 	if err != nil {
 		return
 	}
 	defer querylog.Close()
 
-	// write statement to disk
-	json.NewEncoder(querylog).Encode(s)
+	// opportunistically write statement to disk
+	err = json.NewEncoder(querylog).Encode(s)
 }
 
 // Execute runs the query with the provided parameters
@@ -209,8 +227,13 @@ func (s *Statement) Execute() error {
 			return err
 		case agg = <-aggregateChan:
 			if agg.err != nil {
-				err = fmt.Errorf("data aggregation error: %s", agg.err)
-				return err
+				switch agg.err {
+				case errorNoResults:
+					return s.noResults()
+				default:
+					err = fmt.Errorf("data aggregation error: %s", agg.err)
+					return err
+				}
 			}
 			// continue processing
 			processingComplete = true
@@ -323,4 +346,13 @@ func createWorkManager(dbPath string, iface string, tfirst, tlast int64, query *
 	}
 	nonempty, err = workManager.CreateWorkerJobs(tfirst, tlast, query)
 	return
+}
+
+func (s *Statement) noResults() error {
+	if s.External || s.Format == "json" {
+		msg := ErrorMsgExternal{Status: "empty", Message: errorNoResults.Error()}
+		return json.NewEncoder(s.Output).Encode(msg)
+	}
+	_, err := fmt.Fprintf(s.Output, "%s\n", errorNoResults.Error())
+	return err
 }

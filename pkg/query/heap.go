@@ -8,7 +8,6 @@ import (
 
 // Parameters for checking memory consumption of query
 const (
-	MaxMemPctDefault = 60
 	MemCheckInterval = 1 * time.Second
 )
 

@@ -40,7 +40,7 @@ var helpBaseLong = helpBase + `
 
 var helpMap = map[string]string{
 	"Ifaces": `Interfaces for which the query should be performed
-(e.g. "eth0", "eth0,t4_33760")
+(e.g. "eth0", "eth0,t4_33760").
 You can specify "ANY" to query all interfaces.
 `,
 	"Help": `Display this help text.
@@ -160,13 +160,14 @@ COMPARATIVE OPERATORS:
      <    less than              less, l, -l, lt, -lt
      >    greater than           greater, g, -g, gt, -gt
 
-All of the items under "Other representations" (except for "===" and "==")
-must be enclosed by whitespace.
+All of the items under "Other representations" (except for "===" and
+"==") must be enclosed by whitespace.
 
   NOTE: In case the attribute involves an IP address, only "=" and "!="
         are supported.
 
-Individual conditions can be chained together via logical operators, e.g.
+Individual conditions can be chained together via logical operators,
+e.g.
 
     ! dport = 8080 | dport = 443 & proto = TCP
 
@@ -181,14 +182,15 @@ The representations "not", and", and "or" require enclosing whitespace.
 
 PRECEDENCE:
 
-In terms of logical operator precendence, NOT is evaluated before AND and
-AND is evaluated before OR.
+In terms of logical operator precendence, NOT is evaluated before AND
+and AND is evaluated before OR.
 
 Thus above expression would be evaluated as
 
     (! dport = 8080) | ( dport = 443 & proto = TCP)
 
-Precedence can be enforced by bracing condition chains appropriately, e.g.
+Precedence can be enforced by bracing condition chains appropriately,
+e.g.
 
     ! (( dport = 8080 | dport = 443 ) & proto = TCP )
 
@@ -204,8 +206,9 @@ The braces "[]" and "{}" can also be used.
 
 SYNTAX
 
-The condition can be expressed in different syntaxes, which can be combined
-arbitrarily to the user's liking. Consider the following conditional:
+The condition can be expressed in different syntaxes, which can be
+combined arbitrarily to the user's liking. Consider the following
+conditional:
 
     ( proto = TCP & snet != 192.168.0.0/16 )
   & ( dport <= 1024 | dport >= 443 )
@@ -237,18 +240,19 @@ json          Output in JSON format
 csv           Output in comma-separated table format
 `,
 	"NumResults": `Maximum number of final entries to show. Defaults to 95% of the overall
-data volume / number of packets (depending on the '-s' parameter). Ignored
-for queries including the "time" field.
+data volume / number of packets (depending on the '-s' parameter).
+Ignored for queries including the "time" field.
 `,
 	"SortBy": `Sort results by given column name:
   bytes         Sort by accumulated data volume (default)
   packets       Sort by accumulated packets
-  time          Sort by time. Forced for queries including the "time" field
+  time          Sort by time. Enforced for "time" queries
 `,
 	"SortAscending": `Sort results in ascending instead of descending order. Forced for queries
 including the "time" field.
 `,
-	"List": `List all interfaces on which data was captured and written to the database.
+	"List": `List all interfaces on which data was captured and written
+to the database.
 `,
 	"In": `Take into account incoming data (received packets/bytes). Can be combined
 with --out.
@@ -276,16 +280,16 @@ different when the packets were captured.
 	"MaxMemPct": `Maximum amount of memory that can be used for the query
 (in % of available memory)
 `,
-	"ResolveRows": `Maximum number of output rows to perform DNS resolution against. Before setting
-this to some high value (e.g. 1000), consider that this may incur a high load on
-the DNS resolver and network!
+	"ResolveRows": `Maximum number of output rows to perform DNS resolution against. Before
+setting this to some high value (e.g. 1000), consider that this may incur
+a high load on the DNS resolver and network!
 `}
 
 var adminHelp = `Advanced maintenance options (should not be used in interactive mode).
 
 COMMANDS
 
-  clean [DATE]
+  clean [date]
       Remove all database rows before given timestamp (retention time).
       Handle with utmost care, all changes are permanent and cannot be undone!
       Allowed formats are identical to -f/-l parameters.
