@@ -42,7 +42,7 @@ func resolve(node Node, timeout time.Duration) (Node, error) {
 
 		// Does the value vaguely look like a hostname?
 		if !hostnameRegexp.MatchString(node.value) {
-			return nil, fmt.Errorf("Invalid value in condition: '%s' is neither an ip nor a hostname.", node.value)
+			return nil, fmt.Errorf("invalid value in condition: '%s' is neither an ip nor a hostname", node.value)
 		}
 
 		hostnames[node.value] = struct{}{}

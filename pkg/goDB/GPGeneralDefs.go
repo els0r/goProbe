@@ -13,12 +13,13 @@
 
 package goDB
 
+// DBData holds all data for the flow attributes and counters
 type DBData struct {
 	// counters
-	Bytes_rcvd []byte
-	Bytes_sent []byte
-	Pkts_rcvd  []byte
-	Pkts_sent  []byte
+	BytesRcvd []byte
+	BytesSent []byte
+	PktsRcvd  []byte
+	PktsSent  []byte
 
 	// attributes
 	Dip   []byte
@@ -31,7 +32,7 @@ type DBData struct {
 	Iface  string
 }
 
-// constructor for the DBData struct in case it needs to be set from an external
+// NewDBData returns the DBData struct in case it needs to be set from an external
 // go program that included goProbe
 func NewDBData(br []byte, bs []byte, pr []byte, ps []byte, dip []byte, sip []byte, dport []byte, proto []byte, tstamp int64, iface string) DBData {
 	return DBData{br, bs, pr, ps, dip, sip, dport, proto, tstamp, iface}
@@ -72,13 +73,13 @@ func itod(i uint) string {
 
 /// END GOOGLE ///
 
-// convert the ip byte arrays to string. The formatting logic for IPv6
+// RawIPToString converts the ip byte arrays to string. The formatting logic for IPv6
 // is directly copied over from the go IP package in order to save an
 // additional import just for string operations
-func rawIpToString(ip []byte) string {
+func RawIPToString(ip []byte) string {
 	var (
-		numZeros uint8 = 0
-		iplen    int   = len(ip)
+		numZeros uint8
+		iplen    = len(ip)
 	)
 
 	// count zeros in order to determine whether the address
@@ -95,45 +96,44 @@ func rawIpToString(ip []byte) string {
 			itod(uint(ip[1])) + "." +
 			itod(uint(ip[2])) + "." +
 			itod(uint(ip[3]))
-	} else {
-		/// START OF GOOGLE CODE SNIPPET ///
-		p := ip
-
-		// Find longest run of zeros.
-		e0 := -1
-		e1 := -1
-		for i := 0; i < iplen; i += 2 {
-			j := i
-			for j < iplen && p[j] == 0 && p[j+1] == 0 {
-				j += 2
-			}
-			if j > i && j-i > e1-e0 {
-				e0 = i
-				e1 = j
-			}
-		}
-
-		// The symbol "::" MUST NOT be used to shorten just one 16 bit 0 field.
-		if e1-e0 <= 2 {
-			e0 = -1
-			e1 = -1
-		}
-
-		// Print with possible :: in place of run of zeros
-		var s string
-		for i := 0; i < iplen; i += 2 {
-			if i == e0 {
-				s += "::"
-				i = e1
-				if i >= iplen {
-					break
-				}
-			} else if i > 0 {
-				s += ":"
-			}
-			s += itox((uint(p[i])<<8)|uint(p[i+1]), 1)
-
-		}
-		return s
 	}
+	/// START OF GOOGLE CODE SNIPPET ///
+	p := ip
+
+	// Find longest run of zeros.
+	e0 := -1
+	e1 := -1
+	for i := 0; i < iplen; i += 2 {
+		j := i
+		for j < iplen && p[j] == 0 && p[j+1] == 0 {
+			j += 2
+		}
+		if j > i && j-i > e1-e0 {
+			e0 = i
+			e1 = j
+		}
+	}
+
+	// The symbol "::" MUST NOT be used to shorten just one 16 bit 0 field.
+	if e1-e0 <= 2 {
+		e0 = -1
+		e1 = -1
+	}
+
+	// Print with possible :: in place of run of zeros
+	var s string
+	for i := 0; i < iplen; i += 2 {
+		if i == e0 {
+			s += "::"
+			i = e1
+			if i >= iplen {
+				break
+			}
+		} else if i > 0 {
+			s += ":"
+		}
+		s += itox((uint(p[i])<<8)|uint(p[i+1]), 1)
+	}
+
+	return s
 }

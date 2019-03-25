@@ -12,6 +12,7 @@
 
 package util
 
+// TunnelInfos is a no-op for the public release.
 func TunnelInfos() map[string]TunnelInfo {
 	return nil
 }

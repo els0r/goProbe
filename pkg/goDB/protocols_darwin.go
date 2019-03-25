@@ -2,6 +2,7 @@
 
 package goDB
 
+// IPProtocols maps all protocol values to their name. These are taken from the distributions /etc/protocols file
 var IPProtocols = map[int]string{
 	0:   "HOPOPT", // added to fit consistency tests
 	1:   "ICMP",
@@ -146,10 +147,12 @@ var IPProtocols = map[int]string{
 	255: "UNKNOWN",
 }
 
+// GetIPProto returns the string representation of an IP protocol value
 func GetIPProto(id int) string {
 	return IPProtocols[id]
 }
 
+// IPProtocolIDs maps protocol names to their numeric value
 var IPProtocolIDs = map[string]int{
 	"hopopt":          0, // added to fit consistency tests
 	"icmp":            1,
@@ -294,6 +297,7 @@ var IPProtocolIDs = map[string]int{
 	"unknown":         255,
 }
 
+// GetIPProtoID returns the numeric IP protocol value for a given string
 func GetIPProtoID(name string) (uint64, bool) {
 	ret, ok := IPProtocolIDs[name]
 	return uint64(ret), ok

@@ -2,14 +2,14 @@
 //
 // DBConvert.go
 //
-// Binary to read in database data from csv files and push it to the goDB writer
-// which creates a .gpf columnar database from the data at a specified location.
-//
 // Written by Lennart Elsen lel@open.ch, July 2014
 // Copyright (c) 2014 Open Systems AG, Switzerland
 // All Rights Reserved.
 //
 /////////////////////////////////////////////////////////////////////////////////
+
+// Binary to read in database data from csv files and push it to the goDB writer
+// which creates a .gpf columnar database from the data at a specified location.
 package main
 
 import (
@@ -23,12 +23,17 @@ import (
 	"sync"
 	"time"
 
+	// for metrics export to metricsbeat
+	_ "expvar"
+
 	"github.com/els0r/goProbe/pkg/goDB"
+	log "github.com/els0r/log"
 
 	"flag"
 	"fmt"
 )
 
+// Config stores the flags provided to the converter
 type Config struct {
 	FilePath string
 	SavePath string
@@ -39,8 +44,7 @@ type Config struct {
 
 // parameter governing the number of seconds that are covered by a block
 const (
-	DB_WRITE_INTERVAL  int64 = 300
-	CSV_DEFAULT_SCHEMA       = "time,iface,sip,dip,dport,proto,packets received,packets sent,%,data vol. received,data vol. sent,%"
+	csvDefaultSchema = "time,iface,sip,dip,dport,proto,packets received,packets sent,%,data vol. received,data vol. sent,%"
 )
 
 type writeJob struct {
@@ -49,17 +53,39 @@ type writeJob struct {
 	data   goDB.AggFlowMap
 }
 
+// CSVConverter can read CSV files containing goProbe flow information
 type CSVConverter struct {
 	// map field index to how it should be parsed
 	KeyParsers map[int]goDB.StringKeyParser
 	ValParsers map[int]goDB.StringValParser
+
+	// logging
+	logger log.Logger
 }
 
-func NewCSVConverter() *CSVConverter {
-	return &CSVConverter{
-		make(map[int]goDB.StringKeyParser),
-		make(map[int]goDB.StringValParser),
+// Option allows to configure the CSVConverter
+type Option func(*CSVConverter)
+
+// WithLogger passes a logger to the CSVConverter
+func WithLogger(l log.Logger) Option {
+	return func(c *CSVConverter) {
+		c.logger = l
 	}
+}
+
+// NewCSVConverter initializes a CSVConverter with the Key- and Value parsers for goProbe flows
+func NewCSVConverter(opts ...Option) *CSVConverter {
+
+	c := &CSVConverter{
+		KeyParsers: make(map[int]goDB.StringKeyParser),
+		ValParsers: make(map[int]goDB.StringValParser),
+	}
+
+	// apply options
+	for _, opt := range opts {
+		opt(c)
+	}
+	return c
 }
 
 func (c *CSVConverter) readSchema(schema string) error {
@@ -99,8 +125,9 @@ func (c *CSVConverter) readSchema(schema string) error {
 	}
 
 	// print parseable/unparseable fields:
-	//    fmt.Println("SCHEMA:\n Can parse:\n\t", canParse, "\n Will not parse:\n\t", cantParse)
-	_, _ = canParse, cantParse
+	if c.logger != nil {
+		c.logger.Debugf("SCHEMA: can parse: %s. Will not parse: %s", canParse, cantParse)
+	}
 	return nil
 }
 
@@ -139,11 +166,18 @@ func main() {
 		os.Exit(1)
 	}
 
+	// get logger
+	logger, err := log.NewFromString("console", log.WithLevel(log.DEBUG))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to spawn logger: %s\n", err)
+		os.Exit(1)
+	}
+
 	// get number of lines to read in the specified file
 	cmd := exec.Command("wc", "-l", config.FilePath)
 	out, cmderr := cmd.Output()
 	if cmderr != nil {
-		fmt.Println("Could not obtain line count on file", config.FilePath)
+		logger.Errorf("could not obtain line count on file %s", config.FilePath)
 		os.Exit(1)
 	}
 
@@ -153,24 +187,21 @@ func main() {
 		config.NumLines = int(nlInFile)
 	}
 
-	fmt.Printf("Converting %d rows in file %s\n", config.NumLines, config.FilePath)
+	logger.Infof("Converting %d rows in file %s", config.NumLines, config.FilePath)
 
 	// open file
-	var (
-		file *os.File
-		err  error
-	)
+	var file *os.File
 
 	if file, err = os.Open(config.FilePath); err != nil {
-		fmt.Println("File open error: " + err.Error())
+		logger.Errorf("file open error: %s", err)
 		os.Exit(1)
 	}
 
 	// create a CSV converter
-	var csvconv = NewCSVConverter()
+	var csvconv = NewCSVConverter(WithLogger(logger))
 	if config.Schema != "" {
 		if err = csvconv.readSchema(config.Schema); err != nil {
-			fmt.Printf("Failed to read schema: %s\n", err.Error())
+			logger.Errorf("failed to read schema: %s", err)
 			os.Exit(1)
 		}
 	}
@@ -388,7 +419,7 @@ func main() {
 
 func incompleteFlowMap(m map[int64]goDB.AggFlowMap) int64 {
 	var recent int64
-	for k, _ := range m {
+	for k := range m {
 		if k > recent {
 			recent = k
 		}

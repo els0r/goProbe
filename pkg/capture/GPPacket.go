@@ -22,32 +22,32 @@ import (
 )
 
 var (
-	BYTE_ARR_1_ZERO  = byte(0x00)
-	BYTE_ARR_2_ZERO  = [2]byte{0x00, 0x00}
-	BYTE_ARR_4_ZERO  = [4]byte{0x00, 0x00, 0x00, 0x00}
-	BYTE_ARR_16_ZERO = [16]byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
-	BYTE_ARR_37_ZERO = [37]byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
+	byteArray1Zeros  = byte(0x00)
+	byteArray2Zeros  = [2]byte{0x00, 0x00}
+	byteArray4Zeros  = [4]byte{0x00, 0x00, 0x00, 0x00}
+	byteArray16Zeros = [16]byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
+	byteArray37Zeros = [37]byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
 )
 
+// Enumeration of the most common IP protocols
 const (
 	TCP byte = 6
 	UDP      = 17
 	ESP      = 50
 )
 
-// typedef that allows us to replace the type of hash
+// EPHash is a typedef that allows us to replace the type of hash
 type EPHash [37]byte
 
+// GPPacket stores all relevant packet details for a flow
 type GPPacket struct {
 	// core fields
-	sip           [16]byte
-	dip           [16]byte
-	sport         [2]byte
-	dport         [2]byte
-	protocol      byte
-	l7payload     [4]byte
-	l7payloadSize uint16
-	numBytes      uint16
+	sip      [16]byte
+	dip      [16]byte
+	sport    [2]byte
+	dport    [2]byte
+	protocol byte
+	numBytes uint16
 
 	// direction indicator fields
 	tcpFlags byte
@@ -114,8 +114,8 @@ func (p *GPPacket) Populate(srcPacket gopacket.Packet) error {
 
 	// decode packet
 	if srcPacket.NetworkLayer() != nil {
-		nw_l := srcPacket.NetworkLayer().LayerContents()
-		nlHeaderSize = uint16(len(nw_l))
+		nwL := srcPacket.NetworkLayer().LayerContents()
+		nlHeaderSize = uint16(len(nwL))
 
 		// exit if layer is available but the bytes aren't captured by the layer
 		// contents
@@ -136,7 +136,7 @@ func (p *GPPacket) Populate(srcPacket gopacket.Packet) error {
 		switch srcPacket.NetworkLayer().LayerType() {
 		case layers.LayerTypeIPv4:
 
-			p.protocol = nw_l[9]
+			p.protocol = nwL[9]
 
 			// only run the fragmentation checks on fragmented TCP/UDP packets. For
 			// ESP, we don't have any transport layer information so there's no
@@ -148,8 +148,8 @@ func (p *GPPacket) Populate(srcPacket gopacket.Packet) error {
 				skipTransport = true
 			} else {
 				// check for IP fragmentation
-				fragBits := (0xe0 & nw_l[6]) >> 5
-				fragOffset := (uint16(0x1f&nw_l[6]) << 8) | uint16(nw_l[7])
+				fragBits := (0xe0 & nwL[6]) >> 5
+				fragOffset := (uint16(0x1f&nwL[6]) << 8) | uint16(nwL[7])
 
 				// return decoding error if the packet carries anything other than the
 				// first fragment, i.e. if the packet lacks a transport layer header
@@ -158,13 +158,13 @@ func (p *GPPacket) Populate(srcPacket gopacket.Packet) error {
 				}
 			}
 		case layers.LayerTypeIPv6:
-			p.protocol = nw_l[6]
+			p.protocol = nwL[6]
 		}
 
 		if !skipTransport && srcPacket.TransportLayer() != nil {
 			// get layer contents
-			tp_l := srcPacket.TransportLayer().LayerContents()
-			tpHeaderSize = uint16(len(tp_l))
+			tpL := srcPacket.TransportLayer().LayerContents()
+			tpHeaderSize = uint16(len(tpL))
 
 			if tpHeaderSize == 0 {
 				return fmt.Errorf("Transport layer header not available")
@@ -182,10 +182,10 @@ func (p *GPPacket) Populate(srcPacket gopacket.Packet) error {
 			// if the protocol is TCP, grab the flag information
 			if p.protocol == TCP {
 				if tpHeaderSize < 14 {
-					return fmt.Errorf("Incomplete TCP header: %d", tp_l)
+					return fmt.Errorf("Incomplete TCP header: %d", tpL)
 				}
 
-				p.tcpFlags = tp_l[13] // we are primarily interested in SYN, ACK and FIN
+				p.tcpFlags = tpL[13] // we are primarily interested in SYN, ACK and FIN
 			}
 		}
 	} else {
@@ -212,14 +212,14 @@ func (p *GPPacket) Populate(srcPacket gopacket.Packet) error {
 }
 
 func (p *GPPacket) reset() {
-	p.sip = BYTE_ARR_16_ZERO
-	p.dip = BYTE_ARR_16_ZERO
-	p.dport = BYTE_ARR_2_ZERO
-	p.sport = BYTE_ARR_2_ZERO
-	p.protocol = BYTE_ARR_1_ZERO
+	p.sip = byteArray16Zeros
+	p.dip = byteArray16Zeros
+	p.dport = byteArray2Zeros
+	p.sport = byteArray2Zeros
+	p.protocol = byteArray1Zeros
 	p.numBytes = uint16(0)
-	p.tcpFlags = BYTE_ARR_1_ZERO
-	p.epHash = BYTE_ARR_37_ZERO
-	p.epHashReverse = BYTE_ARR_37_ZERO
+	p.tcpFlags = byteArray1Zeros
+	p.epHash = byteArray37Zeros
+	p.epHashReverse = byteArray37Zeros
 	p.dirInbound = false
 }

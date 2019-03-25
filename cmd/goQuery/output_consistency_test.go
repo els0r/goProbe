@@ -24,11 +24,11 @@ import (
 
 const (
 	// Constants used by output consistency testing
-	OUTPUT_CONSISTENCY_DIR = "./output_consistency"
-	CORRECT_OUTPUT_SUFFIX  = ".correctOutput.json"
-	ARGS_SUFFIX            = ".args.json"
+	outputConsistencyDir = "./output_consistency"
+	correctOutputSuffix  = ".correctOutput.json"
+	argsSuffix           = ".args.json"
 	// Used as a placeholder for the path to the test database inside .args.json files
-	TESTDB_VARIABLE = "$TESTDB"
+	testDBVariable = "$TESTDB"
 )
 
 // Compares output of goQuery with known good outputs.
@@ -75,7 +75,7 @@ func TestOutputConsistency(t *testing.T) {
 
 	t.Parallel()
 
-	checkDbExists(t, SMALL_GODB)
+	checkDbExists(t, SmallGoDB)
 
 	testCases, err := testCases()
 	if err != nil {
@@ -83,50 +83,50 @@ func TestOutputConsistency(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		argumentFile := path.Join(OUTPUT_CONSISTENCY_DIR, testCase+ARGS_SUFFIX)
-		expectedOutputFile := path.Join(OUTPUT_CONSISTENCY_DIR, testCase+CORRECT_OUTPUT_SUFFIX)
+		argumentFile := path.Join(outputConsistencyDir, testCase+argsSuffix)
+		expectedOutputFile := path.Join(outputConsistencyDir, testCase+correctOutputSuffix)
 
 		// Read arguments
-		argumentssJson, err := ioutil.ReadFile(argumentFile)
+		argumentsJSON, err := ioutil.ReadFile(argumentFile)
 		if err != nil {
 			t.Fatalf("Could not read argument file %s. Error: %s", argumentFile, err)
 		}
 		var argumentss [][]string
-		err = json.Unmarshal(argumentssJson, &argumentss)
+		err = json.Unmarshal(argumentsJSON, &argumentss)
 		if err != nil {
 			t.Fatalf("Could not decode argument file %s. Error: %s", argumentFile, err)
 		}
 
 		// Read expected output
-		expectedOutputJson, err := ioutil.ReadFile(expectedOutputFile)
+		expectedOutputJSON, err := ioutil.ReadFile(expectedOutputFile)
 		if err != nil {
 			t.Fatalf("Could not read expected output file %s. Error: %s", expectedOutputFile, err)
 		}
 		var expectedOutput interface{}
-		err = json.Unmarshal(expectedOutputJson, &expectedOutput)
+		err = json.Unmarshal(expectedOutputJSON, &expectedOutput)
 		if err != nil {
 			t.Fatalf("Could not decode expected output file %s. Error: %s", expectedOutputFile, err)
 		}
 
 		for i, arguments := range argumentss {
 
-			// Replace all occurrences of TESTDB_VARIABLE with the path to the test database
+			// Replace all occurrences of testDBVariable with the path to the test database
 			arguments = replaceTestDBVar(arguments)
 
 			cmd := callMain(arguments...)
-			actualOutputJson, err := cmd.Output()
+			actualOutputJSON, err := cmd.Output()
 			// We are running our real main() inside the test executable's main(). The latter always prints PASS\n
 			// if there were no errors. This makes the JSON parser unhappy, so we remove it from the output.
-			if len(actualOutputJson) < len("PASS\n") {
+			if len(actualOutputJSON) < len("PASS\n") {
 				fatalfWithBashCommand(arguments, "Something strange happened in testcase %s[%d].", testCase, i)
 			} else {
-				actualOutputJson = actualOutputJson[:len(actualOutputJson)-len("PASS\n")]
+				actualOutputJSON = actualOutputJSON[:len(actualOutputJSON)-len("PASS\n")]
 			}
 
 			var actualOutput interface{}
-			err = json.Unmarshal(actualOutputJson, &actualOutput)
+			err = json.Unmarshal(actualOutputJSON, &actualOutput)
 			if err != nil {
-				fmt.Println(string(actualOutputJson))
+				fmt.Println(string(actualOutputJSON))
 				fatalfWithBashCommand(arguments, "Failed to parse output from testcase %s[%d] as JSON: %s", testCase, i, err)
 			}
 			if !outputMatches(expectedOutput, actualOutput) {
@@ -136,33 +136,33 @@ func TestOutputConsistency(t *testing.T) {
 	}
 }
 
-// Replace all occurrences of TESTDB_VARIABLE with the path to the test database
+// Replace all occurrences of testDBVariable with the path to the test database
 func replaceTestDBVar(arguments []string) (modifiedArguments []string) {
 	modifiedArguments = make([]string, len(arguments))
 	copy(modifiedArguments, arguments)
 	for i := range modifiedArguments {
-		if modifiedArguments[i] == TESTDB_VARIABLE {
-			modifiedArguments[i] = SMALL_GODB
+		if modifiedArguments[i] == testDBVariable {
+			modifiedArguments[i] = SmallGoDB
 		}
 	}
 	return
 }
 
-// Validates the directry structure of OUTPUT_CONSISTENCY_DIR and finds all test cases in it.
+// Validates the directry structure of outputConsistencyDir and finds all test cases in it.
 // Each test case X consists of two files: X.correctOutput.json and X.args.json
 // If we find a X.correctOutput.json file without an accompanying X.args.json file (or the other way around)
 // we fail.
 func testCases() (testCases []string, err error) {
-	// Open file descriptor for OUTPUT_CONSISTENCY_DIR
-	fd, err := os.Open(OUTPUT_CONSISTENCY_DIR)
+	// Open file descriptor for outputConsistencyDir
+	fd, err := os.Open(outputConsistencyDir)
 	if err != nil {
-		err = fmt.Errorf("Could not open directory %v: %v", OUTPUT_CONSISTENCY_DIR, err)
+		err = fmt.Errorf("Could not open directory %v: %v", outputConsistencyDir, err)
 		return
 	}
 	// Get a list of ALL files in the directory, that's what the -1 is for.
 	fileInfos, err := fd.Readdir(-1)
 	if err != nil {
-		err = fmt.Errorf("Could not enumerate directory %v: %v", OUTPUT_CONSISTENCY_DIR, err)
+		err = fmt.Errorf("Could not enumerate directory %v: %v", outputConsistencyDir, err)
 		return
 	}
 
@@ -172,20 +172,20 @@ func testCases() (testCases []string, err error) {
 		args          bool
 	})
 
-	// Loop over all entries of OUTPUT_CONSISTENCY_DIR and populate seen map.
+	// Loop over all entries of outputConsistencyDir and populate seen map.
 	for _, fileInfo := range fileInfos {
 		if fileInfo.IsDir() {
 			continue
 		}
 
 		name := fileInfo.Name()
-		if strings.HasSuffix(name, ARGS_SUFFIX) {
-			key := name[:len(name)-len(ARGS_SUFFIX)]
+		if strings.HasSuffix(name, argsSuffix) {
+			key := name[:len(name)-len(argsSuffix)]
 			seenElem := seen[key]
 			seenElem.args = true
 			seen[key] = seenElem
-		} else if strings.HasSuffix(name, CORRECT_OUTPUT_SUFFIX) {
-			key := name[:len(name)-len(CORRECT_OUTPUT_SUFFIX)]
+		} else if strings.HasSuffix(name, correctOutputSuffix) {
+			key := name[:len(name)-len(correctOutputSuffix)]
 			seenElem := seen[key]
 			seenElem.correctOutput = true
 			seen[key] = seenElem
@@ -195,15 +195,15 @@ func testCases() (testCases []string, err error) {
 	// Check validity condition, i.e. whether for each testcase we have both files.
 	for testName, seenFiles := range seen {
 		if !seenFiles.args {
-			return nil, fmt.Errorf("File %v%v is missing", testName, ARGS_SUFFIX)
+			return nil, fmt.Errorf("File %v%v is missing", testName, argsSuffix)
 		}
 		if !seenFiles.correctOutput {
-			return nil, fmt.Errorf("File %v%v is missing", testName, CORRECT_OUTPUT_SUFFIX)
+			return nil, fmt.Errorf("File %v%v is missing", testName, correctOutputSuffix)
 		}
 	}
 
 	// If we get here, the validity condition is satisfied; we return the list of test cases.
-	for testName, _ := range seen {
+	for testName := range seen {
 		testCases = append(testCases, testName)
 	}
 	return
@@ -251,7 +251,7 @@ func outputMatches(expected, actual interface{}) (ok bool) {
 
 	// find key that holds expected output, e.g. "sip,dport" or "talk_conv"
 	var expectedOutputKey string
-	for key, _ := range expectedMap {
+	for key := range expectedMap {
 		if key != "ext_ips" && key != "status" && key != "summary" {
 			expectedOutputKey = key
 		}
@@ -259,7 +259,7 @@ func outputMatches(expected, actual interface{}) (ok bool) {
 
 	// find key that holds actual output
 	var actualOutputKey string
-	for key, _ := range actualMap {
+	for key := range actualMap {
 		if key != "ext_ips" && key != "status" && key != "summary" {
 			actualOutputKey = key
 		}
@@ -307,16 +307,16 @@ func outputMatches(expected, actual interface{}) (ok bool) {
 // Note that we use float64 for all numeric columns because this struct is filled with data
 // from JSON which only supports floats for numberic data.
 type row struct {
-	bytes, bytes_rcvd, bytes_sent       float64
-	bytes_percent                       float64
-	dip                                 string
-	dport                               string
-	iface                               string
-	packets, packets_rcvd, packets_sent float64
-	packets_percent                     float64
-	proto                               string
-	sip                                 string
-	time                                string
+	bytes, bytesRcvd, bytesSent       float64
+	bytesPercent                      float64
+	dip                               string
+	dport                             string
+	iface                             string
+	packets, packetsRcvd, packetsSent float64
+	packetsPercent                    float64
+	proto                             string
+	sip                               string
+	time                              string
 }
 
 // Given an interface{} resulting from a call to json.Unmarshal(), tries to construct a row structure.
@@ -363,16 +363,16 @@ func newRow(input interface{}) (result row, ok bool) {
 
 	// Construct row and return
 	extractFloat64("bytes", &result.bytes)
-	extractFloat64("bytes_rcvd", &result.bytes_rcvd)
-	extractFloat64("bytes_sent", &result.bytes_sent)
-	extractFloat64("bytes_percent", &result.bytes_percent)
+	extractFloat64("bytesRcvd", &result.bytesRcvd)
+	extractFloat64("bytesSent", &result.bytesSent)
+	extractFloat64("bytesPercent", &result.bytesPercent)
 	extractString("dip", &result.dip)
 	extractString("dport", &result.dport)
 	extractString("iface", &result.iface)
 	extractFloat64("packets", &result.packets)
-	extractFloat64("packets_rcvd", &result.packets_rcvd)
-	extractFloat64("packets_sent", &result.packets_sent)
-	extractFloat64("packets_percent", &result.packets_percent)
+	extractFloat64("packetsRcvd", &result.packetsRcvd)
+	extractFloat64("packetsSent", &result.packetsSent)
+	extractFloat64("packetsPercent", &result.packetsPercent)
 	extractString("proto", &result.proto)
 	extractString("sip", &result.sip)
 	extractString("time", &result.time)

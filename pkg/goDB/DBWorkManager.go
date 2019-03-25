@@ -27,16 +27,20 @@ import (
 )
 
 const (
-	EPOCH_DAY         int64 = 86400 // one day in seconds
-	DB_WRITE_INTERVAL int64 = 300   // write out interval of capture probe
+	// EpochDay is one day in seconds
+	EpochDay int64 = 86400
+	// DBWriteInterval defines the periodic write out interval of goProbe
+	DBWriteInterval int64 = 300
 )
 
+// DBWorkload stores all relevant parameters to load a block and execute a query on it
 type DBWorkload struct {
-	query    *Query
-	work_dir string
-	load     []int64
+	query   *Query
+	workDir string
+	load    []int64
 }
 
+// DBWorkManager schedules parallel processing of blocks relevant for a query
 type DBWorkManager struct {
 	dbIfaceDir         string // path to interface directory in DB, e.g. /path/to/db/eth0
 	iface              string
@@ -46,6 +50,7 @@ type DBWorkManager struct {
 	logger log.Logger
 }
 
+// NewDBWorkManager sets up a new work manager for executing queries
 func NewDBWorkManager(dbpath string, iface string, numProcessingUnits int) (*DBWorkManager, error) {
 	// whenever a new workload is created the logging facility is set up
 	l, err := log.NewFromString("syslog")
@@ -56,23 +61,24 @@ func NewDBWorkManager(dbpath string, iface string, numProcessingUnits int) (*DBW
 	return &DBWorkManager{filepath.Join(dbpath, iface), iface, []DBWorkload{}, numProcessingUnits, l}, nil
 }
 
-// make number of workloads available to the outside world for loop bounds etc.
+// GetNumWorkers returns the number of workloads available to the outside world for loop bounds etc.
 func (w *DBWorkManager) GetNumWorkers() int {
 	return len(w.workloads)
 }
 
-// used to determine the time span actually covered by the query
+// GetCoveredTimeInterval can be used to determine the time span actually covered by the query
 func (w *DBWorkManager) GetCoveredTimeInterval() (time.Time, time.Time) {
 
 	numWorkers := len(w.workloads)
 	lenLoad := len(w.workloads[numWorkers-1].load)
 
-	first := w.workloads[0].load[0] - DB_WRITE_INTERVAL
+	first := w.workloads[0].load[0] - DBWriteInterval
 	last := w.workloads[numWorkers-1].load[lenLoad-1]
 
 	return time.Unix(first, 0), time.Unix(last, 0)
 }
 
+// CreateWorkerJobs sets up all workloads for query execution
 func (w *DBWorkManager) CreateWorkerJobs(tfirst int64, tlast int64, query *Query) (nonempty bool, err error) {
 	// Get list of files in directory
 	var dirList []os.FileInfo
@@ -83,8 +89,8 @@ func (w *DBWorkManager) CreateWorkerJobs(tfirst int64, tlast int64, query *Query
 
 	// loop over directory list in order to create the timestamp pairs
 	var (
-		info_file *GPFile
-		dir_name  string
+		infoFile *GPFile
+		dirName  string
 	)
 
 	// make sure to start with zero workloads as the number of assigned
@@ -92,28 +98,28 @@ func (w *DBWorkManager) CreateWorkerJobs(tfirst int64, tlast int64, query *Query
 	numDirs := 0
 	for _, file := range dirList {
 		if file.IsDir() && (file.Name() != "./" || file.Name() != "../") {
-			dir_name = file.Name()
-			temp_dir_tstamp, _ := strconv.ParseInt(dir_name, 10, 64)
+			dirName = file.Name()
+			tempdirTstamp, _ := strconv.ParseInt(dirName, 10, 64)
 
 			// check if the directory is within time frame of interest
-			if tfirst < temp_dir_tstamp+EPOCH_DAY && temp_dir_tstamp < tlast+DB_WRITE_INTERVAL {
+			if tfirst < tempdirTstamp+EpochDay && tempdirTstamp < tlast+DBWriteInterval {
 				numDirs++
 
 				// create new workload for the directory
-				workload := DBWorkload{query: query, work_dir: dir_name, load: []int64{}}
+				workload := DBWorkload{query: query, workDir: dirName, load: []int64{}}
 
 				// retrieve all the relevant timestamps from one of the database files.
-				if info_file, err = NewGPFile(w.dbIfaceDir + "/" + dir_name + "/bytes_rcvd.gpf"); err != nil {
-					return false, errors.New("could not read file: " + w.dbIfaceDir + "/" + dir_name + "/bytes_rcvd.gpf")
+				if infoFile, err = NewGPFile(w.dbIfaceDir + "/" + dirName + "/bytes_rcvd.gpf"); err != nil {
+					return false, errors.New("could not read file: " + w.dbIfaceDir + "/" + dirName + "/bytes_rcvd.gpf")
 				}
 
 				// add the relevant timestamps to the workload's list
-				for _, stamp := range info_file.GetTimestamps() {
-					if stamp != 0 && tfirst < stamp && stamp < tlast+DB_WRITE_INTERVAL {
+				for _, stamp := range infoFile.GetTimestamps() {
+					if stamp != 0 && tfirst < stamp && stamp < tlast+DBWriteInterval {
 						workload.load = append(workload.load, stamp)
 					}
 				}
-				info_file.Close()
+				infoFile.Close()
 
 				// Assume we have a directory with timestamp td.
 				// Assume that the first block in the directory has timestamp td + 10.
@@ -130,7 +136,7 @@ func (w *DBWorkManager) CreateWorkerJobs(tfirst int64, tlast int64, query *Query
 	return 0 < len(w.workloads), err
 }
 
-// Processing units ---------------------------------------------------------------------
+// main query processing
 func (w *DBWorkManager) grabAndProcessWorkload(workloadChan <-chan DBWorkload, mapChan chan map[ExtraKey]Val, wg *sync.WaitGroup) {
 	// parse conditions
 	var err error
@@ -152,7 +158,7 @@ func (w *DBWorkManager) grabAndProcessWorkload(workloadChan <-chan DBWorkload, m
 	wg.Done()
 }
 
-// Spawning of processing units and pushing of workload onto factory channel -----------
+// ExecuteWorkerReadJobs runs the query concurrently with multiple sprocessing units
 func (w *DBWorkManager) ExecuteWorkerReadJobs(mapChan chan map[ExtraKey]Val) {
 	procsWG := sync.WaitGroup{}
 	procsWG.Add(w.numProcessingUnits)
@@ -173,18 +179,18 @@ func (w *DBWorkManager) ExecuteWorkerReadJobs(mapChan chan map[ExtraKey]Val) {
 
 // Array of functions to extract a specific entry from a block (represented as a byteslice)
 // to a field in the Key struct.
-var copyToKeyFns = [COLIDX_ATTRIBUTE_COUNT]func(int, *ExtraKey, []byte){
+var copyToKeyFns = [ColIdxAttributeCount]func(int, *ExtraKey, []byte){
 	func(i int, key *ExtraKey, bytes []byte) {
-		copy(key.Sip[:], bytes[i*SIP_SIZEOF:i*SIP_SIZEOF+SIP_SIZEOF])
+		copy(key.Sip[:], bytes[i*SipSizeof:i*SipSizeof+SipSizeof])
 	},
 	func(i int, key *ExtraKey, bytes []byte) {
-		copy(key.Dip[:], bytes[i*DIP_SIZEOF:i*DIP_SIZEOF+DIP_SIZEOF])
+		copy(key.Dip[:], bytes[i*DipSizeof:i*DipSizeof+DipSizeof])
 	},
 	func(i int, key *ExtraKey, bytes []byte) {
 		key.Protocol = bytes[i*1]
 	},
 	func(i int, key *ExtraKey, bytes []byte) {
-		copy(key.Dport[:], bytes[i*DPORT_SIZEOF:i*DPORT_SIZEOF+DPORT_SIZEOF])
+		copy(key.Dport[:], bytes[i*DportSizeof:i*DportSizeof+DportSizeof])
 	},
 }
 
@@ -195,13 +201,13 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workload DBWorkload, resultMap map
 
 	var (
 		query = workload.query
-		dir   = workload.work_dir
+		dir   = workload.workDir
 	)
 
 	var key, comparisonValue ExtraKey
 
 	// Load the GPFiles corresponding to the columns we need for the query. Each file is loaded at most once.
-	var columnFiles [COLIDX_COUNT]*GPFile
+	var columnFiles [ColIdxCount]*GPFile
 	for _, colIdx := range query.columnIndizes {
 		if columnFiles[colIdx], err = NewGPFile(w.dbIfaceDir + "/" + dir + "/" + columnFileNames[colIdx] + ".gpf"); err == nil {
 			defer columnFiles[colIdx].Close()
@@ -215,7 +221,7 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workload DBWorkload, resultMap map
 	for b, tstamp := range workload.load {
 
 		var (
-			blocks      [COLIDX_COUNT][]byte
+			blocks      [ColIdxCount][]byte
 			blockBroken = false
 		)
 
@@ -249,7 +255,7 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workload DBWorkload, resultMap map
 		}
 
 		// Check whether all blocks have matching number of entries
-		numEntries := int((len(blocks[BYTESRCVD_COLIDX]) - 8) / 8) // Each block contains another timestamp as the last 8 bytes
+		numEntries := int((len(blocks[BytesRcvdColIdx]) - 8) / 8) // Each block contains another timestamp as the last 8 bytes
 		for _, colIdx := range query.columnIndizes {
 			l := len(blocks[colIdx]) - 8 // subtract timestamp
 			if l/columnSizeofs[colIdx] != numEntries {
@@ -292,10 +298,10 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workload DBWorkload, resultMap map
 			if conditionalSatisfied {
 				// Update aggregates
 				var delta Val
-				delta.NBytesRcvd = bigendian.UnsafeReadUint64At(blocks[BYTESRCVD_COLIDX], i)
-				delta.NBytesSent = bigendian.UnsafeReadUint64At(blocks[BYTESSENT_COLIDX], i)
-				delta.NPktsRcvd = bigendian.UnsafeReadUint64At(blocks[PKTSRCVD_COLIDX], i)
-				delta.NPktsSent = bigendian.UnsafeReadUint64At(blocks[PKTSSENT_COLIDX], i)
+				delta.NBytesRcvd = bigendian.UnsafeReadUint64At(blocks[BytesRcvdColIdx], i)
+				delta.NBytesSent = bigendian.UnsafeReadUint64At(blocks[BytesSentColIdx], i)
+				delta.NPktsRcvd = bigendian.UnsafeReadUint64At(blocks[PacketsRcvdColIdx], i)
+				delta.NPktsSent = bigendian.UnsafeReadUint64At(blocks[PacketsSentColIdx], i)
 
 				if val, exists := resultMap[key]; exists {
 					val.NBytesRcvd += delta.NBytesRcvd

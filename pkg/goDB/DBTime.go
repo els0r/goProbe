@@ -19,8 +19,8 @@ import (
 	"time"
 )
 
-// Utility variables and functions for time parsing -----------------------------
-var TimeFormats []string = []string{
+// TimeFormats stores all supported tie formats
+var TimeFormats = []string{
 	time.ANSIC,    // "Mon Jan _2 15:04:05 2006"
 	time.RubyDate, // "Mon Jan 02 15:04:05 -0700 2006"
 	time.RFC822Z,  // "02 Jan 06 15:04 -0700" // RFC822 with numeric zone
@@ -66,7 +66,7 @@ func parseRelativeTime(rtime string) (int64, error) {
 
 	rtime = rtime[1:]
 
-	var secBackwards int64 = 0
+	var secBackwards int64
 
 	// iterate over different time chunks to get the days, hours and minutes
 	for _, chunk := range strings.Split(rtime, ":") {
@@ -103,7 +103,7 @@ func parseRelativeTime(rtime string) (int64, error) {
 
 }
 
-// Entry point for external calls -------------------------------------------------
+// ParseTimeArgument is the entry point for external calls and converts valid formats to a unix timtestamp
 func ParseTimeArgument(timeString string) (int64, error) {
 	var (
 		err  error
@@ -122,9 +122,8 @@ func ParseTimeArgument(timeString string) (int64, error) {
 	if timeString[0] == '-' {
 		if tRel, rerr = parseRelativeTime(timeString); rerr == nil {
 			return tRel, rerr
-		} else {
-			return int64(0), rerr
 		}
+		return int64(0), rerr
 	}
 
 	// try to interpret string as unix timestamp

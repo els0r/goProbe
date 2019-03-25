@@ -12,4 +12,5 @@
 
 package version
 
-const BUILD_KIND = "public"
+// BuildKind stores what type of code release this is (e.g. public/osag)
+const BuildKind = "public"

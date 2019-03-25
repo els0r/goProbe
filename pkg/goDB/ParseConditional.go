@@ -136,7 +136,7 @@ func (p *parser) advance() (result string) {
 		return ""
 	}
 	result = p.tokens[p.pos]
-	p.pos += 1
+	p.pos++
 	return
 }
 
@@ -152,9 +152,8 @@ func (p *parser) accept(token string) bool {
 	if !p.eof() && p.tokens[p.pos] == token {
 		p.advance()
 		return true
-	} else {
-		return false
 	}
+	return false
 }
 
 // Like accept, but the parse fails if the argument token doesn't equal the current token.
@@ -208,11 +207,10 @@ func listToTree(and bool, nodes []Node) (result Node) {
 			left:  nodes[0],
 			right: listToTree(and, nodes[1:]),
 		}
-	} else {
-		return orNode{
-			left:  nodes[0],
-			right: listToTree(and, nodes[1:]),
-		}
+	}
+	return orNode{
+		left:  nodes[0],
+		right: listToTree(and, nodes[1:]),
 	}
 }
 

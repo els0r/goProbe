@@ -28,22 +28,18 @@ var testKey = ExtraKey{
 var tests = []struct {
 	Attribute        Attribute
 	Name             string
-	LenExtraColumns  int
 	ExtractedStrings []string
 }{
-	{SipAttribute{}, "sip", 0, []string{"a102:304:506:708:90a:b0c:d0e:f10"}},
-	{DipAttribute{}, "dip", 0, []string{"301:401:509:206:503:508:907:903"}},
-	{DportAttribute{}, "dport", 0, []string{"52209"}},
-	{ProtoAttribute{}, "proto", 0, []string{"TCP"}},
+	{SipAttribute{}, "sip", []string{"a102:304:506:708:90a:b0c:d0e:f10"}},
+	{DipAttribute{}, "dip", []string{"301:401:509:206:503:508:907:903"}},
+	{DportAttribute{}, "dport", []string{"52209"}},
+	{ProtoAttribute{}, "proto", []string{"TCP"}},
 }
 
 func TestAttributes(t *testing.T) {
 	for _, test := range tests {
 		if test.Attribute.Name() != test.Name {
 			t.Fatalf("wrong name")
-		}
-		if len(test.Attribute.ExtraColumns()) != test.LenExtraColumns {
-			t.Fatalf("wrong number of extra columns")
 		}
 		if !reflect.DeepEqual(test.Attribute.ExtractStrings(&testKey), test.ExtractedStrings) {
 			t.Fatalf("expected: %s got: %s", test.ExtractedStrings, test.Attribute.ExtractStrings(&testKey))

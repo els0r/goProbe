@@ -12,4 +12,4 @@
 
 package main
 
-const DEFAULT_DB_PATH = ""
+const defaultDBPath = ""

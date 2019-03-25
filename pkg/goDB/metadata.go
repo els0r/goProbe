@@ -15,7 +15,7 @@ import (
 	"os"
 )
 
-// Represents metadata for one database block.
+// BlockMetadata represents metadata for one database block.
 type BlockMetadata struct {
 	Timestamp            int64 `json:"timestamp"`
 	PcapPacketsReceived  int   `json:"pcap_packets_received"`
@@ -34,11 +34,12 @@ type Metadata struct {
 	Blocks []BlockMetadata `json:"blocks"`
 }
 
+// NewMetadata creates a new Metdata struct
 func NewMetadata() *Metadata {
 	return &Metadata{}
 }
 
-// Reads the given metadata file.
+// ReadMetadata reads the metadata from the supplied filepath
 func ReadMetadata(path string) (*Metadata, error) {
 	var result Metadata
 
@@ -55,7 +56,7 @@ func ReadMetadata(path string) (*Metadata, error) {
 	return &result, nil
 }
 
-// Tries to read the given metadata file.
+// TryReadMetadata attempts to read the given metadata file.
 // If an error occurs, a fresh Metadata struct is returned.
 func TryReadMetadata(path string) *Metadata {
 	meta, err := ReadMetadata(path)
@@ -65,6 +66,7 @@ func TryReadMetadata(path string) *Metadata {
 	return meta
 }
 
+// WriteMetadata stores the metadata on disk
 func WriteMetadata(path string, meta *Metadata) error {
 	f, err := os.Create(path)
 	if err != nil {

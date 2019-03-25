@@ -33,9 +33,8 @@ func nextAll(prevprev, prev string, openParens int) []suggestion {
 	s := func(sugg string, accept bool) suggestion {
 		if accept {
 			return suggestion{sugg, sugg, accept}
-		} else {
-			return suggestion{sugg, sugg + " ...  ", accept}
 		}
+		return suggestion{sugg, sugg + " ...  ", accept}
 	}
 
 	switch prev {
@@ -100,11 +99,10 @@ func nextAll(prevprev, prev string, openParens int) []suggestion {
 				s("&", false),
 				s("|", false),
 			}
-		} else {
-			return []suggestion{
-				s("&", false),
-				s("|", false),
-			}
+		}
+		return []suggestion{
+			s("&", false),
+			s("|", false),
 		}
 	default:
 		switch prevprev {
@@ -115,11 +113,10 @@ func nextAll(prevprev, prev string, openParens int) []suggestion {
 					s("&", false),
 					s("|", false),
 				}
-			} else {
-				return []suggestion{
-					s("&", false),
-					s("|", false),
-				}
+			}
+			return []suggestion{
+				s("&", false),
+				s("|", false),
 			}
 		default:
 			return nil
@@ -163,9 +160,8 @@ func conditional(args []string) []string {
 		}
 		if len(suggs) == 0 {
 			return unknownSuggestions{}
-		} else {
-			return knownSuggestions{suggs}
 		}
+		return knownSuggestions{suggs}
 	}
 
 	unknown := func(s string) []string {

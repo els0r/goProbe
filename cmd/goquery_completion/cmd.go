@@ -8,6 +8,30 @@
 //
 /////////////////////////////////////////////////////////////////////////////////
 
+// Utility to enable bash completion for goQuery.
+//
+// goQuery has extensive support for bash autocompletion. To enable autocompletion,
+// you need to tell bash that it should use the `goquery_completion` program for
+// completing `goquery` commands.
+//
+// How to do this depends on your distribution.
+//
+// On Debian derivatives, we suggest creating a file `goquery` in `/etc/bash_completion.d` with the following contents:
+//
+//     _goquery() {
+//         case "$3" in
+//             -d) # the -d flag specifies the database directory.
+//                 # we rely on bash's builtin directory completion.
+//                 COMPREPLY=( $( compgen -d -- "$2" ) )
+//             ;;
+//
+//             *)
+//                 if [ -x /opt/ntm/goProbe/shared/goquery_completion ]; then
+//                     mapfile -t COMPREPLY < <( /opt/ntm/goProbe/shared/goquery_completion bash "${COMP_POINT}" "${COMP_LINE}" )
+//                 fi
+//             ;;
+//         esac
+//     }
 package main
 
 import (
@@ -22,9 +46,9 @@ import (
 type bashMode byte
 
 const (
-	BASHMODE_NORMAL bashMode = iota
-	BASHMODE_SINGLEQUOTE
-	BASHMODE_DOUBLEQUOTE
+	bashmodeNormal bashMode = iota
+	bashmodeSingleQuote
+	bashmodeDoubleQuote
 )
 
 // nobody likes you, bash. nobody! you suck!
@@ -58,9 +82,9 @@ func bashUnescape(s string) (ss []string, weird bool) {
 
 	var r rune
 	for _, r = range s {
-		prevRuneMode = BASHMODE_NORMAL
+		prevRuneMode = bashmodeNormal
 		switch mode {
-		case BASHMODE_NORMAL:
+		case bashmodeNormal:
 			if escaped {
 				cur = append(cur, r)
 				escaped = false
@@ -72,17 +96,17 @@ func bashUnescape(s string) (ss []string, weird bool) {
 					escaped = true
 				case '"':
 					prevRuneMode = mode
-					mode = BASHMODE_DOUBLEQUOTE
+					mode = bashmodeDoubleQuote
 					splitIfNotEmpty()
 				case '\'':
 					prevRuneMode = mode
-					mode = BASHMODE_SINGLEQUOTE
+					mode = bashmodeSingleQuote
 					splitIfNotEmpty()
 				default:
 					cur = append(cur, r)
 				}
 			}
-		case BASHMODE_DOUBLEQUOTE:
+		case bashmodeDoubleQuote:
 			if escaped {
 				// we can only escape \ and " in doublequote mode
 				switch r {
@@ -98,18 +122,18 @@ func bashUnescape(s string) (ss []string, weird bool) {
 					escaped = true
 				case '"':
 					prevRuneMode = mode
-					mode = BASHMODE_NORMAL
+					mode = bashmodeNormal
 					split()
 				default:
 					cur = append(cur, r)
 				}
 			}
-		case BASHMODE_SINGLEQUOTE:
+		case bashmodeSingleQuote:
 			// escaping isn't possible in singlequote mode
 			switch r {
 			case '\'':
 				prevRuneMode = mode
-				mode = BASHMODE_NORMAL
+				mode = bashmodeNormal
 				split()
 			default:
 				cur = append(cur, r)
@@ -119,7 +143,7 @@ func bashUnescape(s string) (ss []string, weird bool) {
 
 	split()
 
-	return result, mode == BASHMODE_NORMAL && (prevRuneMode == BASHMODE_SINGLEQUOTE || prevRuneMode == BASHMODE_DOUBLEQUOTE)
+	return result, mode == bashmodeNormal && (prevRuneMode == bashmodeSingleQuote || prevRuneMode == bashmodeDoubleQuote)
 }
 
 func filterPrefix(pre string, ss ...string) []string {
@@ -224,7 +248,7 @@ func main() {
 
 		bash(compPoint, compLine)
 	case "-version":
-		fmt.Printf("goquery_completion %s\n", version.VersionText())
+		fmt.Printf("goquery_completion %s\n", version.Text())
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown completion mode: %s Implemented modes: %s\n", os.Args[1], "bash, -version")
 	}

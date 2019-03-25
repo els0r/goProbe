@@ -13,10 +13,11 @@
 
 package capture
 
+// Direction detection states
 const (
-	Unknown          uint8 = 0
-	DirectionRemains uint8 = 1
-	DirectionReverts uint8 = 2
+	Unknown uint8 = iota
+	DirectionRemains
+	DirectionReverts
 )
 
 /*
@@ -27,7 +28,8 @@ const ssdpAddressIPv4    [4]byte = [4]byte{239, 255, 255, 250}
 
 // slice storing frequently used destination ports which fall outside of the service
 // port range 1-1023. These are explicit exceptions to the direction heuristic below
-var specialPorts [6]uint16 = [6]uint16{
+var specialPorts = [...]uint16{
+	2049,  // NFS
 	5222,  // XMPP, iMessage
 	5353,  // DNS
 	8080,  // Proxy
@@ -36,8 +38,9 @@ var specialPorts [6]uint16 = [6]uint16{
 	1352,  // Lotus Notes
 }
 
+// IsSpecialPort checks whether port is a well-known high port
 func IsSpecialPort(port uint16) bool {
-	special := false
+	var special bool
 
 	// check if port matches any of the special ports
 	for _, p := range specialPorts {
@@ -47,7 +50,7 @@ func IsSpecialPort(port uint16) bool {
 	return special
 }
 
-// This function is responsible for running a variety of heuristics on the packet
+// ClassifyPacketDirection is responsible for running a variety of heuristics on the packet
 // in order to determine its direction. This classification is important since the
 // termination of flows in regular intervals otherwise results in the incapability
 // to correctly assign the appropriate endpoints. Current heuristics include:
