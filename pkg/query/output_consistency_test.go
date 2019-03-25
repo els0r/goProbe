@@ -79,6 +79,7 @@ func TestOutputConsistency(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Could not read argument file %s. Error: %s", argumentFile, err)
 		}
+
 		var arguments []Args
 		err = json.Unmarshal(argumentsJSON, &arguments)
 		if err != nil {
@@ -183,7 +184,7 @@ func testCases() (testCases []string, err error) {
 	}
 
 	// If we get here, the validity condition is satisfied; we return the list of test cases.
-	for testName, _ := range seen {
+	for testName := range seen {
 		testCases = append(testCases, testName)
 	}
 	return
@@ -231,7 +232,7 @@ func outputMatches(expected, actual interface{}) (err error, ok bool) {
 
 	// find key that holds expected output, e.g. "sip,dport" or "talk_conv"
 	var expectedOutputKey string
-	for key, _ := range expectedMap {
+	for key := range expectedMap {
 		if key != "ext_ips" && key != "status" && key != "summary" {
 			expectedOutputKey = key
 		}
@@ -239,7 +240,7 @@ func outputMatches(expected, actual interface{}) (err error, ok bool) {
 
 	// find key that holds actual output
 	var actualOutputKey string
-	for key, _ := range actualMap {
+	for key := range actualMap {
 		if key != "ext_ips" && key != "status" && key != "summary" {
 			actualOutputKey = key
 		}
@@ -287,16 +288,16 @@ func outputMatches(expected, actual interface{}) (err error, ok bool) {
 // Note that we use float64 for all numeric columns because this struct is filled with data
 // from JSON which only supports floats for numberic data.
 type row struct {
-	bytes, bytes_rcvd, bytes_sent       float64
-	bytes_percent                       float64
-	dip                                 string
-	dport                               string
-	iface                               string
-	packets, packets_rcvd, packets_sent float64
-	packets_percent                     float64
-	proto                               string
-	sip                                 string
-	time                                string
+	bytes, bytesRcvd, bytesSent       float64
+	bytesPercent                      float64
+	dip                               string
+	dport                             string
+	iface                             string
+	packets, packetsRcvd, packetsSent float64
+	packetsPercent                    float64
+	proto                             string
+	sip                               string
+	time                              string
 }
 
 // Given an interface{} resulting from a call to json.Unmarshal(), tries to construct a row structure.
@@ -343,16 +344,16 @@ func newRow(input interface{}) (result row, ok bool) {
 
 	// Construct row and return
 	extractFloat64("bytes", &result.bytes)
-	extractFloat64("bytes_rcvd", &result.bytes_rcvd)
-	extractFloat64("bytes_sent", &result.bytes_sent)
-	extractFloat64("bytes_percent", &result.bytes_percent)
+	extractFloat64("bytesRcvd", &result.bytesRcvd)
+	extractFloat64("bytesSent", &result.bytesSent)
+	extractFloat64("bytesPercent", &result.bytesPercent)
 	extractString("dip", &result.dip)
 	extractString("dport", &result.dport)
 	extractString("iface", &result.iface)
 	extractFloat64("packets", &result.packets)
-	extractFloat64("packets_rcvd", &result.packets_rcvd)
-	extractFloat64("packets_sent", &result.packets_sent)
-	extractFloat64("packets_percent", &result.packets_percent)
+	extractFloat64("packetsRcvd", &result.packetsRcvd)
+	extractFloat64("packetsSent", &result.packetsSent)
+	extractFloat64("packetsPercent", &result.packetsPercent)
 	extractString("proto", &result.proto)
 	extractString("sip", &result.sip)
 	extractString("time", &result.time)

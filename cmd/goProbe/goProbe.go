@@ -8,105 +8,35 @@
 //
 /////////////////////////////////////////////////////////////////////////////////
 
+// Binary for the lightweight packet aggregation tool goProbe
 package main
 
 import (
-	"bufio"
-	"flag"
 	"fmt"
-	"io"
-	"net"
 	"os"
 	"os/signal"
-	"path/filepath"
-	"strings"
-	"sync"
 	"syscall"
 	"time"
 
+	"github.com/els0r/goProbe/cmd/goProbe/flags"
+	"github.com/els0r/goProbe/pkg/api"
 	"github.com/els0r/goProbe/pkg/capture"
 	"github.com/els0r/goProbe/pkg/goDB"
 	"github.com/els0r/goProbe/pkg/version"
 	"github.com/els0r/log"
-	"github.com/els0r/status"
 
 	capconfig "github.com/els0r/goProbe/cmd/goProbe/config"
 )
 
-const (
-	// MAX_IFACES is the maximum number of interfaces we can monitor
-	MAX_IFACES = 1024
-
-	DB_WRITE_INTERVAL   = 300 // seconds
-	CONTROL_SOCKET      = "control.sock"
-	WRITEOUTSCHAN_DEPTH = 100
-
-	// TODO(lob): For debugging. Consider removing this later.
-	CONTROL_CMD_DEBUGSTATUS = "DEBUGSTATUS"
-
-	CONTROL_CMD_STATUS = "STATUS"
-	CONTROL_CMD_RELOAD = "RELOAD"
-	CONTROL_CMD_ERRORS = "ERRORS"
-
-	CONTROL_REPLY_DONE        = "DONE"
-	CONTROL_REPLY_ERROR       = "ERROR"
-	CONTROL_REPLY_UNKNOWN_CMD = "UNKNOWN COMMAND"
-)
-
-// flag handling
-var (
-	flagConfigFile string
-	flagVersion    bool
-)
-
-func init() {
-	flag.StringVar(&flagConfigFile, "config", "", "path to configuration `file`")
-	flag.BoolVar(&flagVersion, "version", false, "print version and exit")
-}
-
-// A writeout consists of a channel over which the individual
-// interfaces' TaggedAggFlowMaps are sent and is tagged with
-// the timestamp of when it was triggered.
-type writeout struct {
-	Chan      <-chan capture.TaggedAggFlowMap
-	Timestamp time.Time
-}
-
 var (
 	// cfg may be potentially accessed from multiple goroutines,
 	// so we need to synchronize access.
-	configMutex sync.Mutex
-	config      *capconfig.Config
+	config *capconfig.Config
 
-	// dbpath is set once in the beginning of executing goprobe
-	// and then never changed
-	dbpath string
-
-	// captureManager and lastRotation may also be accessed
+	// captureManager may also be accessed
 	// from multiple goroutines, so we need to synchronize access.
-	captureManagerMutex sync.Mutex
-	captureManager      *capture.CaptureManager
-	lastRotation        time.Time
+	captureManager *capture.Manager
 )
-
-// reloadConfig attempts to reload the configuration file and updates
-// the global config if successful.
-func reloadConfig() error {
-	c, err := capconfig.ParseFile(flagConfigFile)
-	if err != nil {
-		return fmt.Errorf("Failed to reload config file: %s", err)
-	}
-
-	if len(c.Interfaces) > MAX_IFACES {
-		return fmt.Errorf("Cannot monitor more than %d interfaces.", MAX_IFACES)
-	}
-
-	if config != nil && dbpath != c.DBPath {
-		return fmt.Errorf("Failed to reload config file: Cannot change database path while running.")
-	}
-	config = c
-	return nil
-}
 
 func main() {
 	var err error
@@ -119,20 +49,18 @@ func main() {
 	// logger for the initial setup phase (logs to stdout)
 	var initLogger = log.NewTextLogger()
 
-	flag.Parse()
-	if flagVersion {
-		fmt.Printf("goProbe %s\n", version.VersionText())
-		return
-	}
-
-	if flagConfigFile == "" {
-		initLogger.Error("Please specify a config file")
-		flag.PrintDefaults()
+	// get flags
+	err = flags.Read()
+	if err != nil {
 		os.Exit(1)
+	}
+	if flags.CmdLine.Version {
+		fmt.Printf("goProbe %s\n", version.Text())
+		os.Exit(0)
 	}
 
 	// Config file
-	config, err = capconfig.ParseFile(flagConfigFile)
+	config, err = capconfig.ParseFile(flags.CmdLine.Config)
 	if err != nil {
 		initLogger.Errorf("Failed to load config file: %s", err)
 		os.Exit(1)
@@ -153,7 +81,6 @@ func main() {
 	initLogger.Close()
 	defer logger.Close()
 
-	dbpath = config.DBPath
 	logger.Debug("Loaded config file")
 
 	// It doesn't make sense to monitor zero interfaces
@@ -161,9 +88,10 @@ func main() {
 		logger.Error("No interfaces have been specified in the configuration file")
 		os.Exit(1)
 	}
+
 	// Limit the number of interfaces
-	if len(config.Interfaces) > MAX_IFACES {
-		logger.Errorf("Cannot monitor more than %d interfaces", MAX_IFACES)
+	if len(config.Interfaces) > capture.MaxIfaces {
+		logger.Errorf("Cannot monitor more than %d interfaces", capture.MaxIfaces)
 		os.Exit(1)
 	}
 
@@ -172,29 +100,15 @@ func main() {
 	signal.Notify(sigExitChan, syscall.SIGTERM, os.Interrupt)
 
 	// Create DB directory if it doesn't exist already.
-	if err := os.MkdirAll(dbpath, 0755); err != nil {
+	if err := os.MkdirAll(capconfig.RuntimeDBPath(), 0755); err != nil {
 		logger.Errorf("Failed to create database directory: '%s'", err)
 		os.Exit(1)
 	}
 
-	// Open control socket
-	err = os.RemoveAll(filepath.Join(dbpath, CONTROL_SOCKET))
-	if err != nil {
-		// just log the error, don't bail out, since goProbe's main tasks are not affected
-		fmt.Fprintf(os.Stderr, "Failed to clean up old control socket '%s': %s\n", CONTROL_SOCKET, err)
-	}
-
-	listener, err := net.Listen("unix", filepath.Join(dbpath, CONTROL_SOCKET))
-	if err != nil {
-		logger.Errorf("Failed to listen on control socket '%s': %s", CONTROL_SOCKET, err)
-		os.Exit(1)
-	}
-	defer listener.Close()
-
 	// Initialize packet logger
 	ifaces := make([]string, len(config.Interfaces))
 	i := 0
-	for k, _ := range config.Interfaces {
+	for k := range config.Interfaces {
 		ifaces[i] = k
 		i++
 	}
@@ -204,24 +118,78 @@ func main() {
 	// None of the initialization steps failed.
 	logger.Info("Started goProbe")
 
-	// Start goroutine for writeouts
-	writeoutsChan := make(chan writeout, WRITEOUTSCHAN_DEPTH)
-	completedWriteoutsChan := make(chan struct{})
-	go handleWriteouts(writeoutsChan, completedWriteoutsChan, config.SyslogFlows, logger)
+	captureManager = capture.NewManager(logger)
 
-	lastRotation = time.Now()
-
-	captureManager = capture.NewCaptureManager(logger)
 	// No captures are being deleted here, so we can safely discard the channel we pass
-	captureManagerMutex.Lock()
+	logger.Debug("Updating capture manager configuration")
 	captureManager.Update(config.Interfaces, make(chan capture.TaggedAggFlowMap))
-	captureManagerMutex.Unlock()
 
-	// We're ready to accept commands on the control socket
-	go handleControlSocket(listener, writeoutsChan, logger)
+	// configure api server
+	var (
+		server     *api.Server
+		apiOptions []api.Option
+	)
+
+	if config.API.Metrics {
+		apiOptions = append(apiOptions, api.WithMetricsExport())
+	}
+	if config.API.Logging {
+		apiOptions = append(apiOptions, api.WithLogger(logger))
+	}
+	if len(config.API.Keys) > 0 {
+		apiOptions = append(apiOptions, api.WithKeys(config.API.Keys))
+	}
+	if config.API.Host != "" {
+		apiOptions = append(apiOptions, api.WithHost(config.API.Host))
+	}
+	if config.API.Timeout > 0 {
+		apiOptions = append(apiOptions, api.WithTimeout(config.API.Timeout))
+	}
+
+	// create server and start listening for requests
+	server, err = api.New(config.API.Port, captureManager, apiOptions...)
+	if err != nil {
+		logger.Errorf("failed to spawn API server: %s", err)
+	} else {
+		// handle -docgen flag
+		if flags.CmdLine.DocGen {
+			var mdRoutes, jsonRoutes *os.File
+
+			logger.Info("generating API docs and quitting")
+
+			// open files
+			fname := "pkg/api/"
+			mdRoutes, err = os.OpenFile(fname+"README.md", os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0755)
+			if err != nil {
+				logger.Errorf("failed to open '%s.md' for writing: %s", fname, err)
+				os.Exit(1)
+			}
+			jsonRoutes, err = os.OpenFile(fname+"routes.json", os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0755)
+			if err != nil {
+				logger.Errorf("failed to open '%s.json' for writing: %s", fname, err)
+				os.Exit(1)
+			}
+
+			// generate the documentation
+			err = server.GenerateAPIDocs(jsonRoutes, mdRoutes)
+			if err != nil {
+				logger.Errorf("docgen failed: %s", err)
+				os.Exit(1)
+			}
+
+			// exit program
+			os.Exit(0)
+		}
+
+		// start server
+		server.Run()
+	}
+
+	// Start goroutine for writeouts
+	go handleWriteouts(captureManager.WriteoutHandler, config.SyslogFlows, logger)
 
 	// Start regular rotations
-	go handleRotations(writeoutsChan, logger)
+	go handleRotations(captureManager, logger)
 
 	// Wait for signal to exit
 	<-sigExitChan
@@ -231,12 +199,15 @@ func main() {
 	// We intentionally don't unlock the mutex hereafter,
 	// because the program exits anyways. This ensures that there
 	// can be no new Rotations/Updates/etc... while we're shutting down.
-	captureManagerMutex.Lock()
+	var (
+		writeoutsChan          chan<- capture.Writeout = captureManager.WriteoutHandler.WriteoutChan
+		completedWriteoutsChan                         = captureManager.WriteoutHandler.CompletedChan
+	)
 	captureManager.DisableAll()
 
 	// One last writeout
-	woChan := make(chan capture.TaggedAggFlowMap, MAX_IFACES)
-	writeoutsChan <- writeout{woChan, time.Now()}
+	woChan := make(chan capture.TaggedAggFlowMap, capture.MaxIfaces)
+	writeoutsChan <- capture.Writeout{woChan, time.Now()}
 	captureManager.RotateAll(woChan)
 	close(woChan)
 	close(writeoutsChan)
@@ -248,23 +219,24 @@ func main() {
 	return
 }
 
-func handleRotations(writeoutsChan chan<- writeout, logger log.Logger) {
-	// One rotation every DB_WRITE_INTERVAL seconds...
-	ticker := time.NewTicker(time.Second * time.Duration(DB_WRITE_INTERVAL))
+func handleRotations(manager *capture.Manager, logger log.Logger) {
+	var writeoutsChan chan<- capture.Writeout = manager.WriteoutHandler.WriteoutChan
+
+	// One rotation every DBWriteInterval seconds...
+	ticker := time.NewTicker(time.Second * time.Duration(goDB.DBWriteInterval))
 	for {
 		select {
 		case <-ticker.C:
-			captureManagerMutex.Lock()
 			logger.Debug("Initiating flow data flush")
 
-			lastRotation = time.Now()
-			woChan := make(chan capture.TaggedAggFlowMap, MAX_IFACES)
-			writeoutsChan <- writeout{woChan, lastRotation}
-			captureManager.RotateAll(woChan)
+			manager.LastRotation = time.Now()
+			woChan := make(chan capture.TaggedAggFlowMap, capture.MaxIfaces)
+			writeoutsChan <- capture.Writeout{woChan, captureManager.LastRotation}
+			manager.RotateAll(woChan)
 			close(woChan)
 
 			if len(writeoutsChan) > 2 {
-				if len(writeoutsChan) > WRITEOUTSCHAN_DEPTH {
+				if len(writeoutsChan) > capture.WriteoutsChanDepth {
 					logger.Error(fmt.Sprintf("Writeouts are lagging behind too much: Queue length is %d", len(writeoutsChan)))
 					os.Exit(1)
 				}
@@ -272,16 +244,19 @@ func handleRotations(writeoutsChan chan<- writeout, logger log.Logger) {
 			}
 
 			logger.Debug("Restarting any interfaces that have encountered errors.")
-			captureManager.EnableAll()
-			captureManagerMutex.Unlock()
+			manager.EnableAll()
 		}
 	}
 }
 
-func handleWriteouts(writeoutsChan <-chan writeout, doneChan chan<- struct{}, logToSyslog bool, logger log.Logger) {
-	writeoutsCount := 0
-	dbWriters := make(map[string]*goDB.DBWriter)
-	lastWrite := make(map[string]int)
+func handleWriteouts(handler *capture.WriteoutHandler, logToSyslog bool, logger log.Logger) {
+	var (
+		writeoutsChan  <-chan capture.Writeout = handler.WriteoutChan
+		doneChan       chan<- struct{}         = handler.CompletedChan
+		writeoutsCount                         = 0
+		dbWriters                              = make(map[string]*goDB.DBWriter)
+		lastWrite                              = make(map[string]int)
+	)
 
 	var syslogWriter *goDB.SyslogDBWriter
 	if logToSyslog {
@@ -301,7 +276,7 @@ func handleWriteouts(writeoutsChan <-chan writeout, doneChan chan<- struct{}, lo
 			// Ensure that there is a DBWriter for the given interface
 			_, exists := dbWriters[taggedMap.Iface]
 			if !exists {
-				w := goDB.NewDBWriter(dbpath, taggedMap.Iface)
+				w := goDB.NewDBWriter(capconfig.RuntimeDBPath(), taggedMap.Iface)
 				dbWriters[taggedMap.Iface] = w
 			}
 
@@ -345,7 +320,7 @@ func handleWriteouts(writeoutsChan <-chan writeout, doneChan chan<- struct{}, lo
 		}
 
 		// We are done with the writeout, let's try to write the updated summary
-		err := goDB.ModifyDBSummary(dbpath, 10*time.Second, func(summ *goDB.DBSummary) (*goDB.DBSummary, error) {
+		err := goDB.ModifyDBSummary(capconfig.RuntimeDBPath(), 10*time.Second, func(summ *goDB.DBSummary) (*goDB.DBSummary, error) {
 			if summ == nil {
 				summ = goDB.NewDBSummary()
 			}
@@ -377,178 +352,4 @@ func handleWriteouts(writeoutsChan <-chan writeout, doneChan chan<- struct{}, lo
 
 	logger.Debug("Completed all writeouts")
 	doneChan <- struct{}{}
-}
-
-// handleControlSocket accepts connections on the given listener and handles any interactions
-// with clients.
-//
-// There is no mechanism for graceful termination because we don't need one:
-// We never stop listening on the control socket once we have started until the program
-// terminates anyways and/or listener.Accept() fails.
-func handleControlSocket(listener net.Listener, writeoutsChan chan<- writeout, logger log.Logger) {
-	for {
-		conn, err := listener.Accept()
-
-		if err != nil {
-			logger.Info(fmt.Sprintf("Stopped listening on control socket because: %s.", err))
-			return
-		}
-		logger.Debug(fmt.Sprintf("Accepted connection on control socket."))
-
-		// handle connection
-		go func(conn net.Conn) {
-			defer conn.Close()
-
-			var writeError error
-			writeLn := func(msg string) {
-				if writeError != nil {
-					return
-				}
-				_, writeError = io.WriteString(conn, msg+"\n")
-			}
-
-			// set status output to socket
-			status.SetOutput(conn)
-
-			scanner := bufio.NewScanner(conn)
-			for scanner.Scan() {
-				switch scanner.Text() {
-				case CONTROL_CMD_RELOAD:
-					configMutex.Lock()
-					status.Line("Reloading configuration")
-					if err := reloadConfig(); err == nil {
-						captureManagerMutex.Lock()
-						woChan := make(chan capture.TaggedAggFlowMap, MAX_IFACES)
-						writeoutsChan <- writeout{woChan, time.Now()}
-						captureManager.Update(config.Interfaces, woChan)
-						close(woChan)
-						captureManagerMutex.Unlock()
-
-						status.Ok("")
-					} else {
-						logger.Error(err.Error())
-						status.Fail(err.Error())
-					}
-					configMutex.Unlock()
-				case CONTROL_CMD_STATUS, CONTROL_CMD_DEBUGSTATUS:
-					captureManagerMutex.Lock()
-
-					stats := captureManager.StatusAll()
-
-					writeLn("Interface and pcap statistics")
-
-					// print info for each interface
-					var loggedRcvd, pcapRcvd, pcapDrop, pcapIfDrop uint64
-					var numActive int
-					for _, stat := range stats {
-						if stat.Stats.Pcap != nil {
-							loggedRcvd += uint64(stat.Stats.PacketsLogged)
-							pcapRcvd += uint64(stat.Stats.Pcap.PacketsReceived)
-							pcapDrop += uint64(stat.Stats.Pcap.PacketsDropped)
-							pcapIfDrop += uint64(stat.Stats.Pcap.PacketsIfDropped)
-						}
-						if stat.State == capture.CAPTURE_STATE_ACTIVE {
-							numActive++
-						}
-					}
-					writeLn(fmt.Sprintf(
-						`
-   last writeout: %.0fs ago
-  packets logged: %d
-
-   pcap received: %d
-         dropped: %d
-   iface dropped: %d`,
-						time.Now().Sub(lastRotation).Seconds(),
-						loggedRcvd, pcapRcvd, pcapDrop, pcapIfDrop))
-
-					if scanner.Text() == CONTROL_CMD_DEBUGSTATUS {
-						writeLn(fmt.Sprintf("\n%s   RCVD     DROP   IFDROP", strings.Repeat(" ", status.StatusLineIndent+8+4)))
-
-						for iface, stat := range stats {
-							var pcapInfoStr string
-							if stat.Stats.Pcap != nil {
-								pcapInfoStr = fmt.Sprintf("%8d %8d %8d",
-									stat.Stats.Pcap.PacketsReceived,
-									stat.Stats.Pcap.PacketsDropped,
-									stat.Stats.Pcap.PacketsIfDropped)
-							}
-
-							status.Line(iface)
-							switch stat.State {
-							case capture.CAPTURE_STATE_UNINITIALIZED:
-								status.Warn("unitialized")
-							case capture.CAPTURE_STATE_INITIALIZED:
-								status.Warn("initialized")
-							case capture.CAPTURE_STATE_ACTIVE:
-								status.Ok(pcapInfoStr)
-							case capture.CAPTURE_STATE_ERROR:
-								status.Fail("error")
-							default:
-								status.Custom(status.White, "NONE", "Unknown capture state")
-							}
-
-							pcapInfoStr = ""
-						}
-					}
-
-					writeLn("")
-					status.Line("Total")
-
-					activeStr := fmt.Sprintf("%d/%d interfaces active", numActive, len(stats))
-					if numActive != len(stats) {
-						if numActive == 0 {
-							status.Fail(activeStr)
-						} else {
-							status.Warn(activeStr)
-						}
-					} else {
-						status.Ok(activeStr)
-					}
-					captureManagerMutex.Unlock()
-
-				case CONTROL_CMD_ERRORS:
-					captureManagerMutex.Lock()
-					for iface, errs := range captureManager.ErrorsAll() {
-						status.Line(iface)
-						if len(errs) > 0 {
-							for errString, count := range errs {
-								status.Warnf(" [%8d] %s", count, errString)
-							}
-						} else {
-							status.Ok("no errors")
-						}
-					}
-					captureManagerMutex.Unlock()
-				default:
-					writeLn(CONTROL_REPLY_UNKNOWN_CMD)
-				}
-			}
-			if writeError != nil {
-				logger.Debug(fmt.Sprintf("Error on control socket: %s", writeError))
-				return
-			}
-			if scanner.Err() != nil {
-				logger.Debug(fmt.Sprintf("Error on control socket: %s", scanner.Err()))
-				return
-			}
-		}(conn)
-	}
-}
-
-// Returns a brief string without whitespace
-// that represents the argument CaptureState.
-func stateMessage(cs capture.CaptureState) string {
-	switch cs {
-	case capture.CAPTURE_STATE_UNINITIALIZED:
-		return "inactive"
-	case capture.CAPTURE_STATE_INITIALIZED:
-		return "inactive"
-	case capture.CAPTURE_STATE_ACTIVE:
-		return "active"
-	case capture.CAPTURE_STATE_ERROR:
-		return "inactive"
-	default:
-		return "unknown"
-	}
 }

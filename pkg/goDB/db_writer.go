@@ -21,15 +21,18 @@ import (
 )
 
 const (
-	METADATA_FILE_NAME = "meta.json"
-	QueryLogFile       = "query.log"
+	// QueryLogFile is the name of the query log written by the query package
+	QueryLogFile = "query.log"
+	// MetadataFileName specifies the location of the daily column metadata file
+	MetadataFileName = "meta.json"
 )
 
 // DayTimestamp returns timestamp rounded down to the nearest day
 func DayTimestamp(timestamp int64) int64 {
-	return (timestamp / EPOCH_DAY) * EPOCH_DAY
+	return (timestamp / EpochDay) * EpochDay
 }
 
+// DBWriter writes goProbe flows to goDB database files
 type DBWriter struct {
 	dbpath string
 	iface  string
@@ -39,15 +42,9 @@ type DBWriter struct {
 	metadata *Metadata
 }
 
+// NewDBWriter initializes a new DBWriter
 func NewDBWriter(dbpath string, iface string) (w *DBWriter) {
-	return &DBWriter{
-		dbpath,
-		iface,
-
-		0,
-
-		new(Metadata),
-	}
+	return &DBWriter{dbpath, iface, 0, new(Metadata)}
 }
 
 func (w *DBWriter) dailyDir(timestamp int64) (path string) {
@@ -62,7 +59,7 @@ func (w *DBWriter) writeMetadata(timestamp int64, meta BlockMetadata) error {
 		w.dayTimestamp = DayTimestamp(timestamp)
 	}
 
-	path := filepath.Join(w.dailyDir(timestamp), METADATA_FILE_NAME)
+	path := filepath.Join(w.dailyDir(timestamp), MetadataFileName)
 
 	if w.metadata == nil {
 		w.metadata = TryReadMetadata(path)
@@ -88,36 +85,49 @@ func (w *DBWriter) writeBlock(timestamp int64, column string, data []byte) error
 	return nil
 }
 
-func (w *DBWriter) Write(flowmap AggFlowMap, meta BlockMetadata, timestamp int64) (InterfaceSummaryUpdate, error) {
+func (w *DBWriter) createQueryLog() error {
 	var (
-		dbdata  [COLIDX_COUNT][]byte
-		update  InterfaceSummaryUpdate
-		logfile *os.File
 		err     error
+		logfile *os.File
 	)
-
-	// check if the query log exists and create it if necessary
 	qlogPath := filepath.Join(w.dbpath, QueryLogFile)
 	logfile, err = os.OpenFile(qlogPath, os.O_CREATE, 0666)
 	if err != nil {
 		err = fmt.Errorf("failed to create query log: %s", err)
-		return update, err
+		return err
 	}
 	logfile.Close()
 	err = os.Chmod(qlogPath, 0666)
 	if err != nil {
 		err = fmt.Errorf("failed to set query log permissions: %s", err)
+		return err
+	}
+	return nil
+}
+
+// Write takes an aggregated flow map and its metadata and writes it to disk for a given timestamp
+func (w *DBWriter) Write(flowmap AggFlowMap, meta BlockMetadata, timestamp int64) (InterfaceSummaryUpdate, error) {
+	var (
+		dbdata [ColIdxCount][]byte
+		update InterfaceSummaryUpdate
+		err    error
+	)
+
+	err = os.MkdirAll(w.dailyDir(timestamp), 0755)
+	if err != nil {
+		err = fmt.Errorf("Could not create daily directory: %s", err.Error())
 		return update, err
 	}
 
-	if err = os.MkdirAll(w.dailyDir(timestamp), 0755); err != nil {
-		err = fmt.Errorf("Could not create daily directory: %s", err.Error())
+	// check if the query log exists and create it if necessary
+	err = w.createQueryLog()
+	if err != nil {
 		return update, err
 	}
 
 	dbdata, update = dbData(w.iface, timestamp, flowmap)
 
-	for i := columnIndex(0); i < COLIDX_COUNT; i++ {
+	for i := columnIndex(0); i < ColIdxCount; i++ {
 		if err = w.writeBlock(timestamp, columnFileNames[i], dbdata[i]); err != nil {
 			return update, err
 		}
@@ -133,11 +143,11 @@ func (w *DBWriter) Write(flowmap AggFlowMap, meta BlockMetadata, timestamp int64
 	return update, err
 }
 
-func dbData(iface string, timestamp int64, aggFlowMap AggFlowMap) ([COLIDX_COUNT][]byte, InterfaceSummaryUpdate) {
-	var dbData [COLIDX_COUNT][]byte
+func dbData(iface string, timestamp int64, aggFlowMap AggFlowMap) ([ColIdxCount][]byte, InterfaceSummaryUpdate) {
+	var dbData [ColIdxCount][]byte
 	summUpdate := new(InterfaceSummaryUpdate)
 
-	for i := columnIndex(0); i < COLIDX_COUNT; i++ {
+	for i := columnIndex(0); i < ColIdxCount; i++ {
 		// size: initial timestamp + values + final timestamp
 		size := 8 + columnSizeofs[i]*len(aggFlowMap) + 8
 		dbData[i] = make([]byte, 0, size)
@@ -149,7 +159,7 @@ func dbData(iface string, timestamp int64, aggFlowMap AggFlowMap) ([COLIDX_COUNT
 	timestampBytes := make([]byte, 8)
 	bigendian.PutInt64(timestampBytes, timestamp)
 
-	for i := columnIndex(0); i < COLIDX_COUNT; i++ {
+	for i := columnIndex(0); i < ColIdxCount; i++ {
 		dbData[i] = append(dbData[i], timestampBytes...)
 	}
 
@@ -165,26 +175,26 @@ func dbData(iface string, timestamp int64, aggFlowMap AggFlowMap) ([COLIDX_COUNT
 
 		// counters
 		bigendian.PutUint64(counterBytes, V.NBytesRcvd)
-		dbData[BYTESRCVD_COLIDX] = append(dbData[BYTESRCVD_COLIDX], counterBytes...)
+		dbData[BytesRcvdColIdx] = append(dbData[BytesRcvdColIdx], counterBytes...)
 
 		bigendian.PutUint64(counterBytes, V.NBytesSent)
-		dbData[BYTESSENT_COLIDX] = append(dbData[BYTESSENT_COLIDX], counterBytes...)
+		dbData[BytesSentColIdx] = append(dbData[BytesSentColIdx], counterBytes...)
 
 		bigendian.PutUint64(counterBytes, V.NPktsRcvd)
-		dbData[PKTSRCVD_COLIDX] = append(dbData[PKTSRCVD_COLIDX], counterBytes...)
+		dbData[PacketsRcvdColIdx] = append(dbData[PacketsRcvdColIdx], counterBytes...)
 
 		bigendian.PutUint64(counterBytes, V.NPktsSent)
-		dbData[PKTSSENT_COLIDX] = append(dbData[PKTSSENT_COLIDX], counterBytes...)
+		dbData[PacketsSentColIdx] = append(dbData[PacketsSentColIdx], counterBytes...)
 
 		// attributes
-		dbData[DIP_COLIDX] = append(dbData[DIP_COLIDX], K.Dip[:]...)
-		dbData[SIP_COLIDX] = append(dbData[SIP_COLIDX], K.Sip[:]...)
-		dbData[DPORT_COLIDX] = append(dbData[DPORT_COLIDX], K.Dport[:]...)
-		dbData[PROTO_COLIDX] = append(dbData[PROTO_COLIDX], K.Protocol)
+		dbData[DipColIdx] = append(dbData[DipColIdx], K.Dip[:]...)
+		dbData[SipColIdx] = append(dbData[SipColIdx], K.Sip[:]...)
+		dbData[DportColIdx] = append(dbData[DportColIdx], K.Dport[:]...)
+		dbData[ProtoColIdx] = append(dbData[ProtoColIdx], K.Protocol)
 	}
 
 	// push postamble to the arrays
-	for i := columnIndex(0); i < COLIDX_COUNT; i++ {
+	for i := columnIndex(0); i < ColIdxCount; i++ {
 		dbData[i] = append(dbData[i], timestampBytes...)
 	}
 

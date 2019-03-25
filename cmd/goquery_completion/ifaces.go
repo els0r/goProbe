@@ -21,7 +21,7 @@ import (
 // tries to find the db path based on args
 // If no db path has been specified, returns the default DB path.
 func dbPath(args []string) string {
-	result := DEFAULT_DB_PATH
+	result := defaultDBPath
 	minusd := false
 	for _, arg := range args {
 		switch {
@@ -71,7 +71,7 @@ func ifaces(args []string) []string {
 			}
 		}
 
-		for iface, _ := range summ.Interfaces {
+		for iface := range summ.Interfaces {
 			if _, used := used[iface]; !used && strings.HasPrefix(iface, last(ifaces)) {
 				if info, isTunnel := tunnels[iface]; isTunnel {
 					suggs = append(suggs, suggestion{iface, fmt.Sprintf("%s (%s: %s)   ", iface, info.PhysicalIface, info.Peer), true})

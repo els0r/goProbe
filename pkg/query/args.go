@@ -167,13 +167,13 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 	}
 	switch a.SortBy {
 	case "bytes":
-		s.SortBy = SORT_TRAFFIC
+		s.SortBy = SortTraffic
 	case "time":
-		s.SortBy = SORT_TIME
+		s.SortBy = SortTime
 	case "packets":
 		fallthrough
 	default:
-		s.SortBy = SORT_PACKETS
+		s.SortBy = SortPackets
 	}
 
 	var queryAttributes []goDB.Attribute
@@ -196,7 +196,7 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 
 	// override sorting direction and number of entries for time based queries
 	if s.HasAttrTime {
-		s.SortBy = SORT_TIME
+		s.SortBy = SortTime
 		s.SortAscending = true
 		s.NumResults = 9999999999999999
 	}
@@ -225,13 +225,13 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 
 	switch {
 	case a.Sum:
-		s.Direction = DIRECTION_SUM
+		s.Direction = DirectionSum
 	case a.In && !a.Out:
-		s.Direction = DIRECTION_IN
+		s.Direction = DirectionIn
 	case !a.In && a.Out:
-		s.Direction = DIRECTION_OUT
+		s.Direction = DirectionOut
 	default:
-		s.Direction = DIRECTION_BOTH
+		s.Direction = DirectionBoth
 	}
 
 	// check resolve timeout and DNS

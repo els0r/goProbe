@@ -25,72 +25,88 @@ import (
 )
 
 const (
-	CAPTURE_SNAPLEN         = 86
-	CAPTURE_ERROR_THRESHOLD = 10000
-	// Our experiments show that you don't want to set this value lower
+	// Snaplen sets the amount of bytes captured from a packet
+	Snaplen = 86
+
+	// ErrorThreshold is the maximum amount of consecutive errors that can occur on an interface before capturing is halted.
+	ErrorThreshold = 10000
+
+	// CaptureTimeout sets the maximum duration pcap waits until polling the kernel for more packets. Our experiments show that you don't want to set this value lower
 	// than roughly 100 ms. Otherwise we flood the kernel with syscalls
 	// and our performance drops.
-	CAPTURE_TIMEOUT time.Duration = 500 * time.Millisecond
+	CaptureTimeout time.Duration = 500 * time.Millisecond
 
-	MIN_PCAP_BUF_SIZE = 1024               // require at least one KiB
-	MAX_PCAP_BUF_SIZE = 1024 * 1024 * 1024 // 1 GiB should be enough for anyone ;)
+	// MinPcapBufSize sets the minimum buffer size for capture on an interface
+	MinPcapBufSize = 1024 // require at least one KiB
+	// MaxPcapBufSize sets the maximum buffer size for capture on an interface.
+	MaxPcapBufSize = 1024 * 1024 * 1024 // 1 GiB should be enough for anyone ;)
 )
 
 //////////////////////// Ancillary types ////////////////////////
 
-type CaptureConfig struct {
+// Config stores the parameters for capturing packets with libpcap
+type Config struct {
 	BufSize   int    `json:"buf_size"` // in bytes
 	BPFFilter string `json:"bpf_filter"`
 	Promisc   bool   `json:"promisc"`
 }
 
-// Validate (partially) checks that the given CaptureConfig contains no bogus settings.
+// Validate (partially) checks that the given Config contains no bogus settings.
 //
 // Note that the BPFFilter field isn't checked.
-func (cc CaptureConfig) Validate() error {
-	if !(MIN_PCAP_BUF_SIZE <= cc.BufSize && cc.BufSize <= MAX_PCAP_BUF_SIZE) {
-		return fmt.Errorf("Invalid configuration entry BufSize. Value must be in range [%d, %d].", MIN_PCAP_BUF_SIZE, MAX_PCAP_BUF_SIZE)
+func (cc Config) Validate() error {
+	if !(MinPcapBufSize <= cc.BufSize && cc.BufSize <= MaxPcapBufSize) {
+		return fmt.Errorf("invalid configuration entry BufSize. Value must be in range [%d, %d]", MinPcapBufSize, MaxPcapBufSize)
 	}
 	return nil
 }
 
-type CaptureState byte
+// State enumerates the activity states of a capture
+type State byte
 
 const (
-	CAPTURE_STATE_UNINITIALIZED CaptureState = iota + 1
-	CAPTURE_STATE_INITIALIZED
-	CAPTURE_STATE_ACTIVE
-	CAPTURE_STATE_ERROR
+	// StateUninitialized describes a capture that hasn't been set up (yet)
+	StateUninitialized State = iota + 1
+	// StateInitialized describes a capture that has been set up
+	StateInitialized
+	// StateActive means that the capture is actively capturing packets
+	StateActive
+	// StateError means that the capture has hit the error threshold on the interface (set by ErrorThreshold)
+	StateError
 )
 
-func (cs CaptureState) String() string {
+func (cs State) String() string {
 	switch cs {
-	case CAPTURE_STATE_UNINITIALIZED:
-		return "CAPTURE_STATE_UNINITIALIZED"
-	case CAPTURE_STATE_INITIALIZED:
-		return "CAPTURE_STATE_INITIALIZED"
-	case CAPTURE_STATE_ACTIVE:
-		return "CAPTURE_STATE_ACTIVE"
-	case CAPTURE_STATE_ERROR:
-		return "CAPTURE_STATE_ERROR"
+	case StateUninitialized:
+		return "StateUninitialized"
+	case StateInitialized:
+		return "StateInitialized"
+	case StateActive:
+		return "StateActive"
+	case StateError:
+		return "StateError"
 	default:
 		return "Unknown"
 	}
 }
 
-type CaptureStats struct {
-	Pcap          *pcap.Stats
-	PacketsLogged int
+// Stats stores the packet and pcap statistics of the capture
+type Stats struct {
+	Pcap          *pcap.Stats `json:"pcap"`
+	PacketsLogged int         `json:"packets_logged"`
 }
 
-type CaptureStatus struct {
-	State CaptureState
-	Stats CaptureStats
+// Status stores both the capture's state and statistics
+type Status struct {
+	State State `json:"state"`
+	Stats Stats `json:"stats"`
 }
 
-type errorMap map[string]int
+// ErrorMap stores all encountered pcap errors and their number of occurrence
+type ErrorMap map[string]int
 
-func (e errorMap) String() string {
+// String prints the errors that occurred during capturing
+func (e ErrorMap) String() string {
 	var str string
 	for err, count := range e {
 		str += fmt.Sprintf(" %s(%d);", err, count)
@@ -113,20 +129,24 @@ type captureCommand interface {
 }
 
 type captureCommandStatus struct {
-	returnChan chan<- CaptureStatus
+	returnChan chan<- Status
 }
 
 type captureCommandErrors struct {
-	returnChan chan<- errorMap
+	returnChan chan<- ErrorMap
+}
+
+type captureCommandFlows struct {
+	returnChan chan<- *FlowLog
 }
 
 func (cmd captureCommandStatus) execute(c *Capture) {
-	var result CaptureStatus
+	var result Status
 
 	result.State = c.state
 
 	pcapStats := c.tryGetPcapStats()
-	result.Stats = CaptureStats{
+	result.Stats = Stats{
 		Pcap:          subPcapStats(pcapStats, c.lastRotationStats.Pcap),
 		PacketsLogged: c.packetsLogged - c.lastRotationStats.PacketsLogged,
 	}
@@ -138,13 +158,17 @@ func (cmd captureCommandErrors) execute(c *Capture) {
 	cmd.returnChan <- c.errMap
 }
 
+func (cmd captureCommandFlows) execute(c *Capture) {
+	cmd.returnChan <- c.flowLog
+}
+
 type captureCommandUpdate struct {
-	config     CaptureConfig
+	config     Config
 	returnChan chan<- struct{}
 }
 
 func (cmd captureCommandUpdate) execute(c *Capture) {
-	if c.state == CAPTURE_STATE_ACTIVE {
+	if c.state == StateActive {
 		if c.needReinitialization(cmd.config) {
 			c.deactivate()
 		} else {
@@ -153,19 +177,19 @@ func (cmd captureCommandUpdate) execute(c *Capture) {
 		}
 	}
 
-	// Can no longer be in CAPTURE_STATE_ACTIVE at this point
+	// Can no longer be in StateActive at this point
 	// Now try to make Capture initialized with new config.
 	switch c.state {
-	case CAPTURE_STATE_UNINITIALIZED:
+	case StateUninitialized:
 		c.config = cmd.config
 		c.initialize()
-	case CAPTURE_STATE_INITIALIZED:
+	case StateInitialized:
 		if c.needReinitialization(cmd.config) {
 			c.uninitialize()
 			c.config = cmd.config
 			c.initialize()
 		}
-	case CAPTURE_STATE_ERROR:
+	case StateError:
 		c.recoverError()
 		c.config = cmd.config
 		c.initialize()
@@ -174,7 +198,7 @@ func (cmd captureCommandUpdate) execute(c *Capture) {
 	c.logger.Debugf("Interface '%s': (re)initialized for configuration update", c.iface)
 
 	// If initialization in last step succeeded, activate
-	if c.state == CAPTURE_STATE_INITIALIZED {
+	if c.state == StateInitialized {
 		c.activate()
 	}
 
@@ -185,7 +209,7 @@ func (cmd captureCommandUpdate) execute(c *Capture) {
 // of Rotate
 type rotateResult struct {
 	agg   goDB.AggFlowMap
-	stats CaptureStats
+	stats Stats
 }
 
 type captureCommandRotate struct {
@@ -199,12 +223,12 @@ func (cmd captureCommandRotate) execute(c *Capture) {
 
 	pcapStats := c.tryGetPcapStats()
 
-	result.stats = CaptureStats{
+	result.stats = Stats{
 		Pcap:          subPcapStats(pcapStats, c.lastRotationStats.Pcap),
 		PacketsLogged: c.packetsLogged - c.lastRotationStats.PacketsLogged,
 	}
 
-	c.lastRotationStats = CaptureStats{
+	c.lastRotationStats = Stats{
 		Pcap:          pcapStats,
 		PacketsLogged: c.packetsLogged,
 	}
@@ -230,13 +254,13 @@ type captureCommandDisable struct {
 
 func (cmd captureCommandDisable) execute(c *Capture) {
 	switch c.state {
-	case CAPTURE_STATE_UNINITIALIZED:
-	case CAPTURE_STATE_INITIALIZED:
+	case StateUninitialized:
+	case StateInitialized:
 		c.uninitialize()
-	case CAPTURE_STATE_ACTIVE:
+	case StateActive:
 		c.deactivate()
 		c.uninitialize()
-	case CAPTURE_STATE_ERROR:
+	case StateError:
 		c.recoverError()
 	}
 
@@ -252,7 +276,7 @@ func (cmd captureCommandDisable) execute(c *Capture) {
 // there can only be on call to Activate and SetBPFFilter at any given
 // moment.
 
-// This mutex linearizes all pcap.InactiveHandle.Activate and
+// PcapMutex linearizes all pcap.InactiveHandle.Activate and
 // pcap.Handle.SetBPFFilter calls. Don't touch it unless you know what you're
 // doing.
 var PcapMutex sync.Mutex
@@ -317,16 +341,16 @@ type Capture struct {
 	// has Close been called on the Capture?
 	closed bool
 
-	state CaptureState
+	state State
 
-	config CaptureConfig
+	config Config
 
 	// channel over which commands are passed to process()
 	// close(cmdChan) is used to tell process() to stop
 	cmdChan chan captureCommand
 
 	// stats from the last rotation or reset (needed for Status)
-	lastRotationStats CaptureStats
+	lastRotationStats Stats
 
 	// Counts the total number of logged packets (since the creation of the
 	// Capture)
@@ -340,22 +364,22 @@ type Capture struct {
 	packetSource *gopacket.PacketSource
 
 	// error map for logging errors more properly
-	errMap errorMap
+	errMap ErrorMap
 
 	// logging
 	logger log.Logger
 }
 
 // NewCapture creates a new Capture associated with the given iface.
-func NewCapture(iface string, config CaptureConfig, logger log.Logger) *Capture {
+func NewCapture(iface string, config Config, logger log.Logger) *Capture {
 	c := &Capture{
 		iface,
 		sync.Mutex{},
 		false, // closed
-		CAPTURE_STATE_UNINITIALIZED,
+		StateUninitialized,
 		config,
 		make(chan captureCommand, 1),
-		CaptureStats{
+		Stats{
 			Pcap:          &pcap.Stats{},
 			PacketsLogged: 0,
 		},
@@ -372,7 +396,7 @@ func NewCapture(iface string, config CaptureConfig, logger log.Logger) *Capture 
 
 // setState provides write access to the state field of
 // a Capture. It also logs the state change.
-func (c *Capture) setState(s CaptureState) {
+func (c *Capture) setState(s State) {
 	c.state = s
 	c.logger.Debugf("Interface '%s': entered capture state %s", c.iface, s)
 }
@@ -380,7 +404,7 @@ func (c *Capture) setState(s CaptureState) {
 // process is the heart of the Capture. It listens for network traffic on the
 // network interface and logs the corresponding flows.
 //
-// As long as the Capture is in CAPTURE_STATE_ACTIVE process() is capturing
+// As long as the Capture is in StateActive process() is capturing
 // packets from the network. In any other state, process() only awaits
 // further commands.
 //
@@ -401,11 +425,10 @@ func (c *Capture) process() {
 
 		packet, err := c.packetSource.NextPacket()
 		if err != nil {
-			if err == pcap.NextErrorTimeoutExpired { // CAPTURE_TIMEOUT expired
+			if err == pcap.NextErrorTimeoutExpired { // CaptureTimeout expired
 				return nil
-			} else {
-				return fmt.Errorf("Capture error: %s", err)
 			}
+			return fmt.Errorf("Capture error: %s", err)
 		}
 
 		if err := gppacket.Populate(packet); err == nil {
@@ -419,7 +442,7 @@ func (c *Capture) process() {
 			// of the error would be taken, which results in a non-minimal set of errors
 			if _, exists := c.errMap[err.Error()]; !exists {
 				// log the packet to the pcap error logs
-				if logerr := PacketLog.Log(c.iface, packet, CAPTURE_SNAPLEN); logerr != nil {
+				if logerr := PacketLog.Log(c.iface, packet, Snaplen); logerr != nil {
 					c.logger.Info("failed to log faulty packet: " + logerr.Error())
 				}
 			}
@@ -428,9 +451,9 @@ func (c *Capture) process() {
 
 			// shut down the interface thread if too many consecutive decoding failures
 			// have been encountered
-			if errcount > CAPTURE_ERROR_THRESHOLD {
+			if errcount > ErrorThreshold {
 				return fmt.Errorf("The last %d packets could not be decoded: [%s ]",
-					CAPTURE_ERROR_THRESHOLD,
+					ErrorThreshold,
 					c.errMap.String(),
 				)
 			}
@@ -440,9 +463,9 @@ func (c *Capture) process() {
 	}
 
 	for {
-		if c.state == CAPTURE_STATE_ACTIVE {
+		if c.state == StateActive {
 			if err := capturePacket(); err != nil {
-				c.setState(CAPTURE_STATE_ERROR)
+				c.setState(StateError)
 				c.logger.Errorf("Interface '%s': %s", c.iface, err.Error())
 			}
 
@@ -469,18 +492,18 @@ func (c *Capture) process() {
 
 //////////////////////// state transisition functions ////////////////////////
 
-// initialize attempts to transition from CAPTURE_STATE_UNINITIALIZED
-// into CAPTURE_STATE_INITIALIZED. If an error occurrs, it instead
-// transitions into state CAPTURE_STATE_ERROR.
+// initialize attempts to transition from StateUninitialized
+// into StateInitialized. If an error occurrs, it instead
+// transitions into state StateError.
 func (c *Capture) initialize() {
 	initializationErr := func(msg string, args ...interface{}) {
 		c.logger.Errorf(msg, args...)
-		c.setState(CAPTURE_STATE_ERROR)
+		c.setState(StateError)
 		return
 	}
 
-	if c.state != CAPTURE_STATE_UNINITIALIZED {
-		panic("Need state CAPTURE_STATE_UNINITIALIZED")
+	if c.state != StateUninitialized {
+		panic("Need state StateUninitialized")
 	}
 
 	var err error
@@ -526,42 +549,42 @@ func (c *Capture) initialize() {
 	// structure afterwards.
 	c.packetSource.DecodeOptions = gopacket.DecodeOptions{Lazy: true, NoCopy: true}
 
-	c.setState(CAPTURE_STATE_INITIALIZED)
+	c.setState(StateInitialized)
 }
 
-// uninitialize moves from CAPTURE_STATE_INITIALIZED to CAPTURE_STATE_UNINITIALIZED.
+// uninitialize moves from StateInitialized to StateUninitialized.
 func (c *Capture) uninitialize() {
-	if c.state != CAPTURE_STATE_INITIALIZED {
-		panic("Need state CAPTURE_STATE_INITIALIZED")
+	if c.state != StateInitialized {
+		panic("Need state StateInitialized")
 	}
 	c.reset()
 }
 
-// activate transitions from CAPTURE_STATE_INITIALIZED
-// into CAPTURE_STATE_ACTIVE.
+// activate transitions from StateInitialized
+// into StateActive.
 func (c *Capture) activate() {
-	if c.state != CAPTURE_STATE_INITIALIZED {
-		panic("Need state CAPTURE_STATE_INITIALIZED")
+	if c.state != StateInitialized {
+		panic("Need state StateInitialized")
 	}
-	c.setState(CAPTURE_STATE_ACTIVE)
+	c.setState(StateActive)
 	c.logger.Debugf("Interface '%s': capture active. Link type: %s", c.iface, c.pcapHandle.LinkType())
 }
 
-// deactivate transitions from CAPTURE_STATE_ACTIVE
-// into CAPTURE_STATE_INITIALIZED.
+// deactivate transitions from StateActive
+// into StateInitialized.
 func (c *Capture) deactivate() {
-	if c.state != CAPTURE_STATE_ACTIVE {
-		panic("Need state CAPTURE_STATE_ACTIVE")
+	if c.state != StateActive {
+		panic("Need state StateActive")
 	}
-	c.setState(CAPTURE_STATE_INITIALIZED)
+	c.setState(StateInitialized)
 	c.logger.Debugf("Interface '%s': deactivated", c.iface)
 }
 
-// recoverError transitions from CAPTURE_STATE_ERROR
-// into CAPTURE_STATE_UNINITIALIZED
+// recoverError transitions from StateError
+// into StateUninitialized
 func (c *Capture) recoverError() {
-	if c.state != CAPTURE_STATE_ERROR {
-		panic("Need state CAPTURE_STATE_ERROR")
+	if c.state != StateError {
+		panic("Need state StateError")
 	}
 	c.reset()
 }
@@ -582,7 +605,7 @@ func (c *Capture) reset() {
 	c.lastRotationStats.Pcap = &pcap.Stats{}
 	c.pcapHandle = nil
 	c.packetSource = nil
-	c.setState(CAPTURE_STATE_UNINITIALIZED)
+	c.setState(StateUninitialized)
 
 	// reset the error map. The GC will take care of the previous
 	// one
@@ -591,7 +614,7 @@ func (c *Capture) reset() {
 
 // needReinitialization checks whether we need to reinitialize the capture
 // to apply the given config.
-func (c *Capture) needReinitialization(config CaptureConfig) bool {
+func (c *Capture) needReinitialization(config Config) bool {
 	return c.config != config
 }
 
@@ -614,12 +637,11 @@ func (c *Capture) tryGetPcapStats() *pcap.Stats {
 func subPcapStats(a, b *pcap.Stats) *pcap.Stats {
 	if a == nil || b == nil {
 		return nil
-	} else {
-		return &pcap.Stats{
-			PacketsReceived:  a.PacketsReceived - b.PacketsReceived,
-			PacketsDropped:   a.PacketsDropped - b.PacketsDropped,
-			PacketsIfDropped: a.PacketsIfDropped - b.PacketsIfDropped,
-		}
+	}
+	return &pcap.Stats{
+		PacketsReceived:  a.PacketsReceived - b.PacketsReceived,
+		PacketsDropped:   a.PacketsDropped - b.PacketsDropped,
+		PacketsIfDropped: a.PacketsIfDropped - b.PacketsIfDropped,
 	}
 }
 
@@ -639,7 +661,7 @@ func setupInactiveHandle(iface string, bufSize int, promisc bool) (*pcap.Inactiv
 	}
 
 	// set snaplength
-	if err := inactive.SetSnapLen(int(CAPTURE_SNAPLEN)); err != nil {
+	if err := inactive.SetSnapLen(int(Snaplen)); err != nil {
 		inactive.CleanUp()
 		return nil, err
 	}
@@ -651,7 +673,7 @@ func setupInactiveHandle(iface string, bufSize int, promisc bool) (*pcap.Inactiv
 	}
 
 	// set timeout
-	if err := inactive.SetTimeout(CAPTURE_TIMEOUT); err != nil {
+	if err := inactive.SetTimeout(CaptureTimeout); err != nil {
 		inactive.CleanUp()
 		return nil, err
 	}
@@ -662,7 +684,7 @@ func setupInactiveHandle(iface string, bufSize int, promisc bool) (*pcap.Inactiv
 
 //////////////////////// public functions ////////////////////////
 
-// Status returns the current CaptureState as well as the statistics
+// Status returns the current State as well as the statistics
 // collected since the last call to Rotate()
 //
 // Note: If the Capture was reinitialized since the last rotation,
@@ -670,7 +692,7 @@ func setupInactiveHandle(iface string, bufSize int, promisc bool) (*pcap.Inactiv
 //
 // Note: result.Stats.Pcap may be null if there was an error fetching the
 // stats of the underlying pcap handle.
-func (c *Capture) Status() (result CaptureStatus) {
+func (c *Capture) Status() (result Status) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
@@ -678,13 +700,13 @@ func (c *Capture) Status() (result CaptureStatus) {
 		panic("Capture is closed")
 	}
 
-	ch := make(chan CaptureStatus, 1)
+	ch := make(chan Status, 1)
 	c.cmdChan <- captureCommandStatus{ch}
 	return <-ch
 }
 
-// Error map status call
-func (c *Capture) Errors() (result errorMap) {
+// Errors implements the status call to return all interface errors
+func (c *Capture) Errors() (result ErrorMap) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
@@ -692,16 +714,30 @@ func (c *Capture) Errors() (result errorMap) {
 		panic("Capture is closed")
 	}
 
-	ch := make(chan errorMap, 1)
+	ch := make(chan ErrorMap, 1)
 	c.cmdChan <- captureCommandErrors{ch}
 	return <-ch
 }
 
+// Flows impolements the status call to return the contents of the active flow log
+func (c *Capture) Flows() (result *FlowLog) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	if c.closed {
+		panic("Capture is closed")
+	}
+
+	ch := make(chan *FlowLog, 1)
+	c.cmdChan <- captureCommandFlows{ch}
+	return <-ch
+}
+
 // Update will attempt to put the Capture instance into
-// CAPTURE_STATE_ACTIVE with the given config.
+// StateActive with the given config.
 // If the Capture is already active with the given config
 // Update will detect this and do no work.
-func (c *Capture) Update(config CaptureConfig) {
+func (c *Capture) Update(config Config) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
@@ -715,9 +751,9 @@ func (c *Capture) Update(config CaptureConfig) {
 }
 
 // Enable will attempt to put the Capture instance into
-// CAPTURE_STATE_ACTIVE.
+// StateActive.
 // Enable will have no effect if the Capture is already
-// in CAPTURE_STATE_ACTIVE.
+// in StateActive.
 func (c *Capture) Enable() {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
@@ -731,9 +767,9 @@ func (c *Capture) Enable() {
 	<-ch
 }
 
-// Disable will bring the Capture instance into CAPTURE_STATE_UNINITIALIZED
+// Disable will bring the Capture instance into StateUninitialized
 // Disable will have no effect if the Capture is already
-// in CAPTURE_STATE_UNINITIALIZED.
+// in StateUninitialized.
 func (c *Capture) Disable() {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
@@ -754,7 +790,7 @@ func (c *Capture) Disable() {
 //
 // Note: stats.Pcap may be null if there was an error fetching the
 // stats of the underlying pcap handle.
-func (c *Capture) Rotate() (agg goDB.AggFlowMap, stats CaptureStats) {
+func (c *Capture) Rotate() (agg goDB.AggFlowMap, stats Stats) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 

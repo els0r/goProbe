@@ -75,7 +75,7 @@ func callReadInt64AtRef(b []byte, idx int) (result int64, panicked bool) {
 	return
 }
 
-var tests [][]byte = [][]byte{
+var tests = [][]byte{
 	{},
 	{1},
 	{1, 2},

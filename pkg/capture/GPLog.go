@@ -23,19 +23,23 @@ import (
 	"github.com/fako1024/gopacket/pcapgo"
 )
 
+// PacketLogWriter provides methods to write packets to file for a given interface
 type PacketLogWriter struct {
 	sync.Mutex
 	path    string
 	writers map[string]*PcapWriter
 }
 
+// PcapWriter wraps a pcapgo.Writer
 type PcapWriter struct {
 	file       *os.File
 	pcapWriter *pcapgo.Writer
 }
 
+// PacketLog makes the pcap writer globally accessible
 var PacketLog *PacketLogWriter
 
+// InitPacketLog initializes the packet log
 func InitPacketLog(dbpath string, ifaces []string) {
 
 	PacketLog = &PacketLogWriter{writers: make(map[string]*PcapWriter)}
@@ -49,6 +53,7 @@ func InitPacketLog(dbpath string, ifaces []string) {
 	}
 }
 
+// Close closes the writer's underlying pcap file
 func (p *PacketLogWriter) Close() {
 	for _, w := range p.writers {
 		if w != nil {
@@ -59,6 +64,7 @@ func (p *PacketLogWriter) Close() {
 	}
 }
 
+// Log logs a packet to a pcap file for a given interface
 func (p *PacketLogWriter) Log(iface string, packet gopacket.Packet, snapshotLen int) error {
 	p.Lock()
 	defer p.Unlock()

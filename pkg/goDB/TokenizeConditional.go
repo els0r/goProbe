@@ -136,11 +136,10 @@ func delimiterSplitFunc(data []byte, atEOF bool) (advance int, token []byte, err
 			advance = 2
 			token = data[0:2]
 			return
-		} else {
-			advance = 1
-			token = data[0:1]
-			return
 		}
+		advance = 1
+		token = data[0:1]
+		return
 	}
 }
 
@@ -155,9 +154,8 @@ func wordSplitFunc(data []byte, atEOF bool) (advance int, token []byte, err erro
 		if startsDelimiter(data[i]) {
 			token = data[:advance]
 			return
-		} else {
-			advance++
 		}
+		advance++
 	}
 	if atEOF {
 		token = data[:advance]
@@ -181,9 +179,8 @@ func conditionalSplitFunc(data []byte, atEOF bool) (advance int, token []byte, e
 	// by looking at the first character.
 	if startsDelimiter(data[0]) {
 		return delimiterSplitFunc(data, atEOF)
-	} else {
-		return wordSplitFunc(data, atEOF)
 	}
+	return wordSplitFunc(data, atEOF)
 }
 
 // TokenizeConditional tokenizes the given conditional. Note that the tokenization is "loose":

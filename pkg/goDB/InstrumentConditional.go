@@ -58,12 +58,12 @@ func generateCompareValue(condition *conditionNode) error {
 		switch condition.comparator {
 		case "=":
 			condition.compareValue = func(currentValue *ExtraKey) bool {
-				return bytes.Compare(currentValue.Sip[:], value[:SIP_SIZEOF]) == 0
+				return bytes.Compare(currentValue.Sip[:], value[:SipSizeof]) == 0
 			}
 			return nil
 		case "!=":
 			condition.compareValue = func(currentValue *ExtraKey) bool {
-				return bytes.Compare(currentValue.Sip[:], value[:SIP_SIZEOF]) != 0
+				return bytes.Compare(currentValue.Sip[:], value[:SipSizeof]) != 0
 			}
 			return nil
 		default:
@@ -73,12 +73,12 @@ func generateCompareValue(condition *conditionNode) error {
 		switch condition.comparator {
 		case "=":
 			condition.compareValue = func(currentValue *ExtraKey) bool {
-				return bytes.Compare(currentValue.Dip[:], value[:DIP_SIZEOF]) == 0
+				return bytes.Compare(currentValue.Dip[:], value[:DipSizeof]) == 0
 			}
 			return nil
 		case "!=":
 			condition.compareValue = func(currentValue *ExtraKey) bool {
-				return bytes.Compare(currentValue.Dip[:], value[:DIP_SIZEOF]) != 0
+				return bytes.Compare(currentValue.Dip[:], value[:DipSizeof]) != 0
 			}
 			return nil
 		default:
@@ -88,7 +88,7 @@ func generateCompareValue(condition *conditionNode) error {
 		// in case of matching networks, only the relevant bytes (e.g. those
 		// at which the netmask is non-zero) have to be checked. This form of
 		// lazy checking can be applied to both IPv4 and IPv6 networks
-		var len_bytes int
+		var lenBytes int
 		index := int(netmask / 8)
 		toShift := uint8(8 - netmask%8) // number of zeros in netmask
 
@@ -96,7 +96,7 @@ func generateCompareValue(condition *conditionNode) error {
 		if toShift != 8 {
 			// calculate relevant portion of netmask
 			netmaskByte := uint8(0xff) << toShift
-			len_bytes = index + 1
+			lenBytes = index + 1
 
 			// handle comparator operator. For IP based checks only EQUALS TO and
 			// NOT EQUALS TO makes sense
@@ -108,7 +108,7 @@ func generateCompareValue(condition *conditionNode) error {
 					// the network address
 					ip[index] = ip[index] & netmaskByte
 
-					return bytes.Compare(ip[:len_bytes], value[:len_bytes]) == 0
+					return bytes.Compare(ip[:lenBytes], value[:lenBytes]) == 0
 				}
 				return nil
 			case "!=":
@@ -118,7 +118,7 @@ func generateCompareValue(condition *conditionNode) error {
 					// the network address
 					ip[index] = ip[index] & netmaskByte
 
-					return !(bytes.Compare(ip[:len_bytes], value[:len_bytes]) == 0)
+					return !(bytes.Compare(ip[:lenBytes], value[:lenBytes]) == 0)
 				}
 				return nil
 			default:
@@ -146,7 +146,7 @@ func generateCompareValue(condition *conditionNode) error {
 		// in case of matching networks, only the relevant bytes (e.g. those
 		// at which the netmask is non-zero) have to be checked. This form of
 		// lazy checking can be applied to both IPv4 and IPv6 networks
-		var len_bytes int
+		var lenBytes int
 		index := int(netmask / 8)
 		toShift := uint8(8 - netmask%8) // number of zeros in netmask
 
@@ -154,7 +154,7 @@ func generateCompareValue(condition *conditionNode) error {
 		if toShift != 8 {
 			// calculate relevant portion of netmask
 			netmaskByte := uint8(0xff) << toShift
-			len_bytes = index + 1
+			lenBytes = index + 1
 
 			// handle comparator operator. For IP based checks only EQUALS TO and
 			// NOT EQUALS TO makes sense
@@ -166,7 +166,7 @@ func generateCompareValue(condition *conditionNode) error {
 					// the network address
 					ip[index] = ip[index] & netmaskByte
 
-					return bytes.Compare(ip[:len_bytes], value[:len_bytes]) == 0
+					return bytes.Compare(ip[:lenBytes], value[:lenBytes]) == 0
 				}
 				return nil
 			case "!=":
@@ -176,7 +176,7 @@ func generateCompareValue(condition *conditionNode) error {
 					// the network address
 					ip[index] = ip[index] & netmaskByte
 
-					return !(bytes.Compare(ip[:len_bytes], value[:len_bytes]) == 0)
+					return !(bytes.Compare(ip[:lenBytes], value[:lenBytes]) == 0)
 				}
 				return nil
 			default:
@@ -204,32 +204,32 @@ func generateCompareValue(condition *conditionNode) error {
 		switch condition.comparator {
 		case "=":
 			condition.compareValue = func(currentValue *ExtraKey) bool {
-				return bytes.Compare(currentValue.Dport[:], value[:DPORT_SIZEOF]) == 0
+				return bytes.Compare(currentValue.Dport[:], value[:DportSizeof]) == 0
 			}
 			return nil
 		case "!=":
 			condition.compareValue = func(currentValue *ExtraKey) bool {
-				return bytes.Compare(currentValue.Dport[:], value[:DPORT_SIZEOF]) != 0
+				return bytes.Compare(currentValue.Dport[:], value[:DportSizeof]) != 0
 			}
 			return nil
 		case "<":
 			condition.compareValue = func(currentValue *ExtraKey) bool {
-				return bytes.Compare(currentValue.Dport[:], value[:DPORT_SIZEOF]) < 0
+				return bytes.Compare(currentValue.Dport[:], value[:DportSizeof]) < 0
 			}
 			return nil
 		case ">":
 			condition.compareValue = func(currentValue *ExtraKey) bool {
-				return bytes.Compare(currentValue.Dport[:], value[:DPORT_SIZEOF]) > 0
+				return bytes.Compare(currentValue.Dport[:], value[:DportSizeof]) > 0
 			}
 			return nil
 		case "<=":
 			condition.compareValue = func(currentValue *ExtraKey) bool {
-				return bytes.Compare(currentValue.Dport[:], value[:DPORT_SIZEOF]) <= 0
+				return bytes.Compare(currentValue.Dport[:], value[:DportSizeof]) <= 0
 			}
 			return nil
 		case ">=":
 			condition.compareValue = func(currentValue *ExtraKey) bool {
-				return bytes.Compare(currentValue.Dport[:], value[:DPORT_SIZEOF]) >= 0
+				return bytes.Compare(currentValue.Dport[:], value[:DportSizeof]) >= 0
 			}
 			return nil
 		default:
@@ -295,7 +295,7 @@ func conditionBytesAndNetmask(condition conditionNode) ([]byte, int, error) {
 		err       error
 		num       uint64
 		isIn      bool
-		netmask   int64 = 0
+		netmask   int64
 		condBytes []byte
 	)
 
@@ -306,17 +306,17 @@ func conditionBytesAndNetmask(condition conditionNode) ([]byte, int, error) {
 		switch attribute {
 		case "dip", "sip":
 			if condBytes, err = IPStringToBytes(value); err != nil {
-				return nil, 0, errors.New("Could not parse IP address: " + value)
+				return nil, 0, errors.New("could not parse IP address: " + value)
 			}
 		case "dnet", "snet":
 			cidr := strings.Split(value, "/")
 			if len(cidr) < 2 {
-				return nil, 0, errors.New("Could not get netmask. Use CIDR notation. Example: 192.168.1.17/25")
+				return nil, 0, errors.New("could not get netmask. Use CIDR notation. Example: 192.168.1.17/25")
 			}
 
 			// parse netmask and run sanity checks
 			if netmask, err = strconv.ParseInt(cidr[1], 10, 32); err != nil {
-				return nil, 0, errors.New("Failed to parse netmask " + cidr[1] + ". Use CIDR notation. Example: 192.168.1.17/25 ")
+				return nil, 0, errors.New("failed to parse netmask " + cidr[1] + ". Use CIDR notation. Example: 192.168.1.17/25")
 			}
 
 			// check if the netmask is within allowed bounds
@@ -324,11 +324,11 @@ func conditionBytesAndNetmask(condition conditionNode) ([]byte, int, error) {
 
 			if isIPv6Address {
 				if netmask > 128 {
-					return nil, 0, errors.New("Incorrect netmask. Maximum possible value is 128 for IPv6 networks.")
+					return nil, 0, errors.New("incorrect netmask. Maximum possible value is 128 for IPv6 networks")
 				}
 			} else {
 				if netmask > 32 {
-					return nil, 0, errors.New("Incorrect netmask. Maximum possible value is 32 for IPv4 networks.")
+					return nil, 0, errors.New("incorrect netmask. Maximum possible value is 32 for IPv4 networks")
 				}
 			}
 
@@ -369,16 +369,16 @@ func conditionBytesAndNetmask(condition conditionNode) ([]byte, int, error) {
 	return condBytes, int(netmask), nil
 }
 
-// Condition conversion utility functions ------------------------------------------------
+// IPStringToBytes creates a goDB compatible bytes slice from an IP address string
 func IPStringToBytes(ip string) ([]byte, error) {
-	var is_ipv4 bool = strings.Contains(ip, ".")
+	var isIPv4 = strings.Contains(ip, ".")
 
 	ipaddr := net.ParseIP(ip)
 	if len(ipaddr) == 0 {
 		return nil, errors.New("IP parse: incorrect format")
 	}
 
-	if is_ipv4 {
+	if isIPv4 {
 		ipaddr[0], ipaddr[1], ipaddr[2], ipaddr[3] = ipaddr[12], ipaddr[13], ipaddr[14], ipaddr[15]
 		ipaddr[12], ipaddr[13], ipaddr[14], ipaddr[15] = 0, 0, 0, 0
 		ipaddr[10], ipaddr[11] = 0, 0 // Zero out v4InV6Prefix set by net.ParseIP

@@ -9,13 +9,13 @@ import (
 )
 
 const (
-	BUF_SIZE = 4096         // 512 * 64bit
-	N_ELEM   = BUF_SIZE / 8 // 512
-
-	LZ4_COMPRESSION_LEVEL = 512
+	// BufSize allocates space for the header (512 slots for 64bit integers)
+	BufSize = 4096
+	// NumElements is the number of available header slots
+	NumElements = BufSize / 8 // 512
 )
 
-// GPFile defines the binary on-disk storage format for goProbe data
+// GPFile implements the binary data file used to store goProbe's flows
 type GPFile struct {
 	// The file header //
 	// Contains 512 64 bit addresses pointing to the end
@@ -28,23 +28,13 @@ type GPFile struct {
 
 	// The path to the file
 	filename string
-	cur_file *os.File
-	w_buf    []byte
+	curFile  *os.File
+	wBuf     []byte
 
-	last_seek_pos int64
+	lastSeekPos int64
 
 	// governs how data blocks are (de-)compressed
 	encoder Encoder
-}
-
-type GPFiler interface {
-	BlocksUsed() (int, error)
-	WriteTimedBlock(timestamp int64, data []byte) error
-	ReadTimedBlock(timestamp int64) ([]byte, error)
-	ReadBlock(block int) ([]byte, error)
-	GetBlocks() ([]int64, error)
-	GetTimestamps() ([]int64, error)
-	Close() error
 }
 
 // GPFileOption defines optional arguments to GPFile
@@ -58,14 +48,15 @@ func WithGPFileEncoding(e Encoder) GPFileOption {
 	}
 }
 
+// NewGPFile returns a new GPFile object to read and write goProbe flow data
 func NewGPFile(p string, opts ...GPFileOption) (*GPFile, error) {
 	var (
-		buf_h            = make([]byte, BUF_SIZE)
-		buf_ts           = make([]byte, BUF_SIZE)
-		buf_len          = make([]byte, BUF_SIZE)
-		f                *os.File
-		n_h, n_ts, n_len int
-		err              error
+		bufH          = make([]byte, BufSize)
+		bufTS         = make([]byte, BufSize)
+		bufLen        = make([]byte, BufSize)
+		f             *os.File
+		nH, nTS, nLen int
+		err           error
 	)
 
 	// open file if it exists and read header, otherwise create it
@@ -74,55 +65,55 @@ func NewGPFile(p string, opts ...GPFileOption) (*GPFile, error) {
 		if f, err = os.Open(p); err != nil {
 			return nil, err
 		}
-		if n_h, err = f.Read(buf_h); err != nil {
+		if nH, err = f.Read(bufH); err != nil {
 			return nil, err
 		}
-		if n_ts, err = f.Read(buf_ts); err != nil {
+		if nTS, err = f.Read(bufTS); err != nil {
 			return nil, err
 		}
-		if n_len, err = f.Read(buf_len); err != nil {
+		if nLen, err = f.Read(bufLen); err != nil {
 			return nil, err
 		}
 	} else {
 		if f, err = os.Create(p); err != nil {
 			return nil, err
 		}
-		if n_h, err = f.Write(buf_h); err != nil {
+		if nH, err = f.Write(bufH); err != nil {
 			return nil, err
 		}
-		if n_ts, err = f.Write(buf_ts); err != nil {
+		if nTS, err = f.Write(bufTS); err != nil {
 			return nil, err
 		}
-		if n_len, err = f.Write(buf_len); err != nil {
+		if nLen, err = f.Write(bufLen); err != nil {
 			return nil, err
 		}
 		f.Sync()
 	}
 
-	if n_h != BUF_SIZE {
+	if nH != BufSize {
 		return nil, errors.New("Invalid header (blocks)")
 	}
-	if n_ts != BUF_SIZE {
+	if nTS != BufSize {
 		return nil, errors.New("Invalid header (lookup table)")
 	}
-	if n_len != BUF_SIZE {
+	if nLen != BufSize {
 		return nil, errors.New("Invalid header (block lengths)")
 	}
 
 	// read the header information
-	var h = make([]int64, N_ELEM)
-	var ts = make([]int64, N_ELEM)
-	var le = make([]int64, N_ELEM)
-	var pos int = 0
-	for i := 0; i < N_ELEM; i++ {
-		h[i] = int64(buf_h[pos])<<56 | int64(buf_h[pos+1])<<48 | int64(buf_h[pos+2])<<40 | int64(buf_h[pos+3])<<32 | int64(buf_h[pos+4])<<24 | int64(buf_h[pos+5])<<16 | int64(buf_h[pos+6])<<8 | int64(buf_h[pos+7])
-		ts[i] = int64(buf_ts[pos])<<56 | int64(buf_ts[pos+1])<<48 | int64(buf_ts[pos+2])<<40 | int64(buf_ts[pos+3])<<32 | int64(buf_ts[pos+4])<<24 | int64(buf_ts[pos+5])<<16 | int64(buf_ts[pos+6])<<8 | int64(buf_ts[pos+7])
-		le[i] = int64(buf_len[pos])<<56 | int64(buf_len[pos+1])<<48 | int64(buf_len[pos+2])<<40 | int64(buf_len[pos+3])<<32 | int64(buf_len[pos+4])<<24 | int64(buf_len[pos+5])<<16 | int64(buf_len[pos+6])<<8 | int64(buf_len[pos+7])
+	var h = make([]int64, NumElements)
+	var ts = make([]int64, NumElements)
+	var le = make([]int64, NumElements)
+	var pos int
+	for i := 0; i < NumElements; i++ {
+		h[i] = int64(bufH[pos])<<56 | int64(bufH[pos+1])<<48 | int64(bufH[pos+2])<<40 | int64(bufH[pos+3])<<32 | int64(bufH[pos+4])<<24 | int64(bufH[pos+5])<<16 | int64(bufH[pos+6])<<8 | int64(bufH[pos+7])
+		ts[i] = int64(bufTS[pos])<<56 | int64(bufTS[pos+1])<<48 | int64(bufTS[pos+2])<<40 | int64(bufTS[pos+3])<<32 | int64(bufTS[pos+4])<<24 | int64(bufTS[pos+5])<<16 | int64(bufTS[pos+6])<<8 | int64(bufTS[pos+7])
+		le[i] = int64(bufLen[pos])<<56 | int64(bufLen[pos+1])<<48 | int64(bufLen[pos+2])<<40 | int64(bufLen[pos+3])<<32 | int64(bufLen[pos+4])<<24 | int64(bufLen[pos+5])<<16 | int64(bufLen[pos+6])<<8 | int64(bufLen[pos+7])
 		pos += 8
 	}
 
 	// the GP File uses LZ4 data block compression by default
-	gpf := &GPFile{h, ts, le, p, f, make([]byte, BUF_SIZE*3), 0, lz4.New()}
+	gpf := &GPFile{h, ts, le, p, f, make([]byte, BufSize*3), 0, lz4.New()}
 
 	// apply functional options
 	for _, opt := range opts {
@@ -132,8 +123,9 @@ func NewGPFile(p string, opts ...GPFileOption) (*GPFile, error) {
 	return gpf, nil
 }
 
+// BlocksUsed returns how many slots are already taken in the GP file
 func (f *GPFile) BlocksUsed() (int, error) {
-	for i := 0; i < N_ELEM; i++ {
+	for i := 0; i < NumElements; i++ {
 		if f.timestamps[i] == 0 && f.blocks[i] == 0 && f.lengths[i] == 0 {
 			return i, nil
 		}
@@ -141,58 +133,60 @@ func (f *GPFile) BlocksUsed() (int, error) {
 	return -1, errors.New("Could not retrieve number of allocated blocks")
 }
 
+// ReadBlock returns the data for a given block in the file
 func (f *GPFile) ReadBlock(block int) ([]byte, error) {
 	if f.timestamps[block] == 0 && f.blocks[block] == 0 && f.lengths[block] == 0 {
 		return nil, errors.New("Block " + strconv.Itoa(block) + " is empty")
 	}
 
 	var (
-		err      error
-		seek_pos int64 = BUF_SIZE * 3
-		read_len int64
+		err     error
+		seekPos int64 = BufSize * 3
+		readLen int64
 	)
 
 	// Check if file has already been opened for reading. If not, open it
-	if f.cur_file == nil {
-		if f.cur_file, err = os.OpenFile(f.filename, os.O_RDONLY, 0600); err != nil {
+	if f.curFile == nil {
+		if f.curFile, err = os.OpenFile(f.filename, os.O_RDONLY, 0600); err != nil {
 			return nil, err
 		}
 	}
 
 	// If first block is requested, set seek position to end of header and read length of
 	// first block. Otherwise start at last block's end
-	read_len = f.blocks[block] - BUF_SIZE*3
+	readLen = f.blocks[block] - BufSize*3
 	if block != 0 {
-		seek_pos = f.blocks[block-1]
-		read_len = f.blocks[block] - f.blocks[block-1]
+		seekPos = f.blocks[block-1]
+		readLen = f.blocks[block] - f.blocks[block-1]
 	}
 
 	// if the file is read continuously, do not seek
-	if seek_pos != f.last_seek_pos {
-		if _, err = f.cur_file.Seek(seek_pos, 0); err != nil {
+	if seekPos != f.lastSeekPos {
+		if _, err = f.curFile.Seek(seekPos, 0); err != nil {
 			return nil, err
 		}
 
-		f.last_seek_pos = seek_pos
+		f.lastSeekPos = seekPos
 	}
 
 	// prepare data slices for decompression
 	var (
-		uncomp_len int
-		buf_comp   = make([]byte, read_len)
-		buf        = make([]byte, f.lengths[block])
+		uncompLen int
+		bufComp   = make([]byte, readLen)
+		buf       = make([]byte, f.lengths[block])
 	)
 
-	uncomp_len, err = f.encoder.Decompress(buf_comp, buf, f.cur_file)
-	if int64(uncomp_len) != read_len {
+	uncompLen, err = f.encoder.Decompress(bufComp, buf, f.curFile)
+	if int64(uncompLen) != readLen {
 		return nil, errors.New("Incorrect number of bytes read for decompression")
 	}
 
 	return buf, nil
 }
 
+// ReadTimedBlock searches if a block for a given timestamp exists and returns in its data
 func (f *GPFile) ReadTimedBlock(timestamp int64) ([]byte, error) {
-	for i := 0; i < N_ELEM; i++ {
+	for i := 0; i < NumElements; i++ {
 		if f.timestamps[i] == timestamp {
 			return f.ReadBlock(i)
 		}
@@ -201,24 +195,25 @@ func (f *GPFile) ReadTimedBlock(timestamp int64) ([]byte, error) {
 	return nil, errors.New("Timestamp " + strconv.Itoa(int(timestamp)) + " not found")
 }
 
+// WriteTimedBlock writes data to the file for a given timestamp
 func (f *GPFile) WriteTimedBlock(timestamp int64, data []byte) error {
 	var (
 		nextFreeBlock = int64(-1)
-		cur_wfile     *os.File
+		curWfile      *os.File
 		err           error
-		n_write       int
-		new_pos       int64
+		nWrite        int
+		newPos        int64
 	)
 
-	for new_pos = 0; new_pos < N_ELEM; new_pos++ {
-		cur_timestamp := f.timestamps[new_pos]
-		if cur_timestamp == timestamp {
-			return errors.New("Timestamp" + strconv.Itoa(int(cur_timestamp)) + " already exists in file " + f.filename)
-		} else if cur_timestamp == 0 {
-			if new_pos != 0 {
-				nextFreeBlock = f.blocks[new_pos-1]
+	for newPos = 0; newPos < NumElements; newPos++ {
+		curTstamp := f.timestamps[newPos]
+		if curTstamp == timestamp {
+			return errors.New("Timestamp" + strconv.Itoa(int(curTstamp)) + " already exists in file " + f.filename)
+		} else if curTstamp == 0 {
+			if newPos != 0 {
+				nextFreeBlock = f.blocks[newPos-1]
 			} else {
-				nextFreeBlock = BUF_SIZE * 3
+				nextFreeBlock = BufSize * 3
 			}
 			break
 		}
@@ -228,55 +223,57 @@ func (f *GPFile) WriteTimedBlock(timestamp int64, data []byte) error {
 		return errors.New("File is full")
 	}
 
-	if cur_wfile, err = os.OpenFile(f.filename, os.O_APPEND|os.O_WRONLY, 0600); err != nil {
+	if curWfile, err = os.OpenFile(f.filename, os.O_APPEND|os.O_WRONLY, 0600); err != nil {
 		return err
 	}
 
 	// compress the data
-	n_write, err = f.encoder.Compress(data, cur_wfile)
+	nWrite, err = f.encoder.Compress(data, curWfile)
 	if err != nil {
 		return err
 	}
-	cur_wfile.Close()
+	curWfile.Close()
 
 	// Update header
-	f.blocks[new_pos] = nextFreeBlock + int64(n_write)
-	f.timestamps[new_pos] = timestamp
-	f.lengths[new_pos] = int64(len(data))
+	f.blocks[newPos] = nextFreeBlock + int64(nWrite)
+	f.timestamps[newPos] = timestamp
+	f.lengths[newPos] = int64(len(data))
 
-	var pos int = 0
-	for i := 0; i < N_ELEM; i++ {
+	var pos int
+	for i := 0; i < NumElements; i++ {
 		for j := 0; j < 8; j++ {
-			f.w_buf[pos+j] = byte(f.blocks[i] >> uint(56-(j*8)))
-			f.w_buf[BUF_SIZE+pos+j] = byte(f.timestamps[i] >> uint(56-(j*8)))
-			f.w_buf[BUF_SIZE+BUF_SIZE+pos+j] = byte(f.lengths[i] >> uint(56-(j*8)))
+			f.wBuf[pos+j] = byte(f.blocks[i] >> uint(56-(j*8)))
+			f.wBuf[BufSize+pos+j] = byte(f.timestamps[i] >> uint(56-(j*8)))
+			f.wBuf[BufSize+BufSize+pos+j] = byte(f.lengths[i] >> uint(56-(j*8)))
 		}
 		pos += 8
 	}
 
-	if cur_wfile, err = os.OpenFile(f.filename, os.O_WRONLY, 0600); err != nil {
+	if curWfile, err = os.OpenFile(f.filename, os.O_WRONLY, 0600); err != nil {
 		return err
 	}
-	if _, err = cur_wfile.Write(f.w_buf); err != nil {
+	if _, err = curWfile.Write(f.wBuf); err != nil {
 		return err
 	}
-
-	cur_wfile.Close()
+	curWfile.Close()
 
 	return nil
 }
 
+// GetBlocks returns the in-file location for all data blocks
 func (f *GPFile) GetBlocks() []int64 {
 	return f.blocks
 }
 
+// GetTimestamps returns all timestamps under which data blocks were stored
 func (f *GPFile) GetTimestamps() []int64 {
 	return f.timestamps
 }
 
+// Close closes the underlying file
 func (f *GPFile) Close() error {
-	if f.cur_file != nil {
-		return f.cur_file.Close()
+	if f.curFile != nil {
+		return f.curFile.Close()
 	}
 	return nil
 }

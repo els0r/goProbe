@@ -6,23 +6,23 @@ import "encoding/json"
 type Direction int
 
 const (
-	DIRECTION_UNKNOWN Direction = iota // sum of inbound and outbound counters
-	DIRECTION_SUM                      // sum of inbound and outbound counters
-	DIRECTION_IN                       // inbound counters
-	DIRECTION_OUT                      // outbound counters
-	DIRECTION_BOTH                     // inbound and outbound counters
+	DirectionUnknown Direction = iota // sum of inbound and outbound counters
+	DirectionSum                      // sum of inbound and outbound counters
+	DirectionIn                       // inbound counters
+	DirectionOut                      // outbound counters
+	DirectionBoth                     // inbound and outbound counters
 )
 
 // String implement human-readable printing of the direction
 func (d Direction) String() string {
 	switch d {
-	case DIRECTION_SUM:
+	case DirectionSum:
 		return "sum"
-	case DIRECTION_IN:
+	case DirectionIn:
 		return "in"
-	case DIRECTION_OUT:
+	case DirectionOut:
 		return "out"
-	case DIRECTION_BOTH:
+	case DirectionBoth:
 		return "bi-directional"
 	}
 	return "unknown"
@@ -32,15 +32,15 @@ func (d Direction) String() string {
 func DirectionFromString(s string) Direction {
 	switch s {
 	case "sum":
-		return DIRECTION_SUM
+		return DirectionSum
 	case "in":
-		return DIRECTION_IN
+		return DirectionIn
 	case "out":
-		return DIRECTION_OUT
+		return DirectionOut
 	case "bi-directional":
-		return DIRECTION_OUT
+		return DirectionOut
 	}
-	return DIRECTION_UNKNOWN
+	return DirectionUnknown
 }
 
 // MarshalJSON implements the Marshaler interface for sort order

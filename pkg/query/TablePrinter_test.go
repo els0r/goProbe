@@ -29,43 +29,43 @@ var columnsTests = []struct {
 }{
 	{
 		"sip,dip",
-		DIRECTION_IN,
-		[]OutputColumn{OUTCOL_SIP, OUTCOL_DIP,
-			OUTCOL_INPKTS, OUTCOL_INPKTSPERCENT,
-			OUTCOL_INBYTES, OUTCOL_INBYTESPERCENT,
+		DirectionIn,
+		[]OutputColumn{OutcolSip, OutcolDip,
+			OutcolInPkts, OutcolInPktsPercent,
+			OutcolInBytes, OutcolInBytesPercent,
 		},
 	},
 	{
 		"dport,proto",
-		DIRECTION_OUT,
+		DirectionOut,
 		[]OutputColumn{
-			OUTCOL_DPORT, OUTCOL_PROTO,
-			OUTCOL_OUTPKTS, OUTCOL_OUTPKTSPERCENT,
-			OUTCOL_OUTBYTES, OUTCOL_OUTBYTESPERCENT,
+			OutcolDport, OutcolProto,
+			OutcolOutPkts, OutcolOutPktsPercent,
+			OutcolOutBytes, OutcolOutBytesPercent,
 		},
 	},
 	{
 		"sip,proto,time",
-		DIRECTION_BOTH,
-		[]OutputColumn{OUTCOL_TIME, OUTCOL_SIP, OUTCOL_PROTO,
-			OUTCOL_BOTHPKTSRCVD, OUTCOL_BOTHPKTSSENT, OUTCOL_BOTHPKTSPERCENT,
-			OUTCOL_BOTHBYTESRCVD, OUTCOL_BOTHBYTESSENT, OUTCOL_BOTHBYTESPERCENT,
+		DirectionBoth,
+		[]OutputColumn{OutcolTime, OutcolSip, OutcolProto,
+			OutcolBothPktsRcvd, OutcolBothPktsSent, OutcolBothPktsPercent,
+			OutcolBothBytesRcvd, OutcolBothBytesSent, OutcolBothBytesPercent,
 		},
 	},
 	{
 		"proto,time,sip",
-		DIRECTION_BOTH,
-		[]OutputColumn{OUTCOL_TIME, OUTCOL_PROTO, OUTCOL_SIP,
-			OUTCOL_BOTHPKTSRCVD, OUTCOL_BOTHPKTSSENT, OUTCOL_BOTHPKTSPERCENT,
-			OUTCOL_BOTHBYTESRCVD, OUTCOL_BOTHBYTESSENT, OUTCOL_BOTHBYTESPERCENT,
+		DirectionBoth,
+		[]OutputColumn{OutcolTime, OutcolProto, OutcolSip,
+			OutcolBothPktsRcvd, OutcolBothPktsSent, OutcolBothPktsPercent,
+			OutcolBothBytesRcvd, OutcolBothBytesSent, OutcolBothBytesPercent,
 		},
 	},
 	{
 		"time,proto,iface,sip",
-		DIRECTION_BOTH,
-		[]OutputColumn{OUTCOL_TIME, OUTCOL_IFACE, OUTCOL_PROTO, OUTCOL_SIP,
-			OUTCOL_BOTHPKTSRCVD, OUTCOL_BOTHPKTSSENT, OUTCOL_BOTHPKTSPERCENT,
-			OUTCOL_BOTHBYTESRCVD, OUTCOL_BOTHBYTESSENT, OUTCOL_BOTHBYTESPERCENT,
+		DirectionBoth,
+		[]OutputColumn{OutcolTime, OutcolIface, OutcolProto, OutcolSip,
+			OutcolBothPktsRcvd, OutcolBothPktsSent, OutcolBothPktsPercent,
+			OutcolBothBytesRcvd, OutcolBothBytesSent, OutcolBothBytesPercent,
 		},
 	},
 }
@@ -118,13 +118,13 @@ var extractTests = []struct {
 	format      Formatter
 	ips2domains map[string]string
 	totals      Counts
-	outputs     [COUNT_OUTCOL]string // for each column
+	outputs     [CountOutcol]string // for each column
 }{
 	{
 		TextFormatter{},
 		map[string]string{},
 		Counts{},
-		[COUNT_OUTCOL]string{
+		[CountOutcol]string{
 			time.Unix(extractTestsEntry.k.Time, 0).Format("06-01-02 15:04:05"),
 			"eth1",
 			"192.168.0.1",
@@ -144,7 +144,7 @@ var extractTests = []struct {
 			"10.11.12.13": "dip.example.com",
 		},
 		Counts{},
-		[COUNT_OUTCOL]string{
+		[CountOutcol]string{
 			time.Unix(extractTestsEntry.k.Time, 0).Format("06-01-02 15:04:05"),
 			"eth1",
 			"sip.example.com",
@@ -161,7 +161,7 @@ var extractTests = []struct {
 		TextFormatter{},
 		map[string]string{},
 		Counts{2 * 10, 3 * 3, 3 * 40 * 1024, 4 * 20 * 1024},
-		[COUNT_OUTCOL]string{
+		[CountOutcol]string{
 			time.Unix(extractTestsEntry.k.Time, 0).Format("06-01-02 15:04:05"),
 			"eth1",
 			"192.168.0.1",
@@ -178,7 +178,7 @@ var extractTests = []struct {
 
 func TestExtract(t *testing.T) {
 	for _, test := range extractTests {
-		for col := OutputColumn(0); col < COUNT_OUTCOL; col++ {
+		for col := OutputColumn(0); col < CountOutcol; col++ {
 			actual := extract(test.format, test.ips2domains, test.totals, extractTestsEntry, col)
 			if test.outputs[col] != actual {
 				t.Fatalf("Column %d: Expected '%s', got '%s'", col, test.outputs[col], actual)
@@ -196,16 +196,16 @@ var extractTotalTests = []struct {
 		TextFormatter{},
 		Counts{10, 3, 40 * 1024, 20 * 1024},
 		map[OutputColumn]string{
-			OUTCOL_INPKTS:        "10.00  ",
-			OUTCOL_INBYTES:       "40.00 kB",
-			OUTCOL_OUTPKTS:       "3.00  ",
-			OUTCOL_OUTBYTES:      "20.00 kB",
-			OUTCOL_SUMPKTS:       "13.00  ",
-			OUTCOL_SUMBYTES:      "60.00 kB",
-			OUTCOL_BOTHPKTSRCVD:  "10.00  ",
-			OUTCOL_BOTHPKTSSENT:  "3.00  ",
-			OUTCOL_BOTHBYTESRCVD: "40.00 kB",
-			OUTCOL_BOTHBYTESSENT: "20.00 kB",
+			OutcolInPkts:        "10.00  ",
+			OutcolInBytes:       "40.00 kB",
+			OutcolOutPkts:       "3.00  ",
+			OutcolOutBytes:      "20.00 kB",
+			OutcolSumPkts:       "13.00  ",
+			OutcolSumBytes:      "60.00 kB",
+			OutcolBothPktsRcvd:  "10.00  ",
+			OutcolBothPktsSent:  "3.00  ",
+			OutcolBothBytesRcvd: "40.00 kB",
+			OutcolBothBytesSent: "20.00 kB",
 		},
 	},
 }
@@ -309,8 +309,8 @@ type printerTest struct {
 
 var printerAnsiTests = []printerTest{
 	{ // direction out
-		SORT_TRAFFIC,
-		DIRECTION_OUT,
+		SortTraffic,
+		DirectionOut,
 		"sip,dip,dport,proto",
 		map[string]string{},
 		12427491, 9790521, 10105124299, 2133066153,
@@ -335,8 +335,8 @@ var printerAnsiTests = []printerTest{
 
 var printerTests = []printerTest{
 	{ // direction in
-		SORT_TRAFFIC,
-		DIRECTION_IN,
+		SortTraffic,
+		DirectionIn,
 		"sip,dip,dport,proto",
 		map[string]string{},
 		12427491, 9790521, 10105124299, 2133066153,
@@ -385,8 +385,8 @@ var printerTests = []printerTest{
 			`goprobe_flows,proto=TCP sip=172.8.12.2,dip=10.11.12.14,dport=10565,packets=1578601i,bytes=2094476019i` + "\n",
 	},
 	{ // with time attribute
-		SORT_TRAFFIC,
-		DIRECTION_SUM,
+		SortTraffic,
+		DirectionSum,
 		"time,sip,dip",
 		map[string]string{},
 		12427491, 9790521, 10105124299, 2133066153,
@@ -434,8 +434,8 @@ var printerTests = []printerTest{
 			`goprobe_flows sip=172.8.12.2,dip=10.11.12.14,packets=1659745i,bytes=2356631329i 1455531429000000000` + "\n",
 	},
 	{ // with iface attribute
-		SORT_TRAFFIC,
-		DIRECTION_SUM,
+		SortTraffic,
+		DirectionSum,
 		"iface,sip,dip",
 		map[string]string{},
 		12427491, 9790521, 10105124299, 2133066153,
@@ -483,8 +483,8 @@ var printerTests = []printerTest{
 			`goprobe_flows,iface=eth1 sip=172.8.12.2,dip=10.11.12.14,packets=1659745i,bytes=2356631329i` + "\n",
 	},
 	{ // reverse DNS
-		SORT_TRAFFIC,
-		DIRECTION_IN,
+		SortTraffic,
+		DirectionIn,
 		"sip,dip,dport,proto",
 		map[string]string{
 			"172.4.12.2":  "da-sh.open.ch",
@@ -692,10 +692,10 @@ var textTablePrinterFooterTests = []struct {
 	outputRegex                                    string
 }{
 	{
-		SORT_TRAFFIC,
+		SortTraffic,
 		false,
 		false,
-		DIRECTION_BOTH,
+		DirectionBoth,
 		1270,
 		"eth17",
 		"",
@@ -706,10 +706,10 @@ var textTablePrinterFooterTests = []struct {
 			`Query stats          : 1.27 k hits in 17.0s\n`,
 	},
 	{
-		SORT_PACKETS,
+		SortPackets,
 		false,
 		true,
-		DIRECTION_OUT,
+		DirectionOut,
 		1270,
 		"t4_1232",
 		"",
@@ -721,10 +721,10 @@ var textTablePrinterFooterTests = []struct {
 			`Query stats          : 1.27 k hits in 17.0s\n`,
 	},
 	{
-		SORT_TIME,
+		SortTime,
 		true,
 		true,
-		DIRECTION_SUM,
+		DirectionSum,
 		92270,
 		"eth17",
 		"sip = 10.0.0.1 | dip = open.ch",

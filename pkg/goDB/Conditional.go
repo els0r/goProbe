@@ -25,7 +25,7 @@ import (
 	"time"
 )
 
-// Parses and instruments the given conditional string for evaluation.
+// ParseAndInstrumentConditional parses and instruments the given conditional string for evaluation.
 // This is the main external function related to conditionals.
 func ParseAndInstrumentConditional(conditional string, dnsTimeout time.Duration) (Node, error) {
 	tokenList, err := TokenizeConditional(conditional)
@@ -57,7 +57,7 @@ func ParseAndInstrumentConditional(conditional string, dnsTimeout time.Duration)
 	return conditionalNode, nil
 }
 
-// An AST node for the conditional grammar
+// Node describes an AST node for the conditional grammar
 // This interface is not meant to be implemented by structs
 // outside of this package.
 type Node interface {
@@ -168,7 +168,7 @@ func (n andNode) evaluate(comparisonValue *ExtraKey) bool {
 }
 func (n andNode) attributes() map[string]struct{} {
 	result := n.left.attributes()
-	for attribute, _ := range n.right.attributes() {
+	for attribute := range n.right.attributes() {
 		result[attribute] = struct{}{}
 	}
 	return result
@@ -207,7 +207,7 @@ func (n orNode) evaluate(comparisonValue *ExtraKey) bool {
 }
 func (n orNode) attributes() map[string]struct{} {
 	result := n.left.attributes()
-	for attribute, _ := range n.right.attributes() {
+	for attribute := range n.right.attributes() {
 		result[attribute] = struct{}{}
 	}
 	return result
@@ -244,20 +244,18 @@ func negationNormalForm(node Node) Node {
 					node.comparator = "<"
 				}
 				return node
-			} else {
-				return node
 			}
+			return node
 		case andNode:
 			if negate {
 				return orNode{
 					left:  helper(node.left, true),
 					right: helper(node.right, true),
 				}
-			} else {
-				return andNode{
-					left:  helper(node.left, false),
-					right: helper(node.right, false),
-				}
+			}
+			return andNode{
+				left:  helper(node.left, false),
+				right: helper(node.right, false),
 			}
 		case orNode:
 			if negate {
@@ -265,11 +263,10 @@ func negationNormalForm(node Node) Node {
 					left:  helper(node.left, true),
 					right: helper(node.right, true),
 				}
-			} else {
-				return orNode{
-					left:  helper(node.left, false),
-					right: helper(node.right, false),
-				}
+			}
+			return orNode{
+				left:  helper(node.left, false),
+				right: helper(node.right, false),
 			}
 		case notNode:
 			return helper(node.node, !negate)

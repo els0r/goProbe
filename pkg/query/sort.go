@@ -11,10 +11,10 @@ import (
 type SortOrder int
 
 const (
-	SORT_UNKNOWN SortOrder = iota
-	SORT_PACKETS
-	SORT_TRAFFIC
-	SORT_TIME
+	SortUnknown SortOrder = iota
+	SortPackets
+	SortTraffic
+	SortTime
 )
 
 // For the sorting we refer to closures to be able so sort by whatever value
@@ -35,11 +35,11 @@ type entrySorter struct {
 // String implement human-readable printing of the sort order
 func (s SortOrder) String() string {
 	switch s {
-	case SORT_PACKETS:
+	case SortPackets:
 		return "packets"
-	case SORT_TRAFFIC:
+	case SortTraffic:
 		return "bytes"
-	case SORT_TIME:
+	case SortTime:
 		return "time"
 	}
 	return "unknown"
@@ -48,13 +48,13 @@ func (s SortOrder) String() string {
 func SortOrderFromString(s string) SortOrder {
 	switch s {
 	case "packets":
-		return SORT_PACKETS
+		return SortPackets
 	case "bytes":
-		return SORT_TRAFFIC
+		return SortTraffic
 	case "time":
-		return SORT_TIME
+		return SortTime
 	}
-	return SORT_UNKNOWN
+	return SortUnknown
 }
 
 // MarshalJSON implements the Marshaler interface for sort order
@@ -99,9 +99,9 @@ func (s *entrySorter) Less(i, j int) bool {
 
 func By(sort SortOrder, direction Direction, ascending bool) by {
 	switch sort {
-	case SORT_PACKETS:
+	case SortPackets:
 		switch direction {
-		case DIRECTION_BOTH, DIRECTION_SUM:
+		case DirectionBoth, DirectionSum:
 			if ascending {
 				return func(e1, e2 *Entry) bool {
 					return e1.nPs+e1.nPr < e2.nPs+e2.nPr
@@ -111,7 +111,7 @@ func By(sort SortOrder, direction Direction, ascending bool) by {
 					return e1.nPs+e1.nPr > e2.nPs+e2.nPr
 				}
 			}
-		case DIRECTION_IN:
+		case DirectionIn:
 			if ascending {
 				return func(e1, e2 *Entry) bool {
 					return e1.nPr < e2.nPr
@@ -121,7 +121,7 @@ func By(sort SortOrder, direction Direction, ascending bool) by {
 					return e1.nPr > e2.nPr
 				}
 			}
-		case DIRECTION_OUT:
+		case DirectionOut:
 			if ascending {
 				return func(e1, e2 *Entry) bool {
 					return e1.nPs < e2.nPs
@@ -132,9 +132,9 @@ func By(sort SortOrder, direction Direction, ascending bool) by {
 				}
 			}
 		}
-	case SORT_TRAFFIC:
+	case SortTraffic:
 		switch direction {
-		case DIRECTION_BOTH, DIRECTION_SUM:
+		case DirectionBoth, DirectionSum:
 			if ascending {
 				return func(e1, e2 *Entry) bool {
 					return e1.nBs+e1.nBr < e2.nBs+e2.nBr
@@ -144,7 +144,7 @@ func By(sort SortOrder, direction Direction, ascending bool) by {
 					return e1.nBs+e1.nBr > e2.nBs+e2.nBr
 				}
 			}
-		case DIRECTION_IN:
+		case DirectionIn:
 			if ascending {
 				return func(e1, e2 *Entry) bool {
 					return e1.nBr < e2.nBr
@@ -154,7 +154,7 @@ func By(sort SortOrder, direction Direction, ascending bool) by {
 					return e1.nBr > e2.nBr
 				}
 			}
-		case DIRECTION_OUT:
+		case DirectionOut:
 			if ascending {
 				return func(e1, e2 *Entry) bool {
 					return e1.nBs < e2.nBs
@@ -165,7 +165,7 @@ func By(sort SortOrder, direction Direction, ascending bool) by {
 				}
 			}
 		}
-	case SORT_TIME:
+	case SortTime:
 		if ascending {
 			return func(e1, e2 *Entry) bool {
 				return e1.k.Time < e2.k.Time

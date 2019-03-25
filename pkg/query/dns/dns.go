@@ -42,7 +42,7 @@ func TimedReverseLookup(ips []string, timeout time.Duration) (ipToDomain map[str
 	var pending int
 	// Perform an asynchronous lookup for every ip in the set. The results are sent
 	// over the lookup channel.
-	for ip, _ := range ipset {
+	for ip := range ipset {
 		go func(ip string) {
 			lookupR := LookupResult{}
 			lookupR.IP = ip
