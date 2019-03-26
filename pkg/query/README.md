@@ -11,7 +11,10 @@ func main() {
      // set query output(s) redirection (default is os.Stdout). You can use multiple io.Writers here
      outputs := os.Stderr
 
-     args := query.NewArgs()
+     args := query.NewArgs("sip,dip", "eth0",
+        query.WithSortAscending(),
+        query.WithCondition("dport eq 443),
+     )
 
      // prepare the statement (e.g. parse args and setup query parameters)
      stmt, err := args.Prepare(output)
