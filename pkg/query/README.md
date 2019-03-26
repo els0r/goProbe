@@ -13,7 +13,7 @@ func main() {
 
      args := query.NewArgs("sip,dip", "eth0",
         query.WithSortAscending(),
-        query.WithCondition("dport eq 443),
+        query.WithCondition("dport eq 443"),
      )
 
      // prepare the statement (e.g. parse args and setup query parameters)
