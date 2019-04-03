@@ -8,7 +8,6 @@ import (
 )
 
 var (
-	Lots   = 99999999
 	TestDB = "./testdb"
 )
 
@@ -73,7 +72,7 @@ func TestSimpleQuery(test *testing.T) {
 			{
 				"eth1",
 				"time",
-				[]Option{WithDirectionSum(), WithDBPath(TestDB), WithFirst("1456428000"), WithLast("1456473000"), WithNumResults(Lots), WithFormat("json")},
+				[]Option{WithDirectionSum(), WithDBPath(TestDB), WithFirst("1456428000"), WithLast("1456473000"), WithNumResults(MaxResults), WithFormat("json")},
 			},
 		},
 	}

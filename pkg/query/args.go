@@ -11,19 +11,6 @@ import (
 	"github.com/els0r/goProbe/pkg/query/dns"
 )
 
-// Defaults for query arguments
-var (
-	DefaultDBPath         = "/opt/ntm/goProbe/db"
-	DefaultFormat         = "txt"
-	DefaultIn             = false
-	DefaultMaxMemPct      = 60
-	DefaultNumResults     = 1000
-	DefaultOut            = false
-	DefaultResolveRows    = 25
-	DefaultResolveTimeout = 1 // seconds
-	DefaultSortBy         = "bytes"
-)
-
 // NewArgs creates new query arguments with the defaults set
 func NewArgs(query, ifaces string, opts ...Option) *Args {
 	a := &Args{
@@ -141,9 +128,8 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 	var err error
 
 	// verify config format
-	switch a.Format {
-	case "txt", "csv", "json", "influxdb":
-	default:
+	_, verifies := PermittedFormats[a.Format]
+	if !verifies {
 		return s, fmt.Errorf("unknown output format '%s'", a.Format)
 	}
 	s.Format = a.Format
@@ -162,18 +148,9 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 	}
 
 	// assign sort order and direction
-	if !(a.SortBy == "bytes" || a.SortBy == "packets" || a.SortBy == "time") {
+	s.SortBy, verifies = PermittedSortBy[a.SortBy]
+	if !verifies {
 		return s, fmt.Errorf("unknown sorting parameter '%s' specified", a.SortBy)
-	}
-	switch a.SortBy {
-	case "bytes":
-		s.SortBy = SortTraffic
-	case "time":
-		s.SortBy = SortTime
-	case "packets":
-		fallthrough
-	default:
-		s.SortBy = SortPackets
 	}
 
 	var queryAttributes []goDB.Attribute
@@ -198,7 +175,7 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 	if s.HasAttrTime {
 		s.SortBy = SortTime
 		s.SortAscending = true
-		s.NumResults = 9999999999999999
+		s.NumResults = MaxResults
 	}
 
 	// parse time bound
