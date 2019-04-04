@@ -122,7 +122,7 @@ func TestOutputConsistency(t *testing.T) {
 				t.Fatalf("[%d] failed to decode JSON output: %s\n%s", i, err, string(actualOutputJSON))
 			}
 			var match bool
-			err, match = outputMatches(expectedOutput, actualOutput)
+			match, err = outputMatches(expectedOutput, actualOutput)
 			if err != nil || !match {
 				t.Logf("[%d] arguments: from %s\n%s", i, argumentFile, args.String())
 				//				mi, _ := json.MarshalIndent(expectedOutput, "", " ")
@@ -192,34 +192,34 @@ func testCases() (testCases []string, err error) {
 
 // Check whether the actual output and the expected output (both as interface{}s
 // unmarshalled from JSON) match.
-func outputMatches(expected, actual interface{}) (err error, ok bool) {
+func outputMatches(expected, actual interface{}) (ok bool, err error) {
 	expectedMap, isMap := expected.(map[string]interface{})
 	if !isMap {
-		return errors.New("expected output is not a map"), false
+		return false, errors.New("expected output is not a map")
 	}
 
 	actualMap, isMap := actual.(map[string]interface{})
 	if !isMap {
-		return errors.New("actual output is not a map"), false
+		return false, errors.New("actual output is not a map")
 	}
 
 	if len(actualMap) != 4 || len(expectedMap) != 4 {
-		return errors.New("loaded maps have incorrect number of sections"), false
+		return false, errors.New("loaded maps have incorrect number of sections")
 	}
 
 	// ext_ips: we only check that these are present, but don't compare
 	// them, because they vary from host to host.
 	if _, isSlice := expectedMap["ext_ips"].([]interface{}); !isSlice {
-		return errors.New("in expected: didn't find external IPs section"), false
+		return false, errors.New("in expected: didn't find external IPs section")
 	}
 
 	if _, isSlice := actualMap["ext_ips"].([]interface{}); !isSlice {
-		return errors.New("in actual: didn't find external IPs section"), false
+		return false, errors.New("in actual: didn't find external IPs section")
 	}
 
 	// status
 	if !reflect.DeepEqual(expectedMap["status"], actualMap["status"]) {
-		return fmt.Errorf("status doesn't match. Have: %s; Want: %s", fmt.Sprint(actualMap["status"]), fmt.Sprint(expectedMap["status"])), false
+		return false, fmt.Errorf("status doesn't match. Have: %s; Want: %s", fmt.Sprint(actualMap["status"]), fmt.Sprint(expectedMap["status"]))
 	}
 
 	// summary
@@ -227,7 +227,7 @@ func outputMatches(expected, actual interface{}) (err error, ok bool) {
 	delete(expectedMap["summary"].(map[string]interface{}), "interface")
 	delete(actualMap["summary"].(map[string]interface{}), "interface")
 	if !reflect.DeepEqual(expectedMap["summary"], actualMap["summary"]) {
-		return fmt.Errorf("summary doesn't match.\nHave:\n%s;\nWant:\n%s", fmt.Sprint(actualMap["summary"]), fmt.Sprint(expectedMap["summary"])), false
+		return false, fmt.Errorf("summary doesn't match.\nHave:\n%s;\nWant:\n%s", fmt.Sprint(actualMap["summary"]), fmt.Sprint(expectedMap["summary"]))
 	}
 
 	// find key that holds expected output, e.g. "sip,dport" or "talk_conv"
@@ -249,23 +249,23 @@ func outputMatches(expected, actual interface{}) (err error, ok bool) {
 	// Compare outputs ignoring order (output order of goQuery is non-deterministic, cf. TMI-91)
 	expectedOutputs, isSlice := expectedMap[expectedOutputKey].([]interface{})
 	if !isSlice {
-		return fmt.Errorf("expected output is not a slice"), false
+		return false, fmt.Errorf("expected output is not a slice")
 	}
 
 	actualOutputs, isSlice := actualMap[actualOutputKey].([]interface{})
 	if !isSlice {
-		return fmt.Errorf("actual output is not a slice"), false
+		return false, fmt.Errorf("actual output is not a slice")
 	}
 
 	if len(expectedOutputs) != len(actualOutputs) {
-		return fmt.Errorf("number of entries mismatch. len(expected)=%d; len(actual)=%d", len(expectedOutputs), len(actualOutputs)), false
+		return false, fmt.Errorf("number of entries mismatch. len(expected)=%d; len(actual)=%d", len(expectedOutputs), len(actualOutputs))
 	}
 
 	expectedOutputSet := make(map[row]struct{})
 	for i, output := range expectedOutputs {
 		row, isValidRow := newRow(output)
 		if !isValidRow {
-			return fmt.Errorf("expected: invalid row at index %d", i), false
+			return false, fmt.Errorf("expected: invalid row at index %d", i)
 		}
 		expectedOutputSet[row] = struct{}{}
 	}
@@ -273,14 +273,14 @@ func outputMatches(expected, actual interface{}) (err error, ok bool) {
 	for i, output := range actualOutputs {
 		row, isValidRow := newRow(output)
 		if !isValidRow {
-			return fmt.Errorf("actual: invalid row at index %d", i), false
+			return false, fmt.Errorf("actual: invalid row at index %d", i)
 		}
 		if _, exists := expectedOutputSet[row]; !exists {
-			return fmt.Errorf("row of actual doesn't exist in expected at index %d", i), false
+			return false, fmt.Errorf("row of actual doesn't exist in expected at index %d", i)
 		}
 	}
 
-	return nil, true
+	return true, nil
 }
 
 // Helper struct that contains a superset of the columns present in any goQuery output.

@@ -219,6 +219,7 @@ var funcMap = template.FuncMap{
 
 var log = lg.NewTextLogger()
 
+// TestTuple stores a possible benchmark query configuration. It is used to enumerate different query scenarios.
 type TestTuple struct {
 	ID        int
 	Iface     string
@@ -287,9 +288,10 @@ func main() {
 			for _, n := range numResults {
 
 				// iterate over all conditions
-				for cname, _ := range testConditions {
+				for cname := range testConditions {
 
-					for format, _ := range query.PermittedFormats {
+					// iterate over all formats
+					for format := range query.PermittedFormats {
 						tuples = append(tuples, TestTuple{
 							ID:        benchNum,
 							Iface:     iarg,

@@ -24,7 +24,8 @@ func TestLookup(t *testing.T) {
 	if domain, ok := ips2domains["8.8.8.8"]; ok && domain != "google-public-dns-a.google.com." {
 		t.Fatalf("RDNS lookup yielded wrong result: %s", domain)
 	} else if !ok {
-		t.Errorf("RDNS lookup yielded no result. Perhaps your internet is down?")
+		t.Log("RDNS lookup yielded no result. Perhaps your internet is down?")
+		t.Skip()
 	}
 
 	if _, ok := ips2domains["0.0.0.0"]; ok {

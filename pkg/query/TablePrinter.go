@@ -25,7 +25,7 @@ import (
 	"github.com/els0r/goProbe/pkg/goDB"
 )
 
-// OutputColumn's domain ranges over all possible output columns.
+// OutputColumn ranges over all possible output columns.
 // Not every format prints every output column, e.g. the InfluxDBTablePrinter
 // completely ignores all percentages.
 type OutputColumn int
@@ -977,7 +977,7 @@ func (s *Statement) NewTablePrinter(ips2domains map[string]string, sums Counts, 
 	}
 }
 
-// ErrorMsgMExternal stores a status and message for external callers
+// ErrorMsgExternal stores a status and message for external callers
 type ErrorMsgExternal struct {
 	Status  string `json:"status"`
 	Message string `json:"statusMessage"`

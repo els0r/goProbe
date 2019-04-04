@@ -35,6 +35,11 @@ The package itself now requires a fully set up Go environment. Running install/b
 go install -i github.com/els0r/goProbe/...
 ```
 
+Alternatively, you can use `go generate` from `gen.go` to install all binaries (and run tests and linters):
+```
+go generate
+```
+
 The addon folder provides a Makefile for building the software suite. To use it, run
 
 ```
@@ -215,9 +220,9 @@ goQuery --stored-query /path/to/args.json
 The args file can look as follows:
 ```
 {
-  "Query": "sip,dip,proto",       
+  "Query": "sip,dip,proto",
   "Output": "/tmp/query.output",  // where to route the output (stdout is default)
-  "Ifaces": "eth0,eth1",          
+  "Ifaces": "eth0,eth1",
   "Condition": "dport eq 443",
   "In": true,
   "Out": true,
@@ -303,7 +308,7 @@ Authors & Contributors
 ----------------------
 
 * Lennart Elsen
-* Fabian Kohn 
+* Fabian Kohn
 * Lorenz Breidenbach
 
 This software was developed at [Open Systems AG](https://www.open.ch/) in close collaboration with the [Distributed Computing Group](http://www.disco.ethz.ch/) at the [Swiss Federal Institute of Technology](https://www.ethz.ch/en.html).

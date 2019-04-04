@@ -18,13 +18,14 @@ import (
 	"time"
 )
 
+// LookupResult stores the result of a reverse DNS lookup
 type LookupResult struct {
 	Success bool
 	IP      string
 	Domain  string
 }
 
-// Performs a reverse lookup on the given ips. The lookup takes at most timeout time, afterwards
+// TimedReverseLookup performs a reverse lookup on the given ips. The lookup takes at most timeout time, afterwards
 // it is aborted.
 // Returns a mapping IP => domain. If the lookup is aborted because of a timeout, the current mapping
 // is returned with the pending lookups missing. If there is no RDNS entry for an IP, the corresponding

@@ -48,12 +48,12 @@ func TestEmptyOutput(test *testing.T) {
 			t.Fatalf("execute query: %s", err)
 		}
 
-		actualOutputJson := buf.Bytes()
+		actualOutputJSON := buf.Bytes()
 
 		var actualOutput map[string]string
-		err = json.Unmarshal(actualOutputJson, &actualOutput)
+		err = json.Unmarshal(actualOutputJSON, &actualOutput)
 		if err != nil {
-			t.t.Log(string(actualOutputJson))
+			t.t.Log(string(actualOutputJSON))
 			t.t.Log(a)
 			t.Fatalf("failed to parse output as JSON: %s", err)
 		}

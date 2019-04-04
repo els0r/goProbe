@@ -61,13 +61,13 @@ type Statement struct {
 	Stats ExecutionStats `json:"query_stats"`
 
 	// error during execution
-	Err *QueryError `json:"error,omitempty"`
+	Err *Error `json:"error,omitempty"`
 }
 
-// QueryError encloses an error encountered during processing
-type QueryError struct{ err error }
+// Error encloses an error encountered during processing
+type Error struct{ err error }
 
-func (q *QueryError) Error() string { return q.err.Error() }
+func (q *Error) Error() string { return q.err.Error() }
 
 type internalError int
 
@@ -87,7 +87,7 @@ func (i internalError) Error() string {
 }
 
 // MarshalJSON implements the Marshaler interface for human-readable error logging
-func (q *QueryError) MarshalJSON() ([]byte, error) {
+func (q *Error) MarshalJSON() ([]byte, error) {
 	return json.Marshal(q.Error())
 }
 
@@ -159,7 +159,7 @@ func (s *Statement) Execute() error {
 			// get duration of execution even under error
 			s.Stats.Duration = time.Now().Sub(s.Stats.Start)
 
-			s.Err = &QueryError{err}
+			s.Err = &Error{err}
 		}
 		// log the query
 		s.log()
@@ -241,7 +241,7 @@ func (s *Statement) Execute() error {
 	}
 
 	/// DATA PRESENATION ///
-	var mapEntries []Entry = make([]Entry, len(agg.aggregatedMap))
+	var mapEntries = make([]Entry, len(agg.aggregatedMap))
 	var val goDB.Val
 	count := 0
 

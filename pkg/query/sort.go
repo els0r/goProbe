@@ -10,6 +10,7 @@ import (
 // SortOrder indicates by what the entries are sorted.
 type SortOrder int
 
+// Enumeration of different sort orders
 const (
 	SortUnknown SortOrder = iota
 	SortPackets
@@ -17,8 +18,7 @@ const (
 	SortTime
 )
 
-// For the sorting we refer to closures to be able so sort by whatever value
-// struct field we want
+// Entry stores the fields after which we sort (bytes or packets)
 type Entry struct {
 	k        goDB.ExtraKey
 	nBr, nBs uint64
@@ -45,6 +45,7 @@ func (s SortOrder) String() string {
 	return "unknown"
 }
 
+// SortOrderFromString is the inverse operation to SortOrder.String()
 func SortOrderFromString(s string) SortOrder {
 	switch s {
 	case "packets":
@@ -97,6 +98,7 @@ func (s *entrySorter) Less(i, j int) bool {
 	return s.less(&s.entries[i], &s.entries[j])
 }
 
+// By is part of the sort.Interface
 func By(sort SortOrder, direction Direction, ascending bool) by {
 	switch sort {
 	case SortPackets:
@@ -106,30 +108,27 @@ func By(sort SortOrder, direction Direction, ascending bool) by {
 				return func(e1, e2 *Entry) bool {
 					return e1.nPs+e1.nPr < e2.nPs+e2.nPr
 				}
-			} else {
-				return func(e1, e2 *Entry) bool {
-					return e1.nPs+e1.nPr > e2.nPs+e2.nPr
-				}
+			}
+			return func(e1, e2 *Entry) bool {
+				return e1.nPs+e1.nPr > e2.nPs+e2.nPr
 			}
 		case DirectionIn:
 			if ascending {
 				return func(e1, e2 *Entry) bool {
 					return e1.nPr < e2.nPr
 				}
-			} else {
-				return func(e1, e2 *Entry) bool {
-					return e1.nPr > e2.nPr
-				}
+			}
+			return func(e1, e2 *Entry) bool {
+				return e1.nPr > e2.nPr
 			}
 		case DirectionOut:
 			if ascending {
 				return func(e1, e2 *Entry) bool {
 					return e1.nPs < e2.nPs
 				}
-			} else {
-				return func(e1, e2 *Entry) bool {
-					return e1.nPs > e2.nPs
-				}
+			}
+			return func(e1, e2 *Entry) bool {
+				return e1.nPs > e2.nPs
 			}
 		}
 	case SortTraffic:
@@ -139,30 +138,27 @@ func By(sort SortOrder, direction Direction, ascending bool) by {
 				return func(e1, e2 *Entry) bool {
 					return e1.nBs+e1.nBr < e2.nBs+e2.nBr
 				}
-			} else {
-				return func(e1, e2 *Entry) bool {
-					return e1.nBs+e1.nBr > e2.nBs+e2.nBr
-				}
+			}
+			return func(e1, e2 *Entry) bool {
+				return e1.nBs+e1.nBr > e2.nBs+e2.nBr
 			}
 		case DirectionIn:
 			if ascending {
 				return func(e1, e2 *Entry) bool {
 					return e1.nBr < e2.nBr
 				}
-			} else {
-				return func(e1, e2 *Entry) bool {
-					return e1.nBr > e2.nBr
-				}
+			}
+			return func(e1, e2 *Entry) bool {
+				return e1.nBr > e2.nBr
 			}
 		case DirectionOut:
 			if ascending {
 				return func(e1, e2 *Entry) bool {
 					return e1.nBs < e2.nBs
 				}
-			} else {
-				return func(e1, e2 *Entry) bool {
-					return e1.nBs > e2.nBs
-				}
+			}
+			return func(e1, e2 *Entry) bool {
+				return e1.nBs > e2.nBs
 			}
 		}
 	case SortTime:
@@ -170,10 +166,9 @@ func By(sort SortOrder, direction Direction, ascending bool) by {
 			return func(e1, e2 *Entry) bool {
 				return e1.k.Time < e2.k.Time
 			}
-		} else {
-			return func(e1, e2 *Entry) bool {
-				return e1.k.Time > e2.k.Time
-			}
+		}
+		return func(e1, e2 *Entry) bool {
+			return e1.k.Time > e2.k.Time
 		}
 	}
 

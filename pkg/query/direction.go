@@ -5,12 +5,13 @@ import "encoding/json"
 // Direction indicates the counters of which flow direction we should print.
 type Direction int
 
+// Enumeration of directions to be considered
 const (
-	DirectionUnknown Direction = iota // sum of inbound and outbound counters
-	DirectionSum                      // sum of inbound and outbound counters
-	DirectionIn                       // inbound counters
-	DirectionOut                      // outbound counters
-	DirectionBoth                     // inbound and outbound counters
+	DirectionUnknown Direction = iota
+	DirectionSum               // sum of inbound and outbound counters
+	DirectionIn                // inbound counters
+	DirectionOut               // outbound counters
+	DirectionBoth              // inbound and outbound counters
 )
 
 // String implement human-readable printing of the direction

@@ -12,6 +12,7 @@
 
 package dns
 
+// CheckDNS is a no-op to check if a DNS resolver is present (deployment enviornment specific)
 func CheckDNS() error {
 	return nil
 }

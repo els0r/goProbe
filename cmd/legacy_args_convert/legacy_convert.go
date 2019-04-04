@@ -47,13 +47,13 @@ func main() {
 		argumentFile := path.Join(legacyFolder, testCase+argsSuffix)
 
 		// Read arguments
-		argumentsJson, err := ioutil.ReadFile(argumentFile)
+		argumentsJSON, err := ioutil.ReadFile(argumentFile)
 		if err != nil {
 			log.Errorf("Could not read argument file %s. Error: %s", argumentFile, err)
 			os.Exit(1)
 		}
 		var arguments [][]string
-		err = json.Unmarshal(argumentsJson, &arguments)
+		err = json.Unmarshal(argumentsJSON, &arguments)
 		if err != nil {
 			log.Errorf("Could not decode argument file %s. Error: %s", argumentFile, err)
 			os.Exit(1)
@@ -182,7 +182,7 @@ func testCases() (testCases []string, err error) {
 	}
 
 	// If we get here, the validity condition is satisfied; we return the list of test cases.
-	for testName, _ := range seen {
+	for testName := range seen {
 		testCases = append(testCases, testName)
 	}
 	return

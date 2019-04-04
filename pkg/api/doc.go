@@ -13,7 +13,7 @@
 //     Access to API version 1 functions
 package api
 
-var mdApiDocIntro = `API documentation for goProbe (auto-generated). The default output is JSON. Results can be pretty-printed by passing URL parameter` + "`pretty=1`" + `
+var mdAPIDocIntro = `API documentation for goProbe (auto-generated). The default output is JSON. Results can be pretty-printed by passing URL parameter` + "`pretty=1`" + `
 
 ## Authentication
 

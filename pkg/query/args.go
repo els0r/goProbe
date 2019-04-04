@@ -287,7 +287,7 @@ func parseIfaceList(dbPath string, ifacelist string) (ifaces []string, err error
 		if err != nil {
 			return nil, err
 		}
-		for iface, _ := range summary.Interfaces {
+		for iface := range summary.Interfaces {
 			ifaces = append(ifaces, iface)
 		}
 	} else {
@@ -302,7 +302,7 @@ func parseIfaceList(dbPath string, ifacelist string) (ifaces []string, err error
 	return
 }
 
-// CheckExistsDB will return nil if a DB at path exists and otherwise the error encountered
+// CheckDBExists will return nil if a DB at path exists and otherwise the error encountered
 func CheckDBExists(path string) error {
 	if path == "" {
 		return fmt.Errorf("empty DB path provided")
