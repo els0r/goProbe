@@ -62,19 +62,21 @@ func listInterfaces(dbPath string, external bool) error {
 
 			is := summary.Interfaces[iface]
 
+			tf := query.NewTextFormatter()
 			fmt.Fprintf(wtxt, "%s\t%s\t%s\t%s\t%s\t\n",
 				ifaceDesc,
-				query.TextFormatter{}.Count(is.FlowCount),
-				query.TextFormatter{}.Size(is.Traffic),
+				tf.Count(is.FlowCount),
+				tf.Size(is.Traffic),
 				time.Unix(is.Begin, 0).Format("2006-01-02 15:04:05"),
 				time.Unix(is.End, 0).Format("2006-01-02 15:04:05"))
 			totalFlowCount += is.FlowCount
 			totalTraffic += is.Traffic
 		}
+		tf := query.NewTextFormatter()
 		fmt.Fprintln(wtxt, "\t \t \t \t \t")
 		fmt.Fprintf(wtxt, "Total\t%s\t%s\t\t\t\n",
-			query.TextFormatter{}.Count(totalFlowCount),
-			query.TextFormatter{}.Size(totalTraffic))
+			tf.Count(totalFlowCount),
+			tf.Size(totalTraffic))
 		wtxt.Flush()
 	}
 	if !external {

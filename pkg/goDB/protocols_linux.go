@@ -1,5 +1,6 @@
 package goDB
 
+// IPProtocols stores the IP protocol mappings to friendly name
 var IPProtocols = map[int]string{
 	0:   "HOPOPT",
 	1:   "ICMP",
@@ -142,10 +143,12 @@ var IPProtocols = map[int]string{
 	255: "UNKNOWN",
 }
 
+// GetIPProto returns the friendly name for a given protocol id
 func GetIPProto(id int) string {
 	return IPProtocols[id]
 }
 
+// IPProtocolIDs is the reverse mapping from friendly name to protocol number
 var IPProtocolIDs = map[string]int{
 	"hopopt":          0,
 	"icmp":            1,
@@ -288,6 +291,7 @@ var IPProtocolIDs = map[string]int{
 	"unknown":         255,
 }
 
+// GetIPProtoID returns the numeric value for a given IP protocol
 func GetIPProtoID(name string) (uint64, bool) {
 	ret, ok := IPProtocolIDs[name]
 	return uint64(ret), ok

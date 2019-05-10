@@ -226,7 +226,7 @@ func wipeDB(dbPath string) error {
 	}
 
 	for _, file := range dirList {
-		if file.IsDir() && (file.Name() != "./" || file.Name() != "../") {
+		if file.IsDir() {
 			if rmerr := os.RemoveAll(dbPath + "/" + file.Name()); rmerr != nil {
 				return rmerr
 			}

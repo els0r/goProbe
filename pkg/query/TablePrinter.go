@@ -533,6 +533,11 @@ func (j *JSONTablePrinter) Print() error {
 // TextFormatter table formats goProbe flows (goQuery's default)
 type TextFormatter struct{}
 
+// NewTextFormatter returns a new TextFormatter
+func NewTextFormatter() TextFormatter {
+	return TextFormatter{}
+}
+
 // Size prints out size in a human-readable format (e.g. 10 MB)
 func (TextFormatter) Size(size uint64) string {
 	count := 0
