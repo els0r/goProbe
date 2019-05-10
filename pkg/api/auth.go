@@ -8,7 +8,7 @@ import (
 	log "github.com/els0r/log"
 )
 
-func (k APIKeys) Exists(key string) bool {
+func (k Keys) exists(key string) bool {
 	_, exists := k[key]
 	return exists
 }
@@ -16,7 +16,7 @@ func (k APIKeys) Exists(key string) bool {
 // authenticator implements the middleware http.Handler
 type authenticator struct {
 	h      http.Handler
-	keys   APIKeys
+	keys   Keys
 	logger log.Logger
 }
 
@@ -43,7 +43,7 @@ func (a *authenticator) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		userKey = authHeader[1]
 
-		if !a.keys.Exists(userKey) {
+		if !a.keys.exists(userKey) {
 			a.logger.Debugf("user key '%s' denied: not registered")
 
 			ReturnStatus(w, http.StatusUnauthorized)
@@ -61,7 +61,7 @@ func (a *authenticator) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // AuthenticationHandler registers API authentication keys and returns a middleware that checks them
-func (s *Server) AuthenticationHandler(keys APIKeys) func(http.Handler) http.Handler {
+func (s *Server) AuthenticationHandler(keys Keys) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return &authenticator{h: next, keys: keys, logger: s.logger}
 	}

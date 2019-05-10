@@ -2,4 +2,7 @@
 //
 // For usage examples consult
 //    goQuery --help
+//
+// or run
+//    goQuery examples
 package main

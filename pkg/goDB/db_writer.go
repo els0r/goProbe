@@ -21,6 +21,8 @@ import (
 )
 
 const (
+	// QueryLogFile is the name of the query log written by the query package
+	QueryLogFile = "query.log"
 	// MetadataFileName specifies the location of the daily column metadata file
 	MetadataFileName = "meta.json"
 )
@@ -83,6 +85,26 @@ func (w *DBWriter) writeBlock(timestamp int64, column string, data []byte) error
 	return nil
 }
 
+func (w *DBWriter) createQueryLog() error {
+	var (
+		err     error
+		logfile *os.File
+	)
+	qlogPath := filepath.Join(w.dbpath, QueryLogFile)
+	logfile, err = os.OpenFile(qlogPath, os.O_CREATE, 0666)
+	if err != nil {
+		err = fmt.Errorf("failed to create query log: %s", err)
+		return err
+	}
+	logfile.Close()
+	err = os.Chmod(qlogPath, 0666)
+	if err != nil {
+		err = fmt.Errorf("failed to set query log permissions: %s", err)
+		return err
+	}
+	return nil
+}
+
 // Write takes an aggregated flow map and its metadata and writes it to disk for a given timestamp
 func (w *DBWriter) Write(flowmap AggFlowMap, meta BlockMetadata, timestamp int64) (InterfaceSummaryUpdate, error) {
 	var (
@@ -91,8 +113,15 @@ func (w *DBWriter) Write(flowmap AggFlowMap, meta BlockMetadata, timestamp int64
 		err    error
 	)
 
-	if err = os.MkdirAll(w.dailyDir(timestamp), 0755); err != nil {
+	err = os.MkdirAll(w.dailyDir(timestamp), 0755)
+	if err != nil {
 		err = fmt.Errorf("Could not create daily directory: %s", err.Error())
+		return update, err
+	}
+
+	// check if the query log exists and create it if necessary
+	err = w.createQueryLog()
+	if err != nil {
 		return update, err
 	}
 

@@ -173,12 +173,19 @@ func TestMain(m *testing.M) {
 
 	// remove any current test databases
 	if err = os.RemoveAll(dbPath); err != nil {
-		fmt.Printf("Failed to remove old databases: %s", err.Error())
+		fmt.Printf("Failed to remove old databases: %s\n", err.Error())
 		os.Exit(1)
 	}
 
 	// run tests
-	os.Exit(m.Run())
+	ecode := m.Run()
+
+	// remove any current test databases
+	if err = os.RemoveAll(dbPath); err != nil {
+		fmt.Printf("Failed to remove old databases: %s\n", err.Error())
+	}
+
+	os.Exit(ecode)
 }
 
 func callMain(arg ...string) *exec.Cmd {

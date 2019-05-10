@@ -1,0 +1,26 @@
+[
+  {
+    "Query": "talk_conv",
+    "Ifaces": "eth1",
+    "Condition": "",
+    "In": false,
+    "Out": true,
+    "Sum": false,
+    "First": "1456428000",
+    "Last": "1456473000",
+    "Format": "json",
+    "SortBy": "bytes",
+    "NumResults": 1000,
+    "External": false,
+    "SortAscending": false,
+    "Output": "",
+    "List": false,
+    "Version": false,
+    "Resolve": false,
+    "ResolveTimeout": 1,
+    "ResolveRows": 25,
+    "DBPath": "./testdb",
+    "MaxMemPct": 60,
+    "Caller": ""
+  }
+]

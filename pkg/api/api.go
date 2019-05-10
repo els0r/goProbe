@@ -51,8 +51,8 @@ type Server struct {
 	timeout time.Duration
 }
 
-// APIKeys allows for quick key validation
-type APIKeys map[string]struct{}
+// Keys allows for quick key validation
+type Keys map[string]struct{}
 
 // unique keys for context setting
 type key int
@@ -67,7 +67,7 @@ const (
 )
 
 const (
-	// request timeout in seconds
+	// DefaultTimeout stores the default request timeout in seconds
 	DefaultTimeout = 30
 )
 
@@ -193,7 +193,7 @@ func (s *Server) GenerateAPIDocs(json, md io.Writer) error {
 	}
 	_, mderr = fmt.Fprintf(md, docgen.MarkdownRoutesDoc(s.router, docgen.MarkdownOpts{
 		ProjectPath: "github.com/els0r/goProbe",
-		Intro:       mdApiDocIntro,
+		Intro:       mdAPIDocIntro,
 	}))
 	if mderr != nil {
 		err = fmt.Errorf("%s; md docgen: %s", err, mderr)
