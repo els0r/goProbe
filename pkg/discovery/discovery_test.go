@@ -384,6 +384,15 @@ func TestMakeConfig(t *testing.T) {
 				Versions:   []string{"v1"},
 			},
 		},
+		{
+			"no service discovery",
+			&capconfig.Config{
+				API: capconfig.APIConfig{
+					Keys: []string{"key1", "key2"},
+				},
+			},
+			nil,
+		},
 	}
 
 	for _, test := range tests {

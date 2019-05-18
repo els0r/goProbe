@@ -106,6 +106,8 @@ The interface configuration is stored as JSON and looks as follows:
 }
 ```
 
+Changes to the interface configuration can be _live reloaded_.
+
 #### Logging
 
 goProbe has flexible logging capabilities. It uses the `Logger` interface from third-party package [log](https://github.com/els0r/log), which is compatible with most third-party logging frameworks. Hence, other loggers can be injected into goProbe.
@@ -117,6 +119,8 @@ The default configuration has goProbe log to syslog with level "info". The confi
     "level" : "debug"          // more verbose logging
 }
 ```
+
+Changes to the logging configuration require a _restart_ of goProbe.
 
 #### API
 
@@ -136,6 +140,8 @@ The API itself is configured via the following parameters:
 }
 ```
 
+Changes to the logging configuration mostly require a _restart_ of goProbe (for more info see below).
+
 #### Service discovery and auto-registration
 
 If goProbe should advertise how it can be reached, auto-registration can be enabled. This will make goProbe periodically attempt to register its API details at an [ntm-discovery-service](./addon/ntm-discovery-service) endpoint.
@@ -152,6 +158,8 @@ To enable this, enrich the API configuration:
     }
 }
 ```
+
+Addition of a service discovery configuration require a _restart_ of goProbe. Changes (modifications and deletion of config) can be _live reloaded_.
 
 goDB
 --------------------------

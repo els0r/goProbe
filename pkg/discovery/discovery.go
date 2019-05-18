@@ -34,14 +34,18 @@ func (c *Config) String() string {
 	return fmt.Sprintf("{%s@%s; v=%v; keys=%s}", c.Identifier, c.Endpoint, c.Versions, keys)
 }
 
-// MakeConfig reads the relevant parts from goProbe's config and creates a discovery config from it
+// MakeConfig reads the relevant parts from goProbe's config and creates a discovery config from it. If the discovery section is nil, a nil config is returned.
 func MakeConfig(cfg *capconfig.Config) *Config {
-	return &Config{
-		Identifier: cfg.API.Discovery.Identifier,
-		Keys:       cfg.API.Keys,
-		Versions:   []string{"v1"}, // default is at least v1
-		Endpoint:   cfg.API.Discovery.Endpoint,
+
+	if cfg.API.Discovery != nil {
+		return &Config{
+			Identifier: cfg.API.Discovery.Identifier,
+			Keys:       cfg.API.Keys,
+			Versions:   []string{"v1"}, // default is at least v1
+			Endpoint:   cfg.API.Discovery.Endpoint,
+		}
 	}
+	return nil
 }
 
 // ProbesClient describes a path under the NTM discovery API
@@ -372,18 +376,31 @@ const (
 )
 
 type configUpdater struct {
-	state  state
-	config *Config
+	state      state
+	config     *Config
+	identifier string
 }
 
-func (c *configUpdater) tryRegister(client ProbesClient, logger log.Logger) {
+func (c *configUpdater) handleConfig(client ProbesClient, logger log.Logger) {
+	// a nil config triggers de-registration of the probe
 	if c.config == nil {
+		err := client.Delete(c.identifier)
+		if err != nil {
+			logger.Errorf("failed to deregister probe with id=%s", c.identifier)
+		} else {
+			logger.Infof("deregistered probe with id=%s", c.identifier)
+
+			// accept new configs
+			c.identifier = ""
+			c.state = acceptNew
+		}
 		return
 	}
 	if c.state == acceptNew {
-		err := CreateOrRegisterConfig(client, c.config, logger)
+		err := RegisterOrUpdateConfig(client, c.config, logger)
 		if err == nil {
 			c.state = idle
+			c.identifier = c.config.Identifier // store identifier for possible deregistration
 		}
 	}
 }
@@ -403,12 +420,12 @@ func RunConfigRegistration(client ProbesClient, logger log.Logger) chan *Config 
 		for {
 			select {
 			case <-time.After(5 * time.Minute):
-				updater.tryRegister(client, logger)
+				updater.handleConfig(client, logger)
 			case cfg := <-cfgUpdateChan:
 				updater.state = acceptNew
 				updater.config = cfg
 
-				updater.tryRegister(client, logger)
+				updater.handleConfig(client, logger)
 			}
 		}
 	}()
@@ -416,8 +433,8 @@ func RunConfigRegistration(client ProbesClient, logger log.Logger) chan *Config 
 	return cfgUpdateChan
 }
 
-// CreateOrRegisterConfig takes a configuration and registers it at the discovery service. If it exists already, it is updated.
-func CreateOrRegisterConfig(client ProbesClient, cfg *Config, logger log.Logger) error {
+// RegisterOrUpdateConfig takes a configuration and registers it at the discovery service. If it exists already, it is updated.
+func RegisterOrUpdateConfig(client ProbesClient, cfg *Config, logger log.Logger) error {
 	cfgRec, err := client.Create(cfg)
 	if err == nil {
 		logger.Info("Successfully registered probe with discovery service")
@@ -428,12 +445,12 @@ func CreateOrRegisterConfig(client ProbesClient, cfg *Config, logger log.Logger)
 			if err == nil {
 				logger.Info("Updated discovery configuration")
 			} else {
-				logger.Debugf("Probe discovery configuration update failed: %s", err)
+				logger.Errorf("Probe discovery configuration update failed: %s", err)
 			}
 			return err
 		}
 	} else {
-		logger.Debugf("Probe registration failed: %s", err)
+		logger.Errorf("Probe registration failed: %s", err)
 	}
 	return err
 }

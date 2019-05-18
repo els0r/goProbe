@@ -241,7 +241,9 @@ func main() {
 	captureManager.RotateAll(woChan)
 	close(woChan)
 	close(writeoutsChan)
-	close(discoveryConfigUpdate)
+	if discoveryConfigUpdate != nil {
+		close(discoveryConfigUpdate)
+	}
 
 	captureManager.CloseAll()
 
