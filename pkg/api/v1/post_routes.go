@@ -8,6 +8,7 @@ import (
 	capconfig "github.com/els0r/goProbe/cmd/goProbe/config"
 	"github.com/els0r/goProbe/cmd/goProbe/flags"
 	"github.com/els0r/goProbe/pkg/capture"
+	"github.com/els0r/goProbe/pkg/discovery"
 	"github.com/els0r/status"
 	"github.com/go-chi/chi"
 )
@@ -50,6 +51,11 @@ func (a *API) handleReload(w http.ResponseWriter, r *http.Request) {
 		status.Ok("")
 	} else {
 		http.Error(w, http.StatusText(http.StatusOK), http.StatusOK)
+	}
+
+	// send discovery update
+	if a.discoveryConfigUpdate != nil {
+		a.discoveryConfigUpdate <- discovery.MakeConfig(config)
 	}
 }
 

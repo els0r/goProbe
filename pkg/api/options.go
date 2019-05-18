@@ -3,6 +3,7 @@ package api
 import (
 	"time"
 
+	"github.com/els0r/goProbe/pkg/discovery"
 	log "github.com/els0r/log"
 )
 
@@ -52,5 +53,12 @@ func WithHost(host string) Option {
 func WithTimeout(seconds int) Option {
 	return func(s *Server) {
 		s.timeout = time.Duration(seconds) * time.Second
+	}
+}
+
+// WithDiscoveryConfigUpdate hands over a probe registration client and enables service discovery
+func WithDiscoveryConfigUpdate(update chan *discovery.Config) Option {
+	return func(s *Server) {
+		s.discoveryConfigUpdate = update
 	}
 }

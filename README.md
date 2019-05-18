@@ -136,6 +136,23 @@ The API itself is configured via the following parameters:
 }
 ```
 
+#### Service discovery and auto-registration
+
+If goProbe should advertise how it can be reached, auto-registration can be enabled. This will make goProbe periodically attempt to register its API details at an [ntm-discovery-service](./addon/ntm-discovery-service) endpoint.
+
+To enable this, enrich the API configuration:
+```
+"api" : {
+    ...,
+    "service_discovery" : {
+        "endpoint" : "https://goprobe.mydomain.com/server1",    // the endpoint does not have to coincide with the API settings in order to support setups behind a web-application firewall
+        "probe_identifier" : "dc-server1",                      // a unique identifier for the host on which goProbe runs
+        "skip_verify" : false,                                  // in case self-signed certificates are used by the registry ("true" disables SSL cert verification)
+        "registry" : "https://goprobe-discovery.mydomain.com"   // location of the discovery service
+    }
+}
+```
+
 goDB
 --------------------------
 The flow records are stored block-wise on a five minute basis in their respective attribute files. The database is partitioned on a per day basis, which means that for each day, a new folder is created which holds the attribute files for all flow records written throughout the day.

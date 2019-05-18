@@ -21,6 +21,7 @@ import (
 	"github.com/els0r/goProbe/cmd/goProbe/flags"
 	"github.com/els0r/goProbe/pkg/api"
 	"github.com/els0r/goProbe/pkg/capture"
+	"github.com/els0r/goProbe/pkg/discovery"
 	"github.com/els0r/goProbe/pkg/goDB"
 	"github.com/els0r/goProbe/pkg/version"
 	"github.com/els0r/log"
@@ -146,6 +147,27 @@ func main() {
 		apiOptions = append(apiOptions, api.WithTimeout(config.API.Timeout))
 	}
 
+	// run go-routine to register with discovery service
+	var (
+		discoveryConfigUpdate chan *discovery.Config
+		discoveryConfig       *discovery.Config
+	)
+	if config.API.Discovery != nil {
+
+		var clientOpts []discovery.Option
+		if config.API.Discovery.SkipVerify {
+			clientOpts = append(clientOpts, discovery.WithAllowSelfSignedCerts())
+		}
+
+		discoveryConfigUpdate = discovery.RunConfigRegistration(
+			discovery.NewClient(config.API.Discovery.Registry, clientOpts...),
+			logger,
+		)
+
+		// allow API to update config
+		apiOptions = append(apiOptions, api.WithDiscoveryConfigUpdate(discoveryConfigUpdate))
+	}
+
 	// create server and start listening for requests
 	server, err = api.New(config.API.Port, captureManager, apiOptions...)
 	if err != nil {
@@ -185,6 +207,14 @@ func main() {
 		server.Run()
 	}
 
+	// report supported API versions if discovery is used
+	if config.API.Discovery != nil {
+		discoveryConfig = discovery.MakeConfig(config)
+		discoveryConfig.Versions = server.SupportedAPIs()
+
+		discoveryConfigUpdate <- discoveryConfig
+	}
+
 	// Start goroutine for writeouts
 	go handleWriteouts(captureManager.WriteoutHandler, config.SyslogFlows, logger)
 
@@ -211,6 +241,7 @@ func main() {
 	captureManager.RotateAll(woChan)
 	close(woChan)
 	close(writeoutsChan)
+	close(discoveryConfigUpdate)
 
 	captureManager.CloseAll()
 

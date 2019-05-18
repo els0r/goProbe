@@ -48,6 +48,7 @@ import (
 	"net/http"
 
 	"github.com/els0r/goProbe/pkg/capture"
+	"github.com/els0r/goProbe/pkg/discovery"
 	"github.com/go-chi/chi"
 
 	log "github.com/els0r/log"
@@ -63,10 +64,18 @@ func WithLogger(logger log.Logger) Option {
 	}
 }
 
+// WithDiscoveryConfigUpdate hands over a probe registration client and enables service discovery
+func WithDiscoveryConfigUpdate(update chan *discovery.Config) Option {
+	return func(a *API) {
+		a.discoveryConfigUpdate = update
+	}
+}
+
 // API holds access to goProbe's internal capture routines
 type API struct {
-	c      *capture.Manager
-	logger log.Logger
+	c                     *capture.Manager
+	discoveryConfigUpdate chan *discovery.Config
+	logger                log.Logger
 }
 
 // New creates a new API
@@ -77,6 +86,7 @@ func New(manager *capture.Manager, opts ...Option) *API {
 	for _, opt := range opts {
 		opt(a)
 	}
+
 	return a
 }
 
