@@ -16,5 +16,5 @@ var versionCmd = &cobra.Command{
 }
 
 func printVersion() {
-	fmt.Printf("goProbe/goQuery %s\n", version.Text())
+	fmt.Printf("goQuery\n%s", version.Version())
 }

@@ -56,7 +56,7 @@ func main() {
 		os.Exit(1)
 	}
 	if flags.CmdLine.Version {
-		fmt.Printf("goProbe %s\n", version.Text())
+		fmt.Printf("goProbe\n%s", version.Version())
 		os.Exit(0)
 	}
 
