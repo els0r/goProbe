@@ -93,7 +93,7 @@ steps:
       commands:
           - go get ./...
           - cd pkg/version
-          - export COMMIT_SHA=$( git describe --tags `git rev-list --tags --max-count=1` )+$(git rev-parse HEAD)
+          - export COMMIT_SHA=$(git rev-parse HEAD)
           - go generate
           - cd ../../
           - go install ./...
