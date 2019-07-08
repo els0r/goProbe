@@ -1,0 +1,108 @@
+kind: pipeline
+name: goprobe
+
+clone:
+  disable: true
+
+steps:
+
+
+workspace:
+    base: /go
+    path: src/github.com/els0r/goProbe
+
+steps:
+    - name: internal_net_clone
+      image: plugins/git
+      settings:
+          skip_verify: true
+
+    - name: dependencies
+      image: golang:1.12.5-stretch
+      pull: always
+      environment:
+          GO111MODULE: on
+      commands:
+          - go get ./...
+      when:
+          branch:
+              - master
+              - develop
+              - feature/*
+          event:
+              - push
+
+    - name: build
+      image: golang:1.12.5-stretch
+      pull: always
+      environment:
+          GO111MODULE: on
+      commands:
+          - cd pkg/version
+          - export COMMIT_SHA=$(git rev-parse HEAD)
+          - go generate
+          - cd ../../
+          - go install ./...
+          - goQuery -version
+      when:
+          branch:
+              - master
+              - develop
+              - feature/*
+          event:
+              - push
+
+    - name: test
+      image: golang:1.12.5-stretch
+      pull: always
+      environment:
+          GO111MODULE: on
+          GODB_LOGGER: console
+      commands:
+          - go test -v ./...
+      when:
+          branch:
+              - master
+              - develop
+              - feature/*
+          event:
+              - push
+
+    - name: vet
+      image: golang:1.12.5-stretch
+      pull: always
+      environment:
+          GO111MODULE: on
+          GODB_LOGGER: console
+      commands:
+          - go vet -composites=false ./...
+      when:
+          branch:
+              - master
+              - develop
+              - feature/*
+          event:
+              - push
+
+    - name: merge
+      image: golang:1.12.5-stretch
+      pull: always
+      environment:
+          GO111MODULE: on
+          GODB_LOGGER: console
+      commands:
+          - go get ./...
+          - cd pkg/version
+          - export COMMIT_SHA=$(git rev-parse HEAD)
+          - go generate
+          - cd ../../
+          - go install ./...
+          - go test -v ./...
+          - golint ./... | grep -Ev "(annoying|MixedCaps|ColIdx)"
+      when:
+          branch:
+              - develop
+              - release/*
+              - feature/*
+          event:
+              - merge

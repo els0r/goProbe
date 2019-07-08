@@ -9,6 +9,7 @@ import (
 
 	"github.com/els0r/goProbe/pkg/api/v1"
 	"github.com/els0r/goProbe/pkg/capture"
+	"github.com/els0r/goProbe/pkg/discovery"
 	log "github.com/els0r/log"
 
 	"github.com/go-chi/chi"
@@ -49,6 +50,9 @@ type Server struct {
 
 	// timeouts
 	timeout time.Duration
+
+	// discovery config update
+	discoveryConfigUpdate chan *discovery.Config
 }
 
 // Keys allows for quick key validation
@@ -115,7 +119,14 @@ func New(port string, manager *capture.Manager, opts ...Option) (*Server, error)
 	}
 
 	// initialize currently supported APIs
-	s.apis = append(s.apis, v1.New(manager, v1.WithLogger(s.logger)))
+	v1Options := []v1.Option{v1.WithLogger(s.logger)}
+	if s.discoveryConfigUpdate != nil {
+		v1Options = append(v1Options, v1.WithDiscoveryConfigUpdate(s.discoveryConfigUpdate))
+	}
+
+	s.apis = append(s.apis,
+		v1.New(manager, v1Options...),
+	)
 
 	r := chi.NewRouter()
 
@@ -209,4 +220,13 @@ func (s *Server) Run() {
 // ReturnStatus is a wrapper around the default http.Error method
 func ReturnStatus(w http.ResponseWriter, code int) {
 	http.Error(w, http.StatusText(code), code)
+}
+
+// SupportedAPIs returns a list of all APIs that are registered
+func (s *Server) SupportedAPIs() []string {
+	var sup []string
+	for _, api := range s.apis {
+		sup = append(sup, api.Version())
+	}
+	return sup
 }

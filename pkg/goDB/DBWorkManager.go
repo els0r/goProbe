@@ -52,8 +52,12 @@ type DBWorkManager struct {
 
 // NewDBWorkManager sets up a new work manager for executing queries
 func NewDBWorkManager(dbpath string, iface string, numProcessingUnits int) (*DBWorkManager, error) {
-	// whenever a new workload is created the logging facility is set up
-	l, err := log.NewFromString("syslog")
+	// whenever a new workload is created the logging facility is set up. Make sure to honor environments where syslog may not be available
+	loggerStr := os.Getenv("GODB_LOGGER")
+	if !(loggerStr == "devnull" || loggerStr == "console") {
+		loggerStr = "syslog"
+	}
+	l, err := log.NewFromString(loggerStr)
 	if err != nil {
 		return nil, err
 	}

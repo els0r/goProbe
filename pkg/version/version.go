@@ -1,55 +1,35 @@
-/////////////////////////////////////////////////////////////////////////////////
-//
-// version.go
-//
-// Written by Lorenz Breidenbach lob@open.ch, February 2016
-// Copyright (c) 2016 Open Systems AG, Switzerland
-// All Rights Reserved.
-//
-/////////////////////////////////////////////////////////////////////////////////
-
-// Package version provides a single place to store/retrieve all version information
+// Package version is used by the release process to add an
+// informative version string to some commands.
 package version
 
 import (
 	"fmt"
 	"runtime"
+	"time"
 )
 
-// these variables are set during build by the command
-// go build -ldflags "-X pkg/version.version=3.14 ..."
+//go:generate go run make_version.go
+
+// These strings will be overwritten by an init function in
+// created by make_version.go during the release process.
 var (
-	version   = "unknown"
-	commit    = "unknown"
-	builddate = "unknown"
+	BuildTime = time.Time{}
+	GitSHA    = ""
 )
 
-// Version returns the version number of goProbe/goQuery, e.g. "2.1"
+// Version returns a newline-terminated string describing the current
+// version of the build.
 func Version() string {
-	return version
-}
+	if GitSHA == "" {
+		return "devel\n"
+	}
 
-// Commit returns the git commit sha1 of goProbe/goQuery. If the build
-// was from a dirty tree, the hash will be prepended with a "!".
-func Commit() string {
-	return commit
-}
-
-// BuildDate returns the date and time when goProbe/goQuery were built.
-func BuildDate() string {
-	return builddate
-}
-
-// Text returns ready-for-printing output for the -version target
-// containing the build kind, version number, commit hash, build date and
-// go version.
-func Text() string {
-	return fmt.Sprintf(
-		"%s version %s (commit id: %s, built on: %s) using go %s",
-		BuildKind,
-		version,
-		commit,
-		builddate,
+	str := fmt.Sprintf(`    Build time:     %s
+    Git hash:       %s
+    Go versions:    %s
+`, BuildTime.In(time.UTC).Format(time.Stamp+" 2006 UTC"),
+		GitSHA,
 		runtime.Version(),
 	)
+	return str
 }

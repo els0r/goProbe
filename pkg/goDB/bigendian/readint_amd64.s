@@ -28,7 +28,7 @@ TEXT ·ReadUint64At(SB),NOSPLIT,$0-40
                               // 24 = 3 * 8 byte for slice + 8 bytes for idx
     RET
 panic:
-    CALL    runtime·panicindex(SB)
+    CALL    ·panicIndex(SB)
 
 // func ReadInt64At(b []byte, idx int) int64
 TEXT ·ReadInt64At(SB),NOSPLIT,$0-40
@@ -46,7 +46,7 @@ TEXT ·ReadInt64At(SB),NOSPLIT,$0-40
                               // 24 = 3 * 8 byte for slice + 8 bytes for idx
     RET
 panic:
-    CALL    runtime·panicindex(SB)
+    CALL    ·panicIndex(SB)
 
 // func UnsafeReadUint64At(b []byte, idx int) uint64
 TEXT ·UnsafeReadUint64At(SB),NOSPLIT,$0-40

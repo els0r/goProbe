@@ -248,7 +248,7 @@ func main() {
 
 		bash(compPoint, compLine)
 	case "-version":
-		fmt.Printf("goquery_completion %s\n", version.Text())
+		fmt.Printf("goquery_completion\n%s", version.Version())
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown completion mode: %s Implemented modes: %s\n", os.Args[1], "bash, -version")
 	}

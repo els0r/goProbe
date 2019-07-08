@@ -25,3 +25,7 @@ func UnsafeReadUint64At(b []byte, idx int) uint64
 
 // UnsafeReadInt64At returns the int64 stored at location idx in b. It accesses the data directly via the unsafe package
 func UnsafeReadInt64At(b []byte, idx int) int64
+
+func panicIndex() {
+	panic("index out of range")
+}

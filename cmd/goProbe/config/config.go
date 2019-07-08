@@ -55,12 +55,21 @@ type LogConfig struct {
 
 // APIConfig stores goProbe's API configuration
 type APIConfig struct {
-	Host    string   `json:"host"`
-	Port    string   `json:"port"`
-	Metrics bool     `json:"metrics"`
-	Logging bool     `json:"request_logging"`
-	Timeout int      `json:"request_timeout"`
-	Keys    []string `json:"keys"`
+	Host      string           `json:"host"`
+	Port      string           `json:"port"`
+	Metrics   bool             `json:"metrics"`
+	Logging   bool             `json:"request_logging"`
+	Timeout   int              `json:"request_timeout"`
+	Keys      []string         `json:"keys"`
+	Discovery *DiscoveryConfig `json:"service_discovery,omitempty"`
+}
+
+// DiscoveryConfig stores access parameters in case goProbe should publish it's API configuration so other services can discover it
+type DiscoveryConfig struct {
+	Endpoint   string `json:"endpoint"`
+	Identifier string `json:"probe_identifier"`
+	Registry   string `json:"registry"`
+	SkipVerify bool   `json:"skip_verify"`
 }
 
 // New creates a new configuration struct with default settings
@@ -97,6 +106,24 @@ func (a APIConfig) validate() error {
 	// check API key constraints
 	if a.Timeout < 0 {
 		return fmt.Errorf("The request timeout must be a positive number > 0")
+	}
+
+	// check discovery config
+	if a.Discovery != nil {
+		return a.Discovery.validate()
+	}
+	return nil
+}
+
+func (d DiscoveryConfig) validate() error {
+	if d.Endpoint == "" {
+		return fmt.Errorf("Each probe must publish it's config with a non-empty endpoint on which the API can be reached")
+	}
+	if d.Identifier == "" {
+		return fmt.Errorf("Each probe must publish it's config with a non-empty identifier if service discvoery is enabled")
+	}
+	if d.Registry == "" {
+		return fmt.Errorf("The registry endpoint (configuration store) needs to be specified. Usually this will be a FQDN or an IP:Port pair")
 	}
 	return nil
 }
