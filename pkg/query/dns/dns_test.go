@@ -11,11 +11,19 @@
 package dns
 
 import (
+	"os"
 	"testing"
 	"time"
 )
 
+func skipInCI(t *testing.T) {
+	if os.Getenv("CI") == "true" {
+		t.Skipf("skipping DNS tests in CI/CD mode")
+	}
+}
+
 func TestLookup(t *testing.T) {
+	skipInCI(t)
 	t.Parallel()
 
 	// 8.8.8.8 is google's DNS server. This lookup should yield the same
@@ -34,6 +42,7 @@ func TestLookup(t *testing.T) {
 }
 
 func TestTimeout(t *testing.T) {
+	skipInCI(t)
 	t.Parallel()
 
 	t0 := time.Now()
