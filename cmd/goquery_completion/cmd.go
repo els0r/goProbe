@@ -26,8 +26,8 @@
 //             ;;
 //
 //             *)
-//                 if [ -x /opt/ntm/goProbe/shared/goquery_completion ]; then
-//                     mapfile -t COMPREPLY < <( /opt/ntm/goProbe/shared/goquery_completion bash "${COMP_POINT}" "${COMP_LINE}" )
+//                 if [ -x /usr/local/share/goquery_completion ]; then
+//                     mapfile -t COMPREPLY < <( /usr/local/share/goquery_completion bash "${COMP_POINT}" "${COMP_LINE}" )
 //                 fi
 //             ;;
 //         esac

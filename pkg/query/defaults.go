@@ -2,7 +2,7 @@ package query
 
 // Defaults for query arguments
 var (
-	DefaultDBPath         = "/opt/ntm/goProbe/db"
+	DefaultDBPath         = "/usr/local/goProbe/db"
 	DefaultFormat         = "txt"
 	DefaultIn             = false
 	DefaultMaxMemPct      = 60
