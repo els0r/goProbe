@@ -1,0 +1,7 @@
+Package: goprobe
+Version: {{VERSION}}
+Section: base
+Priority: optional
+Architecture: amd64
+Maintainer: fako1024
+Description: Network Traffic Monitoring
