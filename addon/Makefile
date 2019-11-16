@@ -98,12 +98,11 @@ go_install:
 	echo "*** generating example configuration ***"
 	echo -e "{\n\t\"db_path\" : \"/usr/local/$(GO_PRODUCT)/db\",\n\t\"interfaces\" : {\n\t\t\"eth0\" : {\n\t\t\t\"bpf_filter\" : \"not arp and not icmp\",\n\t\t\t\"buf_size\" : 2097152,\n\t\t\t\"promisc\" : false\n\t\t}\n\t}\n}" > absolute/etc/goprobe.conf.example
 
-	#set the appropriate permissions
-	chmod -R 755 absolute/bin \
-		absolute/etc \
+	#set the appropriate permissions for files
+	chmod -R 755 absolute/bin
+	chown root.root absolute/etc/systemd/system/goprobe.service
 
 	echo "*** cleaning unneeded files ***"
-
 	# strip binaries
 	if [ "$(UNAME_OS)" != "darwin" ]; \
 	then \
@@ -133,7 +132,6 @@ deploy:
 	else \
 		echo "*** syncing binary tree ***"; \
 		rsync -a absolute/ /; \
-		chown root.root /etc/systemd/system/goprobe.service; \
 		systemctl daemon-reload
 	fi
 
