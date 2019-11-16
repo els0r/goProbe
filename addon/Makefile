@@ -100,7 +100,6 @@ go_install:
 
 	#set the appropriate permissions for files
 	chmod -R 755 absolute/bin
-	chown root.root absolute/etc/systemd/system/goprobe.service
 
 	echo "*** cleaning unneeded files ***"
 	# strip binaries
@@ -121,7 +120,9 @@ deb:
 	sed 's/{{VERSION}}/$(DEB_VERSION)/g' deb-control > $(DEB_VERSION)/DEBIAN/control
 	cp preinst postrm postinst $(DEB_VERSION)/DEBIAN/
 	cp -r absolute/* $(DEB_VERSION)/
+	docker run --rm -v $(PWD)/$(DEB_VERSION):/$(DEB_VERSION) debian:buster-slim chown -R root.root $(DEB_VERSION)/{bin,etc}
 	docker run --rm -v $(PWD)/$(DEB_VERSION):/$(DEB_VERSION) -v $(PWD):/output debian:buster-slim dpkg-deb --build $(DEB_VERSION) /output/$(GO_PRODUCT)-$(DEB_VERSION).deb
+	docker run --rm -v $(PWD)/$(DEB_VERSION):/$(DEB_VERSION) debian:buster-slim rm -rf $(DEB_VERSION)/{bin,etc}
 	rm -rf $(DEB_VERSION)
 
 deploy:
@@ -132,6 +133,7 @@ deploy:
 	else \
 		echo "*** syncing binary tree ***"; \
 		rsync -a absolute/ /; \
+		chown root.root /etc/systemd/system/goprobe.service; \
 		systemctl daemon-reload
 	fi
 
