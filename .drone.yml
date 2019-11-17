@@ -18,7 +18,7 @@ steps:
           skip_verify: true
 
     - name: dependencies
-      image: golang:1.12.5-stretch
+      image: golang:1.13.4-stretch
       pull: always
       environment:
           GO111MODULE: on
@@ -33,16 +33,13 @@ steps:
               - push
 
     - name: build
-      image: golang:1.12.5-stretch
+      image: golang:1.13.4-stretch
       pull: always
       environment:
           GO111MODULE: on
       commands:
-          - cd pkg/version
-          - export COMMIT_SHA=$(git rev-parse HEAD)
-          - go generate
-          - cd ../../
-          - go install ./...
+          - cd addon
+          - make all
           - goQuery -version
       when:
           branch:
@@ -53,7 +50,7 @@ steps:
               - push
 
     - name: test
-      image: golang:1.12.5-stretch
+      image: golang:1.13.4-stretch
       pull: always
       environment:
           GO111MODULE: on
@@ -69,7 +66,7 @@ steps:
               - push
 
     - name: vet
-      image: golang:1.12.5-stretch
+      image: golang:1.13.4-stretch
       pull: always
       environment:
           GO111MODULE: on
@@ -85,18 +82,16 @@ steps:
               - push
 
     - name: merge
-      image: golang:1.12.5-stretch
+      image: golang:1.13.4-stretch
       pull: always
       environment:
           GO111MODULE: on
           GODB_LOGGER: console
       commands:
           - go get ./...
-          - cd pkg/version
-          - export COMMIT_SHA=$(git rev-parse HEAD)
-          - go generate
-          - cd ../../
-          - go install ./...
+          - cd addon
+          - make all
+          - go test
           - go test -v ./...
           - golint ./... | grep -Ev "(annoying|MixedCaps|ColIdx)"
       when:
