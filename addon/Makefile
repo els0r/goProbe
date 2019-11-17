@@ -34,26 +34,23 @@
 # public code is used.
 SHELL := /bin/bash
 
-PKG    = goProbe
-PREFIX = /opt/ntm
-
 # GoLang main version
-BASEPATH		= github.com/els0r/goProbe
-GO_PRODUCT	    = goProbe
-GO_QUERY        = goQuery
+BASEPATH	= github.com/els0r/goProbe
+GO_PRODUCT	= goProbe
+GO_QUERY	= goQuery
 
 # get the operating system and git variables for versioning
 UNAME_OS := $(shell uname -s | tr '[:upper:]' '[:lower:]')
-GIT_COMMIT := $(shell git rev-parse HEAD)
+COMMIT_SHA := $(shell git rev-parse HEAD)
 GIT_VERSION := $(shell git describe --tags)
+DEB_VERSION := $(shell echo $(GIT_VERSION) | sed 's/v//g')
 BUILD_DATE  := $(shell date +%FT%T%z)
 
 # easy to use build command for everything related goprobe
 VERSION_PATH = $(BASEPATH)/pkg/version
 
 GO_BUILDTAGS = netcgo public $(UNAME_OS)
-GO_LDFLAGS   = -ldflags '-X $(VERSION_PATH).version=$(GIT_VERSION) -X $(VERSION_PATH).commit=$(GIT_COMMIT) -X $(VERSION_PATH).builddate=$(BUILD_DATE)'
-GPBUILD      = go install -i -tags '$(GO_BUILDTAGS)' $(GO_LDFLAGS)
+GPBUILD      = go install -i -tags '$(GO_BUILDTAGS)'
 GPTESTBUILD  = go test -c -tags '$(GO_BUILDTAGS)'
 
 # gopacket and gopcap
@@ -67,6 +64,10 @@ fetch:
 	go get github.com/els0r/status
 
 compile:
+
+	## VERSION ###
+	echo "*** setting version information ***"
+	COMMIT_SHA=$(COMMIT_SHA) go generate $(BASEPATH)/pkg/version
 
 	## GO CODE COMPILATION ##
 	echo "*** compiling $(GO_PRODUCT) ***"
@@ -86,40 +87,46 @@ go_install:
 
 	# additional directories
 	echo "*** creating binary tree ***"
-	mkdir -p absolute$(PREFIX)/$(PKG)/bin    && chmod 755 absolute$(PREFIX)/$(PKG)/bin
-	mkdir -p absolute$(PREFIX)/$(PKG)/etc    && chmod 755 absolute$(PREFIX)/$(PKG)/etc
-	mkdir -p absolute/etc/init.d             && chmod 755 absolute/etc/init.d
+	mkdir -p absolute/bin                    && chmod 755 absolute/bin
+	mkdir -p absolute/etc/systemd/system     && chmod 755 absolute/etc/systemd/system
 
 	echo "*** installing $(GO_PRODUCT) and $(GO_QUERY) ***"
-	mv $(GOPATH)/bin/goProbe 	absolute$(PREFIX)/$(PKG)/bin
-	mv $(GOPATH)/bin/goQuery   	absolute$(PREFIX)/$(PKG)/bin
-	mv $(GOPATH)/bin/goConvert  absolute$(PREFIX)/$(PKG)/bin
+	mv $(GOPATH)/bin/goProbe 	absolute/bin
+	mv $(GOPATH)/bin/goQuery   	absolute/bin
+	mv $(GOPATH)/bin/goConvert      absolute/bin
 
-	# change the prefix variable in the init script
-	cp goprobe.init absolute/etc/init.d/goprobe.init
-	sed "s#PREFIX=#PREFIX=$(PREFIX)#g" -i absolute/etc/init.d/goprobe.init
+	# systemd service definition
+	cp goprobe.service absolute/etc/systemd/system/goprobe.service
 
 	echo "*** generating example configuration ***"
-	echo -e "{\n\t\"db_path\" : \"$(PREFIX)/$(PKG)/db\",\n\t\"interfaces\" : {\n\t\t\"eth0\" : {\n\t\t\t\"bpf_filter\" : \"not arp and not icmp\",\n\t\t\t\"buf_size\" : 2097152,\n\t\t\t\"promisc\" : false\n\t\t}\n\t}\n}" > absolute$(PREFIX)/$(PKG)/etc/goprobe.conf.example
+	echo -e "{\n\t\"db_path\" : \"/usr/local/$(GO_PRODUCT)/db\",\n\t\"interfaces\" : {\n\t\t\"eth0\" : {\n\t\t\t\"bpf_filter\" : \"not arp and not icmp\",\n\t\t\t\"buf_size\" : 2097152,\n\t\t\t\"promisc\" : false\n\t\t}\n\t}\n}" > absolute/etc/goprobe.conf.example
 
-	#set the appropriate permissions
-	chmod -R 755 absolute$(PREFIX)/$(PKG)/bin \
-		absolute$(PREFIX)/$(PKG)/etc \
-		absolute/etc/init.d \
+	#set the appropriate permissions for files
+	chmod -R 755 absolute/bin
 
 	echo "*** cleaning unneeded files ***"
-
 	# strip binaries
 	if [ "$(UNAME_OS)" != "darwin" ]; \
 	then \
-		strip --strip-unneeded absolute$(PREFIX)/$(PKG)/bin/*; \
+		strip --strip-unneeded absolute/bin/*; \
 	fi
 
 package: go_package
 
 go_package:
 
-	cd absolute; tar cjf $(PKG).tar.bz2 *; mv $(PKG).tar.bz2 ../
+	cd absolute; tar cjf $(GO_PRODUCT).tar.bz2 *; mv $(GO_PRODUCT).tar.bz2 ../
+
+deb:
+
+	mkdir -p $(DEB_VERSION)/DEBIAN
+	sed 's/{{VERSION}}/$(DEB_VERSION)/g' deb-control > $(DEB_VERSION)/DEBIAN/control
+	cp preinst postrm postinst $(DEB_VERSION)/DEBIAN/
+	cp -r absolute/* $(DEB_VERSION)/
+	docker run --rm -v $(PWD)/$(DEB_VERSION):/$(DEB_VERSION) debian:buster-slim chown -R root.root $(DEB_VERSION)/{bin,etc}
+	docker run --rm -v $(PWD)/$(DEB_VERSION):/$(DEB_VERSION) -v $(PWD):/output debian:buster-slim dpkg-deb --build $(DEB_VERSION) /output/$(GO_PRODUCT)-$(DEB_VERSION).deb
+	docker run --rm -v $(PWD)/$(DEB_VERSION):/$(DEB_VERSION) debian:buster-slim rm -rf $(DEB_VERSION)/{bin,etc}
+	rm -rf $(DEB_VERSION)
 
 deploy:
 
@@ -129,8 +136,8 @@ deploy:
 	else \
 		echo "*** syncing binary tree ***"; \
 		rsync -a absolute/ /; \
-		ln -sf $(PREFIX)/$(PKG)/bin/goQuery /usr/local/bin/goquery; \
-		chown root.root /etc/init.d/goprobe.init; \
+		chown root.root /etc/systemd/system/goprobe.service; \
+		systemctl daemon-reload
 	fi
 
 clean:
@@ -141,7 +148,8 @@ clean:
 	echo "*** removing dependencies and binaries ***"
 	rm -rf cmd/$(GO_PRODUCT)/$(GO_PRODUCT) cmd/$(GO_QUERY)/$(GO_QUERY) cmd/goConvert/goConvert
 
-	rm -rf $(PKG).tar.bz2
+	rm -f $(GO_PRODUCT).tar.bz2
+	rm -f $(GO_PRODUCT)-$(DEB_VERSION).deb
 
 all: clean fetch compile install
 

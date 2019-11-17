@@ -1,1 +1,6 @@
+*.bz2
+*.deb
 absolute
+cmd/goProbe/goProbe
+cmd/goQuery/goQuery
+cmd/goConvert/goConvert

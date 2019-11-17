@@ -2,13 +2,13 @@
 
 case $1 in
   reload)
-    /bin/echo "RELOAD" | /usr/bin/socat - UNIX-CONNECT:PREFIX/goProbe/db/control.sock > /dev/null
+    /bin/echo "RELOAD" | /usr/bin/socat - UNIX-CONNECT:/usr/local/goProbe/db/control.sock > /dev/null
     ;;
   status)
-    /bin/echo "STATUS" | /usr/bin/socat - UNIX-CONNECT:/opt/ntm/goProbe/db/control.sock
+    /bin/echo "STATUS" | /usr/bin/socat - UNIX-CONNECT:/usr/local/goProbe/db/control.sock
     ;;
   debug)
-    /bin/echo "STATUS" | /usr/bin/socat - UNIX-CONNECT:/opt/ntm/goProbe/db/control.sock
+    /bin/echo "STATUS" | /usr/bin/socat - UNIX-CONNECT:/usr/local/goProbe/db/control.sock
     ;;
   *)
     ;;

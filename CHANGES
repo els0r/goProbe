@@ -56,3 +56,5 @@ UNRELEASED fako1024,els0r
     - start fetching fako's gopacket via go get
     - get rid of fetching golang, effectively making a go installation a pre-requisite
     - remove all mentions of libpcap from the repository
+    - improve packaging and add .deb Makefile target
+    - Add explicit systemd timeout for stop target to ensure that a stalling goprobe is killed

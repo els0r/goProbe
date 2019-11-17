@@ -72,20 +72,20 @@ The flow data is written out to a custom colum store called `goDB`, which was sp
 Capturing is performed concurrently by goProbe on multiple interfaces. goProbe is started as follows (either as `root` or as non-root with capability `CAP_NET_RAW`):
 
 ```
-/opt/ntm/goProbe/bin/goProbe -config <path to configuration file>
+/usr/local/goProbe/bin/goProbe -config <path to configuration file>
 ```
 The capturing probe can be run as a daemon via
 
 ```
-/etc/init.d/goprobe.init {start|stop|status|restart|reload|force-reload}
+systemctl {start|stop|status|restart|reload|force-reload} goprobe.service
 ```
 
 ### Configuration
 
 You must configure goProbe. By default, the relevant configuration file resides in
-`/opt/ntm/goProbe/etc/goprobe.conf`. The config covers three aspects of goProbe: capturing, logging and the API.
+`/etc/goprobe.conf`. The config covers three aspects of goProbe: capturing, logging and the API.
 
-An example configuration file is created during installation at `/opt/ntm/goProbe/etc/goprobe.conf.example`.
+An example configuration file is created during installation at `/etc/goprobe.conf.example`.
 
 #### DB location
 
@@ -182,7 +182,7 @@ goQuery
 
 ### Usage
 
-For a comprehensive help on how to use goQuery type `/opt/ntm/goProbe/bin/goQuery -h` or `/opt/ntm/goProbe/bin/goQuery help`.
+For a comprehensive help on how to use goQuery type `/bin/goQuery -h` or `/bin/goQuery help`.
 
 ### Example Output
 
@@ -272,8 +272,6 @@ The args file can look as follows:
 Installation
 ------------
 
-*Note*: the default directory for `goProbe` is `/opt/ntm/goProbe`. If you wish to change this, change the `PREFIX` variable in the `Makefile` to a destination of your choosing.
-
 Before running the installer, make sure that you have the following dependencies installed:
 * golang
 * socat (for init script usage only)
@@ -315,8 +313,8 @@ _goquery() {
         ;;
 
         *)
-            if [ -x /opt/ntm/goProbe/shared/goquery_completion ]; then
-                mapfile -t COMPREPLY < <( /opt/ntm/goProbe/shared/goquery_completion bash "${COMP_POINT}" "${COMP_LINE}" )
+            if [ -x /usr/local/share/goquery_completion ]; then
+                mapfile -t COMPREPLY < <( /usr/local/share/goquery_completion bash "${COMP_POINT}" "${COMP_LINE}" )
             fi
         ;;
     esac
