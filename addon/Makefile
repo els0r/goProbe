@@ -41,7 +41,7 @@ GO_QUERY	= goQuery
 
 # get the operating system and git variables for versioning
 UNAME_OS := $(shell uname -s | tr '[:upper:]' '[:lower:]')
-GIT_COMMIT := $(shell git rev-parse HEAD)
+COMMIT_SHA := $(shell git rev-parse HEAD)
 GIT_VERSION := $(shell git describe --tags)
 DEB_VERSION := $(shell echo $(GIT_VERSION) | sed 's/v//g')
 BUILD_DATE  := $(shell date +%FT%T%z)
@@ -50,8 +50,7 @@ BUILD_DATE  := $(shell date +%FT%T%z)
 VERSION_PATH = $(BASEPATH)/pkg/version
 
 GO_BUILDTAGS = netcgo public $(UNAME_OS)
-GO_LDFLAGS   = -ldflags '-X $(VERSION_PATH).version=$(GIT_VERSION) -X $(VERSION_PATH).commit=$(GIT_COMMIT) -X $(VERSION_PATH).builddate=$(BUILD_DATE)'
-GPBUILD      = go install -i -tags '$(GO_BUILDTAGS)' $(GO_LDFLAGS)
+GPBUILD      = go install -i -tags '$(GO_BUILDTAGS)'
 GPTESTBUILD  = go test -c -tags '$(GO_BUILDTAGS)'
 
 # gopacket and gopcap
@@ -65,6 +64,10 @@ fetch:
 	go get github.com/els0r/status
 
 compile:
+
+	## VERSION ###
+	echo "*** setting version information ***"
+	COMMIT_SHA=$(COMMIT_SHA) go generate $(BASEPATH)/pkg/version
 
 	## GO CODE COMPILATION ##
 	echo "*** compiling $(GO_PRODUCT) ***"
