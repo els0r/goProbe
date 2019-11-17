@@ -40,7 +40,7 @@ steps:
       commands:
           - cd addon
           - make all
-          - goQuery -version
+          - absolute/bin/goQuery -version
       when:
           branch:
               - master
