@@ -1,5 +1,0 @@
-[
-  ["-i", "ANY", "-d", "$TESTDB", "-f", "1456428000", "-l", "1456473000", "-n", "99999999", "-e", "json", "iface,sip,dip"],
-  ["-i", "aNy", "-d", "$TESTDB", "-f", "1456428000", "-l", "1456473000", "-n", "99999999", "-e", "json", "iface,sip,dip"],
-  ["-i", "eth0,eth1,eth2,t_c1_fwde,t_c1_fwde1,tun_3g_c1_fw1,tun_3g_c1_fwde", "-d", "$TESTDB", "-f", "1456428000", "-l", "1456473000", "-n", "99999999", "-e", "json", "iface,sip,dip"]
-]
