@@ -1,47 +1,4 @@
 // Package v1 specifies goProbe API version 1.
-//
-// Actions (POST):
-//
-// Path: /
-//
-//   /_reload:
-//    Triggers a reload of the configuration.
-//
-//    Parameters:
-//        None
-//
-// Statistics (GET):
-//
-// Path: /stats
-//
-//   /packets
-//    Returns the number of packets received in the last writeout period
-//
-//    Parameters:
-//        * debug: if set to 1, it will print out info for each interface
-//        * pretty: if set to 1, it will use status line to print out the statistics. Default format is JSON
-//
-//   /errors
-//    Returns the pcap errors ocurring on each interface
-//
-//    Parameters:
-//        * pretty: if set to 1, it will use status line to print out the statistics. Default format is JSON
-//
-// Flow State (GET):
-//
-// Path: /flows
-//
-//   /all:
-//    Prints the active flows for all captured interfaces
-//
-//    Parameters:
-//        * pretty: if set to 1, it will use status line to print out the statistics. Default format is JSON
-//
-//   /{ifaceName}:
-//    Prints the active flows for interface {ifaceName}
-//
-//    Parameters:
-//        * pretty: if set to 1, it will use status line to print out the statistics. Default format is JSON
 package v1
 
 import (

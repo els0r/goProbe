@@ -42,98 +42,125 @@ curl -X GET http://localhost:6060/api/v1/stats/packets?pretty=1&debug=1
 
 Any supported action is prefixed with a "_". goProbe has support for live-reloading the capture configuration. The /_reload path comes in handy when adding/removing interfaces for capturing in place. Upon reload, goProbe will load the changes and adjust its capturing routines.
 
+Additionally, stored flows can be accessed directly via the API via /_query. This is equivalent to calling goQuery on the host.
+
 ### Examples:
+* Live-reload the configuration
 ```
 curl -X POST http://localhost:6060/api/v1/_reload
+```
+* Query the most active hosts of the last 2 days
+```
+curl -X POST --data-binary <query-args> http://localhost:6060/api/v1/_query
 ```
 
 
 ## Routes
 
 <details>
-<summary>`/*/api/*/v1/*/*/_reload`</summary>
+<summary>`/*/api/*/v1/*/*/_query`</summary>
 
-- [RequestID](https://github.com/go-chi/chi/middleware/request_id.go#L63)
-- [RealIP](https://github.com/go-chi/chi/middleware/realip.go#L29)
-- [RequestLogger.func1](https://github.com/go-chi/chi/middleware/logger.go#L36)
-- [Recoverer](https://github.com/go-chi/chi/middleware/recoverer.go#L18)
-- [Timeout.func1](https://github.com/go-chi/chi/middleware/timeout.go#L34)
+- [RequestID]()
+- [RealIP]()
+- [RequestLogger.func1]()
+- [Recoverer]()
+- [Timeout.func1]()
 - **/***
 	- **/api/***
-		- [github.com/throttled/throttled.(*HTTPRateLimiter).RateLimit-fm](/pkg/api/rate.go#L49)
-		- [ThrottleBacklog.func1](https://github.com/go-chi/chi/middleware/throttle.go#L50)
-		- [(*Server).AuthenticationHandler.func1](/pkg/api/auth.go#L86)
+		- [throttled.(*HTTPRateLimiter).RateLimit-fm]()
+		- [ThrottleBacklog.func1]()
+		- [(*Server).AuthenticationHandler.func1](/pkg/api/auth.go#L65)
+		- **/v1/***
+			- **/***
+				- **/_query**
+					- _POST_
+						- [(*API).handleQuery-fm](/pkg/api/v1/query.go#L15)
+
+</details>
+<details>
+<summary>`/*/api/*/v1/*/*/_reload`</summary>
+
+- [RequestID]()
+- [RealIP]()
+- [RequestLogger.func1]()
+- [Recoverer]()
+- [Timeout.func1]()
+- **/***
+	- **/api/***
+		- [throttled.(*HTTPRateLimiter).RateLimit-fm]()
+		- [ThrottleBacklog.func1]()
+		- [(*Server).AuthenticationHandler.func1](/pkg/api/auth.go#L65)
 		- **/v1/***
 			- **/***
 				- **/_reload**
 					- _POST_
-						- [(*API).handleReload-fm](/pkg/api/v1/post_routes.go#L17)
+						- [(*API).handleReload-fm](/pkg/api/v1/post_routes.go#L22)
 
 </details>
 <details>
 <summary>`/*/api/*/v1/*/*/flows/*/{ifaceName}/*`</summary>
 
-- [RequestID](https://github.com/go-chi/chi/middleware/request_id.go#L63)
-- [RealIP](https://github.com/go-chi/chi/middleware/realip.go#L29)
-- [RequestLogger.func1](https://github.com/go-chi/chi/middleware/logger.go#L36)
-- [Recoverer](https://github.com/go-chi/chi/middleware/recoverer.go#L18)
-- [Timeout.func1](https://github.com/go-chi/chi/middleware/timeout.go#L34)
+- [RequestID]()
+- [RealIP]()
+- [RequestLogger.func1]()
+- [Recoverer]()
+- [Timeout.func1]()
 - **/***
 	- **/api/***
-		- [github.com/throttled/throttled.(*HTTPRateLimiter).RateLimit-fm](/pkg/api/rate.go#L49)
-		- [ThrottleBacklog.func1](https://github.com/go-chi/chi/middleware/throttle.go#L50)
-		- [(*Server).AuthenticationHandler.func1](/pkg/api/auth.go#L86)
+		- [throttled.(*HTTPRateLimiter).RateLimit-fm]()
+		- [ThrottleBacklog.func1]()
+		- [(*Server).AuthenticationHandler.func1](/pkg/api/auth.go#L65)
 		- **/v1/***
 			- **/***
 				- **/flows/***
 					- **/{ifaceName}/***
 						- **/**
 							- _GET_
-								- [(*API).IfaceCtx-fm](/pkg/api/v1/get_routes.go#L28)
-								- [(*API).getActiveFlows-fm](/pkg/api/v1/get_routes.go#L28)
+								- [(*API).IfaceCtx-fm](/pkg/api/v1/get_routes.go#L43)
+								- [(*API).getActiveFlows-fm](/pkg/api/v1/get_routes.go#L57)
 
 </details>
 <details>
 <summary>`/*/api/*/v1/*/*/stats/*/errors`</summary>
 
-- [RequestID](https://github.com/go-chi/chi/middleware/request_id.go#L63)
-- [RealIP](https://github.com/go-chi/chi/middleware/realip.go#L29)
-- [RequestLogger.func1](https://github.com/go-chi/chi/middleware/logger.go#L36)
-- [Recoverer](https://github.com/go-chi/chi/middleware/recoverer.go#L18)
-- [Timeout.func1](https://github.com/go-chi/chi/middleware/timeout.go#L34)
+- [RequestID]()
+- [RealIP]()
+- [RequestLogger.func1]()
+- [Recoverer]()
+- [Timeout.func1]()
 - **/***
 	- **/api/***
-		- [github.com/throttled/throttled.(*HTTPRateLimiter).RateLimit-fm](/pkg/api/rate.go#L49)
-		- [ThrottleBacklog.func1](https://github.com/go-chi/chi/middleware/throttle.go#L50)
-		- [(*Server).AuthenticationHandler.func1](/pkg/api/auth.go#L86)
+		- [throttled.(*HTTPRateLimiter).RateLimit-fm]()
+		- [ThrottleBacklog.func1]()
+		- [(*Server).AuthenticationHandler.func1](/pkg/api/auth.go#L65)
 		- **/v1/***
 			- **/***
 				- **/stats/***
 					- **/errors**
 						- _GET_
-							- [(*API).getErrors-fm](/pkg/api/v1/get_routes.go#L22)
+							- [(*API).getErrors-fm](/pkg/api/v1/get_routes.go#L208)
 
 </details>
 <details>
 <summary>`/*/api/*/v1/*/*/stats/*/packets`</summary>
 
-- [RequestID](https://github.com/go-chi/chi/middleware/request_id.go#L63)
-- [RealIP](https://github.com/go-chi/chi/middleware/realip.go#L29)
-- [RequestLogger.func1](https://github.com/go-chi/chi/middleware/logger.go#L36)
-- [Recoverer](https://github.com/go-chi/chi/middleware/recoverer.go#L18)
-- [Timeout.func1](https://github.com/go-chi/chi/middleware/timeout.go#L34)
+- [RequestID]()
+- [RealIP]()
+- [RequestLogger.func1]()
+- [Recoverer]()
+- [Timeout.func1]()
 - **/***
 	- **/api/***
-		- [github.com/throttled/throttled.(*HTTPRateLimiter).RateLimit-fm](/pkg/api/rate.go#L49)
-		- [ThrottleBacklog.func1](https://github.com/go-chi/chi/middleware/throttle.go#L50)
-		- [(*Server).AuthenticationHandler.func1](/pkg/api/auth.go#L86)
+		- [throttled.(*HTTPRateLimiter).RateLimit-fm]()
+		- [ThrottleBacklog.func1]()
+		- [(*Server).AuthenticationHandler.func1](/pkg/api/auth.go#L65)
 		- **/v1/***
 			- **/***
 				- **/stats/***
 					- **/packets**
 						- _GET_
-							- [(*API).getPacketStats-fm](/pkg/api/v1/get_routes.go#L21)
+							- [(*API).getPacketStats-fm](/pkg/api/v1/get_routes.go#L92)
 
 </details>
 
-Total # of routes: 4
+Total # of routes: 5

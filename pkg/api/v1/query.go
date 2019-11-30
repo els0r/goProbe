@@ -9,6 +9,9 @@ import (
 	"github.com/els0r/goProbe/pkg/query"
 )
 
+// handleQuery can be used to query the flow database that goPorbe writes
+// to disk. It is the equivalent of calling the binary `goQuery` on
+// the machine running goProbe.
 func (a *API) handleQuery(w http.ResponseWriter, r *http.Request) {
 	// set up default options
 	callerString := fmt.Sprintf("goProbe-API/%s", a.Version())

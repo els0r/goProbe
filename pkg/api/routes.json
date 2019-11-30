@@ -5,21 +5,21 @@
         "pkg": "github.com/go-chi/chi/middleware",
         "func": "RequestID",
         "comment": "RequestID is a middleware that injects a request ID into the context of each\nrequest. A request ID is a string of the form \"host.example.com/random-0001\",\nwhere \"random\" is a base62 random string that uniquely identifies this go\nprocess, and where the last number is an atomically incremented request\ncounter.\n",
-        "file": "github.com/go-chi/chi/middleware/request_id.go",
+        "file": "/home/lel/programming/pkg/mod/github.com/go-chi/chi@v4.0.2+incompatible/middleware/request_id.go",
         "line": 63
       },
       {
         "pkg": "github.com/go-chi/chi/middleware",
         "func": "RealIP",
         "comment": "RealIP is a middleware that sets a http.Request's RemoteAddr to the results\nof parsing either the X-Forwarded-For header or the X-Real-IP header (in that\norder).\n\nThis middleware should be inserted fairly early in the middleware stack to\nensure that subsequent layers (e.g., request loggers) which examine the\nRemoteAddr will see the intended value.\n\nYou should only use this middleware if you can trust the headers passed to\nyou (in particular, the two headers this middleware uses), for example\nbecause you have placed a reverse proxy like HAProxy or nginx in front of\nchi. If your reverse proxies are configured to pass along arbitrary header\nvalues from the client, or if you use this middleware without a reverse\nproxy, malicious clients will be able to make you very sad (or, depending on\nhow you're using RemoteAddr, vulnerable to an attack of some sort).\n",
-        "file": "github.com/go-chi/chi/middleware/realip.go",
+        "file": "/home/lel/programming/pkg/mod/github.com/go-chi/chi@v4.0.2+incompatible/middleware/realip.go",
         "line": 29
       },
       {
         "pkg": "github.com/go-chi/chi/middleware",
         "func": "RequestLogger.func1",
         "comment": "",
-        "file": "github.com/go-chi/chi/middleware/logger.go",
+        "file": "/home/lel/programming/pkg/mod/github.com/go-chi/chi@v4.0.2+incompatible/middleware/logger.go",
         "line": 36,
         "anonymous": true
       },
@@ -27,14 +27,14 @@
         "pkg": "github.com/go-chi/chi/middleware",
         "func": "Recoverer",
         "comment": "Recoverer is a middleware that recovers from panics, logs the panic (and a\nbacktrace), and returns a HTTP 500 (Internal Server Error) status if\npossible. Recoverer prints a request ID if one is provided.\n\nAlternatively, look at https://github.com/pressly/lg middleware pkgs.\n",
-        "file": "github.com/go-chi/chi/middleware/recoverer.go",
+        "file": "/home/lel/programming/pkg/mod/github.com/go-chi/chi@v4.0.2+incompatible/middleware/recoverer.go",
         "line": 18
       },
       {
         "pkg": "github.com/go-chi/chi/middleware",
         "func": "Timeout.func1",
         "comment": "",
-        "file": "github.com/go-chi/chi/middleware/timeout.go",
+        "file": "/home/lel/programming/pkg/mod/github.com/go-chi/chi@v4.0.2+incompatible/middleware/timeout.go",
         "line": 34,
         "anonymous": true
       }
@@ -48,18 +48,17 @@
               "router": {
                 "middlewares": [
                   {
-                    "pkg": "",
-                    "func": "github.com/throttled/throttled.(*HTTPRateLimiter).RateLimit-fm",
-                    "comment": "",
-                    "file": "github.com/els0r/goProbe/pkg/api/rate.go",
-                    "line": 49,
-                    "unresolvable": true
+                    "pkg": "github.com/throttled",
+                    "func": "throttled.(*HTTPRateLimiter).RateLimit-fm",
+                    "comment": "RateLimit wraps an http.Handler to limit incoming requests.\nRequests that are not limited will be passed to the handler\nunchanged.  Limited requests will be passed to the DeniedHandler.\nX-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset and\nRetry-After headers will be written to the response based on the\nvalues in the RateLimitResult.\n",
+                    "file": "/home/lel/programming/pkg/mod/github.com/throttled/throttled@v2.2.4+incompatible/http.go",
+                    "line": 52
                   },
                   {
                     "pkg": "github.com/go-chi/chi/middleware",
                     "func": "ThrottleBacklog.func1",
                     "comment": "",
-                    "file": "github.com/go-chi/chi/middleware/throttle.go",
+                    "file": "/home/lel/programming/pkg/mod/github.com/go-chi/chi@v4.0.2+incompatible/middleware/throttle.go",
                     "line": 50,
                     "anonymous": true
                   },
@@ -68,7 +67,7 @@
                     "func": "(*Server).AuthenticationHandler.func1",
                     "comment": "",
                     "file": "github.com/els0r/goProbe/pkg/api/auth.go",
-                    "line": 86,
+                    "line": 65,
                     "anonymous": true
                   }
                 ],
@@ -81,6 +80,19 @@
                           "router": {
                             "middlewares": [],
                             "routes": {
+                              "/_query": {
+                                "handlers": {
+                                  "POST": {
+                                    "middlewares": [],
+                                    "method": "POST",
+                                    "pkg": "github.com/els0r/goProbe/pkg/api/v1",
+                                    "func": "(*API).handleQuery-fm",
+                                    "comment": "handleQuery can be used to query the flow database that goPorbe writes\nto disk. It is the equivalent of calling the binary `goQuery` on\nthe machine running goProbe.\n",
+                                    "file": "github.com/els0r/goProbe/pkg/api/v1/query.go",
+                                    "line": 15
+                                  }
+                                }
+                              },
                               "/_reload": {
                                 "handlers": {
                                   "POST": {
@@ -88,9 +100,9 @@
                                     "method": "POST",
                                     "pkg": "github.com/els0r/goProbe/pkg/api/v1",
                                     "func": "(*API).handleReload-fm",
-                                    "comment": "list actions here\n",
+                                    "comment": "",
                                     "file": "github.com/els0r/goProbe/pkg/api/v1/post_routes.go",
-                                    "line": 17
+                                    "line": 22
                                   }
                                 }
                               },
@@ -109,9 +121,9 @@
                                                   {
                                                     "pkg": "github.com/els0r/goProbe/pkg/api/v1",
                                                     "func": "(*API).IfaceCtx-fm",
-                                                    "comment": "",
+                                                    "comment": "IfaceCtx obtains the flow map for the queried interface and stores it in the request context\n",
                                                     "file": "github.com/els0r/goProbe/pkg/api/v1/get_routes.go",
-                                                    "line": 28
+                                                    "line": 43
                                                   }
                                                 ],
                                                 "method": "GET",
@@ -119,7 +131,7 @@
                                                 "func": "(*API).getActiveFlows-fm",
                                                 "comment": "",
                                                 "file": "github.com/els0r/goProbe/pkg/api/v1/get_routes.go",
-                                                "line": 28
+                                                "line": 57
                                               }
                                             }
                                           }
@@ -142,7 +154,7 @@
                                           "func": "(*API).getErrors-fm",
                                           "comment": "",
                                           "file": "github.com/els0r/goProbe/pkg/api/v1/get_routes.go",
-                                          "line": 22
+                                          "line": 208
                                         }
                                       }
                                     },
@@ -155,7 +167,7 @@
                                           "func": "(*API).getPacketStats-fm",
                                           "comment": "",
                                           "file": "github.com/els0r/goProbe/pkg/api/v1/get_routes.go",
-                                          "line": 21
+                                          "line": 92
                                         }
                                       }
                                     }
