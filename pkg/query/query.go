@@ -74,6 +74,8 @@ type internalError int
 // enumeration of processing errors
 const (
 	errorNoResults internalError = iota + 1
+	errorMemoryBreach
+	errorInternalProcessing
 )
 
 // Error implements the error interface for query processing errors
@@ -82,6 +84,10 @@ func (i internalError) Error() string {
 	switch i {
 	case errorNoResults:
 		s = "query returned no results"
+	case errorMemoryBreach:
+		s = "memory limit exceeded"
+	case errorInternalProcessing:
+		s = "internal error during query processing"
 	}
 	return s
 }
@@ -154,6 +160,22 @@ func (s *Statement) Execute() error {
 
 	var err error
 
+	// start ticker to check memory consumption every second
+	memErrors := make(chan error, 1)
+	stopHeapWatch := watchHeap(s.MaxMemPct, memErrors)
+
+	// make sure the memory ticker stops upon function return
+	defer func() {
+
+		// if a memory breach occurred, the memory monitor is shut
+		// down already
+		if err == errorMemoryBreach {
+			return
+		}
+		stopHeapWatch <- struct{}{}
+	}()
+
+	// make sure execution stats and logging are taken care of
 	defer func() {
 		if err != nil {
 			// get duration of execution even under error
@@ -177,10 +199,6 @@ func (s *Statement) Execute() error {
 	if s.Query == nil {
 		return fmt.Errorf("query is not executable")
 	}
-
-	// start ticker to check memory consumption every second
-	memErrors := make(chan error)
-	stopHeapWatch := s.watchHeap(memErrors)
 
 	// create work managers
 	workManagers := map[string]*goDB.DBWorkManager{} // map interfaces to workManagers
@@ -209,34 +227,45 @@ func (s *Statement) Execute() error {
 
 	// Channel for handling of returned maps
 	mapChan := make(chan map[goDB.ExtraKey]goDB.Val, 1024)
-	aggregateChan := make(chan aggregateResult, 1)
-	go aggregate(mapChan, aggregateChan)
+	aggregateChan := aggregate(mapChan)
 
 	// spawn reader processing units and make them work on the individual DB blocks
+	// processing by interface is sequential, e.g. for multi-interface queries
 	for _, workManager := range workManagers {
-		workManager.ExecuteWorkerReadJobs(mapChan)
+		err = workManager.ExecuteWorkerReadJobs(mapChan, memErrors)
+		if err != nil {
+
+			// an error from the routine can only be of type memory error
+			err = errorMemoryBreach
+
+			// close the map channel. This will make sure that the aggregation routine
+			// actually finishes
+			close(mapChan)
+
+			// empty the aggregateChan
+			agg := <-aggregateChan
+
+			// call the garbage collector
+			agg.aggregatedMap = nil
+			runtime.GC()
+			debug.FreeOSMemory()
+
+			return err
+		}
 	}
+
 	// we are done with all worker jobs
 	close(mapChan)
 
-	// monitor memory while we wait for the job to complete
-	var agg aggregateResult
-	for processingComplete := false; !processingComplete; {
-		select {
-		case err = <-memErrors:
+	// wait for the job to complete
+	agg := <-aggregateChan
+	err = agg.err
+	if err != nil {
+		switch err {
+		case errorNoResults:
+			return s.noResults()
+		default:
 			return err
-		case agg = <-aggregateChan:
-			if agg.err != nil {
-				switch agg.err {
-				case errorNoResults:
-					return s.noResults()
-				default:
-					err = fmt.Errorf("data aggregation error: %s", agg.err)
-					return err
-				}
-			}
-			// continue processing
-			processingComplete = true
 		}
 	}
 
@@ -303,6 +332,9 @@ func (s *Statement) Execute() error {
 		count,
 	)
 	if err != nil {
+		// stop the memory ticker
+		stopHeapWatch <- struct{}{}
+
 		return fmt.Errorf("failed to create printer: %s", err)
 	}
 
@@ -318,7 +350,8 @@ func (s *Statement) Execute() error {
 	for doneFilling := false; !doneFilling; {
 		select {
 		case err = <-memErrors:
-			return err
+			fmt.Println("received memory error:", err)
+			return errorMemoryBreach
 		default:
 			for _, entry := range mapEntries {
 				printer.AddRow(entry)
@@ -334,8 +367,6 @@ func (s *Statement) Execute() error {
 		return err
 	}
 
-	// stop the memory ticker
-	stopHeapWatch <- struct{}{}
 	return nil
 }
 

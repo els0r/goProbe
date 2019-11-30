@@ -19,7 +19,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/els0r/goProbe/pkg/goDB/bigendian"
@@ -141,35 +140,63 @@ func (w *DBWorkManager) CreateWorkerJobs(tfirst int64, tlast int64, query *Query
 }
 
 // main query processing
-func (w *DBWorkManager) grabAndProcessWorkload(workloadChan <-chan DBWorkload, mapChan chan map[ExtraKey]Val, wg *sync.WaitGroup) {
-	// parse conditions
-	var err error
+func (w *DBWorkManager) grabAndProcessWorkload(workloadChan <-chan DBWorkload, mapChan chan map[ExtraKey]Val, cancel <-chan struct{}) <-chan struct{} {
 
-	for workload := range workloadChan {
-		// create the map in which the workload will store the aggregations
-		resultMap := make(map[ExtraKey]Val)
+	done := make(chan struct{})
 
-		// if there is an error during one of the read jobs, throw a syslog message and terminate
-		if err = w.readBlocksAndEvaluate(workload, resultMap); err != nil {
-			w.logger.Error(err.Error())
-			mapChan <- nil
-			wg.Done()
+	go func() {
+		defer func(doneChan chan struct{}) {
+			doneChan <- struct{}{}
+		}(done)
+
+		// parse conditions
+		var err error
+
+		var workload DBWorkload
+		for chanOpen := true; chanOpen; {
+			select {
+			case <-cancel:
+				return
+			case workload, chanOpen = <-workloadChan:
+				if chanOpen {
+					// create the map in which the workload will store the aggregations
+					resultMap := make(map[ExtraKey]Val)
+
+					// if there is an error during one of the read jobs, throw a syslog message and terminate
+					if err = w.readBlocksAndEvaluate(workload, resultMap); err != nil {
+						w.logger.Error(err.Error())
+						mapChan <- nil
+						return
+					}
+
+					mapChan <- resultMap
+				}
+			}
 		}
+		return
+	}()
+	return done
+}
 
-		mapChan <- resultMap
-	}
-
-	wg.Done()
+type workerCommunication struct {
+	cancel chan struct{}
+	done   <-chan struct{}
 }
 
 // ExecuteWorkerReadJobs runs the query concurrently with multiple sprocessing units
-func (w *DBWorkManager) ExecuteWorkerReadJobs(mapChan chan map[ExtraKey]Val) {
-	procsWG := sync.WaitGroup{}
-	procsWG.Add(w.numProcessingUnits)
+func (w *DBWorkManager) ExecuteWorkerReadJobs(mapChan chan map[ExtraKey]Val, memErrors <-chan error) error {
 
-	workloadChan := make(chan DBWorkload, 128)
+	workloadChan := make(chan DBWorkload, len(w.workloads))
+
+	var controlChannels []workerCommunication
+
 	for i := 0; i < w.numProcessingUnits; i++ {
-		go w.grabAndProcessWorkload(workloadChan, mapChan, &procsWG)
+		comms := workerCommunication{cancel: make(chan struct{}, 1)}
+
+		// start worker up
+		comms.done = w.grabAndProcessWorkload(workloadChan, mapChan, comms.cancel)
+
+		controlChannels = append(controlChannels, comms)
 	}
 
 	// push the workloads onto the channel
@@ -178,7 +205,36 @@ func (w *DBWorkManager) ExecuteWorkerReadJobs(mapChan chan map[ExtraKey]Val) {
 	}
 	close(workloadChan)
 
-	procsWG.Wait()
+	// check if the workers are done and also monitor memory
+	var (
+		err       error
+		completed int
+	)
+	for {
+		for i, c := range controlChannels {
+			select {
+			case err = <-memErrors:
+				if err != nil {
+					// log the memory error and assign type memory breach
+					// for callers of this function
+					w.logger.Error(err)
+
+					// send cancel to all workers
+					for _, c := range controlChannels {
+						c.cancel <- struct{}{}
+					}
+				}
+			case <-c.done:
+				completed++
+				w.logger.Debugf("worker %d finished, %d/%d are done", i, completed, w.numProcessingUnits)
+
+				// return once done with processing
+				if completed == w.numProcessingUnits {
+					return err
+				}
+			}
+		}
+	}
 }
 
 // Array of functions to extract a specific entry from a block (represented as a byteslice)

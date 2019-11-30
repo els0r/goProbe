@@ -3,16 +3,21 @@ package query
 import (
 	"fmt"
 	"runtime"
+	"runtime/debug"
 	"time"
 )
 
 // Parameters for checking memory consumption of query
 const (
 	MemCheckInterval = 1 * time.Second
+
+	// Variables for manual garbage collection calls
+	goGCInterval = 5 * time.Second
+	goGCLimit    = 6291456 // Limit for GC call, in bytes
 )
 
 // watchHeap makes sure to alert on too high memory consumption
-func (s *Statement) watchHeap(errors chan error) chan struct{} {
+func watchHeap(maxAllowedMemPct int, errors chan error) chan struct{} {
 	stopChan := make(chan struct{})
 
 	go func() {
@@ -28,19 +33,33 @@ func (s *Statement) watchHeap(errors chan error) chan struct{} {
 			return
 		}
 
+		// Create global MemStats object for tracking of memory consumption
 		memTicker := time.NewTicker(MemCheckInterval)
 		m := runtime.MemStats{}
+		lastGC := time.Now()
+
 		for {
 			select {
 			case <-memTicker.C:
 				runtime.ReadMemStats(&m)
 
+				usedMem := m.Sys - m.HeapReleased
+				maxAllowedMem := uint64(float64(maxAllowedMemPct) * physMem / 100)
+
 				// Check if current memory consumption is higher than maximum allowed percentage of the available
 				// physical memory
-				if (m.Sys-m.HeapReleased)/1024 > uint64(float64(s.MaxMemPct)*physMem/100) {
+				if usedMem/1024 > maxAllowedMem {
 					memTicker.Stop()
-					errors <- fmt.Errorf("memory consumption above %v%% of physical memory. Aborting query", s.MaxMemPct)
+					errors <- fmt.Errorf("memory consumption above %v%% of physical memory. Aborting query", maxAllowedMemPct)
 					return
+				}
+
+				// Conditionally call a manual garbage collection and memory release if the current heap allocation
+				// is above goGCLimit and more than goGCInterval seconds have passed
+				if usedMem > goGCLimit && time.Since(lastGC) > goGCInterval {
+					runtime.GC()
+					debug.FreeOSMemory()
+					lastGC = time.Now()
 				}
 			case <-stopChan:
 				memTicker.Stop()

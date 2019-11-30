@@ -30,6 +30,13 @@ func (a *API) handleQuery(w http.ResponseWriter, r *http.Request) {
 	// make sure that the caller variable is always the API
 	args.Caller = callerString
 
+	// do not allow the caller to set more than the default
+	// maximum memory use. The API should not be an entrypoint
+	// to exhaust host resources
+	if args.MaxMemPct > query.DefaultMaxMemPct {
+		args.MaxMemPct = query.DefaultMaxMemPct
+	}
+
 	// prepare the query
 	stmt, err := args.Prepare(w)
 	if err != nil {

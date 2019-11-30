@@ -66,7 +66,7 @@ func (a *API) getActiveFlows(w http.ResponseWriter, r *http.Request) {
 
 	// encode answer
 	if !printPretty(r) {
-		err := json.Response(w, &flowLog)
+		err = json.Response(w, &flowLog)
 		if err != nil {
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return

@@ -1,18 +1,7 @@
 package query
 
 import (
-	"fmt"
-	"runtime"
-	"runtime/debug"
-	"time"
-
 	"github.com/els0r/goProbe/pkg/goDB"
-)
-
-const (
-	// Variables for manual garbage collection calls
-	goGCInterval = 5 * time.Second
-	goGCLimit    = 6291456 // Limit for GC call, in bytes
 )
 
 type aggregateResult struct {
@@ -31,67 +20,57 @@ type Counts struct {
 // Then send aggregation result over resultChan.
 // If an error occurs, aggregate may return prematurely.
 // Closes resultChan on termination.
-func aggregate(mapChan <-chan map[goDB.ExtraKey]goDB.Val, resultChan chan<- aggregateResult) {
-	defer close(resultChan)
+func aggregate(mapChan <-chan map[goDB.ExtraKey]goDB.Val) chan aggregateResult {
 
-	var finalMap = make(map[goDB.ExtraKey]goDB.Val)
-	var totals Counts
+	// create channel that returns the final aggregate result
+	resultChan := make(chan aggregateResult, 1)
 
-	// Temporary goDB.Val because map values cannot be updated in-place
-	var tempVal goDB.Val
-	var exists bool
+	go func() {
+		defer close(resultChan)
 
-	// Create global MemStats object for tracking of memory consumption
-	m := runtime.MemStats{}
-	lastGC := time.Now()
+		var finalMap = make(map[goDB.ExtraKey]goDB.Val)
+		var totals Counts
 
-	for item := range mapChan {
-		if item == nil {
-			resultChan <- aggregateResult{
-				err: fmt.Errorf("Error during daily DB processing. Check syslog/messages for more information"),
+		// Temporary goDB.Val because map values cannot be updated in-place
+		var tempVal goDB.Val
+		var exists bool
+
+		for item := range mapChan {
+			if item == nil {
+				resultChan <- aggregateResult{err: errorInternalProcessing}
+				return
 			}
+
+			for k, v := range item {
+				totals.BytesRcvd += v.NBytesRcvd
+				totals.BytesSent += v.NBytesSent
+				totals.PktsRcvd += v.NPktsRcvd
+				totals.PktsSent += v.NPktsSent
+
+				if tempVal, exists = finalMap[k]; exists {
+					tempVal.NBytesRcvd += v.NBytesRcvd
+					tempVal.NBytesSent += v.NBytesSent
+					tempVal.NPktsRcvd += v.NPktsRcvd
+					tempVal.NPktsSent += v.NPktsSent
+
+					finalMap[k] = tempVal
+				} else {
+					finalMap[k] = v
+				}
+			}
+			item = nil
+		}
+
+		// push the final result
+		if len(finalMap) == 0 {
+			resultChan <- aggregateResult{err: errorNoResults}
 			return
 		}
-		for k, v := range item {
-			totals.BytesRcvd += v.NBytesRcvd
-			totals.BytesSent += v.NBytesSent
-			totals.PktsRcvd += v.NPktsRcvd
-			totals.PktsSent += v.NPktsSent
 
-			if tempVal, exists = finalMap[k]; exists {
-				tempVal.NBytesRcvd += v.NBytesRcvd
-				tempVal.NBytesSent += v.NBytesSent
-				tempVal.NPktsRcvd += v.NPktsRcvd
-				tempVal.NPktsSent += v.NPktsSent
-
-				finalMap[k] = tempVal
-			} else {
-				finalMap[k] = v
-			}
-		}
-
-		item = nil
-
-		// Conditionally call a manual garbage collection and memory release if the current heap allocation
-		// is above goGCLimit and more than goGCInterval seconds have passed
-		runtime.ReadMemStats(&m)
-		if m.Sys-m.HeapReleased > goGCLimit && time.Since(lastGC) > goGCInterval {
-			runtime.GC()
-			debug.FreeOSMemory()
-			lastGC = time.Now()
-		}
-	}
-
-	if len(finalMap) == 0 {
 		resultChan <- aggregateResult{
-			err: errorNoResults,
+			aggregatedMap: finalMap,
+			totals:        totals,
 		}
-		return
-	}
-
-	resultChan <- aggregateResult{
-		aggregatedMap: finalMap,
-		totals:        totals,
-	}
-	return
+	}()
+	return resultChan
 }
