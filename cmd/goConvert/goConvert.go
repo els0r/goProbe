@@ -243,8 +243,9 @@ func main() {
 
 	// writer routine accepting flow maps to write out
 	var wg sync.WaitGroup
+	wg.Add(1)
 	go func(writeChan chan writeJob) {
-		wg.Add(1)
+		defer wg.Done()
 		for fm := range writeChan {
 			if _, ok := mapWriters[fm.iface]; !ok {
 				mapWriters[fm.iface] = goDB.NewDBWriter(config.SavePath, fm.iface)
@@ -261,7 +262,6 @@ func main() {
 				os.Exit(1)
 			}
 		}
-		wg.Done()
 	}(writeChan)
 
 	fmt.Print("Progress:   0% |")
