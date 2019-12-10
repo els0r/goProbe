@@ -36,9 +36,10 @@ func BenchmarkCompress2(b *testing.B) {
 
 	encoder := lz4.NewWriter(tmpfile)
 
-	for n:=0; n<b.N; n++ {
+	for n := 0; n < b.N; n++ {
 		if _, err := encoder.Write(data); err != nil {
 			b.Fatalf("could not compress data: %v", err)
 		}
+		encoder.Flush()
 	}
 }
