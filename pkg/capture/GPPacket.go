@@ -98,7 +98,7 @@ func (p *GPPacket) Populate(srcPacket gopacket.Packet) error {
 	p.reset()
 
 	// size helper vars
-	var nlHeaderSize, tpHeaderSize uint16
+	var nwLHeaderSize, tpHeaderSize uint16
 
 	// process metadata
 	p.numBytes = uint16(srcPacket.Metadata().CaptureInfo.Length)
@@ -113,19 +113,18 @@ func (p *GPPacket) Populate(srcPacket gopacket.Packet) error {
 	var skipTransport bool
 
 	// decode packet
-	if srcPacket.NetworkLayer() != nil {
-		nwL := srcPacket.NetworkLayer().LayerContents()
-		nlHeaderSize = uint16(len(nwL))
+	if nwL := srcPacket.NetworkLayer(); nwL != nil {
+		nwLC := nwL.LayerContents()
+		nwLHeaderSize = uint16(len(nwLC))
 
 		// exit if layer is available but the bytes aren't captured by the layer
 		// contents
-		if nlHeaderSize == 0 {
+		if nwLHeaderSize == 0 {
 			return fmt.Errorf("Network layer header not available")
 		}
 
 		// get ip info
-		ipsrc, ipdst := srcPacket.NetworkLayer().NetworkFlow().Endpoints()
-
+		ipsrc, ipdst := nwL.NetworkFlow().Endpoints()
 		copy(p.sip[:], ipsrc.Raw())
 		copy(p.dip[:], ipdst.Raw())
 
@@ -133,10 +132,10 @@ func (p *GPPacket) Populate(srcPacket gopacket.Packet) error {
 		// the default value is reserved by IANA and thus will never occur unless
 		// the protocol could not be correctly identified
 		p.protocol = 0xFF
-		switch srcPacket.NetworkLayer().LayerType() {
+		switch nwL.LayerType() {
 		case layers.LayerTypeIPv4:
 
-			p.protocol = nwL[9]
+			p.protocol = nwLC[9]
 
 			// only run the fragmentation checks on fragmented TCP/UDP packets. For
 			// ESP, we don't have any transport layer information so there's no
@@ -148,8 +147,8 @@ func (p *GPPacket) Populate(srcPacket gopacket.Packet) error {
 				skipTransport = true
 			} else {
 				// check for IP fragmentation
-				fragBits := (0xe0 & nwL[6]) >> 5
-				fragOffset := (uint16(0x1f&nwL[6]) << 8) | uint16(nwL[7])
+				fragBits := (0xe0 & nwLC[6]) >> 5
+				fragOffset := (uint16(0x1f&nwLC[6]) << 8) | uint16(nwLC[7])
 
 				// return decoding error if the packet carries anything other than the
 				// first fragment, i.e. if the packet lacks a transport layer header
@@ -158,34 +157,37 @@ func (p *GPPacket) Populate(srcPacket gopacket.Packet) error {
 				}
 			}
 		case layers.LayerTypeIPv6:
-			p.protocol = nwL[6]
+			p.protocol = nwLC[6]
 		}
 
-		if !skipTransport && srcPacket.TransportLayer() != nil {
-			// get layer contents
-			tpL := srcPacket.TransportLayer().LayerContents()
-			tpHeaderSize = uint16(len(tpL))
+		if !skipTransport {
+			if tpL := srcPacket.TransportLayer(); tpL != nil {
 
-			if tpHeaderSize == 0 {
-				return fmt.Errorf("Transport layer header not available")
-			}
+				// get layer contents
+				tpLC := tpL.LayerContents()
+				tpHeaderSize = uint16(len(tpLC))
 
-			// get port bytes
-			psrc, dsrc := srcPacket.TransportLayer().TransportFlow().Endpoints()
-
-			// only get raw bytes if we actually have TCP or UDP
-			if p.protocol == TCP || p.protocol == UDP {
-				copy(p.sport[:], psrc.Raw())
-				copy(p.dport[:], dsrc.Raw())
-			}
-
-			// if the protocol is TCP, grab the flag information
-			if p.protocol == TCP {
-				if tpHeaderSize < 14 {
-					return fmt.Errorf("Incomplete TCP header: %d", tpL)
+				if tpHeaderSize == 0 {
+					return fmt.Errorf("Transport layer header not available")
 				}
 
-				p.tcpFlags = tpL[13] // we are primarily interested in SYN, ACK and FIN
+				// get port bytes
+				psrc, dsrc := tpL.TransportFlow().Endpoints()
+
+				// only get raw bytes if we actually have TCP or UDP
+				if p.protocol == TCP || p.protocol == UDP {
+					copy(p.sport[:], psrc.Raw())
+					copy(p.dport[:], dsrc.Raw())
+				}
+
+				// if the protocol is TCP, grab the flag information
+				if p.protocol == TCP {
+					if tpHeaderSize < 14 {
+						return fmt.Errorf("Incomplete TCP header: %d", tpLC)
+					}
+
+					p.tcpFlags = tpLC[13] // we are primarily interested in SYN, ACK and FIN
+				}
 			}
 		}
 	} else {

@@ -12,9 +12,9 @@ package capture
 
 import (
 	"fmt"
-	"os"
-	"runtime/debug"
+	"net"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/els0r/goProbe/pkg/goDB"
@@ -362,9 +362,11 @@ type Capture struct {
 
 	pcapHandle   *pcap.Handle
 	packetSource *gopacket.PacketSource
+	packet       GPPacket
 
 	// error map for logging errors more properly
-	errMap ErrorMap
+	errMap   ErrorMap
+	errCount int
 
 	// logging
 	logger log.Logger
@@ -373,22 +375,18 @@ type Capture struct {
 // NewCapture creates a new Capture associated with the given iface.
 func NewCapture(iface string, config Config, logger log.Logger) *Capture {
 	c := &Capture{
-		iface,
-		sync.Mutex{},
-		false, // closed
-		StateUninitialized,
-		config,
-		make(chan captureCommand, 1),
-		Stats{
+		iface:   iface,
+		mutex:   sync.Mutex{},
+		state:   StateUninitialized,
+		config:  config,
+		cmdChan: make(chan captureCommand, 1),
+		lastRotationStats: Stats{
 			Pcap:          &pcap.Stats{},
 			PacketsLogged: 0,
 		},
-		0, // packetsLogged
-		NewFlowLog(logger),
-		nil, // pcapHandle
-		nil, // packetSource
-		make(map[string]int),
-		logger,
+		flowLog: NewFlowLog(logger),
+		errMap:  make(map[string]int),
+		logger:  logger,
 	}
 	go c.process()
 	return c
@@ -401,6 +399,59 @@ func (c *Capture) setState(s State) {
 	c.logger.Debugf("Interface '%s': entered capture state %s", c.iface, s)
 }
 
+// capturePacket peform the actual packet capture and handles errors gracefully
+func (c *Capture) capturePacket() (err error) {
+
+	// Grab the next gopacket from the source
+	packet, err := c.packetSource.NextPacket()
+	if err != nil {
+
+		// Immediately retry for temporary network errors
+		if nerr, ok := err.(net.Error); ok && nerr.Temporary() {
+			return nil
+		}
+
+		// Immediately retry for EAGAIN or CaptureTimeout expired
+		if err == syscall.EAGAIN || err == pcap.NextErrorTimeoutExpired {
+			return nil
+		}
+
+		// Return all other errors as breaking
+		return fmt.Errorf("Capture error: %s", err)
+	}
+
+	// Populate "our" packet and handle any error
+	if err := c.packet.Populate(packet); err != nil {
+		c.errCount++
+
+		// collect the error. The errors value is the key here. Otherwise, the address
+		// of the error would be taken, which results in a non-minimal set of errors
+		if _, exists := c.errMap[err.Error()]; !exists {
+			// log the packet to the pcap error logs
+			if logerr := PacketLog.Log(c.iface, packet, Snaplen); logerr != nil {
+				c.logger.Info("failed to log faulty packet: " + logerr.Error())
+			}
+		}
+
+		c.errMap[err.Error()]++
+
+		// shut down the interface thread if too many consecutive decoding failures
+		// have been encountered
+		if c.errCount > ErrorThreshold {
+			return fmt.Errorf("The last %d packets could not be decoded: [%s ]",
+				ErrorThreshold,
+				c.errMap.String(),
+			)
+		}
+	}
+
+	c.flowLog.Add(&c.packet)
+	c.errCount = 0
+	c.packetsLogged++
+
+	return nil
+}
+
 // process is the heart of the Capture. It listens for network traffic on the
 // network interface and logs the corresponding flows.
 //
@@ -410,81 +461,20 @@ func (c *Capture) setState(s State) {
 //
 // process keeps running its own goroutine until Close is called on its Capture.
 func (c *Capture) process() {
-	errcount := 0
-	gppacket := GPPacket{}
-
-	capturePacket := func() (err error) {
-		defer func() {
-			if r := recover(); r != nil {
-				trace := string(debug.Stack())
-				fmt.Fprintf(os.Stderr, "Interface '%s': panic returned %v. Stacktrace:\n%s\n", c.iface, r, trace)
-				err = fmt.Errorf("Panic during capture")
-				return
-			}
-		}()
-
-		packet, err := c.packetSource.NextPacket()
-		if err != nil {
-			if err == pcap.NextErrorTimeoutExpired { // CaptureTimeout expired
-				return nil
-			}
-			return fmt.Errorf("Capture error: %s", err)
-		}
-
-		if err := gppacket.Populate(packet); err == nil {
-			c.flowLog.Add(&gppacket)
-			errcount = 0
-			c.packetsLogged++
-		} else {
-			errcount++
-
-			// collect the error. The errors value is the key here. Otherwise, the address
-			// of the error would be taken, which results in a non-minimal set of errors
-			if _, exists := c.errMap[err.Error()]; !exists {
-				// log the packet to the pcap error logs
-				if logerr := PacketLog.Log(c.iface, packet, Snaplen); logerr != nil {
-					c.logger.Info("failed to log faulty packet: " + logerr.Error())
-				}
-			}
-
-			c.errMap[err.Error()]++
-
-			// shut down the interface thread if too many consecutive decoding failures
-			// have been encountered
-			if errcount > ErrorThreshold {
-				return fmt.Errorf("The last %d packets could not be decoded: [%s ]",
-					ErrorThreshold,
-					c.errMap.String(),
-				)
-			}
-		}
-
-		return nil
-	}
-
 	for {
-		if c.state == StateActive {
-			if err := capturePacket(); err != nil {
-				c.setState(StateError)
-				c.logger.Errorf("Interface '%s': %s", c.iface, err.Error())
-			}
-
-			select {
-			case cmd, ok := <-c.cmdChan:
-				if ok {
-					cmd.execute(c)
-				} else {
-					return
-				}
-			default:
-				// keep going
-			}
-		} else {
-			cmd, ok := <-c.cmdChan
+		select {
+		case cmd, ok := <-c.cmdChan:
 			if ok {
 				cmd.execute(c)
 			} else {
 				return
+			}
+		default:
+			if c.state == StateActive {
+				if err := c.capturePacket(); err != nil {
+					c.setState(StateError)
+					c.logger.Errorf("Interface '%s': %s", c.iface, err.Error())
+				}
 			}
 		}
 	}
@@ -547,7 +537,11 @@ func (c *Capture) initialize() {
 	// In addition to lazy decoding, the zeroCopy feature is enabled to avoid allocation
 	// of a full copy of each gopacket, just to copy over a few elements into a GPPacket
 	// structure afterwards.
-	c.packetSource.DecodeOptions = gopacket.DecodeOptions{Lazy: true, NoCopy: true}
+	c.packetSource.DecodeOptions = gopacket.DecodeOptions{
+		Lazy:               true,
+		NoCopy:             true,
+		SkipDecodeRecovery: false,
+	}
 
 	c.setState(StateInitialized)
 }
