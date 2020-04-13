@@ -145,7 +145,7 @@ func parseCommandLineArgs(cfg *Config) {
 	flag.StringVar(&cfg.SavePath, "out", "", "Folder to which the .gpf files should be written")
 	flag.StringVar(&cfg.Schema, "schema", "", "Structure of CSV file (e.g. \"sip,dip,dport,time\"")
 	flag.StringVar(&cfg.Iface, "iface", "", "Interface from which CSV data was created")
-	flag.IntVar(&cfg.NumLines, "n", 111222333444, "Number of rows to read from the CSV file")
+	flag.IntVar(&cfg.NumLines, "n", 1000, "Number of rows to read from the CSV file")
 	flag.Parse()
 }
 
