@@ -13,7 +13,6 @@ import (
 	"time"
 
 	capconfig "github.com/els0r/goProbe/cmd/goProbe/config"
-	"github.com/els0r/goProbe/pkg/version"
 	log "github.com/els0r/log"
 )
 
@@ -76,7 +75,7 @@ func newProbesClient() *probesClient {
 	return &probesClient{baseURL: "probes"}
 }
 
-// is reported in user agnet
+// is reported in user agent
 const (
 	clientVersion = "0.1"
 )
@@ -128,7 +127,7 @@ func NewClient(host string, opts ...Option) *Client {
 	// create new client
 	c := &Client{
 		baseURL:    host,
-		userAgent:  "goProbe/" + version.Version() + " discovery-client/" + clientVersion,
+		userAgent:  "goProbe/discovery-client/" + clientVersion,
 		httpClient: &http.Client{Timeout: 30 * time.Second},
 		probes:     newProbesClient(),
 	}

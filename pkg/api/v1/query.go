@@ -23,11 +23,9 @@ func (a *API) handleQuery(w http.ResponseWriter, r *http.Request) {
 	args := query.NewArgs("", "", opts...)
 
 	// parse additional arguments from command line
-	err := json.Parse(r, &args)
-	if err != nil {
-		status := http.StatusBadRequest
-		errText := fmt.Sprintf("%s: failed to decode query arguments", http.StatusText(status))
-		http.Error(w, errText, status)
+	if err := json.Parse(r, &args); err != nil {
+		a.errorHandler.Handle(w, http.StatusBadRequest, err, "failed to decode query arguments")
+		return
 	}
 
 	// make sure that the caller variable is always the API
@@ -43,16 +41,13 @@ func (a *API) handleQuery(w http.ResponseWriter, r *http.Request) {
 	// prepare the query
 	stmt, err := args.Prepare(w)
 	if err != nil {
-		status := http.StatusBadRequest
-		errText := fmt.Sprintf("%s: failed to prepare query. Invalid arguments provided", http.StatusText(status))
-		http.Error(w, errText, status)
+		a.errorHandler.Handle(w, http.StatusBadRequest, err, "failed to prepare query. Invalid arguments provided")
+		return
 	}
 
 	// execute query
-	err = stmt.Execute()
-	if err != nil {
-		status := http.StatusInternalServerError
-		errText := fmt.Sprintf("%s: failed to execute query", http.StatusText(status))
-		http.Error(w, errText, status)
+	if err = stmt.Execute(); err != nil {
+		a.errorHandler.Handle(w, http.StatusInternalServerError, err, "failed to execute query")
+		return
 	}
 }

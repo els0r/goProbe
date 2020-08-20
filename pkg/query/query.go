@@ -2,6 +2,7 @@ package query
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -169,7 +170,7 @@ func (s *Statement) Execute() error {
 
 		// if a memory breach occurred, the memory monitor is shut
 		// down already
-		if err == errorMemoryBreach {
+		if errors.Is(err, errorMemoryBreach) {
 			return
 		}
 		stopHeapWatch <- struct{}{}
@@ -236,7 +237,7 @@ func (s *Statement) Execute() error {
 		if err != nil {
 
 			// an error from the routine can only be of type memory error
-			err = errorMemoryBreach
+			err = fmt.Errorf("%w: %v", errorMemoryBreach, err)
 
 			// close the map channel. This will make sure that the aggregation routine
 			// actually finishes
@@ -332,9 +333,6 @@ func (s *Statement) Execute() error {
 		count,
 	)
 	if err != nil {
-		// stop the memory ticker
-		stopHeapWatch <- struct{}{}
-
 		return fmt.Errorf("failed to create printer: %s", err)
 	}
 
@@ -350,8 +348,7 @@ func (s *Statement) Execute() error {
 	for doneFilling := false; !doneFilling; {
 		select {
 		case err = <-memErrors:
-			fmt.Println("received memory error:", err)
-			return errorMemoryBreach
+			return fmt.Errorf("%w: %v", errorMemoryBreach, err)
 		default:
 			for _, entry := range mapEntries {
 				printer.AddRow(entry)

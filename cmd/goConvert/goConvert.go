@@ -145,7 +145,7 @@ func parseCommandLineArgs(cfg *Config) {
 	flag.StringVar(&cfg.SavePath, "out", "", "Folder to which the .gpf files should be written")
 	flag.StringVar(&cfg.Schema, "schema", "", "Structure of CSV file (e.g. \"sip,dip,dport,time\"")
 	flag.StringVar(&cfg.Iface, "iface", "", "Interface from which CSV data was created")
-	flag.IntVar(&cfg.NumLines, "n", 111222333444, "Number of rows to read from the CSV file")
+	flag.IntVar(&cfg.NumLines, "n", 1000, "Number of rows to read from the CSV file")
 	flag.Parse()
 }
 
@@ -243,8 +243,9 @@ func main() {
 
 	// writer routine accepting flow maps to write out
 	var wg sync.WaitGroup
+	wg.Add(1)
 	go func(writeChan chan writeJob) {
-		wg.Add(1)
+		defer wg.Done()
 		for fm := range writeChan {
 			if _, ok := mapWriters[fm.iface]; !ok {
 				mapWriters[fm.iface] = goDB.NewDBWriter(config.SavePath, fm.iface)
@@ -261,7 +262,6 @@ func main() {
 				os.Exit(1)
 			}
 		}
-		wg.Done()
 	}(writeChan)
 
 	fmt.Print("Progress:   0% |")
