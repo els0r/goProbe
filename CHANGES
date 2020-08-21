@@ -58,3 +58,4 @@ UNRELEASED fako1024,els0r
     - remove all mentions of libpcap from the repository
     - improve packaging and add .deb Makefile target
     - Add explicit systemd timeout for stop target to ensure that a stalling goprobe is killed
+    - Fix a bug occurring with ASM implementation of bigendian conversion starting from go1.15

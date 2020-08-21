@@ -14,6 +14,7 @@
 package goDB
 
 import (
+	"encoding/binary"
 	"errors"
 	"io/ioutil"
 	"os"
@@ -21,7 +22,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/els0r/goProbe/pkg/goDB/bigendian"
 	"github.com/els0r/log"
 )
 
@@ -295,7 +295,7 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workload DBWorkload, resultMap map
 			}
 
 			// Check whether timestamps contained in headers match
-			blockTstamp := bigendian.ReadInt64At(blocks[colIdx], 0) // The timestamp header is 8 bytes
+			blockTstamp := int64(binary.BigEndian.Uint64(blocks[colIdx][0:8])) // The timestamp header is 8 bytes
 			if tstamp != blockTstamp {
 				blockBroken = true
 				w.logger.Warnf("[Bl %d] Mismatch between timestamp in header [%d] of file [%s.gpf] and in block [%d]\n", b, tstamp, columnFileNames[colIdx], blockTstamp)
@@ -358,10 +358,11 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workload DBWorkload, resultMap map
 			if conditionalSatisfied {
 				// Update aggregates
 				var delta Val
-				delta.NBytesRcvd = bigendian.UnsafeReadUint64At(blocks[BytesRcvdColIdx], i)
-				delta.NBytesSent = bigendian.UnsafeReadUint64At(blocks[BytesSentColIdx], i)
-				delta.NPktsRcvd = bigendian.UnsafeReadUint64At(blocks[PacketsRcvdColIdx], i)
-				delta.NPktsSent = bigendian.UnsafeReadUint64At(blocks[PacketsSentColIdx], i)
+
+				delta.NBytesRcvd = binary.BigEndian.Uint64(blocks[BytesRcvdColIdx][i*8 : i*8+8])
+				delta.NBytesSent = binary.BigEndian.Uint64(blocks[BytesSentColIdx][i*8 : i*8+8])
+				delta.NPktsRcvd = binary.BigEndian.Uint64(blocks[PacketsRcvdColIdx][i*8 : i*8+8])
+				delta.NPktsSent = binary.BigEndian.Uint64(blocks[PacketsSentColIdx][i*8 : i*8+8])
 
 				if val, exists := resultMap[key]; exists {
 					val.NBytesRcvd += delta.NBytesRcvd
