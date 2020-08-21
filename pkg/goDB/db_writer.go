@@ -11,13 +11,12 @@
 package goDB
 
 import (
+	"encoding/binary"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
 	"time"
-
-	"github.com/els0r/goProbe/pkg/goDB/bigendian"
 )
 
 const (
@@ -157,7 +156,7 @@ func dbData(iface string, timestamp int64, aggFlowMap AggFlowMap) ([ColIdxCount]
 	summUpdate.Interface = iface
 
 	timestampBytes := make([]byte, 8)
-	bigendian.PutInt64(timestampBytes, timestamp)
+	binary.BigEndian.PutUint64(timestampBytes, uint64(timestamp))
 
 	for i := columnIndex(0); i < ColIdxCount; i++ {
 		dbData[i] = append(dbData[i], timestampBytes...)
@@ -174,16 +173,16 @@ func dbData(iface string, timestamp int64, aggFlowMap AggFlowMap) ([ColIdxCount]
 		summUpdate.Traffic += V.NBytesSent
 
 		// counters
-		bigendian.PutUint64(counterBytes, V.NBytesRcvd)
+		binary.BigEndian.PutUint64(counterBytes, V.NBytesRcvd)
 		dbData[BytesRcvdColIdx] = append(dbData[BytesRcvdColIdx], counterBytes...)
 
-		bigendian.PutUint64(counterBytes, V.NBytesSent)
+		binary.BigEndian.PutUint64(counterBytes, V.NBytesSent)
 		dbData[BytesSentColIdx] = append(dbData[BytesSentColIdx], counterBytes...)
 
-		bigendian.PutUint64(counterBytes, V.NPktsRcvd)
+		binary.BigEndian.PutUint64(counterBytes, V.NPktsRcvd)
 		dbData[PacketsRcvdColIdx] = append(dbData[PacketsRcvdColIdx], counterBytes...)
 
-		bigendian.PutUint64(counterBytes, V.NPktsSent)
+		binary.BigEndian.PutUint64(counterBytes, V.NPktsSent)
 		dbData[PacketsSentColIdx] = append(dbData[PacketsSentColIdx], counterBytes...)
 
 		// attributes
