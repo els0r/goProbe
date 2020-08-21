@@ -68,6 +68,7 @@ compile:
 	## VERSION ###
 	echo "*** setting version information ***"
 	COMMIT_SHA=$(COMMIT_SHA) go generate $(BASEPATH)/pkg/version
+	echo "commit is $(COMMIT_SHA)"
 
 	## GO CODE COMPILATION ##
 	echo "*** compiling $(GO_PRODUCT) ***"
@@ -152,5 +153,7 @@ clean:
 	rm -f $(GO_PRODUCT)-$(DEB_VERSION).deb
 
 all: clean fetch compile install
+
+deb-package: clean fetch compile install deb
 
 .SILENT:
