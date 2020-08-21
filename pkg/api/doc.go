@@ -48,8 +48,13 @@ Get detailed pacp stats per interface
 
 Any supported action is prefixed with a "_". goProbe has support for live-reloading the capture configuration. The /_reload path comes in handy when adding/removing interfaces for capturing in place. Upon reload, goProbe will load the changes and adjust its capturing routines.
 
+Additionally, stored flows can be accessed directly via the API via /_query. This is equivalent to calling goQuery on the host.
+
 ### Examples:
+* Live-reload the configuration
 ` + example("curl -X POST http://localhost:6060/api/v1/_reload") + `
+* Query the most active hosts of the last 2 days
+` + example("curl -X POST --data-binary <query-args> http://localhost:6060/api/v1/_query") + `
 `
 
 func example(command string) string {

@@ -7,7 +7,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/els0r/goProbe/pkg/api/v1"
+	"github.com/els0r/goProbe/pkg/api/errors"
+	v1 "github.com/els0r/goProbe/pkg/api/v1"
 	"github.com/els0r/goProbe/pkg/capture"
 	"github.com/els0r/goProbe/pkg/discovery"
 	log "github.com/els0r/log"
@@ -119,7 +120,11 @@ func New(port string, manager *capture.Manager, opts ...Option) (*Server, error)
 	}
 
 	// initialize currently supported APIs
-	v1Options := []v1.Option{v1.WithLogger(s.logger)}
+	v1Options := []v1.Option{
+		v1.WithLogger(s.logger),
+		// inject standard error handler and attach api logger
+		v1.WithErrorHandler(errors.NewStandardHandler(s.logger)),
+	}
 	if s.discoveryConfigUpdate != nil {
 		v1Options = append(v1Options, v1.WithDiscoveryConfigUpdate(s.discoveryConfigUpdate))
 	}

@@ -15,3 +15,8 @@ func Response(w http.ResponseWriter, val interface{}) error {
 	w.Header().Set("Content-Type", "application/json")
 	return j.NewEncoder(w).Encode(val)
 }
+
+// Parse json decodes the request body
+func Parse(r *http.Request, val interface{}) error {
+	return j.NewDecoder(r.Body).Decode(val)
+}

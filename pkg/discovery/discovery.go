@@ -127,7 +127,7 @@ func NewClient(host string, opts ...Option) *Client {
 	// create new client
 	c := &Client{
 		baseURL:    host,
-		userAgent:  "goProbe discovery-client/" + clientVersion,
+		userAgent:  "goProbe/discovery-client/" + clientVersion,
 		httpClient: &http.Client{Timeout: 30 * time.Second},
 		probes:     newProbesClient(),
 	}
