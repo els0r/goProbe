@@ -3,6 +3,6 @@
 package goDB
 
 /*
-#cgo LDFLAGS: ${SRCDIR}/lz4/liblz4_darwin.a
+#cgo LDFLAGS: ${SRCDIR}/encoder/lz4/liblz4_darwin.a
 */
 import "C"

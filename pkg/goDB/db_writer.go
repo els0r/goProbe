@@ -17,6 +17,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"time"
+
+	"github.com/els0r/goProbe/pkg/goDB/encoder"
 )
 
 const (
@@ -37,13 +39,14 @@ type DBWriter struct {
 	iface  string
 
 	dayTimestamp int64
+	encoder      encoder.Encoder
 
 	metadata *Metadata
 }
 
 // NewDBWriter initializes a new DBWriter
-func NewDBWriter(dbpath string, iface string) (w *DBWriter) {
-	return &DBWriter{dbpath, iface, 0, new(Metadata)}
+func NewDBWriter(dbpath string, iface string, encoder encoder.Encoder) (w *DBWriter) {
+	return &DBWriter{dbpath, iface, 0, encoder, new(Metadata)}
 }
 
 func (w *DBWriter) dailyDir(timestamp int64) (path string) {
@@ -71,7 +74,7 @@ func (w *DBWriter) writeMetadata(timestamp int64, meta BlockMetadata) error {
 
 func (w *DBWriter) writeBlock(timestamp int64, column string, data []byte) error {
 	path := filepath.Join(w.dailyDir(timestamp), column+".gpf")
-	gpfile, err := NewGPFile(path)
+	gpfile, err := NewGPFile(path, WithGPFileEncoding(w.encoder))
 	if err != nil {
 		return err
 	}

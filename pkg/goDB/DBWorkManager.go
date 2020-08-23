@@ -15,7 +15,7 @@ package goDB
 
 import (
 	"encoding/binary"
-	"errors"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -112,8 +112,9 @@ func (w *DBWorkManager) CreateWorkerJobs(tfirst int64, tlast int64, query *Query
 				workload := DBWorkload{query: query, workDir: dirName, load: []int64{}}
 
 				// retrieve all the relevant timestamps from one of the database files.
-				if infoFile, err = NewGPFile(w.dbIfaceDir + "/" + dirName + "/bytes_rcvd.gpf"); err != nil {
-					return false, errors.New("could not read file: " + w.dbIfaceDir + "/" + dirName + "/bytes_rcvd.gpf")
+				path := filepath.Join(w.dbIfaceDir, dirName, "bytes_rcvd.gpf")
+				if infoFile, err = NewGPFile(path); err != nil {
+					return false, fmt.Errorf("Could not read file: %s: %s", path, err)
 				}
 
 				// add the relevant timestamps to the workload's list

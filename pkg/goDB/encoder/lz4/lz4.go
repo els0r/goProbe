@@ -24,6 +24,8 @@ import (
 	"errors"
 	"io"
 	"unsafe"
+
+	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 )
 
 // Encoder compresses data with the LZ4 algorithm (omitting certain bounds-checks for performance reasons)
@@ -52,6 +54,11 @@ func WithCompressionLevel(level int) Option {
 	return func(e *Encoder) {
 		e.level = level
 	}
+}
+
+// Type will return the type of encoder
+func (e *Encoder) Type() encoders.Type {
+	return encoders.EncoderTypeLZ4
 }
 
 // Compress compresses the input data and writes it to dst

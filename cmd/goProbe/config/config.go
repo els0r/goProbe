@@ -19,6 +19,8 @@ import (
 	"sync"
 
 	"github.com/els0r/goProbe/pkg/capture"
+	"github.com/els0r/goProbe/pkg/goDB/encoder"
+	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 )
 
 // demoKeys stores the API keys that should, under no circumstance, be used in production.
@@ -37,11 +39,15 @@ type validator interface {
 // Config stores goProbe's configuration
 type Config struct {
 	sync.Mutex
-	DBPath      string    `json:"db_path"`
-	Interfaces  Ifaces    `json:"interfaces"`
-	SyslogFlows bool      `json:"syslog_flows"`
-	Logging     LogConfig `json:"logging"`
-	API         APIConfig `json:"api"`
+	DBPath      string        `json:"db_path"`
+	Interfaces  Ifaces        `json:"interfaces"`
+	SyslogFlows bool          `json:"syslog_flows"`
+	Logging     LogConfig     `json:"logging"`
+	API         APIConfig     `json:"api"`
+	EncoderType encoders.Type `json:"encoder_type"`
+
+	// Hidden fields
+	encoder encoder.Encoder
 }
 
 // Ifaces stores the per-interface configuration
@@ -86,6 +92,7 @@ func New() *Config {
 			Host: "localhost",
 			Port: "6060",
 		},
+		EncoderType: encoders.EncoderTypeLZ4,
 	}
 }
 
@@ -146,7 +153,15 @@ func (c *Config) validate() error {
 	if c.DBPath == "" {
 		return fmt.Errorf("Database path must not be empty")
 	}
+	if c.EncoderType > encoders.MaxEncoderType {
+		return fmt.Errorf("Unsupported encoder type requested: %v", c.EncoderType)
+	}
 	return nil
+}
+
+// Encoder returns the encoder / compressor embedded in the config
+func (c *Config) Encoder() encoder.Encoder {
+	return c.encoder
 }
 
 // Validate checks all config parameters
@@ -185,7 +200,8 @@ func Parse(src io.Reader) (*Config, error) {
 		return nil, err
 	}
 
-	if err := config.Validate(); err != nil {
+	err := config.Validate()
+	if err != nil {
 		return nil, err
 	}
 
@@ -193,6 +209,11 @@ func Parse(src io.Reader) (*Config, error) {
 	if !runtimeDBPath.set {
 		runtimeDBPath.path = config.DBPath
 		runtimeDBPath.set = true
+	}
+
+	config.encoder, err = encoder.New(config.EncoderType)
+	if err != nil {
+		return nil, err
 	}
 
 	return config, nil
