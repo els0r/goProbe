@@ -27,6 +27,8 @@ import (
 	_ "expvar"
 
 	"github.com/els0r/goProbe/pkg/goDB"
+	"github.com/els0r/goProbe/pkg/goDB/encoder"
+	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 	log "github.com/els0r/log"
 
 	"flag"
@@ -35,11 +37,12 @@ import (
 
 // Config stores the flags provided to the converter
 type Config struct {
-	FilePath string
-	SavePath string
-	Iface    string
-	Schema   string
-	NumLines int
+	FilePath    string
+	SavePath    string
+	Iface       string
+	Schema      string
+	NumLines    int
+	EncoderType int
 }
 
 // parameter governing the number of seconds that are covered by a block
@@ -146,6 +149,7 @@ func parseCommandLineArgs(cfg *Config) {
 	flag.StringVar(&cfg.Schema, "schema", "", "Structure of CSV file (e.g. \"sip,dip,dport,time\"")
 	flag.StringVar(&cfg.Iface, "iface", "", "Interface from which CSV data was created")
 	flag.IntVar(&cfg.NumLines, "n", 1000, "Number of rows to read from the CSV file")
+	flag.IntVar(&cfg.EncoderType, "encoder", 0, "Encoder type to use for compression")
 	flag.Parse()
 }
 
@@ -206,6 +210,12 @@ func main() {
 		}
 	}
 
+	enc, err := encoder.New(encoders.Type(config.EncoderType))
+	if err != nil {
+		logger.Errorf("failed to create encoder / compressor: %s", err)
+		os.Exit(1)
+	}
+
 	// map writers. There's one for each interface
 	var mapWriters = make(map[string]*goDB.DBWriter)
 
@@ -248,7 +258,7 @@ func main() {
 		defer wg.Done()
 		for fm := range writeChan {
 			if _, ok := mapWriters[fm.iface]; !ok {
-				mapWriters[fm.iface] = goDB.NewDBWriter(config.SavePath, fm.iface)
+				mapWriters[fm.iface] = goDB.NewDBWriter(config.SavePath, fm.iface, enc)
 			}
 
 			// create an empty metadata block for this timestamp. Of course this

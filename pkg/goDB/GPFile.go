@@ -99,6 +99,7 @@ func NewGPFile(p string, opts ...GPFileOption) (*GPFile, error) {
 		if f, err = os.Create(p); err != nil {
 			return nil, err
 		}
+		binary.BigEndian.PutUint64(bufPrefix, MagicBytePrefix)
 		if nPrefix, err = f.Write(bufPrefix); err != nil {
 			return nil, err
 		}
