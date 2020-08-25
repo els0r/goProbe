@@ -31,19 +31,13 @@ func (e *Encoder) Compress(data []byte, dst io.Writer) (n int, err error) {
 
 // Decompress runs LZ4 decompression on "in" read from "src" and writes it to "out"
 func (e *Encoder) Decompress(in, out []byte, src io.Reader) (n int, err error) {
-	var nBytesRead int
-
-	// read compressed source data
-	nBytesRead, err = src.Read(in)
+	n, err = src.Read(out)
 	if err != nil {
 		return 0, err
 	}
-	if nBytesRead != len(in) {
+	if n != len(out) {
 		return 0, errors.New("Incorrect number of bytes read from data source")
 	}
 
-	copy(out, in)
-
-	// decompress data
-	return nBytesRead, nil
+	return n, nil
 }
