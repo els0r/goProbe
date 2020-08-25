@@ -19,6 +19,9 @@ const (
 	// defaultPermissions denotes the permissions used for file creation
 	defaultPermissions = 0644
 
+	// defaultEncoderType denotes the default encoder / compressor
+	defaultEncoderType = encoders.EncoderTypeLZ4
+
 	// headerVersion denotes the current header version
 	headerVersion = 1
 
@@ -60,7 +63,7 @@ func New(filename string, accessMode int, options ...Option) (*GPFile, error) {
 	g := &GPFile{
 		filename:           filename,
 		accessMode:         accessMode,
-		defaultEncoderType: encoders.EncoderTypeLZ4,
+		defaultEncoderType: defaultEncoderType,
 	}
 
 	// apply functional options
@@ -114,8 +117,7 @@ func (g *GPFile) ReadBlock(timestamp int64) ([]byte, error) {
 	}
 
 	// Instantiate decoder / decompressor
-	decoder := g.defaultEncoder
-	if block.EncoderType != decoder.Type() {
+	if block.EncoderType != g.defaultEncoder.Type() {
 		decoder, err := encoder.New(block.EncoderType)
 		if err != nil {
 			return nil, fmt.Errorf("Failed to decode block %d based on detected encoder type %v: %s", block, block.EncoderType, err)
@@ -124,9 +126,12 @@ func (g *GPFile) ReadBlock(timestamp int64) ([]byte, error) {
 	}
 
 	// if the file is read continuously, do not seek
-	seekPos := block.Offset
+	var (
+		seekPos = block.Offset
+		err     error
+	)
 	if seekPos != g.lastSeekPos {
-		if _, err := g.file.Seek(seekPos, 0); err != nil {
+		if g.lastSeekPos, err = g.file.Seek(seekPos, 0); err != nil {
 			return nil, err
 		}
 	}
@@ -134,12 +139,12 @@ func (g *GPFile) ReadBlock(timestamp int64) ([]byte, error) {
 	// Perform decompression of data and store in output slice
 	blockData := make([]byte, block.Len)
 	uncompData := make([]byte, block.RawLen)
-	nRead, err := decoder.Decompress(blockData, uncompData, g.file)
+	nRead, err := g.defaultEncoder.Decompress(blockData, uncompData, g.file)
 	if err != nil {
 		return nil, err
 	}
 	if nRead != block.Len {
-		return nil, fmt.Errorf("Unexpected amount of bytes after decompression, want %d, have %d", block.RawLen, nRead)
+		return nil, fmt.Errorf("Unexpected amount of bytes after decompression, want %d, have %d", block.Len, nRead)
 	}
 	g.lastSeekPos += int64(nRead)
 
@@ -197,6 +202,14 @@ func (g *GPFile) Close() error {
 		return g.file.Close()
 	}
 	return nil
+}
+
+// Delete removes the file and its metadata
+func (g *GPFile) Delete() error {
+	if err := os.Remove(g.filename); err != nil {
+		return err
+	}
+	return os.Remove(g.filename + HeaderFileSuffix)
 }
 
 ////////////////////////////////////////////////////////////////////////////////
