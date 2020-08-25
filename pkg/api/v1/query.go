@@ -1,11 +1,10 @@
 package v1
 
 import (
-	"github.com/els0r/goProbe/pkg/api/json"
-
 	"fmt"
 	"net/http"
 
+	"github.com/els0r/goProbe/pkg/api/json"
 	"github.com/els0r/goProbe/pkg/query"
 )
 

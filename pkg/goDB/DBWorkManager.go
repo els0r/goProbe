@@ -22,12 +22,15 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/els0r/goProbe/pkg/goDB/storage/gpfile"
 	"github.com/els0r/log"
 )
 
 const (
+
 	// EpochDay is one day in seconds
 	EpochDay int64 = 86400
+
 	// DBWriteInterval defines the periodic write out interval of goProbe
 	DBWriteInterval int64 = 300
 )
@@ -92,7 +95,7 @@ func (w *DBWorkManager) CreateWorkerJobs(tfirst int64, tlast int64, query *Query
 
 	// loop over directory list in order to create the timestamp pairs
 	var (
-		infoFile *GPFile
+		infoFile *gpfile.GPFile
 		dirName  string
 	)
 
@@ -113,14 +116,18 @@ func (w *DBWorkManager) CreateWorkerJobs(tfirst int64, tlast int64, query *Query
 
 				// retrieve all the relevant timestamps from one of the database files.
 				path := filepath.Join(w.dbIfaceDir, dirName, "bytes_rcvd.gpf")
-				if infoFile, err = NewGPFile(path); err != nil {
+				if infoFile, err = gpfile.New(path, gpfile.ModeRead); err != nil {
 					return false, fmt.Errorf("Could not read file: %s: %s", path, err)
 				}
 
 				// add the relevant timestamps to the workload's list
-				for _, stamp := range infoFile.GetTimestamps() {
-					if stamp != 0 && tfirst < stamp && stamp < tlast+DBWriteInterval {
-						workload.load = append(workload.load, stamp)
+				blockHeader, err := infoFile.Blocks()
+				if err != nil {
+					return false, fmt.Errorf("Could not get blocks from file: %s: %s", path, err)
+				}
+				for _, block := range blockHeader.OrderedList() {
+					if tfirst < block.Timestamp && block.Timestamp < tlast+DBWriteInterval {
+						workload.load = append(workload.load, block.Timestamp)
 					}
 				}
 				infoFile.Close()
@@ -165,6 +172,7 @@ func (w *DBWorkManager) grabAndProcessWorkload(workloadChan <-chan DBWorkload, m
 
 					// if there is an error during one of the read jobs, throw a syslog message and terminate
 					if err = w.readBlocksAndEvaluate(workload, resultMap); err != nil {
+
 						w.logger.Error(err.Error())
 						mapChan <- nil
 						return
@@ -268,9 +276,9 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workload DBWorkload, resultMap map
 	var key, comparisonValue ExtraKey
 
 	// Load the GPFiles corresponding to the columns we need for the query. Each file is loaded at most once.
-	var columnFiles [ColIdxCount]*GPFile
+	var columnFiles [ColIdxCount]*gpfile.GPFile
 	for _, colIdx := range query.columnIndizes {
-		if columnFiles[colIdx], err = NewGPFile(w.dbIfaceDir + "/" + dir + "/" + columnFileNames[colIdx] + ".gpf"); err == nil {
+		if columnFiles[colIdx], err = gpfile.New(w.dbIfaceDir+"/"+dir+"/"+columnFileNames[colIdx]+".gpf", gpfile.ModeRead); err == nil {
 			defer columnFiles[colIdx].Close()
 		} else {
 			return err
@@ -289,22 +297,11 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workload DBWorkload, resultMap map
 		for _, colIdx := range query.columnIndizes {
 
 			// Read the block from the file
-			if blocks[colIdx], err = columnFiles[colIdx].ReadTimedBlock(tstamp); err != nil {
+			if blocks[colIdx], err = columnFiles[colIdx].ReadBlock(tstamp); err != nil {
 				blockBroken = true
 				w.logger.Warnf("[D %s; B %d] Failed to read %s.gpf: %s", dir, tstamp, columnFileNames[colIdx], err.Error())
 				break
 			}
-
-			// Check whether timestamps contained in headers match
-			blockTstamp := int64(binary.BigEndian.Uint64(blocks[colIdx][0:8])) // The timestamp header is 8 bytes
-			if tstamp != blockTstamp {
-				blockBroken = true
-				w.logger.Warnf("[Bl %d] Mismatch between timestamp in header [%d] of file [%s.gpf] and in block [%d]\n", b, tstamp, columnFileNames[colIdx], blockTstamp)
-				break
-			}
-
-			// Cut off headers so we don't need to offset all later index calculations by 8
-			blocks[colIdx] = blocks[colIdx][8:]
 		}
 
 		if query.hasAttrTime {
@@ -316,9 +313,9 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workload DBWorkload, resultMap map
 		}
 
 		// Check whether all blocks have matching number of entries
-		numEntries := int((len(blocks[BytesRcvdColIdx]) - 8) / 8) // Each block contains another timestamp as the last 8 bytes
+		numEntries := int(len(blocks[BytesRcvdColIdx]) / 8) // Each block contains another timestamp as the last 8 bytes
 		for _, colIdx := range query.columnIndizes {
-			l := len(blocks[colIdx]) - 8 // subtract timestamp
+			l := len(blocks[colIdx])
 			if l/columnSizeofs[colIdx] != numEntries {
 				blockBroken = true
 				w.logger.Warnf("[Bl %d] Incorrect number of entries in file [%s.gpf]. Expected %d, found %d", b, columnFileNames[colIdx], numEntries, l/columnSizeofs[colIdx])

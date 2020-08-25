@@ -1,6 +1,6 @@
 package query
 
-import "encoding/json"
+import jsoniter "github.com/json-iterator/go"
 
 // Direction indicates the counters of which flow direction we should print.
 type Direction int
@@ -46,13 +46,13 @@ func DirectionFromString(s string) Direction {
 
 // MarshalJSON implements the Marshaler interface for sort order
 func (d Direction) MarshalJSON() ([]byte, error) {
-	return json.Marshal(d.String())
+	return jsoniter.Marshal(d.String())
 }
 
 // UnmarshalJSON implements the Unmarshaler interface
 func (d Direction) UnmarshalJSON(b []byte) error {
 	var str string
-	err := json.Unmarshal(b, &str)
+	err := jsoniter.Unmarshal(b, &str)
 	if err != nil {
 		return err
 	}

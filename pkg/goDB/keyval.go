@@ -14,8 +14,10 @@
 package goDB
 
 import (
-	"encoding/json"
 	"fmt"
+
+	"github.com/els0r/goProbe/pkg/goDB/protocols"
+	jsoniter "github.com/json-iterator/go"
 )
 
 // Key stores the 5-tuple which defines a goProbe flow
@@ -53,13 +55,13 @@ func (k Key) String() string {
 		RawIPToString(k.Sip[:]),
 		RawIPToString(k.Dip[:]),
 		int(uint16(k.Dport[0])<<8|uint16(k.Dport[1])),
-		GetIPProto(int(k.Protocol)),
+		protocols.GetIPProto(int(k.Protocol)),
 	)
 }
 
 // MarshalJSON implements the Marshaler interface
 func (k Key) MarshalJSON() ([]byte, error) {
-	return json.Marshal(
+	return jsoniter.Marshal(
 		struct {
 			SIP   string `json:"sip"`
 			DIP   string `json:"dip"`
@@ -69,7 +71,7 @@ func (k Key) MarshalJSON() ([]byte, error) {
 			RawIPToString(k.Sip[:]),
 			RawIPToString(k.Dip[:]),
 			uint16(uint16(k.Dport[0])<<8 | uint16(k.Dport[1])),
-			GetIPProto(int(k.Protocol)),
+			protocols.GetIPProto(int(k.Protocol)),
 		},
 	)
 }
@@ -96,5 +98,5 @@ func (a AggFlowMap) MarshalJSON() ([]byte, error) {
 			}{k, v},
 		)
 	}
-	return json.Marshal(toMarshal)
+	return jsoniter.Marshal(toMarshal)
 }

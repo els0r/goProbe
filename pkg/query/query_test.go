@@ -2,8 +2,9 @@ package query
 
 import (
 	"bytes"
-	"encoding/json"
 	"testing"
+
+	jsoniter "github.com/json-iterator/go"
 )
 
 var (
@@ -53,7 +54,7 @@ func TestEmptyOutput(t *testing.T) {
 			actualOutputJSON := buf.Bytes()
 
 			var actualOutput map[string]string
-			err = json.Unmarshal(actualOutputJSON, &actualOutput)
+			err = jsoniter.Unmarshal(actualOutputJSON, &actualOutput)
 			if err != nil {
 				t.Log(string(actualOutputJSON))
 				t.Log(a)

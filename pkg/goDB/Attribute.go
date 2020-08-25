@@ -15,6 +15,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/els0r/goProbe/pkg/goDB/protocols"
 )
 
 // Attribute interface. It is not meant to be implemented by structs
@@ -70,7 +72,7 @@ func (ProtoAttribute) Name() string {
 
 // ExtractStrings converts the numeric IP protocol into a human-readable name (e.g. "UDP")
 func (ProtoAttribute) ExtractStrings(key *ExtraKey) []string {
-	return []string{GetIPProto(int(key.Protocol))}
+	return []string{protocols.GetIPProto(int(key.Protocol))}
 }
 
 func (ProtoAttribute) attributeMarker() {}

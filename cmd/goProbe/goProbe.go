@@ -309,7 +309,7 @@ func handleWriteouts(handler *capture.WriteoutHandler, logToSyslog bool, logger 
 			// Ensure that there is a DBWriter for the given interface
 			_, exists := dbWriters[taggedMap.Iface]
 			if !exists {
-				w := goDB.NewDBWriter(capconfig.RuntimeDBPath(), taggedMap.Iface, config.Encoder())
+				w := goDB.NewDBWriter(capconfig.RuntimeDBPath(), taggedMap.Iface, config.EncoderType)
 				dbWriters[taggedMap.Iface] = w
 			}
 

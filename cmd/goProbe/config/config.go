@@ -19,7 +19,6 @@ import (
 	"sync"
 
 	"github.com/els0r/goProbe/pkg/capture"
-	"github.com/els0r/goProbe/pkg/goDB/encoder"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 )
 
@@ -45,9 +44,6 @@ type Config struct {
 	Logging     LogConfig     `json:"logging"`
 	API         APIConfig     `json:"api"`
 	EncoderType encoders.Type `json:"encoder_type"`
-
-	// Hidden fields
-	encoder encoder.Encoder
 }
 
 // Ifaces stores the per-interface configuration
@@ -159,11 +155,6 @@ func (c *Config) validate() error {
 	return nil
 }
 
-// Encoder returns the encoder / compressor embedded in the config
-func (c *Config) Encoder() encoder.Encoder {
-	return c.encoder
-}
-
 // Validate checks all config parameters
 func (c *Config) Validate() error {
 	// run all config subsection validators
@@ -209,11 +200,6 @@ func Parse(src io.Reader) (*Config, error) {
 	if !runtimeDBPath.set {
 		runtimeDBPath.path = config.DBPath
 		runtimeDBPath.set = true
-	}
-
-	config.encoder, err = encoder.New(config.EncoderType)
-	if err != nil {
-		return nil, err
 	}
 
 	return config, nil

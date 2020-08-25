@@ -13,7 +13,6 @@ package query
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -22,6 +21,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	jsoniter "github.com/json-iterator/go"
 )
 
 const (
@@ -81,7 +82,7 @@ func TestOutputConsistency(t *testing.T) {
 		}
 
 		var arguments []Args
-		err = json.Unmarshal(argumentsJSON, &arguments)
+		err = jsoniter.Unmarshal(argumentsJSON, &arguments)
 		if err != nil {
 			t.Fatalf("Could not decode argument file %s. Error: %s", argumentFile, err)
 		}
@@ -92,7 +93,7 @@ func TestOutputConsistency(t *testing.T) {
 			t.Fatalf("Could not read expected output file %s. Error: %s", expectedOutputFile, err)
 		}
 		var expectedOutput interface{}
-		err = json.Unmarshal(expectedOutputJSON, &expectedOutput)
+		err = jsoniter.Unmarshal(expectedOutputJSON, &expectedOutput)
 		if err != nil {
 			t.Fatalf("Could not decode expected output file %s. Error: %s", expectedOutputFile, err)
 		}
@@ -117,7 +118,7 @@ func TestOutputConsistency(t *testing.T) {
 			actualOutputJSON := buf.Bytes()
 
 			var actualOutput interface{}
-			err = json.Unmarshal(actualOutputJSON, &actualOutput)
+			err = jsoniter.Unmarshal(actualOutputJSON, &actualOutput)
 			if err != nil {
 				t.Fatalf("[%d] failed to decode JSON output: %s\n%s", i, err, string(actualOutputJSON))
 			}
@@ -125,7 +126,7 @@ func TestOutputConsistency(t *testing.T) {
 			match, err = outputMatches(expectedOutput, actualOutput)
 			if err != nil || !match {
 				t.Logf("[%d] arguments: from %s\n%s", i, argumentFile, args.String())
-				//				mi, _ := json.MarshalIndent(expectedOutput, "", " ")
+				//				mi, _ := jsoniter.MarshalIndent(expectedOutput, "", " ")
 				//				t.Fatalf("[%d] output from testcase %s doesn't match correct output.\nWant: %s", i, testCase, string(mi))
 				t.Fatalf("[%d] output from testcase %s doesn't match correct output: %s", i, testCase, err)
 			}
@@ -300,11 +301,11 @@ type row struct {
 	time                              string
 }
 
-// Given an interface{} resulting from a call to json.Unmarshal(), tries to construct a row structure.
+// Given an interface{} resulting from a call to jsoniter.Unmarshal(), tries to construct a row structure.
 func newRow(input interface{}) (result row, ok bool) {
 	ok = true
 
-	// map[string]interface{} corresponds to objects in JSON. All rows are output as JSON objects
+	// map[string]interface{} corresponds to objects in json All rows are output as JSON objects
 	// by goQuery.
 	inputMap, isMap := input.(map[string]interface{})
 	if !isMap {

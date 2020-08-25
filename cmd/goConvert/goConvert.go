@@ -27,7 +27,6 @@ import (
 	_ "expvar"
 
 	"github.com/els0r/goProbe/pkg/goDB"
-	"github.com/els0r/goProbe/pkg/goDB/encoder"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 	log "github.com/els0r/log"
 
@@ -210,12 +209,6 @@ func main() {
 		}
 	}
 
-	enc, err := encoder.New(encoders.Type(config.EncoderType))
-	if err != nil {
-		logger.Errorf("failed to create encoder / compressor: %s", err)
-		os.Exit(1)
-	}
-
 	// map writers. There's one for each interface
 	var mapWriters = make(map[string]*goDB.DBWriter)
 
@@ -258,7 +251,7 @@ func main() {
 		defer wg.Done()
 		for fm := range writeChan {
 			if _, ok := mapWriters[fm.iface]; !ok {
-				mapWriters[fm.iface] = goDB.NewDBWriter(config.SavePath, fm.iface, enc)
+				mapWriters[fm.iface] = goDB.NewDBWriter(config.SavePath, fm.iface, encoders.Type(config.EncoderType))
 			}
 
 			// create an empty metadata block for this timestamp. Of course this

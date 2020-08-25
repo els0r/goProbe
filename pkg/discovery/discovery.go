@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -14,6 +13,7 @@ import (
 
 	capconfig "github.com/els0r/goProbe/cmd/goProbe/config"
 	log "github.com/els0r/log"
+	jsoniter "github.com/json-iterator/go"
 )
 
 // Config stores an endpoint's API configuration, e.g. under which host it is reachable, it's authorization details and which API versions are supported.
@@ -186,7 +186,7 @@ func (c *Client) Get(identifier string) (*Config, error) {
 		Data    *Config `json:"data"`
 	}{}
 
-	err = json.NewDecoder(resp.Body).Decode(&respBody)
+	err = jsoniter.NewDecoder(resp.Body).Decode(&respBody)
 	if err != nil {
 		return nil, &ClientError{Status: resp.StatusCode, Err: err}
 	}
@@ -215,7 +215,7 @@ func (c *Client) Create(cfg *Config) (*Config, error) {
 
 	body := &bytes.Buffer{}
 	// serialize config
-	err := json.NewEncoder(body).Encode(cfg)
+	err := jsoniter.NewEncoder(body).Encode(cfg)
 	if err != nil {
 		return nil, &ClientError{Err: err}
 	}
@@ -249,7 +249,7 @@ func (c *Client) Create(cfg *Config) (*Config, error) {
 		Data    *Config `json:"data"`
 	}{}
 
-	err = json.NewDecoder(resp.Body).Decode(&respBody)
+	err = jsoniter.NewDecoder(resp.Body).Decode(&respBody)
 	if err != nil {
 		return nil, &ClientError{Status: resp.StatusCode, Err: fmt.Errorf("failed to read received config: %s", err)}
 	}
@@ -264,7 +264,7 @@ func (c *Client) Update(identifier string, cfg *Config) (*Config, error) {
 
 	body := &bytes.Buffer{}
 	// serialize config
-	err := json.NewEncoder(body).Encode(cfg)
+	err := jsoniter.NewEncoder(body).Encode(cfg)
 	if err != nil {
 		return nil, &ClientError{Err: err}
 	}
@@ -296,7 +296,7 @@ func (c *Client) Update(identifier string, cfg *Config) (*Config, error) {
 	}{}
 
 	// check mirrored config
-	err = json.NewDecoder(resp.Body).Decode(&respBody)
+	err = jsoniter.NewDecoder(resp.Body).Decode(&respBody)
 	if err != nil {
 		return nil, &ClientError{Status: resp.StatusCode, Err: fmt.Errorf("failed to read received config: %s", err)}
 	}
@@ -357,7 +357,7 @@ func (c *Client) List() ([]*Config, error) {
 		Data    []*Config `json:"data"`
 	}{}
 
-	err = json.NewDecoder(resp.Body).Decode(&respBody)
+	err = jsoniter.NewDecoder(resp.Body).Decode(&respBody)
 
 	// the list can be empty which would result in an EOF error
 	if err != nil && err != io.EOF {

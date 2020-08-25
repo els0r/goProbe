@@ -1,7 +1,6 @@
 package query
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -13,6 +12,7 @@ import (
 
 	"github.com/els0r/goProbe/pkg/goDB"
 	"github.com/els0r/goProbe/pkg/query/dns"
+	jsoniter "github.com/json-iterator/go"
 )
 
 var numProcessingUnits = runtime.NumCPU()
@@ -95,7 +95,7 @@ func (i internalError) Error() string {
 
 // MarshalJSON implements the Marshaler interface for human-readable error logging
 func (q *Error) MarshalJSON() ([]byte, error) {
-	return json.Marshal(q.Error())
+	return jsoniter.Marshal(q.Error())
 }
 
 // ExecutionStats stores the statements execution statistics
@@ -153,7 +153,7 @@ func (s *Statement) log() {
 	defer querylog.Close()
 
 	// opportunistically write statement to disk
-	err = json.NewEncoder(querylog).Encode(s)
+	err = jsoniter.NewEncoder(querylog).Encode(s)
 }
 
 // Execute runs the query with the provided parameters
@@ -379,7 +379,7 @@ func createWorkManager(dbPath string, iface string, tfirst, tlast int64, query *
 func (s *Statement) noResults() error {
 	if s.External || s.Format == "json" {
 		msg := ErrorMsgExternal{Status: "empty", Message: errorNoResults.Error()}
-		return json.NewEncoder(s.Output).Encode(msg)
+		return jsoniter.NewEncoder(s.Output).Encode(msg)
 	}
 	_, err := fmt.Fprintf(s.Output, "%s\n", errorNoResults.Error())
 	return err

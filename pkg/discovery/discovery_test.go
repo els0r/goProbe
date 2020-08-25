@@ -2,7 +2,6 @@ package discovery
 
 import (
 	"bytes"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -10,6 +9,7 @@ import (
 	"testing"
 
 	capconfig "github.com/els0r/goProbe/cmd/goProbe/config"
+	jsoniter "github.com/json-iterator/go"
 )
 
 // Response stores the ntm API responses
@@ -46,7 +46,7 @@ func TestMarshalConfig(t *testing.T) {
 			b := &bytes.Buffer{}
 
 			// check marshalling
-			err := json.NewEncoder(b).Encode(test.cfg)
+			err := jsoniter.NewEncoder(b).Encode(test.cfg)
 			if err != nil {
 				t.Fatalf("could not marshal config: %s", err)
 			}
@@ -87,7 +87,7 @@ func TestUnmarshalConfig(t *testing.T) {
 
 			// unmarshal config
 			cfg := new(Config)
-			err := json.NewDecoder(r).Decode(cfg)
+			err := jsoniter.NewDecoder(r).Decode(cfg)
 			if err != nil {
 				t.Fatalf("could not unmarshal config: %s", err)
 			}
@@ -136,7 +136,7 @@ func TestGet(t *testing.T) {
 
 						resp := &Response{Message: "test server: get", Data: test.config}
 
-						err := json.NewEncoder(w).Encode(resp)
+						err := jsoniter.NewEncoder(w).Encode(resp)
 						if err != nil {
 							return
 						}
@@ -207,7 +207,7 @@ func TestCreate(t *testing.T) {
 
 					// read response body and check if the source data is okay
 					cfg := new(Config)
-					err := json.NewDecoder(r.Body).Decode(cfg)
+					err := jsoniter.NewDecoder(r.Body).Decode(cfg)
 					if err != nil {
 						w.WriteHeader(500)
 						return
@@ -216,7 +216,7 @@ func TestCreate(t *testing.T) {
 					if test.config != nil {
 						resp := &Response{Message: "test server: create", Data: test.config}
 
-						err := json.NewEncoder(w).Encode(resp)
+						err := jsoniter.NewEncoder(w).Encode(resp)
 						if err != nil {
 							w.WriteHeader(500)
 							return
@@ -288,7 +288,7 @@ func TestList(t *testing.T) {
 					w.WriteHeader(test.expectedStatus)
 					resp := &Response{Message: "test server: list", Data: test.configs}
 
-					err := json.NewEncoder(w).Encode(resp)
+					err := jsoniter.NewEncoder(w).Encode(resp)
 					if err != nil {
 						return
 					}
