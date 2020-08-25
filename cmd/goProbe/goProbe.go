@@ -23,6 +23,7 @@ import (
 	"github.com/els0r/goProbe/pkg/capture"
 	"github.com/els0r/goProbe/pkg/discovery"
 	"github.com/els0r/goProbe/pkg/goDB"
+	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 	"github.com/els0r/goProbe/pkg/version"
 	"github.com/els0r/log"
 
@@ -309,7 +310,11 @@ func handleWriteouts(handler *capture.WriteoutHandler, logToSyslog bool, logger 
 			// Ensure that there is a DBWriter for the given interface
 			_, exists := dbWriters[taggedMap.Iface]
 			if !exists {
-				w := goDB.NewDBWriter(capconfig.RuntimeDBPath(), taggedMap.Iface, config.EncoderType)
+				et, _ := encoders.GetTypeByString(config.EncoderType)
+				w := goDB.NewDBWriter(capconfig.RuntimeDBPath(),
+					taggedMap.Iface,
+					et,
+				)
 				dbWriters[taggedMap.Iface] = w
 			}
 

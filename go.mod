@@ -8,6 +8,7 @@ require (
 	github.com/go-chi/chi v4.0.2+incompatible
 	github.com/go-chi/docgen v1.0.5
 	github.com/hashicorp/golang-lru v0.5.1 // indirect
+	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.6
 	github.com/mattn/go-colorable v0.1.1 // indirect
 	github.com/mattn/go-isatty v0.0.7 // indirect

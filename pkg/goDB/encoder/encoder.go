@@ -33,3 +33,13 @@ func New(t encoders.Type) (Encoder, error) {
 		return nil, fmt.Errorf("Unsupported encoder: %v", t)
 	}
 }
+
+// NewByString is a convenience method for encoder selection by string
+// rather than enumeration code
+func NewByString(t string) (Encoder, error) {
+	et, err := encoders.GetTypeByString(t)
+	if err != nil {
+		return nil, err
+	}
+	return New(et)
+}
