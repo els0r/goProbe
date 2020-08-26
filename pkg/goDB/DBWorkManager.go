@@ -278,7 +278,7 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workload DBWorkload, resultMap map
 	// Load the GPFiles corresponding to the columns we need for the query. Each file is loaded at most once.
 	var columnFiles [ColIdxCount]*gpfile.GPFile
 	for _, colIdx := range query.columnIndizes {
-		if columnFiles[colIdx], err = gpfile.New(w.dbIfaceDir+"/"+dir+"/"+columnFileNames[colIdx]+".gpf", gpfile.ModeRead); err == nil {
+		if columnFiles[colIdx], err = gpfile.New(filepath.Join(w.dbIfaceDir, dir, columnFileNames[colIdx]+".gpf"), gpfile.ModeRead); err == nil {
 			defer columnFiles[colIdx].Close()
 		} else {
 			return err
@@ -313,7 +313,7 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workload DBWorkload, resultMap map
 		}
 
 		// Check whether all blocks have matching number of entries
-		numEntries := int(len(blocks[BytesRcvdColIdx]) / 8) // Each block contains another timestamp as the last 8 bytes
+		numEntries := int(len(blocks[BytesRcvdColIdx]) / 8)
 		for _, colIdx := range query.columnIndizes {
 			l := len(blocks[colIdx])
 			if l/columnSizeofs[colIdx] != numEntries {

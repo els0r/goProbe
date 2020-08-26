@@ -38,12 +38,12 @@ type validator interface {
 // Config stores goProbe's configuration
 type Config struct {
 	sync.Mutex
-	DBPath      string        `json:"db_path"`
-	Interfaces  Ifaces        `json:"interfaces"`
-	SyslogFlows bool          `json:"syslog_flows"`
-	Logging     LogConfig     `json:"logging"`
-	API         APIConfig     `json:"api"`
-	EncoderType encoders.Type `json:"encoder_type"`
+	DBPath      string    `json:"db_path"`
+	Interfaces  Ifaces    `json:"interfaces"`
+	SyslogFlows bool      `json:"syslog_flows"`
+	Logging     LogConfig `json:"logging"`
+	API         APIConfig `json:"api"`
+	EncoderType string    `json:"encoder_type"`
 }
 
 // Ifaces stores the per-interface configuration
@@ -88,7 +88,7 @@ func New() *Config {
 			Host: "localhost",
 			Port: "6060",
 		},
-		EncoderType: encoders.EncoderTypeLZ4,
+		EncoderType: "lz4",
 	}
 }
 
@@ -149,8 +149,9 @@ func (c *Config) validate() error {
 	if c.DBPath == "" {
 		return fmt.Errorf("Database path must not be empty")
 	}
-	if c.EncoderType > encoders.MaxEncoderType {
-		return fmt.Errorf("Unsupported encoder type requested: %v", c.EncoderType)
+	_, err := encoders.GetTypeByString(c.EncoderType)
+	if err != nil {
+		return err
 	}
 	return nil
 }
