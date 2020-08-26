@@ -9,17 +9,17 @@ import (
 
 // Block denotes a block of goprobe data
 type Block struct {
-	EncoderType encoders.Type
-	Offset      int64
-	Len         int
-	RawLen      int
+	EncoderType encoders.Type `json:"e,omitempty"`
+	Offset      int64         `json:"p,omitempty"`
+	Len         int           `json:"l,omitempty"`
+	RawLen      int           `json:"r,omitempty"`
 }
 
 // BlockHeader denotes a list of blocks pertaining to a storage backend
 type BlockHeader struct {
-	Blocks        map[int64]Block
-	CurrentOffset int64
-	Version       int
+	Blocks        map[int64]Block `json:"b,omitempty"`
+	CurrentOffset int64           `json:"p,omitempty"`
+	Version       int             `json:"v"`
 }
 
 // BlockAtTime denotes a block / timestamp pair for easier iteration

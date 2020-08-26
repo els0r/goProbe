@@ -82,6 +82,9 @@ func convert(path string, dryRun bool) error {
 	defer legacyFile.Close()
 
 	tmpPath := path + ".tmp"
+	os.Remove(tmpPath)
+	os.Remove(tmpPath + gpfile.HeaderFileSuffix)
+
 	newFile, err := gpfile.New(tmpPath, gpfile.ModeWrite)
 	if err != nil {
 		return err
@@ -126,7 +129,7 @@ func convert(path string, dryRun bool) error {
 				return err
 			}
 		} else {
-			logrus.StandardLogger().Printf("No flow data detected in file %s, no need to write data file (only header was written), removing legacy data file\n", path)
+			logrus.StandardLogger().Infof("No flow data detected in file %s, no need to write data file (only header was written), removing legacy data file\n", path)
 			if err := os.Remove(path); err != nil {
 				return err
 			}
