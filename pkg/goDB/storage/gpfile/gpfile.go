@@ -180,9 +180,6 @@ func (g *GPFile) WriteBlock(timestamp int64, blockData []byte) error {
 	if err != nil {
 		return err
 	}
-	if err = g.file.Sync(); err != nil {
-		return err
-	}
 
 	// Update and write header data
 	g.header.Blocks[timestamp] = storage.Block{

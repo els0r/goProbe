@@ -49,37 +49,19 @@ func NewLegacyGPFile(p string) (*LegacyGPFile, error) {
 		err           error
 	)
 
-	// open file if it exists and read header, otherwise create it
-	// and write empty header
-	if _, err = os.Stat(p); err == nil {
-		if f, err = os.Open(p); err != nil {
-			return nil, err
-		}
-		if nH, err = f.Read(bufH); err != nil {
-			return nil, err
-		}
-		if nTS, err = f.Read(bufTS); err != nil {
-			return nil, err
-		}
-		if nLen, err = f.Read(bufLen); err != nil {
-			return nil, err
-		}
-	} else {
-		if f, err = os.Create(p); err != nil {
-			return nil, err
-		}
-		if nH, err = f.Write(bufH); err != nil {
-			return nil, err
-		}
-		if nTS, err = f.Write(bufTS); err != nil {
-			return nil, err
-		}
-		if nLen, err = f.Write(bufLen); err != nil {
-			return nil, err
-		}
-		f.Sync()
+	// open file if it exists and read header
+	if f, err = os.Open(p); err != nil {
+		return nil, err
 	}
-
+	if nH, err = f.Read(bufH); err != nil {
+		return nil, err
+	}
+	if nTS, err = f.Read(bufTS); err != nil {
+		return nil, err
+	}
+	if nLen, err = f.Read(bufLen); err != nil {
+		return nil, err
+	}
 	if nH != BufSize {
 		return nil, errors.New("Invalid header (blocks)")
 	}
@@ -108,16 +90,6 @@ func NewLegacyGPFile(p string) (*LegacyGPFile, error) {
 	return gpf, nil
 }
 
-// BlocksUsed returns how many slots are already taken in the GP file
-func (f *LegacyGPFile) BlocksUsed() (int, error) {
-	for i := 0; i < NumElements; i++ {
-		if f.timestamps[i] == 0 && f.blocks[i] == 0 && f.lengths[i] == 0 {
-			return i, nil
-		}
-	}
-	return -1, errors.New("Could not retrieve number of allocated blocks")
-}
-
 // ReadBlock returns the data for a given block in the file
 func (f *LegacyGPFile) ReadBlock(block int) ([]byte, error) {
 	if f.timestamps[block] == 0 && f.blocks[block] == 0 && f.lengths[block] == 0 {
@@ -144,14 +116,15 @@ func (f *LegacyGPFile) ReadBlock(block int) ([]byte, error) {
 		seekPos = f.blocks[block-1]
 		readLen = f.blocks[block] - f.blocks[block-1]
 	}
+	if readLen == 0 || f.lengths[block] == 0 {
+		return []byte{}, nil
+	}
 
 	// if the file is read continuously, do not seek
 	if seekPos != f.lastSeekPos {
-		if _, err = f.curFile.Seek(seekPos, 0); err != nil {
+		if f.lastSeekPos, err = f.curFile.Seek(seekPos, 0); err != nil {
 			return nil, err
 		}
-
-		f.lastSeekPos = seekPos
 	}
 
 	// prepare data slices for decompression
@@ -168,6 +141,7 @@ func (f *LegacyGPFile) ReadBlock(block int) ([]byte, error) {
 	if int64(uncompLen) != readLen {
 		return nil, errors.New("Incorrect number of bytes read for decompression")
 	}
+	f.lastSeekPos += readLen
 
 	return buf, nil
 }

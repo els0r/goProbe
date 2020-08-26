@@ -3,12 +3,13 @@ package main
 import (
 	"flag"
 	"io/ioutil"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/els0r/goProbe/pkg/goDB/storage/gpfile"
+	"github.com/sirupsen/logrus"
 )
 
 func main() {
@@ -22,13 +23,13 @@ func main() {
 	flag.Parse()
 
 	if dbPath == "" {
-		log.Fatal("Path to legacy goDB requried")
+		logrus.StandardLogger().Fatal("Path to legacy goDB requried")
 	}
 
 	// Get all interfaces
 	dirents, err := ioutil.ReadDir(dbPath)
 	if err != nil {
-		log.Fatal(err)
+		logrus.StandardLogger().Fatal(err)
 	}
 	for _, dirent := range dirents {
 		if !dirent.IsDir() {
@@ -38,7 +39,7 @@ func main() {
 		// Get all date directories (usually days)
 		dates, err := ioutil.ReadDir(filepath.Join(dbPath, dirent.Name()))
 		if err != nil {
-			log.Fatal(err)
+			logrus.StandardLogger().Fatal(err)
 		}
 		for _, date := range dates {
 			if !date.IsDir() {
@@ -48,7 +49,7 @@ func main() {
 			// Get all files in date directory
 			files, err := ioutil.ReadDir(filepath.Join(dbPath, dirent.Name(), date.Name()))
 			if err != nil {
-				log.Fatal(err)
+				logrus.StandardLogger().Fatal(err)
 			}
 			for _, file := range files {
 				fullPath := filepath.Join(dbPath, dirent.Name(), date.Name(), file.Name())
@@ -58,18 +59,17 @@ func main() {
 
 				// Check if the expected header file already exists (and skip, if so)
 				if _, err := os.Stat(fullPath + gpfile.HeaderFileSuffix); err == nil {
-					log.Println("File", fullPath, "already converted, skipping...")
+					logrus.StandardLogger().Infof("File %s lready converted, skipping...", fullPath)
 					continue
 				}
 
 				if err := convert(fullPath, dryRun); err != nil {
-					log.Fatalf("Error converting legacy file %s: %s", fullPath, err)
+					logrus.StandardLogger().Fatalf("Error converting legacy file %s: %s", fullPath, err)
 				}
-				log.Println("Converted", fullPath)
+				logrus.StandardLogger().Infof("Converted legacy file %s", fullPath)
 			}
 		}
 	}
-
 }
 
 func convert(path string, dryRun bool) error {
@@ -90,12 +90,17 @@ func convert(path string, dryRun bool) error {
 	defer os.Remove(tmpPath + gpfile.HeaderFileSuffix)
 
 	timestamps := legacyFile.GetTimestamps()
+	overallSizeWritten := 0
 	for _, ts := range timestamps {
 		if ts == 0 {
 			continue
 		}
 		block, err := legacyFile.ReadTimedBlock(ts)
 		if err != nil {
+			if err.Error() == "Incorrect number of bytes read for decompression" {
+				logrus.StandardLogger().Warnf("%s for legacy file %s, skippping block for timestamp %v", err, path, time.Unix(ts, 0))
+				continue
+			}
 			return err
 		}
 
@@ -105,6 +110,7 @@ func convert(path string, dryRun bool) error {
 		if err := newFile.WriteBlock(ts, block); err != nil {
 			return err
 		}
+		overallSizeWritten += len(block)
 	}
 
 	if err := newFile.Close(); err != nil {
@@ -115,8 +121,15 @@ func convert(path string, dryRun bool) error {
 		if err := os.Rename(tmpPath+gpfile.HeaderFileSuffix, path+gpfile.HeaderFileSuffix); err != nil {
 			return err
 		}
-		if err := os.Rename(tmpPath, path); err != nil {
-			return err
+		if overallSizeWritten > 0 {
+			if err := os.Rename(tmpPath, path); err != nil {
+				return err
+			}
+		} else {
+			logrus.StandardLogger().Printf("No flow data detected in file %s, no need to write data file (only header was written), removing legacy data file\n", path)
+			if err := os.Remove(path); err != nil {
+				return err
+			}
 		}
 	}
 
