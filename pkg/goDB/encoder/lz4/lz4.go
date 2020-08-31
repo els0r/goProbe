@@ -2,7 +2,7 @@
 package lz4
 
 /*
-#cgo CFLAGS: -O3
+#cgo CFLAGS: -O3 -g
 #define LZ4_STATIC_LINKING_ONLY
 
 #include <stdlib.h>
@@ -14,8 +14,8 @@ int cCompress(int len, char *input, char *output, int level) {
   return LZ4_compressHC2(input, output, len, level);
 }
 
-int cUncompress(char *output, int out_len, char *input) {
-  return LZ4_decompress_fast(input, output, out_len);
+int cUncompress(char *output, int in_len, char *input, int out_len) {
+  return LZ4_decompress_safe(input, output, in_len, out_len);
 }
 */
 import "C"
@@ -95,5 +95,10 @@ func (e *Encoder) Decompress(in, out []byte, src io.Reader) (n int, err error) {
 	}
 
 	// decompress data
-	return int(C.cUncompress((*C.char)(unsafe.Pointer(&out[0])), C.int(len(out)), (*C.char)(unsafe.Pointer(&in[0])))), nil
+	nBytesDecompressed := int(C.cUncompress((*C.char)(unsafe.Pointer(&out[0])), C.int(len(in)), (*C.char)(unsafe.Pointer(&in[0])), C.int(len(out))))
+	if nBytesDecompressed < 0 {
+		return 0, errors.New("Invalid LZ4 data detected during decompression")
+	}
+
+	return nBytesDecompressed, nil
 }

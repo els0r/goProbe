@@ -1,14 +1,14 @@
 package gpfile
 
 import (
+	"bufio"
 	"fmt"
-	"io/ioutil"
 	"os"
+	"strings"
 
 	"github.com/els0r/goProbe/pkg/goDB/encoder"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 	"github.com/els0r/goProbe/pkg/goDB/storage"
-	jsoniter "github.com/json-iterator/go"
 )
 
 const (
@@ -39,7 +39,8 @@ type GPFile struct {
 	filename string
 
 	// file denotes the pointer to the data file
-	file *os.File
+	file       *os.File
+	fileBuffer *bufio.Writer
 
 	// header denotes the block header (list of blocks) contained in this file
 	header storage.BlockHeader
@@ -143,10 +144,10 @@ func (g *GPFile) ReadBlock(timestamp int64) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if nRead != block.Len {
+	if nRead != block.RawLen {
 		return nil, fmt.Errorf("Unexpected amount of bytes after decompression, want %d, have %d", block.Len, nRead)
 	}
-	g.lastSeekPos += int64(nRead)
+	g.lastSeekPos += int64(block.Len)
 
 	return uncompData, nil
 }
@@ -176,8 +177,11 @@ func (g *GPFile) WriteBlock(timestamp int64, blockData []byte) error {
 	}
 
 	// Compress + write block data to file (append)
-	nWritten, err := g.defaultEncoder.Compress(blockData, g.file)
+	nWritten, err := g.defaultEncoder.Compress(blockData, g.fileBuffer)
 	if err != nil {
+		return err
+	}
+	if err = g.fileBuffer.Flush(); err != nil {
 		return err
 	}
 
@@ -218,17 +222,56 @@ func (g *GPFile) open(flags int) (err error) {
 
 	// Open file for append, create if not exists
 	g.file, err = os.OpenFile(g.filename, flags, defaultPermissions)
+	g.fileBuffer = bufio.NewWriter(g.file)
 
 	return
 }
 
 func (g *GPFile) readHeader() error {
 
-	// Check if a header file exists for this file and read it
+	// Check if a header file exists for this file and open the file for buffered
+	// reading
 	gpfHeaderFile := g.filename + HeaderFileSuffix
-	gpfHeaderData, err := ioutil.ReadFile(gpfHeaderFile)
+	gpfHeader, err := os.OpenFile(gpfHeaderFile, os.O_RDONLY, defaultPermissions)
 	if err == nil {
-		return jsoniter.Unmarshal(gpfHeaderData, &g.header)
+
+		g.header = storage.BlockHeader{
+			Blocks: make(map[int64]storage.Block),
+		}
+		buffer := bufio.NewReader(gpfHeader)
+		scanner := bufio.NewScanner(buffer)
+
+		// Read the global header information and all individual blocks
+		var (
+			ts          int64
+			curOffset   int
+			block       storage.Block
+			encoderType encoders.Type
+		)
+		scanner.Scan()
+		_, err := fmt.Sscanf(scanner.Text(), "v%d,%d,%d", &g.header.Version, &g.header.CurrentOffset, &encoderType)
+		if err != nil {
+			return err
+		}
+		for scanner.Scan() {
+			line := scanner.Text()
+			if strings.Count(line, ",") == 2 {
+				if _, err := fmt.Sscanf(scanner.Text(), "%d,%d,%d", &ts, &block.Len, &block.RawLen); err != nil {
+					return err
+				}
+				block.EncoderType = encoderType
+			} else {
+				if _, err := fmt.Sscanf(scanner.Text(), "%d,%d,%d,%d", &ts, &block.Len, &block.RawLen, &block.EncoderType); err != nil {
+					return err
+				}
+			}
+
+			block.Offset = int64(curOffset)
+			curOffset += block.Len
+			g.header.Blocks[ts] = block
+		}
+
+		return scanner.Err()
 	}
 
 	// If the file doesn't exist, do nothing, otherwise throw the encountered error
@@ -253,12 +296,33 @@ func (g *GPFile) readHeader() error {
 
 func (g *GPFile) writeHeader() error {
 
-	// Check if a header file exists for this file and read it
+	// Open the header file for buffered writing
 	gpfHeaderFile := g.filename + HeaderFileSuffix
-	gpfHeaderData, err := jsoniter.Marshal(&g.header)
+	gpfHeader, err := os.OpenFile(gpfHeaderFile, os.O_CREATE|os.O_WRONLY, defaultPermissions)
 	if err != nil {
 		return err
 	}
+	defer gpfHeader.Close()
+	buffer := bufio.NewWriter(gpfHeader)
 
-	return ioutil.WriteFile(gpfHeaderFile, gpfHeaderData, defaultPermissions)
+	// Write the global header information and all individual blocks
+	var curOffset int
+	if _, err := fmt.Fprintf(buffer, "v%d,%d,%d\n", g.header.Version, g.header.CurrentOffset, g.defaultEncoderType); err != nil {
+		return err
+	}
+	for _, block := range g.header.OrderedList() {
+		if block.EncoderType != g.defaultEncoderType {
+			if _, err := fmt.Fprintf(buffer, "%d,%d,%d,%d\n", block.Timestamp, block.Len, block.RawLen, block.EncoderType); err != nil {
+				return err
+			}
+		} else {
+			if _, err := fmt.Fprintf(buffer, "%d,%d,%d\n", block.Timestamp, block.Len, block.RawLen); err != nil {
+				return err
+			}
+		}
+		curOffset += block.Len
+	}
+
+	// Flush the buffer
+	return buffer.Flush()
 }

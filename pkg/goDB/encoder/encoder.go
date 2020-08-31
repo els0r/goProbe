@@ -7,6 +7,7 @@ import (
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/lz4"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/null"
+	"github.com/els0r/goProbe/pkg/goDB/encoder/zstd"
 )
 
 // Encoder provides the GP File with a means to compress and decompress its raw data
@@ -29,6 +30,8 @@ func New(t encoders.Type) (Encoder, error) {
 		return null.New(), nil
 	case encoders.EncoderTypeLZ4:
 		return lz4.New(), nil
+	case encoders.EncoderTypeZSTD:
+		return zstd.New(), nil
 	default:
 		return nil, fmt.Errorf("Unsupported encoder: %v", t)
 	}

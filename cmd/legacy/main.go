@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/els0r/goProbe/pkg/goDB/storage/gpfile"
@@ -15,15 +16,32 @@ import (
 func main() {
 
 	var (
-		dbPath string
-		dryRun bool
+		dbPath   string
+		dryRun   bool
+		nWorkers int
+		wg       sync.WaitGroup
 	)
 	flag.StringVar(&dbPath, "path", "", "Path to legacy goDB")
 	flag.BoolVar(&dryRun, "dry-run", true, "Perform a dry-run")
+	flag.IntVar(&nWorkers, "n", 4, "Number of parallel conversion workers")
 	flag.Parse()
 
 	if dbPath == "" {
 		logrus.StandardLogger().Fatal("Path to legacy goDB requried")
+	}
+
+	workChan := make(chan string, 64)
+	for i := 0; i < nWorkers; i++ {
+		wg.Add(1)
+		go func() {
+			for file := range workChan {
+				if err := convert(file, dryRun); err != nil {
+					logrus.StandardLogger().Fatalf("Error converting legacy file %s: %s", file, err)
+				}
+				logrus.StandardLogger().Infof("Converted legacy file %s", file)
+			}
+			wg.Done()
+		}()
 	}
 
 	// Get all interfaces
@@ -63,13 +81,12 @@ func main() {
 					continue
 				}
 
-				if err := convert(fullPath, dryRun); err != nil {
-					logrus.StandardLogger().Fatalf("Error converting legacy file %s: %s", fullPath, err)
-				}
-				logrus.StandardLogger().Infof("Converted legacy file %s", fullPath)
+				workChan <- fullPath
 			}
 		}
 	}
+	close(workChan)
+	wg.Wait()
 }
 
 func convert(path string, dryRun bool) error {
@@ -100,7 +117,7 @@ func convert(path string, dryRun bool) error {
 		}
 		block, err := legacyFile.ReadTimedBlock(ts)
 		if err != nil {
-			if err.Error() == "Incorrect number of bytes read for decompression" {
+			if err.Error() == "Incorrect number of bytes read for decompression" || strings.HasPrefix(err.Error(), "Invalid LZ4 data detected during decompression") {
 				logrus.StandardLogger().Warnf("%s for legacy file %s, skippping block for timestamp %v", err, path, time.Unix(ts, 0))
 				continue
 			}

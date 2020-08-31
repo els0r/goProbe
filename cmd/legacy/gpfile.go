@@ -138,7 +138,7 @@ func (f *LegacyGPFile) ReadBlock(block int) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if int64(uncompLen) != readLen {
+	if int64(uncompLen) != f.lengths[block] {
 		return nil, errors.New("Incorrect number of bytes read for decompression")
 	}
 	f.lastSeekPos += readLen
