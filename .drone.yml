@@ -17,8 +17,6 @@ steps:
     - name: dependencies
       image: golang:1.15-buster
       pull: always
-      environment:
-          GO111MODULE: on
       commands:
           - go get ./...
       when:
@@ -32,8 +30,6 @@ steps:
     - name: build
       image: golang:1.15-buster
       pull: always
-      environment:
-          GO111MODULE: on
       commands:
           - cd addon
           - make all
@@ -66,7 +62,6 @@ steps:
       image: golang:1.15-buster
       pull: always
       environment:
-          GO111MODULE: on
           GODB_LOGGER: console
       commands:
           - go vet -composites=false ./...
@@ -83,7 +78,6 @@ steps:
       image: golang:1.15-buster
       pull: always
       environment:
-          GO111MODULE: on
           GODB_LOGGER: console
       commands:
           - go get ./...
