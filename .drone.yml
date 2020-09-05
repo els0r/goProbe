@@ -78,22 +78,6 @@ steps:
           event:
               - push
 
-    - name: vet
-      image: golang:1.15-buster
-      pull: always
-      environment:
-          GO111MODULE: on
-          GODB_LOGGER: console
-      commands:
-          - go vet -composites=false ./...
-      when:
-          branch:
-              - master
-              - develop
-              - feature/*
-          event:
-              - push
-
 
     - name: merge
       image: golang:1.15-buster
