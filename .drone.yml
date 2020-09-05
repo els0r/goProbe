@@ -4,9 +4,6 @@ name: goprobe
 clone:
   disable: true
 
-steps:
-
-
 workspace:
     base: /go
     path: src/github.com/els0r/goProbe
@@ -18,7 +15,7 @@ steps:
           skip_verify: true
 
     - name: dependencies
-      image: golang:1.13.4-stretch
+      image: golang:1.15-buster
       pull: always
       environment:
           GO111MODULE: on
@@ -33,7 +30,7 @@ steps:
               - push
 
     - name: build
-      image: golang:1.13.4-stretch
+      image: golang:1.15-buster
       pull: always
       environment:
           GO111MODULE: on
@@ -50,7 +47,7 @@ steps:
               - push
 
     - name: test
-      image: golang:1.13.4-stretch
+      image: golang:1.15-buster
       pull: always
       environment:
           GO111MODULE: on
@@ -66,7 +63,7 @@ steps:
               - push
 
     - name: vet
-      image: golang:1.13.4-stretch
+      image: golang:1.15-buster
       pull: always
       environment:
           GO111MODULE: on
@@ -81,8 +78,25 @@ steps:
           event:
               - push
 
+    - name: vet
+      image: golang:1.15-buster
+      pull: always
+      environment:
+          GO111MODULE: on
+          GODB_LOGGER: console
+      commands:
+          - go vet -composites=false ./...
+      when:
+          branch:
+              - master
+              - develop
+              - feature/*
+          event:
+              - push
+
+
     - name: merge
-      image: golang:1.13.4-stretch
+      image: golang:1.15-buster
       pull: always
       environment:
           GO111MODULE: on
@@ -101,3 +115,22 @@ steps:
               - feature/*
           event:
               - merge
+
+
+    - name: finish
+      image: golang:1.15-buster
+      pull: always
+      commands:
+          - echo "Done"
+      depends_on:
+        - build
+        - test
+        - vet
+        - merge
+      when:
+          branch:
+              - master
+              - develop
+              - feature/*
+          event:
+              - push
