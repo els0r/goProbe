@@ -42,8 +42,10 @@ GO_QUERY	= goQuery
 # get the operating system and git variables for versioning
 UNAME_OS := $(shell uname -s | tr '[:upper:]' '[:lower:]')
 COMMIT_SHA := $(shell git rev-parse HEAD)
+COMMIT_SHA_SHORT := $(shell git rev-parse --short HEAD)
 GIT_VERSION := $(shell git describe --tags)
 DEB_VERSION := $(shell echo $(GIT_VERSION) | sed 's/v//g')
+DEB_VERSION := '$(DEB_VERSION)-$(COMMIT_SHA_SHORT)'
 BUILD_DATE  := $(shell date +%FT%T%z)
 
 # easy to use build command for everything related goprobe
