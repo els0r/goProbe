@@ -17,7 +17,7 @@ type Encoder struct {
 // Option sets additional parameters on the Encoder
 type Option func(*Encoder)
 
-// New creates a new LZ4 Encoder that can be used to compress/decompress data
+// New creates a new ZSTD Encoder that can be used to compress/decompress data
 func New(opts ...Option) *Encoder {
 	// compression level of 512 is used by default
 	l := &Encoder{level: 5}
@@ -53,7 +53,7 @@ func (e *Encoder) Compress(data []byte, dst io.Writer) (n int, err error) {
 	return n, nil
 }
 
-// Decompress runs LZ4 decompression on "in" read from "src" and writes it to "out"
+// Decompress runs ZSTD decompression on "in" read from "src" and writes it to "out"
 func (e *Encoder) Decompress(in, out []byte, src io.Reader) (n int, err error) {
 	var nBytesRead int
 

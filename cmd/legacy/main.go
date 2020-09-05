@@ -118,7 +118,7 @@ func convert(path string, dryRun bool) error {
 		block, err := legacyFile.ReadTimedBlock(ts)
 		if err != nil {
 			if err.Error() == "Incorrect number of bytes read for decompression" || strings.HasPrefix(err.Error(), "Invalid LZ4 data detected during decompression") {
-				logrus.StandardLogger().Warnf("%s for legacy file %s, skippping block for timestamp %v", err, path, time.Unix(ts, 0))
+				logrus.StandardLogger().Warnf("%s for legacy file %s, skipping block for timestamp %v", err, path, time.Unix(ts, 0))
 				continue
 			}
 			return err
