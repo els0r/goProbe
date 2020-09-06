@@ -41,6 +41,8 @@ steps:
               - feature/*
           event:
               - push
+      depends_on:
+        - dependencies
 
     - name: test
       image: golang:1.15-buster
@@ -57,6 +59,8 @@ steps:
               - feature/*
           event:
               - push
+      depends_on:
+        - dependencies
 
     - name: vet
       image: golang:1.15-buster
@@ -72,6 +76,8 @@ steps:
               - feature/*
           event:
               - push
+      depends_on:
+        - dependencies
 
 
     - name: merge
