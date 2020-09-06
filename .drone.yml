@@ -18,6 +18,7 @@ steps:
       image: golang:1.15-buster
       pull: always
       commands:
+          - ls
           - go get ./...
       when:
           branch:
@@ -31,9 +32,11 @@ steps:
       image: golang:1.15-buster
       pull: always
       commands:
+          - ls
           - cd addon
           - make all
-          - absolute/bin/goQuery -version
+          - absolute/bin/goQuery version
+          - absolute/bin/goProbe -version
       when:
           branch:
               - master
