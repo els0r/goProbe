@@ -74,13 +74,16 @@ compile:
 
 	## GO CODE COMPILATION ##
 	echo "*** compiling $(GO_PRODUCT) ***"
-	$(GPBUILD) $(BASEPATH)/cmd/$(GO_PRODUCT)   # build the goProbe binary
+	$(GPBUILD) $(BASEPATH)/cmd/$(GO_PRODUCT)
 
 	echo "*** compiling $(GO_QUERY) ***"
-	$(GPBUILD) $(BASEPATH)/cmd/$(GO_QUERY)     # build the goquery binary
+	$(GPBUILD) $(BASEPATH)/cmd/$(GO_QUERY)
 
 	echo "*** compiling goConvert ***"
-	$(GPBUILD) $(BASEPATH)/cmd/goConvert 		# build the conversion tool
+	$(GPBUILD) $(BASEPATH)/cmd/goConvert
+
+	echo "*** compiling legacy DB conversion tool ***"
+	$(GPBUILD) $(BASEPATH)/cmd/legacy
 
 install: go_install
 
@@ -93,10 +96,11 @@ go_install:
 	mkdir -p absolute/bin                    && chmod 755 absolute/bin
 	mkdir -p absolute/etc/systemd/system     && chmod 755 absolute/etc/systemd/system
 
-	echo "*** installing $(GO_PRODUCT) and $(GO_QUERY) ***"
+	echo "*** installing binaries ***"
 	mv $(GOPATH)/bin/goProbe 	absolute/bin
 	mv $(GOPATH)/bin/goQuery   	absolute/bin
-	mv $(GOPATH)/bin/goConvert      absolute/bin
+	mv $(GOPATH)/bin/goConvert  absolute/bin
+	mv $(GOPATH)/bin/legacy     absolute/bin
 
 	# systemd service definition
 	cp goprobe.service absolute/etc/systemd/system/goprobe.service
