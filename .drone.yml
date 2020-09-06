@@ -27,6 +27,8 @@ steps:
               - feature/*
           event:
               - push
+      depends_on:
+        - internal_net_clone
 
     - name: build
       image: golang:1.15-buster
