@@ -8,6 +8,7 @@ require (
 	github.com/go-chi/chi v4.0.2+incompatible
 	github.com/go-chi/docgen v1.0.5
 	github.com/hashicorp/golang-lru v0.5.1 // indirect
+	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.6
 	github.com/mattn/go-colorable v0.1.1 // indirect
 	github.com/mattn/go-isatty v0.0.7 // indirect
@@ -19,7 +20,8 @@ require (
 	github.com/spf13/pflag v1.0.3 // indirect
 	github.com/stripe/safesql v0.2.0 // indirect
 	github.com/throttled/throttled v2.2.4+incompatible
+	github.com/valyala/gozstd v1.8.3
 	golang.org/x/tools v0.0.0-20191127201027-ecd32218bd7f // indirect
 )
 
-go 1.13
+go 1.15

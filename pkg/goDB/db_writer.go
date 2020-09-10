@@ -17,6 +17,9 @@ import (
 	"path/filepath"
 	"strconv"
 	"time"
+
+	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
+	"github.com/els0r/goProbe/pkg/goDB/storage/gpfile"
 )
 
 const (
@@ -37,13 +40,14 @@ type DBWriter struct {
 	iface  string
 
 	dayTimestamp int64
+	encoderType  encoders.Type
 
 	metadata *Metadata
 }
 
 // NewDBWriter initializes a new DBWriter
-func NewDBWriter(dbpath string, iface string) (w *DBWriter) {
-	return &DBWriter{dbpath, iface, 0, new(Metadata)}
+func NewDBWriter(dbpath string, iface string, encoderType encoders.Type) (w *DBWriter) {
+	return &DBWriter{dbpath, iface, 0, encoderType, new(Metadata)}
 }
 
 func (w *DBWriter) dailyDir(timestamp int64) (path string) {
@@ -71,13 +75,13 @@ func (w *DBWriter) writeMetadata(timestamp int64, meta BlockMetadata) error {
 
 func (w *DBWriter) writeBlock(timestamp int64, column string, data []byte) error {
 	path := filepath.Join(w.dailyDir(timestamp), column+".gpf")
-	gpfile, err := NewGPFile(path)
+	gpfile, err := gpfile.New(path, gpfile.ModeWrite, gpfile.WithEncoder(w.encoderType))
 	if err != nil {
 		return err
 	}
 	defer gpfile.Close()
 
-	if err := gpfile.WriteTimedBlock(timestamp, data); err != nil {
+	if err := gpfile.WriteBlock(timestamp, data); err != nil {
 		return err
 	}
 
@@ -147,25 +151,15 @@ func dbData(iface string, timestamp int64, aggFlowMap AggFlowMap) ([ColIdxCount]
 	summUpdate := new(InterfaceSummaryUpdate)
 
 	for i := columnIndex(0); i < ColIdxCount; i++ {
-		// size: initial timestamp + values + final timestamp
-		size := 8 + columnSizeofs[i]*len(aggFlowMap) + 8
-		dbData[i] = make([]byte, 0, size)
+		dbData[i] = make([]byte, 0, columnSizeofs[i]*len(aggFlowMap))
 	}
 
 	summUpdate.Timestamp = time.Unix(timestamp, 0)
 	summUpdate.Interface = iface
 
-	timestampBytes := make([]byte, 8)
-	binary.BigEndian.PutUint64(timestampBytes, uint64(timestamp))
-
-	for i := columnIndex(0); i < ColIdxCount; i++ {
-		dbData[i] = append(dbData[i], timestampBytes...)
-	}
-
-	counterBytes := make([]byte, 8)
-
 	// loop through the flow map to extract the relevant
 	// values into database blocks.
+	counterBytes := make([]byte, 8)
 	for K, V := range aggFlowMap {
 
 		summUpdate.FlowCount++
@@ -190,11 +184,6 @@ func dbData(iface string, timestamp int64, aggFlowMap AggFlowMap) ([ColIdxCount]
 		dbData[SipColIdx] = append(dbData[SipColIdx], K.Sip[:]...)
 		dbData[DportColIdx] = append(dbData[DportColIdx], K.Dport[:]...)
 		dbData[ProtoColIdx] = append(dbData[ProtoColIdx], K.Protocol)
-	}
-
-	// push postamble to the arrays
-	for i := columnIndex(0); i < ColIdxCount; i++ {
-		dbData[i] = append(dbData[i], timestampBytes...)
 	}
 
 	return dbData, *summUpdate

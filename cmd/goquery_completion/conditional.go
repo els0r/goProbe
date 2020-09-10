@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/els0r/goProbe/pkg/goDB"
+	"github.com/els0r/goProbe/pkg/goDB/protocols"
 )
 
 func openParens(tokens []string) int {
@@ -85,7 +86,7 @@ func nextAll(prevprev, prev string, openParens int) []suggestion {
 		switch prevprev {
 		case "proto":
 			var result []suggestion
-			for name := range goDB.IPProtocolIDs {
+			for name := range protocols.IPProtocolIDs {
 				result = append(result, suggestion{name, name + " ...", openParens == 0})
 			}
 			return result

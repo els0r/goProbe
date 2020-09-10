@@ -11,11 +11,12 @@
 package goDB
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"time"
+
+	jsoniter "github.com/json-iterator/go"
 )
 
 // Expose lockfile and summary file names
@@ -93,7 +94,7 @@ func ReadDBSummary(dbpath string) (*DBSummary, error) {
 	}
 	defer f.Close()
 
-	err = json.NewDecoder(f).Decode(result)
+	err = jsoniter.NewDecoder(f).Decode(result)
 	if err != nil {
 		return result, err
 	}
@@ -114,7 +115,7 @@ func WriteDBSummary(dbpath string, summ *DBSummary) error {
 	}
 	defer f.Close()
 
-	return json.NewEncoder(f).Encode(summ)
+	return jsoniter.NewEncoder(f).Encode(summ)
 }
 
 // ModifyDBSummary safely modifies the database summary when there are multiple processes accessing it.

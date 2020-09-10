@@ -4,9 +4,6 @@ name: goprobe
 clone:
   disable: true
 
-steps:
-
-
 workspace:
     base: /go
     path: src/github.com/els0r/goProbe
@@ -18,11 +15,10 @@ steps:
           skip_verify: true
 
     - name: dependencies
-      image: golang:1.13.4-stretch
+      image: golang:1.15-buster
       pull: always
-      environment:
-          GO111MODULE: on
       commands:
+          - ls
           - go get ./...
       when:
           branch:
@@ -31,16 +27,18 @@ steps:
               - feature/*
           event:
               - push
+      depends_on:
+        - internal_net_clone
 
     - name: build
-      image: golang:1.13.4-stretch
+      image: golang:1.15-buster
       pull: always
-      environment:
-          GO111MODULE: on
       commands:
+          - ls
           - cd addon
           - make all
-          - absolute/bin/goQuery -version
+          - absolute/bin/goQuery version
+          - absolute/bin/goProbe -version
       when:
           branch:
               - master
@@ -48,9 +46,11 @@ steps:
               - feature/*
           event:
               - push
+      depends_on:
+        - dependencies
 
     - name: test
-      image: golang:1.13.4-stretch
+      image: golang:1.15-buster
       pull: always
       environment:
           GO111MODULE: on
@@ -64,12 +64,13 @@ steps:
               - feature/*
           event:
               - push
+      depends_on:
+        - dependencies
 
     - name: vet
-      image: golang:1.13.4-stretch
+      image: golang:1.15-buster
       pull: always
       environment:
-          GO111MODULE: on
           GODB_LOGGER: console
       commands:
           - go vet -composites=false ./...
@@ -80,12 +81,14 @@ steps:
               - feature/*
           event:
               - push
+      depends_on:
+        - dependencies
+
 
     - name: merge
-      image: golang:1.13.4-stretch
+      image: golang:1.15-buster
       pull: always
       environment:
-          GO111MODULE: on
           GODB_LOGGER: console
       commands:
           - go get ./...
@@ -101,3 +104,22 @@ steps:
               - feature/*
           event:
               - merge
+
+
+    - name: finish
+      image: golang:1.15-buster
+      pull: always
+      commands:
+          - echo "Done"
+      depends_on:
+        - build
+        - test
+        - vet
+        - merge
+      when:
+          branch:
+              - master
+              - develop
+              - feature/*
+          event:
+              - push

@@ -17,6 +17,8 @@ import (
 	"errors"
 	"strconv"
 	"strings"
+
+	"github.com/els0r/goProbe/pkg/goDB/protocols"
 )
 
 // StringKeyParser is used for mapping a string to it's goDB key
@@ -155,7 +157,7 @@ func (p *ProtoStringParser) ParseKey(element string, key *ExtraKey) error {
 	// first try to parse as number (e.g. 6 or 17)
 	if num, err = strconv.ParseUint(element, 10, 8); err != nil {
 		// then try to parse as string (e.g. TCP or UDP)
-		if num, isIn = GetIPProtoID(strings.ToLower(element)); !isIn {
+		if num, isIn = protocols.GetIPProtoID(strings.ToLower(element)); !isIn {
 			return errors.New("Could not parse 'protocol' attribute: " + err.Error())
 		}
 	}

@@ -12,7 +12,6 @@ package query
 
 import (
 	"bytes"
-	"encoding/json"
 	"reflect"
 	"regexp"
 	"strings"
@@ -20,6 +19,7 @@ import (
 	"time"
 
 	"github.com/els0r/goProbe/pkg/goDB"
+	jsoniter "github.com/json-iterator/go"
 )
 
 var columnsTests = []struct {
@@ -565,7 +565,7 @@ func testJSONTablePrinter(t *testing.T, test printerTest, b basePrinter) {
 	bufbytes := buf.Bytes()
 
 	var actual map[string]interface{}
-	json.NewDecoder(buf).Decode(&actual)
+	jsoniter.NewDecoder(buf).Decode(&actual)
 
 	// Make sure that actual has a "ext_ips" entry. Then copy it from the actual output,
 	// because it is machine dependent and hard to test for.
@@ -575,7 +575,7 @@ func testJSONTablePrinter(t *testing.T, test printerTest, b basePrinter) {
 	test.jsonOutput["ext_ips"] = actual["ext_ips"]
 
 	if !reflect.DeepEqual(test.jsonOutput, actual) {
-		expected, _ := json.Marshal(test.jsonOutput)
+		expected, _ := jsoniter.Marshal(test.jsonOutput)
 		t.Fatalf("Expected output:\n%s\nActual output:\n%s\n", expected, bufbytes)
 	}
 }

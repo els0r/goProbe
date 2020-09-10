@@ -72,6 +72,16 @@ var tests = []struct {
 		// fails due to negative timeout
 		`{ "db_path" : "/usr/local/goProbe/db", "interfaces" : { "en0" : { "bpf_filter" : "not arp and not icmp", "buf_size" : 2097152, "promisc" : true } }, "logging" : { "destination" : "console", "level" : "debug" }, "api" : { "port" : "6060", "request_logging" : false, "request_timeout" : -1 } }`,
 	},
+	{
+		"valid configuration (api, logging, discovery, encoder)",
+		false,
+		`{ "db_path" : "/usr/local/goProbe/db", "interfaces" : { "en0" : { "bpf_filter" : "not arp and not icmp", "buf_size" : 2097152, "promisc" : true } }, "logging" : { "destination" : "console", "level" : "debug" }, "api" : { "port" : "6060", "request_logging" : false, "service_discovery" : { "endpoint" : "localhost:6060", "registry": "192.168.1.1:5000", "probe_identifier": "test_probe" } }, "encoder_type": "lz4" }`,
+	},
+	{
+		"unknown encoder",
+		true,
+		`{ "db_path" : "/usr/local/goProbe/db", "interfaces" : { "en0" : { "bpf_filter" : "not arp and not icmp", "buf_size" : 2097152, "promisc" : true } }, "logging" : { "destination" : "console", "level" : "debug" }, "api" : { "port" : "6060", "request_logging" : false, "service_discovery" : { "endpoint" : "localhost:6060", "registry": "192.168.1.1:5000", "probe_identifier": "test_probe" } }, "encoder_type": "iwillneverbesupported" }`,
+	},
 }
 
 func TestValidate(t *testing.T) {

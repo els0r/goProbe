@@ -13,9 +13,9 @@
 package capture
 
 import (
-	"encoding/json"
-
 	"github.com/els0r/goProbe/pkg/goDB"
+	"github.com/els0r/goProbe/pkg/goDB/protocols"
+	jsoniter "github.com/json-iterator/go"
 )
 
 // GPFlow stores a goProbe flow
@@ -37,7 +37,7 @@ type GPFlow struct {
 
 // MarshalJSON implements the Marshaler interface for a flow
 func (f *GPFlow) MarshalJSON() ([]byte, error) {
-	return json.Marshal(
+	return jsoniter.Marshal(
 		struct {
 			Sip      string `json:"sip"`
 			Dip      string `json:"dip"`
@@ -55,7 +55,7 @@ func (f *GPFlow) MarshalJSON() ([]byte, error) {
 			goDB.RawIPToString(f.dip[:]),
 			uint16(uint16(f.sport[0])<<8 | uint16(f.sport[1])),
 			uint16(uint16(f.dport[0])<<8 | uint16(f.dport[1])),
-			goDB.GetIPProto(int(f.protocol)),
+			protocols.GetIPProto(int(f.protocol)),
 			f.nBytesRcvd, f.nBytesSent, f.nPktsRcvd, f.nPktsSent},
 	)
 }
