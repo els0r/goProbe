@@ -11,7 +11,7 @@ This package comprises:
 * goDB      - A small, high-performance, columnar database (pkg)
 * goQuery   - A CLI tool using the query front-end to read out data acquired by goProbe and stored in goDB
 * goConvert - Helper binary to convert goProbe-flow data stored in `csv` files
-* legacy    - DB conversion tool to convert `.gpf` files - needed for upgrade to `v4.0.x` compatible format
+* legacy    - DB conversion tool to convert `.gpf` files - needed for upgrade to a `v4.x` compatible format
 
 As the name suggests, all components are written in [Go](https://golang.org/).
 
@@ -53,7 +53,7 @@ make all
 
 ### Building for Debian
 
-There is a Makefile target `deb-package` which compiles the software suite and provides a `.deb` file for easy installation on Debian based systems. 
+There is a Makefile target `deb-package` which compiles the software suite and provides a `.deb` file for easy installation on Debian based systems.
 
 goProbe
 -------------------------
@@ -115,6 +115,18 @@ The interface configuration is stored as JSON and looks as follows:
 ```
 
 Changes to the interface configuration can be _live reloaded_.
+
+#### Compression Algorithm
+
+Configure the compression algorithm that `goProbe` should use to compress its flow data.
+
+By default, `"lz4"` is chosen. To change it, change the `encoder_type` stanza in the configuration, e.g.
+
+```
+"encoder_type": "zstd"
+```
+
+For a list of supported encoders, refer to [encoders.go](./pkg/goDB/encoder/encoders/encoders.go)
 
 #### Logging
 
@@ -194,8 +206,10 @@ The `.meta` files are vitally important and - if deleted - will result in failed
 Supported compression algorithms are:
 
 - [lz4](https://code.google.com/p/lz4/)
-- [zstd]()
-- None (**not recommended**)
+- [zstd](https://github.com/valyala/gozstd)
+- None (not recommended)
+
+Check [encoder.go](./pkg/goDB/encoder/encoder.go) for the enumeration of supported compression algorithms and the definition fo the `Encoder` interface.
 
 goQuery
 --------------------------
@@ -366,6 +380,8 @@ Authors & Contributors
 
 This software was developed at [Open Systems AG](https://www.open.ch/) in close collaboration with the [Distributed Computing Group](http://www.disco.ethz.ch/) at the [Swiss Federal Institute of Technology](https://www.ethz.ch/en.html).
 
+This repository has been forked off the Open Systems repository end of 2018. Bug fixing and development of new features is done in this repository. The Open Systems one can be considered unmaintained.
+
 Bug Reports
 -----------
 
@@ -373,4 +389,4 @@ Please use the [issue tracker](https://github.com/els0r/goProbe/issues) for bugs
 
 License
 -------
-See the LICENSE file for usage conditions.
+See the [LICENSE](./LICENSE) file for usage conditions.
