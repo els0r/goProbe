@@ -19,6 +19,7 @@ import (
 	"sync"
 
 	"github.com/els0r/goProbe/pkg/capture"
+	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 )
 
 // demoKeys stores the API keys that should, under no circumstance, be used in production.
@@ -42,6 +43,7 @@ type Config struct {
 	SyslogFlows bool      `json:"syslog_flows"`
 	Logging     LogConfig `json:"logging"`
 	API         APIConfig `json:"api"`
+	EncoderType string    `json:"encoder_type"`
 }
 
 // Ifaces stores the per-interface configuration
@@ -86,6 +88,7 @@ func New() *Config {
 			Host: "localhost",
 			Port: "6060",
 		},
+		EncoderType: "lz4",
 	}
 }
 
@@ -146,6 +149,10 @@ func (c *Config) validate() error {
 	if c.DBPath == "" {
 		return fmt.Errorf("Database path must not be empty")
 	}
+	_, err := encoders.GetTypeByString(c.EncoderType)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -185,7 +192,8 @@ func Parse(src io.Reader) (*Config, error) {
 		return nil, err
 	}
 
-	if err := config.Validate(); err != nil {
+	err := config.Validate()
+	if err != nil {
 		return nil, err
 	}
 

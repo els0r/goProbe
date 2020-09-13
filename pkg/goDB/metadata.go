@@ -11,8 +11,9 @@
 package goDB
 
 import (
-	"encoding/json"
 	"os"
+
+	jsoniter "github.com/json-iterator/go"
 )
 
 // BlockMetadata represents metadata for one database block.
@@ -49,7 +50,7 @@ func ReadMetadata(path string) (*Metadata, error) {
 	}
 	defer f.Close()
 
-	if err := json.NewDecoder(f).Decode(&result); err != nil {
+	if err := jsoniter.NewDecoder(f).Decode(&result); err != nil {
 		return nil, err
 	}
 
@@ -74,5 +75,5 @@ func WriteMetadata(path string, meta *Metadata) error {
 	}
 	defer f.Close()
 
-	return json.NewEncoder(f).Encode(meta)
+	return jsoniter.NewEncoder(f).Encode(meta)
 }

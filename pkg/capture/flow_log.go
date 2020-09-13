@@ -14,12 +14,13 @@
 package capture
 
 import (
-	"encoding/json"
 	"fmt"
 	"text/tabwriter"
 
 	"github.com/els0r/goProbe/pkg/goDB"
+	"github.com/els0r/goProbe/pkg/goDB/protocols"
 	"github.com/els0r/log"
+	jsoniter "github.com/json-iterator/go"
 )
 
 // constants for table printing
@@ -41,13 +42,13 @@ func NewFlowLog(logger log.Logger) *FlowLog {
 	return &FlowLog{make(map[EPHash]*GPFlow), logger}
 }
 
-// MarshalJSON implements the json.Marshaler interface
+// MarshalJSON implements the jsoniter.Marshaler interface
 func (f *FlowLog) MarshalJSON() ([]byte, error) {
 	var toMarshal []interface{}
 	for _, v := range f.flowMap {
 		toMarshal = append(toMarshal, v)
 	}
-	return json.Marshal(toMarshal)
+	return jsoniter.Marshal(toMarshal)
 }
 
 // Len returns the number of flows in the FlowLog
@@ -85,7 +86,7 @@ func (f *FlowLog) TablePrint(w *tabwriter.Writer) error {
 			uint16(uint16(g.sport[0])<<8|uint16(g.sport[1])),
 			goDB.RawIPToString(g.dip[:]),
 			uint16(uint16(g.dport[0])<<8|uint16(g.dport[1])),
-			goDB.GetIPProto(int(g.protocol)),
+			protocols.GetIPProto(int(g.protocol)),
 			g.nBytesRcvd, g.nBytesSent, g.nPktsRcvd, g.nPktsSent)
 	}
 	return w.Flush()

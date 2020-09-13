@@ -14,7 +14,6 @@ package query
 import (
 	"bytes"
 	"encoding/csv"
-	"encoding/json"
 	"fmt"
 	"io"
 	"sort"
@@ -23,6 +22,7 @@ import (
 	"time"
 
 	"github.com/els0r/goProbe/pkg/goDB"
+	jsoniter "github.com/json-iterator/go"
 )
 
 // OutputColumn ranges over all possible output columns.
@@ -417,38 +417,38 @@ type JSONFormatter struct{}
 
 // Size marshals s into a JSON string
 func (JSONFormatter) Size(s uint64) string {
-	result, _ := json.Marshal(s)
+	result, _ := jsoniter.Marshal(s)
 	return string(result)
 }
 
 // Duration marshals d into a JSON string
 func (JSONFormatter) Duration(d time.Duration) string {
-	result, _ := json.Marshal(d)
+	result, _ := jsoniter.Marshal(d)
 	return string(result)
 }
 
 // Count marshals c into a JSON string
 func (JSONFormatter) Count(c uint64) string {
-	result, _ := json.Marshal(c)
+	result, _ := jsoniter.Marshal(c)
 	return string(result)
 }
 
 // Float marshals f into a JSON string
 func (JSONFormatter) Float(f float64) string {
-	result, _ := json.Marshal(f)
+	result, _ := jsoniter.Marshal(f)
 	return string(result)
 }
 
 // Time marshals epoch into a JSON string
 func (JSONFormatter) Time(epoch int64) string {
 	// convert to string first for legacy reasons
-	result, _ := json.Marshal(fmt.Sprint(epoch))
+	result, _ := jsoniter.Marshal(fmt.Sprint(epoch))
 	return string(result)
 }
 
 // String marshals s into a JSON string
 func (JSONFormatter) String(s string) string {
-	result, _ := json.Marshal(s)
+	result, _ := jsoniter.Marshal(s)
 	return string(result)
 }
 
@@ -468,7 +468,7 @@ var jsonKeys = [CountOutcol]string{
 // JSONTablePrinter stores all flows as JSON objects and prints them to stdout
 type JSONTablePrinter struct {
 	basePrinter
-	rows      []map[string]*json.RawMessage
+	rows      []map[string]*jsoniter.RawMessage
 	data      map[string]interface{}
 	queryType string
 }
@@ -487,9 +487,9 @@ func NewJSONTablePrinter(b basePrinter, queryType string) *JSONTablePrinter {
 
 // AddRow adds a new JSON formatted row to the JSON printer
 func (j *JSONTablePrinter) AddRow(entry Entry) {
-	row := make(map[string]*json.RawMessage)
+	row := make(map[string]*jsoniter.RawMessage)
 	for _, col := range j.cols {
-		val := json.RawMessage(extract(JSONFormatter{}, j.ips2domains, j.totals, entry, col))
+		val := jsoniter.RawMessage(extract(JSONFormatter{}, j.ips2domains, j.totals, entry, col))
 		row[jsonKeys[col]] = &val
 	}
 	j.rows = append(j.rows, row)
@@ -516,7 +516,7 @@ func (j *JSONTablePrinter) Footer(conditional string, spanFirst, spanLast time.T
 	summaryEntries[OutcolBothBytesSent] = "total_bytes_sent"
 	for _, col := range j.cols {
 		if summaryEntries[col] != "" {
-			val := json.RawMessage(extractTotal(JSONFormatter{}, j.totals, col))
+			val := jsoniter.RawMessage(extractTotal(JSONFormatter{}, j.totals, col))
 			summary[summaryEntries[col]] = &val
 		}
 	}
@@ -527,7 +527,7 @@ func (j *JSONTablePrinter) Footer(conditional string, spanFirst, spanLast time.T
 // Print prints out the JSON formatted flows to stdout
 func (j *JSONTablePrinter) Print() error {
 	j.data[j.queryType] = j.rows
-	return json.NewEncoder(j.output).Encode(j.data)
+	return jsoniter.NewEncoder(j.output).Encode(j.data)
 }
 
 // TextFormatter table formats goProbe flows (goQuery's default)

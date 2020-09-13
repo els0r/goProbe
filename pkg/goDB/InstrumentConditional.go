@@ -22,6 +22,8 @@ import (
 	"net"
 	"strconv"
 	"strings"
+
+	"github.com/els0r/goProbe/pkg/goDB/protocols"
 )
 
 // Returns an identical version of the receiver instrumented
@@ -347,7 +349,7 @@ func conditionBytesAndNetmask(condition conditionNode) ([]byte, int, error) {
 			}
 		case "proto":
 			if num, err = strconv.ParseUint(value, 10, 8); err != nil {
-				if num, isIn = GetIPProtoID(value); !isIn {
+				if num, isIn = protocols.GetIPProtoID(value); !isIn {
 					return nil, 0, errors.New("Could not parse protocol value: " + err.Error())
 				}
 			}

@@ -1,10 +1,10 @@
 package query
 
 import (
-	"encoding/json"
 	"sort"
 
 	"github.com/els0r/goProbe/pkg/goDB"
+	jsoniter "github.com/json-iterator/go"
 )
 
 // SortOrder indicates by what the entries are sorted.
@@ -60,13 +60,13 @@ func SortOrderFromString(s string) SortOrder {
 
 // MarshalJSON implements the Marshaler interface for sort order
 func (s SortOrder) MarshalJSON() ([]byte, error) {
-	return json.Marshal(s.String())
+	return jsoniter.Marshal(s.String())
 }
 
 // UnmarshalJSON implements the Unmarshaler interface
 func (s SortOrder) UnmarshalJSON(b []byte) error {
 	var str string
-	err := json.Unmarshal(b, &str)
+	err := jsoniter.Unmarshal(b, &str)
 	if err != nil {
 		return err
 	}

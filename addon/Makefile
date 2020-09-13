@@ -42,8 +42,10 @@ GO_QUERY	= goQuery
 # get the operating system and git variables for versioning
 UNAME_OS := $(shell uname -s | tr '[:upper:]' '[:lower:]')
 COMMIT_SHA := $(shell git rev-parse HEAD)
+COMMIT_SHA_SHORT := $(shell git rev-parse --short HEAD)
 GIT_VERSION := $(shell git describe --tags)
 DEB_VERSION := $(shell echo $(GIT_VERSION) | sed 's/v//g')
+DEB_VERSION := '$(DEB_VERSION)-$(COMMIT_SHA_SHORT)'
 BUILD_DATE  := $(shell date +%FT%T%z)
 
 # easy to use build command for everything related goprobe
@@ -72,13 +74,16 @@ compile:
 
 	## GO CODE COMPILATION ##
 	echo "*** compiling $(GO_PRODUCT) ***"
-	$(GPBUILD) $(BASEPATH)/cmd/$(GO_PRODUCT)   # build the goProbe binary
+	$(GPBUILD) $(BASEPATH)/cmd/$(GO_PRODUCT)
 
 	echo "*** compiling $(GO_QUERY) ***"
-	$(GPBUILD) $(BASEPATH)/cmd/$(GO_QUERY)     # build the goquery binary
+	$(GPBUILD) $(BASEPATH)/cmd/$(GO_QUERY)
 
 	echo "*** compiling goConvert ***"
-	$(GPBUILD) $(BASEPATH)/cmd/goConvert 		# build the conversion tool
+	$(GPBUILD) $(BASEPATH)/cmd/goConvert
+
+	echo "*** compiling legacy DB conversion tool ***"
+	$(GPBUILD) $(BASEPATH)/cmd/legacy
 
 install: go_install
 
@@ -91,10 +96,11 @@ go_install:
 	mkdir -p absolute/bin                    && chmod 755 absolute/bin
 	mkdir -p absolute/etc/systemd/system     && chmod 755 absolute/etc/systemd/system
 
-	echo "*** installing $(GO_PRODUCT) and $(GO_QUERY) ***"
+	echo "*** installing binaries ***"
 	mv $(GOPATH)/bin/goProbe 	absolute/bin
 	mv $(GOPATH)/bin/goQuery   	absolute/bin
-	mv $(GOPATH)/bin/goConvert      absolute/bin
+	mv $(GOPATH)/bin/goConvert  absolute/bin
+	mv $(GOPATH)/bin/legacy     absolute/bin
 
 	# systemd service definition
 	cp goprobe.service absolute/etc/systemd/system/goprobe.service
