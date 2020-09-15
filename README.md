@@ -11,6 +11,7 @@ This package comprises:
 * goDB      - A small, high-performance, columnar database (pkg)
 * goQuery   - A CLI tool using the query front-end to read out data acquired by goProbe and stored in goDB
 * goConvert - Helper binary to convert goProbe-flow data stored in `csv` files
+* legacy    - DB conversion tool to convert `.gpf` files - needed for upgrade to a `v4.x` compatible format
 
 As the name suggests, all components are written in [Go](https://golang.org/).
 
@@ -49,6 +50,10 @@ The addon folder provides a Makefile for building the software suite. To use it,
 cd addon
 make all
 ```
+
+### Building for Debian
+
+There is a Makefile target `deb-package` which compiles the software suite and provides a `.deb` file for easy installation on Debian based systems.
 
 goProbe
 -------------------------
@@ -111,6 +116,18 @@ The interface configuration is stored as JSON and looks as follows:
 
 Changes to the interface configuration can be _live reloaded_.
 
+#### Compression Algorithm
+
+Configure the compression algorithm that `goProbe` should use to compress its flow data.
+
+By default, `"lz4"` is chosen. To change it, change the `encoder_type` stanza in the configuration, e.g.
+
+```
+"encoder_type": "zstd"
+```
+
+For a list of supported encoders, refer to [encoders.go](./pkg/goDB/encoder/encoders/encoders.go)
+
 #### Logging
 
 goProbe has flexible logging capabilities. It uses the `Logger` interface from third-party package [log](https://github.com/els0r/log), which is compatible with most third-party logging frameworks. Hence, other loggers can be injected into goProbe.
@@ -166,11 +183,33 @@ Addition of a service discovery configuration require a _restart_ of goProbe. Ch
 
 goDB
 --------------------------
-The flow records are stored block-wise on a five minute basis in their respective attribute files. The database is partitioned on a per day basis, which means that for each day, a new folder is created which holds the attribute files for all flow records written throughout the day.
-
-Blocks are compressed using [lz4](https://code.google.com/p/lz4/) compression, which was chosen to enable both swift decompression and good data compression ratios.
+The database is a columnar block-storage. The raw attribute data is captured in `.gpf` (goProbe file) files.
 
 `goDB` is a package which can be imported by other `go` applications.
+
+### The GPF File Structure
+
+The database has two built-in partition dimensions: interfaces and time. These were chosen with the goal to drastically reduce the amount of data that has to be loaded during querying. In practice, most analyses are narroewed down to a time frame and a particular interface.
+
+Time partitioning is done in two steps: per day, and within the files, per five minute intervals. The location of flow data for these intervals is specified (amongst other properties) in the `.meta` files.
+
+#### `.meta` file
+
+The `.meta` file can be thought of as a partition-index and a layout for how the data is stored. Next to storing the timestamps and positions of blocks of flow data, it also captures which compression algorithm was used and provides sizing information for block decompression.
+
+The `.meta` files are vitally important and - if deleted, corrupted or modified in any way - will result in failed data reading for the *day* of data.
+
+#### Compression
+
+`goDB` natively support compression. The design rationale was to sacrifice CPU cycles in order to decrease I/O load. This has proven to drastically increase performance, especially on queries involving several days and a high number of stored flow records.
+
+Supported compression algorithms are:
+
+- [lz4](https://code.google.com/p/lz4/)
+- [zstd](https://github.com/valyala/gozstd)
+- None (not recommended)
+
+Check [encoder.go](./pkg/goDB/encoder/encoder.go) for the enumeration of supported compression algorithms and the definition fo the `Encoder` interface.
 
 goQuery
 --------------------------
@@ -224,6 +263,8 @@ If you use `goConvert`, you need to make sure that the data which you are import
 ...
 ```
 You _must_ abide by this structure, otherwise the conversion will fail.
+
+**Note**: to convert your existing DB to a `v4.x` compatible format, please refer to the [legacy](./cmd/legacy) conversion tool.
 
 Query interface
 --------------------------
@@ -325,9 +366,9 @@ _goquery() {
 
 goProbe is currently set up to run on Linux based systems and Mac OS X. Tested versions include (but are most likely not limited to):
 
+* Debian 7-10
+* Fedora 28-32
 * Ubuntu 14.04/15.04
-* Debian 7/8/9
-* Fedora 28
 * Mac OS X 10.14.3
 
 Authors & Contributors
@@ -339,6 +380,8 @@ Authors & Contributors
 
 This software was developed at [Open Systems AG](https://www.open.ch/) in close collaboration with the [Distributed Computing Group](http://www.disco.ethz.ch/) at the [Swiss Federal Institute of Technology](https://www.ethz.ch/en.html).
 
+This repository has been forked off the Open Systems repository end of 2018 and has now been detached as a standalone project (September 2020). Bug fixes and development of new features is done in this repository.
+
 Bug Reports
 -----------
 
@@ -346,4 +389,4 @@ Please use the [issue tracker](https://github.com/els0r/goProbe/issues) for bugs
 
 License
 -------
-See the LICENSE file for usage conditions.
+See the [LICENSE](./LICENSE) file for usage conditions.
