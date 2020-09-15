@@ -197,7 +197,7 @@ Time partitioning is done in two steps: per day, and within the files, per five 
 
 The `.meta` file can be thought of as a partition-index and a layout for how the data is stored. Next to storing the timestamps and positions of blocks of flow data, it also captures which compression algorithm was used and provides sizing information for block decompression.
 
-The `.meta` files are vitally important and - if deleted - will result in failed data reading for the *day* of data.
+The `.meta` files are vitally important and - if deleted, corrupted or modified in any way - will result in failed data reading for the *day* of data.
 
 #### Compression
 
@@ -366,9 +366,9 @@ _goquery() {
 
 goProbe is currently set up to run on Linux based systems and Mac OS X. Tested versions include (but are most likely not limited to):
 
+* Debian 7-10
+* Fedora 28-32
 * Ubuntu 14.04/15.04
-* Debian 7/8/9/10
-* Fedora 28
 * Mac OS X 10.14.3
 
 Authors & Contributors
@@ -380,7 +380,7 @@ Authors & Contributors
 
 This software was developed at [Open Systems AG](https://www.open.ch/) in close collaboration with the [Distributed Computing Group](http://www.disco.ethz.ch/) at the [Swiss Federal Institute of Technology](https://www.ethz.ch/en.html).
 
-This repository has been forked off the Open Systems repository end of 2018. Bug fixing and development of new features is done in this repository. The Open Systems one can be considered unmaintained.
+This repository has been forked off the Open Systems repository end of 2018 and has now been detached as a standalone project (September 2020). Bug fixes and development of new features is done in this repository.
 
 Bug Reports
 -----------
