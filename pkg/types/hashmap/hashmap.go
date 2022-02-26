@@ -331,7 +331,7 @@ bucketloop:
 				continue
 			}
 			k := b.keys[i]
-			if len(k) != len(key) || string(k) != string(k) {
+			if len(k) != len(key) || string(k) != string(key) {
 				continue
 			}
 
