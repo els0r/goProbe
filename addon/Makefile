@@ -52,7 +52,7 @@ BUILD_DATE  := $(shell date +%FT%T%z)
 VERSION_PATH = $(BASEPATH)/pkg/version
 
 GO_BUILDTAGS = netcgo public $(UNAME_OS)
-GPBUILD      = go install -i -tags '$(GO_BUILDTAGS)'
+GPBUILD      = go install -tags '$(GO_BUILDTAGS)'
 GPTESTBUILD  = go test -c -tags '$(GO_BUILDTAGS)'
 
 # gopacket and gopcap
@@ -61,9 +61,7 @@ GOPACKET_SRC = github.com/fako1024/gopacket
 fetch:
 
 	echo "*** fetching dependencies"
-	go get github.com/mdlayher/raw
-	go get $(GOPACKET_SRC)
-	go get github.com/els0r/status
+	go mod download
 
 compile:
 

@@ -5,3 +5,4 @@ cmd/goProbe/goProbe
 cmd/goQuery/goQuery
 cmd/goConvert/goConvert
 cmd/legacy/legacy
+.vscode
