@@ -106,7 +106,7 @@ func (n conditionNode) evaluate(comparisonValue *ExtraKey) bool {
 }
 func (n conditionNode) attributes() map[string]struct{} {
 	return map[string]struct{}{
-		n.attribute: struct{}{},
+		n.attribute: {},
 	}
 }
 

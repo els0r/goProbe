@@ -15,10 +15,10 @@ var (
 
 // PermittedFormats stores all supported output formats
 var PermittedFormats = map[string]struct{}{
-	"txt":      struct{}{},
-	"json":     struct{}{},
-	"csv":      struct{}{},
-	"influxdb": struct{}{},
+	"txt":      {},
+	"json":     {},
+	"csv":      {},
+	"influxdb": {},
 }
 
 // PermittedSortBy sorts all permitted sorting orders
