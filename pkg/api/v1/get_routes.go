@@ -11,7 +11,7 @@ import (
 	"github.com/els0r/goProbe/pkg/api/json"
 	"github.com/els0r/goProbe/pkg/capture"
 	"github.com/els0r/status"
-	"github.com/go-chi/chi"
+	"github.com/go-chi/chi/v5"
 )
 
 func (a *API) getRequestRoutes(r chi.Router) {
