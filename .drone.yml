@@ -15,7 +15,7 @@ steps:
           skip_verify: true
 
     - name: dependencies
-      image: golang:1.15-buster
+      image: golang:1.18-buster
       pull: always
       commands:
           - ls
@@ -31,7 +31,7 @@ steps:
         - internal_net_clone
 
     - name: build
-      image: golang:1.15-buster
+      image: golang:1.18-buster
       pull: always
       commands:
           - ls
@@ -50,7 +50,7 @@ steps:
         - dependencies
 
     - name: test
-      image: golang:1.15-buster
+      image: golang:1.18-buster
       pull: always
       environment:
           GO111MODULE: on
@@ -68,7 +68,7 @@ steps:
         - dependencies
 
     - name: vet
-      image: golang:1.15-buster
+      image: golang:1.18-buster
       pull: always
       environment:
           GODB_LOGGER: console
@@ -86,7 +86,7 @@ steps:
 
 
     - name: merge
-      image: golang:1.15-buster
+      image: golang:1.18-buster
       pull: always
       environment:
           GODB_LOGGER: console
@@ -107,7 +107,7 @@ steps:
 
 
     - name: finish
-      image: golang:1.15-buster
+      image: golang:1.18-buster
       pull: always
       commands:
           - echo "Done"
