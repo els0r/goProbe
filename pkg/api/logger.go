@@ -2,7 +2,7 @@ package api
 
 import (
 	log "github.com/els0r/log"
-	"github.com/go-chi/chi/middleware"
+	"github.com/go-chi/chi/v5/middleware"
 )
 
 type requestLogger struct {

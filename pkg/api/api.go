@@ -13,8 +13,8 @@ import (
 	"github.com/els0r/goProbe/pkg/discovery"
 	log "github.com/els0r/log"
 
-	"github.com/go-chi/chi"
-	"github.com/go-chi/chi/middleware"
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/docgen"
 )
 
