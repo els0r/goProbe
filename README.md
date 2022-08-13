@@ -51,9 +51,19 @@ cd addon
 make all
 ```
 
-### Building for Debian
+### Building Debian package
 
-There is a Makefile target `deb-package` which compiles the software suite and provides a `.deb` file for easy installation on Debian based systems.
+There is a Makefile target `deb` which compiles the software suite and provides a `.deb` file for easy installation on Debian based systems (requires Docker). In order to build against the latest version of Go & Debian, simply run
+```
+cd addon
+make deb
+```
+
+A specific combination of Go / Debian version can be overridden by setting the `DEB_BASE_IMAGE` variable (see https://hub.docker.com/_/golang for supported Docker images), e.g.:
+```
+cd addon
+DEB_BASE_IMAGE=golang:1.19-bullseye make deb
+```
 
 goProbe
 -------------------------

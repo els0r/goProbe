@@ -44,9 +44,12 @@ UNAME_OS := $(shell uname -s | tr '[:upper:]' '[:lower:]')
 COMMIT_SHA := $(shell git rev-parse HEAD)
 COMMIT_SHA_SHORT := $(shell git rev-parse --short HEAD)
 GIT_VERSION := $(shell git describe --tags)
+BUILD_DATE  := $(shell date +%FT%T%z)
+
+# Debian build variables
 DEB_VERSION := $(shell echo $(GIT_VERSION) | sed 's/v//g')
 DEB_VERSION := '$(DEB_VERSION)-$(COMMIT_SHA_SHORT)'
-BUILD_DATE  := $(shell date +%FT%T%z)
+DEB_BASE_IMAGE?=golang:latest
 
 # easy to use build command for everything related goprobe
 VERSION_PATH = $(BASEPATH)/pkg/version
@@ -126,14 +129,9 @@ go_package:
 
 deb:
 
-	mkdir -p $(DEB_VERSION)/DEBIAN
-	sed 's/{{VERSION}}/$(DEB_VERSION)/g' deb-control > $(DEB_VERSION)/DEBIAN/control
-	cp preinst postrm postinst $(DEB_VERSION)/DEBIAN/
-	cp -r absolute/* $(DEB_VERSION)/
-	docker run --rm -v $(PWD)/$(DEB_VERSION):/$(DEB_VERSION) debian:buster-slim chown -R root.root $(DEB_VERSION)/{bin,etc}
-	docker run --rm -v $(PWD)/$(DEB_VERSION):/$(DEB_VERSION) -v $(PWD):/output debian:buster-slim dpkg-deb --build $(DEB_VERSION) /output/$(GO_PRODUCT)-$(DEB_VERSION).deb
-	docker run --rm -v $(PWD)/$(DEB_VERSION):/$(DEB_VERSION) debian:buster-slim rm -rf $(DEB_VERSION)/{bin,etc}
-	rm -rf $(DEB_VERSION)
+	echo "*** building Debian package against $(DEB_BASE_IMAGE) ***"
+	docker build -t goprobe:$(DEB_VERSION) --build-arg BASE_IMAGE=$(DEB_BASE_IMAGE) --build-arg DEB_VERSION=$(DEB_VERSION) --build-arg GO_PRODUCT=$(GO_PRODUCT) -f Dockerfile.deb .
+	docker run --rm --entrypoint cat goprobe:$(DEB_VERSION) /$(GO_PRODUCT)-$(DEB_VERSION).deb > $(GO_PRODUCT)-$(DEB_VERSION).deb
 
 deploy:
 
@@ -159,7 +157,5 @@ clean:
 	rm -f $(GO_PRODUCT)-$(DEB_VERSION).deb
 
 all: clean fetch compile install
-
-deb-package: clean fetch compile install deb
 
 .SILENT:
