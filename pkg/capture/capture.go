@@ -291,41 +291,41 @@ var PcapMutex sync.Mutex
 // Each Capture is a finite state machine.
 // Here is a diagram of the possible state transitions:
 //
-//           +---------------+
-//           |               |
-//           |               |
-//           |               +---------------------+
-//           |               |                     |
-//           | UNINITIALIZED <-------------------+ |
-//           |               |  recoverError()   | |
-//           +----^-+--------+                   | |initialize()
-//                | |                            | |fails
-//                | |initialize() is             | |
-//                | |successful                  | |
-//                | |                            | |
-//  uninitialize()| |                            | |
-//                | |                            | |
-//            +---+-v-------+                    | |
-//            |             |                +---+-v---+
-//            |             |                |         |
-//            |             |                |         |
-//            |             |                |  ERROR  |
-//            | INITIALIZED |                |         |
-//            |             |                +----^----+
-//            +---^-+-------+                     |
-//                | |                             |
-//                | |activate()                   |
-//                | |                             |
-//    deactivate()| |                             |
-//                | |                             |
-//              +-+-v----+                        |
-//              |        |                        |
-//              |        +------------------------+
-//              |        |  capturePacket()
-//              |        |  (called by process())
-//              | ACTIVE |  fails
-//              |        |
-//              +--------+
+//	         +---------------+
+//	         |               |
+//	         |               |
+//	         |               +---------------------+
+//	         |               |                     |
+//	         | UNINITIALIZED <-------------------+ |
+//	         |               |  recoverError()   | |
+//	         +----^-+--------+                   | |initialize()
+//	              | |                            | |fails
+//	              | |initialize() is             | |
+//	              | |successful                  | |
+//	              | |                            | |
+//	uninitialize()| |                            | |
+//	              | |                            | |
+//	          +---+-v-------+                    | |
+//	          |             |                +---+-v---+
+//	          |             |                |         |
+//	          |             |                |         |
+//	          |             |                |  ERROR  |
+//	          | INITIALIZED |                |         |
+//	          |             |                +----^----+
+//	          +---^-+-------+                     |
+//	              | |                             |
+//	              | |activate()                   |
+//	              | |                             |
+//	  deactivate()| |                             |
+//	              | |                             |
+//	            +-+-v----+                        |
+//	            |        |                        |
+//	            |        +------------------------+
+//	            |        |  capturePacket()
+//	            |        |  (called by process())
+//	            | ACTIVE |  fails
+//	            |        |
+//	            +--------+
 //
 // Enable() and Update() try to put the capture into the ACTIVE state, Disable() puts the capture
 // into the UNINITIALIZED state.
@@ -360,8 +360,8 @@ type Capture struct {
 	// flows are retained even after Rotate has been called)
 	flowLog *FlowLog
 
-	pcapHandle   *pcap.Handle
-	packetSource *gopacket.PacketSource
+	pcapHandle    *pcap.Handle
+	decodeOptions gopacket.DecodeOptions
 
 	// error map for logging errors more properly
 	errMap ErrorMap
@@ -386,7 +386,7 @@ func NewCapture(iface string, config Config, logger log.Logger) *Capture {
 		0, // packetsLogged
 		NewFlowLog(logger),
 		nil, // pcapHandle
-		nil, // packetSource
+		gopacket.DecodeOptions{Lazy: true, NoCopy: true},
 		make(map[string]int),
 		logger,
 	}
@@ -423,13 +423,18 @@ func (c *Capture) process() {
 			}
 		}()
 
-		packet, err := c.packetSource.NextPacket()
+		data, ci, err := c.pcapHandle.ZeroCopyReadPacketData()
 		if err != nil {
 			if err == pcap.NextErrorTimeoutExpired { // CaptureTimeout expired
 				return nil
 			}
 			return fmt.Errorf("Capture error: %s", err)
 		}
+
+		packet := gopacket.NewPacket(data, c.pcapHandle.LinkType(), c.decodeOptions)
+		m := packet.Metadata()
+		m.CaptureInfo = ci
+		m.Truncated = m.Truncated || ci.CaptureLength < ci.Length
 
 		if err := gppacket.Populate(packet); err == nil {
 			c.flowLog.Add(&gppacket)
@@ -538,17 +543,6 @@ func (c *Capture) initialize() {
 		return
 	}
 
-	c.packetSource = gopacket.NewPacketSource(c.pcapHandle, c.pcapHandle.LinkType())
-
-	// set the decoding options to lazy decoding in order to ensure that the packet
-	// layers are only decoded once they are needed. Additionally, this is imperative
-	// when GRE-encapsulated packets are decoded because otherwise the layers cannot
-	// be detected correctly.
-	// In addition to lazy decoding, the zeroCopy feature is enabled to avoid allocation
-	// of a full copy of each gopacket, just to copy over a few elements into a GPPacket
-	// structure afterwards.
-	c.packetSource.DecodeOptions = gopacket.DecodeOptions{Lazy: true, NoCopy: true}
-
 	c.setState(StateInitialized)
 }
 
@@ -604,7 +598,6 @@ func (c *Capture) reset() {
 	// flowLog.
 	c.lastRotationStats.Pcap = &pcap.Stats{}
 	c.pcapHandle = nil
-	c.packetSource = nil
 	c.setState(StateUninitialized)
 
 	// reset the error map. The GC will take care of the previous
