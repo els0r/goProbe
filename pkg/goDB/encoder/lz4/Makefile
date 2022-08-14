@@ -6,36 +6,27 @@ LIBVER_MINOR=`sed -n '/define LZ4_VERSION_MINOR/s/.*[[:blank:]]\([0-9][0-9]*\).*
 LIBVER_PATCH=`sed -n '/define LZ4_VERSION_RELEASE/s/.*[[:blank:]]\([0-9][0-9]*\).*/\1/p' < lz4.h`
 LIBVER=$(LIBVER_MAJOR).$(LIBVER_MINOR).$(LIBVER_PATCH)
 
+GOOS := $(shell uname | tr '[:upper:]' '[:lower:]')
+GOARCH := $(shell uname -m)
+
+STATIC_LIB := liblz4_$(GOARCH)_$(GOOS).a
+
 DESTDIR=
 PREFIX = /usr
 CC    := $(CC)
 CFLAGS?= -O3
-CFLAGS+= -I. -std=c99 -Wall -Wextra -Wundef -Wshadow -Wstrict-prototypes -fPIC -DLZ4_VERSION=\"$(RELEASE)\"
+CFLAGS+= -arch $(GOARCH) -I. -std=c99 -Wall -Wextra -Wundef -Wshadow -Wstrict-prototypes -fPIC -DLZ4_VERSION=\"$(RELEASE)\"
+
 
 LIBDIR?= $(PREFIX)/lib
 INCLUDEDIR=$(PREFIX)/include
 DISTRIBNAME=lz4-$(RELEASE).tar.gz
-
 
 # Define *.exe as extension for Windows systems
 ifneq (,$(filter Windows%,$(OS)))
 EXT =.exe
 else
 EXT =
-endif
-
-# OS X linker doesn't support -soname, and use different extension
-# see : https://developer.apple.com/library/mac/documentation/DeveloperTools/Conceptual/DynamicLibraries/100-Articles/DynamicLibraryDesignGuidelines.html
-ifeq ($(shell uname), Darwin)
-	SHARED_EXT = dylib
-	SHARED_EXT_MAJOR = $(LIBVER_MAJOR).$(SHARED_EXT)
-	SHARED_EXT_VER = $(LIBVER).$(SHARED_EXT)
-	SONAME_FLAGS = -install_name $(PREFIX)/lib/liblz4.$(SHARED_EXT_MAJOR) -compatibility_version $(LIBVER_MAJOR) -current_version $(LIBVER)
-else
-	SONAME_FLAGS = -Wl,-soname=liblz4.$(SHARED_EXT).$(LIBVER_MAJOR)
-	SHARED_EXT = so
-	SHARED_EXT_MAJOR = $(SHARED_EXT).$(LIBVER_MAJOR)
-	SHARED_EXT_VER = $(SHARED_EXT).$(LIBVER)
 endif
 
 TEXT = lz4.c lz4.h lz4hc.c lz4hc.h \
@@ -52,16 +43,11 @@ all: liblz4
 
 liblz4: lz4.c lz4hc.c
 	@echo compiling static library
-	@$(CC) $(CPPFLAGS) $(CFLAGS) -c $^
-	@$(AR) rcs liblz4_linux.a lz4.o lz4hc.o
-	@echo compiling dynamic library
-	@$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -shared $^ -fPIC $(SONAME_FLAGS) -o $@.$(SHARED_EXT_VER)
-	@echo creating versioned links
-	@ln -sf $@.$(SHARED_EXT_VER) $@.$(SHARED_EXT_MAJOR)
-	@ln -sf $@.$(SHARED_EXT_VER) $@.$(SHARED_EXT)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $^ 
+	@$(AR) rcs $(STATIC_LIB) lz4.o lz4hc.o
 
 clean:
-	@rm -f core *.o *.a *.$(SHARED_EXT) *.$(SHARED_EXT).* $(DISTRIBNAME) *.sha1 liblz4.pc
+	@rm -f core *.o $(DISTRIBNAME) *.sha1 liblz4.pc
 	@echo Cleaning completed
 
 

@@ -52,18 +52,18 @@ func SanitizeUserInput(conditional string) (string, error) {
 
 	// expressions that count as "user grammar" for the different parts of the conditional
 	var grammarConversionMap = map[string][]string{
-		"!":  []string{"(^|\\s+)not\\s+"},
-		"!(": []string{"(^|\\s+)not[\\(\\[\\{]"}, // Users should be able to write "not{dport = 80}"
-		"&":  []string{"&&", "\\s+and\\s+", "\\*"},
-		"|":  []string{"\\|\\|", "\\s+or\\s+", "\\+"},
-		"(":  []string{"\\{", "\\["},
-		")":  []string{"\\}", "\\]"},
-		"=":  []string{"\\s+eq\\s+", "\\s+\\-eq\\s+", "\\s+equals\\s+", "===", "=="},
-		"!=": []string{"\\s+neq\\s+", "\\s+-neq\\s+", "\\s+ne\\s+", "\\s+\\-ne\\s+"},
-		"<=": []string{"\\s+le\\s+", "\\s+\\-le\\s+", "\\s+leq\\s+", "\\s+-leq\\s+"},
-		">=": []string{"\\s+ge\\s+", "\\s+\\-ge\\s+", "\\s+geq\\s+", "\\s+-geq\\s+"},
-		">":  []string{"\\s+g\\s+", "\\s+\\-g\\s+", "\\s+gt\\s+", "\\s+\\-gt\\s+", "\\s+greater\\s+"},
-		"<":  []string{"\\s+l\\s+", "\\s+\\-l\\s+", "\\s+lt\\s+", "\\s+\\-lt\\s+", "\\s+less\\s+"},
+		"!":  {"(^|\\s+)not\\s+"},
+		"!(": {"(^|\\s+)not[\\(\\[\\{]"}, // Users should be able to write "not{dport = 80}"
+		"&":  {"&&", "\\s+and\\s+", "\\*"},
+		"|":  {"\\|\\|", "\\s+or\\s+", "\\+"},
+		"(":  {"\\{", "\\["},
+		")":  {"\\}", "\\]"},
+		"=":  {"\\s+eq\\s+", "\\s+\\-eq\\s+", "\\s+equals\\s+", "===", "=="},
+		"!=": {"\\s+neq\\s+", "\\s+-neq\\s+", "\\s+ne\\s+", "\\s+\\-ne\\s+"},
+		"<=": {"\\s+le\\s+", "\\s+\\-le\\s+", "\\s+leq\\s+", "\\s+-leq\\s+"},
+		">=": {"\\s+ge\\s+", "\\s+\\-ge\\s+", "\\s+geq\\s+", "\\s+-geq\\s+"},
+		">":  {"\\s+g\\s+", "\\s+\\-g\\s+", "\\s+gt\\s+", "\\s+\\-gt\\s+", "\\s+greater\\s+"},
+		"<":  {"\\s+l\\s+", "\\s+\\-l\\s+", "\\s+lt\\s+", "\\s+\\-lt\\s+", "\\s+less\\s+"},
 	}
 
 	// first, convert everything to lower case

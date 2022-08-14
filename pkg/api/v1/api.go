@@ -7,7 +7,7 @@ import (
 	"github.com/els0r/goProbe/pkg/api/errors"
 	"github.com/els0r/goProbe/pkg/capture"
 	"github.com/els0r/goProbe/pkg/discovery"
-	"github.com/go-chi/chi"
+	"github.com/go-chi/chi/v5"
 
 	log "github.com/els0r/log"
 )
