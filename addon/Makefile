@@ -130,7 +130,7 @@ go_package:
 deb:
 
 	echo "*** building Debian package against $(DEB_BASE_IMAGE) ***"
-	docker build -t goprobe:$(DEB_VERSION) --build-arg BASE_IMAGE=$(DEB_BASE_IMAGE) --build-arg DEB_VERSION=$(DEB_VERSION) --build-arg GO_PRODUCT=$(GO_PRODUCT) -f Dockerfile.deb .
+	docker build -t goprobe:$(DEB_VERSION) --build-arg BASE_IMAGE=$(DEB_BASE_IMAGE) --build-arg DEB_VERSION=$(DEB_VERSION) --build-arg GO_PRODUCT=$(GO_PRODUCT) -f Dockerfile.debpkg .
 	docker run --rm --entrypoint cat goprobe:$(DEB_VERSION) /$(GO_PRODUCT)-$(DEB_VERSION).deb > $(GO_PRODUCT)-$(DEB_VERSION).deb
 	docker rmi goprobe:$(DEB_VERSION)
 
