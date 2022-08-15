@@ -1,0 +1,20 @@
+ARG BASE_IMAGE=golang:latest
+FROM $BASE_IMAGE
+
+ARG DEB_VERSION=UNDEFINED
+ARG GO_PRODUCT=goProbe
+
+WORKDIR /build
+
+RUN git clone https://github.com/els0r/goProbe \
+ && cd goProbe/addon \
+ && make all \
+ && mkdir absolute/DEBIAN
+
+WORKDIR /build/goProbe/addon/absolute
+
+COPY deb-control DEBIAN/control
+COPY preinst postrm postinst DEBIAN/
+
+RUN echo "Version: $DEB_VERSION" >> DEBIAN/control \
+ && dpkg-deb --build . /${GO_PRODUCT}-${DEB_VERSION}.deb
