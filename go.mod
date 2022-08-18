@@ -3,7 +3,6 @@ module github.com/els0r/goProbe
 require (
 	github.com/els0r/log v1.0.1-0.20190303012150-3e228cb82ff0
 	github.com/els0r/status v1.0.0
-	github.com/fako1024/gopacket v1.1.19
 	github.com/go-chi/chi/v5 v5.0.7
 	github.com/go-chi/docgen v1.2.0
 	github.com/json-iterator/go v1.1.12
@@ -14,6 +13,7 @@ require (
 )
 
 require (
+	github.com/fako1024/gopacket v1.1.20-0.20220816131758-4518db4bf798 // indirect
 	github.com/fatih/color v1.13.0 // indirect
 	github.com/gomodule/redigo v1.8.9 // indirect
 	github.com/hashicorp/golang-lru v0.5.4 // indirect

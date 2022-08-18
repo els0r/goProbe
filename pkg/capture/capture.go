@@ -11,6 +11,7 @@
 package capture
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"runtime/debug"
@@ -19,8 +20,6 @@ import (
 
 	"github.com/els0r/goProbe/pkg/goDB"
 	"github.com/els0r/log"
-	"github.com/fako1024/gopacket"
-	"github.com/fako1024/gopacket/layers"
 	"github.com/fako1024/gopacket/pcap"
 )
 
@@ -92,8 +91,8 @@ func (cs State) String() string {
 
 // Stats stores the packet and pcap statistics of the capture
 type Stats struct {
-	Pcap          *pcap.Stats `json:"pcap"`
-	PacketsLogged int         `json:"packets_logged"`
+	Pcap          *CaptureStats `json:"pcap"`
+	PacketsLogged int           `json:"packets_logged"`
 }
 
 // Status stores both the capture's state and statistics
@@ -360,8 +359,8 @@ type Capture struct {
 	// flows are retained even after Rotate has been called)
 	flowLog *FlowLog
 
-	pcapHandle    *pcap.Handle
-	decodeOptions gopacket.DecodeOptions
+	// Generic handle / source for packet capture
+	captureHandle Source
 
 	// error map for logging errors more properly
 	errMap ErrorMap
@@ -373,23 +372,19 @@ type Capture struct {
 // NewCapture creates a new Capture associated with the given iface.
 func NewCapture(iface string, config Config, logger log.Logger) *Capture {
 	c := &Capture{
-		iface,
-		sync.Mutex{},
-		false, // closed
-		StateUninitialized,
-		config,
-		make(chan captureCommand, 1),
-		Stats{
-			Pcap:          &pcap.Stats{},
-			PacketsLogged: 0,
+		iface:   iface,
+		mutex:   sync.Mutex{},
+		state:   StateUninitialized,
+		config:  config,
+		cmdChan: make(chan captureCommand),
+		lastRotationStats: Stats{
+			Pcap: &CaptureStats{},
 		},
-		0, // packetsLogged
-		NewFlowLog(logger),
-		nil, // pcapHandle
-		gopacket.DecodeOptions{Lazy: true, NoCopy: true},
-		make(map[string]int),
-		logger,
+		flowLog: NewFlowLog(logger),
+		errMap:  make(map[string]int),
+		logger:  logger,
 	}
+
 	go c.process()
 	return c
 }
@@ -423,20 +418,18 @@ func (c *Capture) process() {
 			}
 		}()
 
-		data, ci, err := c.pcapHandle.ZeroCopyReadPacketData()
+		packet, err := c.captureHandle.NextPacket()
 		if err != nil {
-			if err == pcap.NextErrorTimeoutExpired { // CaptureTimeout expired
+			if errors.Is(err, errCaptureTimeout) { // CaptureTimeout expired
 				return nil
 			}
-			return fmt.Errorf("Capture error: %s", err)
+			return fmt.Errorf("capture error: %s", err)
 		}
 
-		packet := gopacket.NewPacket(data, c.pcapHandle.LinkType(), c.decodeOptions)
-		m := packet.Metadata()
-		m.CaptureInfo = ci
-		m.Truncated = m.Truncated || ci.CaptureLength < ci.Length
-
 		if err := gppacket.Populate(packet); err == nil {
+
+			//fmt.Println("Packet on PCAP:", goDB.RawIPToString(gppacket.sip[:]), "->", goDB.RawIPToString(gppacket.dip[:]), strconv.Itoa(int(uint16(gppacket.dport[0])<<8|uint16(gppacket.dport[1]))), gppacket.numBytes, base64.RawStdEncoding.EncodeToString(gppacket.epHash[:]), base64.RawStdEncoding.EncodeToString(gppacket.epHashReverse[:]))
+
 			c.flowLog.Add(&gppacket)
 			errcount = 0
 			c.packetsLogged++
@@ -501,45 +494,15 @@ func (c *Capture) process() {
 // into StateInitialized. If an error occurrs, it instead
 // transitions into state StateError.
 func (c *Capture) initialize() {
-	initializationErr := func(msg string, args ...interface{}) {
-		c.logger.Errorf(msg, args...)
-		c.setState(StateError)
-		return
-	}
-
 	if c.state != StateUninitialized {
 		panic("Need state StateUninitialized")
 	}
 
-	var err error
-
-	inactiveHandle, err := setupInactiveHandle(c.iface, c.config.BufSize, c.config.Promisc)
-	if err != nil {
-		initializationErr("Interface '%s': failed to create inactive handle: %s", c.iface, err)
-		return
-	}
-	defer inactiveHandle.CleanUp()
-
-	PcapMutex.Lock()
-	c.pcapHandle, err = inactiveHandle.Activate()
-	PcapMutex.Unlock()
-	if err != nil {
-		initializationErr("Interface '%s': failed to activate handle: %s", c.iface, err)
-		return
-	}
-
-	// link type might be null if the
-	// specified interface does not exist (anymore)
-	if c.pcapHandle.LinkType() == layers.LinkTypeNull {
-		initializationErr("Interface '%s': has link type null", c.iface)
-		return
-	}
-
-	PcapMutex.Lock()
-	err = c.pcapHandle.SetBPFFilter(c.config.BPFFilter)
-	PcapMutex.Unlock()
-	if err != nil {
-		initializationErr("Interface '%s': failed to set bpf filter to %s: %s", c.iface, c.config.BPFFilter, err)
+	c.captureHandle = newSource()
+	if err := c.captureHandle.Init(c.iface, c.config.BPFFilter, Snaplen, c.config.BufSize, c.config.Promisc); err != nil {
+		fmt.Println("Error:", err)
+		c.logger.Error(err)
+		c.setState(StateError)
 		return
 	}
 
@@ -561,7 +524,7 @@ func (c *Capture) activate() {
 		panic("Need state StateInitialized")
 	}
 	c.setState(StateActive)
-	c.logger.Debugf("Interface '%s': capture active. Link type: %s", c.iface, c.pcapHandle.LinkType())
+	c.logger.Debugf("Interface '%s': capture active. Link type: %s", c.iface, c.captureHandle.LinkType())
 }
 
 // deactivate transitions from StateActive
@@ -588,16 +551,16 @@ func (c *Capture) recoverError() {
 // reset unites logic used in both recoverError and uninitialize
 // in a single method.
 func (c *Capture) reset() {
-	if c.pcapHandle != nil {
-		c.pcapHandle.Close()
+	if c.captureHandle != nil {
+		c.captureHandle.Close()
 	}
 	// We reset the Pcap part of the stats because we will create
 	// a new pcap handle with new counts when the Capture is next
 	// initialized. We don't reset the PacketsLogged field because
 	// it corresponds to the number of packets in the (untouched)
 	// flowLog.
-	c.lastRotationStats.Pcap = &pcap.Stats{}
-	c.pcapHandle = nil
+	c.lastRotationStats.Pcap = &CaptureStats{}
+	c.captureHandle = nil
 	c.setState(StateUninitialized)
 
 	// reset the error map. The GC will take care of the previous
@@ -611,13 +574,13 @@ func (c *Capture) needReinitialization(config Config) bool {
 	return c.config != config
 }
 
-func (c *Capture) tryGetPcapStats() *pcap.Stats {
+func (c *Capture) tryGetPcapStats() *CaptureStats {
 	var (
-		pcapStats *pcap.Stats
+		pcapStats *CaptureStats
 		err       error
 	)
-	if c.pcapHandle != nil {
-		pcapStats, err = c.pcapHandle.Stats()
+	if c.captureHandle != nil {
+		pcapStats, err = c.captureHandle.Stats()
 		if err != nil {
 			c.logger.Errorf("Interface '%s': error while requesting pcap stats: %s", err.Error())
 		}
@@ -627,11 +590,11 @@ func (c *Capture) tryGetPcapStats() *pcap.Stats {
 
 // subPcapStats computes a - b (fieldwise) if both a and b
 // are not nil. Otherwise, it returns nil.
-func subPcapStats(a, b *pcap.Stats) *pcap.Stats {
+func subPcapStats(a, b *CaptureStats) *CaptureStats {
 	if a == nil || b == nil {
 		return nil
 	}
-	return &pcap.Stats{
+	return &CaptureStats{
 		PacketsReceived:  a.PacketsReceived - b.PacketsReceived,
 		PacketsDropped:   a.PacketsDropped - b.PacketsDropped,
 		PacketsIfDropped: a.PacketsIfDropped - b.PacketsIfDropped,
@@ -639,7 +602,7 @@ func subPcapStats(a, b *pcap.Stats) *pcap.Stats {
 }
 
 // setupInactiveHandle sets up a pcap InactiveHandle with the given settings.
-func setupInactiveHandle(iface string, bufSize int, promisc bool) (*pcap.InactiveHandle, error) {
+func setupInactiveHandle(iface string, captureLen, bufSize int, promisc bool) (*pcap.InactiveHandle, error) {
 	// new inactive handle
 	inactive, err := pcap.NewInactiveHandle(iface)
 	if err != nil {
@@ -654,7 +617,7 @@ func setupInactiveHandle(iface string, bufSize int, promisc bool) (*pcap.Inactiv
 	}
 
 	// set snaplength
-	if err := inactive.SetSnapLen(int(Snaplen)); err != nil {
+	if err := inactive.SetSnapLen(captureLen); err != nil {
 		inactive.CleanUp()
 		return nil, err
 	}
