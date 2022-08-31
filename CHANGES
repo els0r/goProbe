@@ -66,3 +66,4 @@ UNRELEASED fako1024,els0r
     - Add ZTSD encoder and enhance testing for encoding package
     - Improve performance of GPFile write functionality by using buffering
     - Update LZ4 to newest version (fixing potential crashes when trying to read invalid data)
+    - Improve Debian package build pipeline
