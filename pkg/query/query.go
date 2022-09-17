@@ -271,10 +271,11 @@ func (s *Statement) Execute() error {
 	}
 
 	/// DATA PRESENATION ///
-	var mapEntries = make([]Entry, len(agg.aggregatedMap))
+	var results = make(Results, len(agg.aggregatedMap))
 	var val goDB.Val
-	count := 0
+	var key goDB.Key
 
+	count := 0
 	for mapEntries[count].k, val = range agg.aggregatedMap {
 
 		mapEntries[count].nBr = val.NBytesRcvd
@@ -290,10 +291,7 @@ func (s *Statement) Execute() error {
 	runtime.GC()
 	debug.FreeOSMemory()
 
-	// there is no need to sort influxdb datapoints
-	if s.Format != "influxdb" {
-		By(s.SortBy, s.Direction, s.SortAscending).Sort(mapEntries)
-	}
+	By(s.SortBy, s.Direction, s.SortAscending).Sort(mapEntries)
 
 	// Find map from ips to domains for reverse DNS
 	var ips2domains map[string]string
