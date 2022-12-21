@@ -10,6 +10,7 @@ import (
 var testEncoders = []encoders.Type{
 	encoders.EncoderTypeNull,
 	encoders.EncoderTypeLZ4,
+	encoders.EncoderTypeLZ4Custom,
 	encoders.EncoderTypeZSTD,
 }
 
