@@ -6,6 +6,7 @@ import (
 
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/lz4"
+	"github.com/els0r/goProbe/pkg/goDB/encoder/lz4cust"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/null"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/zstd"
 )
@@ -30,6 +31,8 @@ func New(t encoders.Type) (Encoder, error) {
 		return null.New(), nil
 	case encoders.EncoderTypeLZ4:
 		return lz4.New(), nil
+	case encoders.EncoderTypeLZ4Custom:
+		return lz4cust.New(), nil
 	case encoders.EncoderTypeZSTD:
 		return zstd.New(), nil
 	default:

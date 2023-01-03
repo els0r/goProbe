@@ -46,20 +46,29 @@ COMMIT_SHA_SHORT := $(shell git rev-parse --short HEAD)
 GIT_VERSION := $(shell git describe --tags)
 BUILD_DATE  := $(shell date +%FT%T%z)
 
+GOOS := $(shell uname | tr '[:upper:]' '[:lower:]')
+GOARCH := $(shell uname -m)
+
 # Debian build variables
 DEB_VERSION := $(shell echo $(GIT_VERSION) | sed 's/v//g')
 DEB_VERSION := '$(DEB_VERSION)-$(COMMIT_SHA_SHORT)'
 DEB_BASE_IMAGE?=golang:latest
 
+# dependencies
+LZ4_VERSION = 1.9.4
+LZ4_URL     = https://github.com/lz4/lz4/archive/refs/tags/v$(LZ4_VERSION).tar.gz
+LZ4_LIB     = lz4-$(LZ4_VERSION)
+
+CGO_CFLAGS := "-I$(PWD)/$(LZ4_LIB)/lib"
+CGO_LDFLAGS := "-L$(PWD)/$(LZ4_LIB)/lib"
+
 # easy to use build command for everything related goprobe
 VERSION_PATH = $(BASEPATH)/pkg/version
 
 GO_BUILDTAGS = netcgo public $(UNAME_OS)
-GPBUILD      = go install -v -tags '$(GO_BUILDTAGS)'
-GPTESTBUILD  = go test -c -tags '$(GO_BUILDTAGS)'
 
-GOOS := $(shell uname | tr '[:upper:]' '[:lower:]')
-GOARCH := $(shell uname -m)
+GPBUILD      := CGO_CFLAGS='$(CGO_CFLAGS)' CGO_LDFLAGS='$(CGO_LDFLAGS)' go install -v -tags '$(GO_BUILDTAGS)'
+GPTESTBUILD  := CGO_CFLAGS='$(CGO_CFLAGS)' CGO_LDFLAGS='$(CGO_LDFLAGS)' go test -c -tags '$(GO_BUILDTAGS)'
 
 fetch:
 
@@ -67,16 +76,25 @@ fetch:
 	go mod tidy
 	go mod download
 
+lib:
 
-compile:
+	echo "*** fetching dynamic libraries ***"
+	curl -LO $(LZ4_URL); tar xf v$(LZ4_VERSION).tar.gz
+
+build:
+
+	## DEPENDENCIES ##
+	echo "*** compiling lz4 $(LZ4_VERSION) ***"
+	cd $(LZ4_LIB); make
 
 	## VERSION ###
 	echo "*** setting version information ***"
-	COMMIT_SHA=$(COMMIT_SHA) go generate $(BASEPATH)/pkg/version
+	COMMIT_SHA=$(COMMIT_SHA) go generate $(VERSION_PATH)
 	echo "commit is $(COMMIT_SHA)"
 
 	## GO CODE COMPILATION ##
 	echo "*** compiling $(GO_PRODUCT) ***"
+	echo "$(GPBUILD) $(BASEPATH)/cmd/$(GO_PRODUCT)"
 	$(GPBUILD) $(BASEPATH)/cmd/$(GO_PRODUCT)
 
 	echo "*** compiling $(GO_QUERY) ***"
@@ -154,9 +172,12 @@ clean:
 	echo "*** removing dependencies and binaries ***"
 	rm -rf cmd/$(GO_PRODUCT)/$(GO_PRODUCT) cmd/$(GO_QUERY)/$(GO_QUERY) cmd/goConvert/goConvert
 
+	rm -f v$(LZ4_VERSION).tar.gz
+	rm -rf $(LZ4_LIB)
+
 	rm -f $(GO_PRODUCT).tar.bz2
 	rm -f $(GO_PRODUCT)-$(DEB_VERSION).deb
 
-all: clean fetch compile install
+all: clean fetch lib build install
 
 .SILENT:

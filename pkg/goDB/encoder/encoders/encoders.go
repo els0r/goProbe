@@ -8,8 +8,6 @@ import (
 // Type denotes the type of encoder
 type Type int
 
-// Enumeration of directions to be considered
-//
 // IMPORTANT:
 // When implementing new encoders, make sure to add the type above MaxEncoderType. Otherwise, compatibility
 // with existing databases is broken

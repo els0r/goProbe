@@ -25,6 +25,7 @@ func TestNewByString(t *testing.T) {
 		{"empty string", "", encoders.EncoderTypeNull, false},
 		{"null encoder", "null", encoders.EncoderTypeNull, false},
 		{"lz4 encoder", "lz4", encoders.EncoderTypeLZ4, false},
+		{"lz4 encoder custom", "lz4cust", encoders.EncoderTypeLZ4Custom, false},
 		{"lz4 encoder (uppercase)", "LZ4", encoders.EncoderTypeLZ4, false},
 		{"zstd encoder", "zstd", encoders.EncoderTypeZSTD, false},
 		{"zstd encoder (uppercase)", "ZSTD", encoders.EncoderTypeZSTD, false},
@@ -105,6 +106,8 @@ func BenchmarkEncodersCompress(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				enc.Compress(encodingCorpus, buf)
 			}
+
+			_ = buf
 		})
 	}
 }
@@ -132,6 +135,9 @@ func BenchmarkEncodersDecompress(b *testing.B) {
 				out := make([]byte, nBytes, nBytes)
 				in := make([]byte, nWritten, nWritten)
 				enc.Decompress(in, out, buf)
+
+				_ = in
+				_ = out
 			}
 		})
 	}
