@@ -7,9 +7,7 @@ package lz4
 #cgo darwin,arm64 LDFLAGS: -llz4
 #include <stdlib.h>
 #include <stdio.h>
-#include "lz4hc.h"
 #include "lz4frame.h"
-#include "lz4.h"
 
 int cCompress(char *src, int srcSize, char *dst, int level) {
 	// initialize the frame compression preferences
