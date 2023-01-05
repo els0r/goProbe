@@ -145,7 +145,7 @@ func (g *GPFile) ReadBlock(timestamp int64) ([]byte, error) {
 		return nil, err
 	}
 	if nRead != block.RawLen {
-		return nil, fmt.Errorf("Unexpected amount of bytes after decompression, want %d, have %d", block.Len, nRead)
+		return nil, fmt.Errorf("Unexpected amount of bytes after decompression, want %d, have %d", block.RawLen, nRead)
 	}
 	g.lastSeekPos += int64(block.Len)
 

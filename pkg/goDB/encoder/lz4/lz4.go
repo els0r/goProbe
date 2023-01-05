@@ -8,14 +8,67 @@ package lz4
 #include <stdlib.h>
 #include <stdio.h>
 #include "lz4hc.h"
+#include "lz4frame.h"
 #include "lz4.h"
 
 int cCompress(char *src, int srcSize, char *dst, int level) {
-  return LZ4_compress_HC(src, dst, srcSize, LZ4_compressBound(srcSize), level);
+	// initialize the frame compression preferences
+	// taken from https://github.com/lz4/lz4/blob/dev/examples/frameCompress.c
+	const LZ4F_preferences_t prefs = {
+    	{
+			LZ4F_default,
+			LZ4F_blockLinked,
+			LZ4F_noContentChecksum,
+			LZ4F_frame,
+			0,
+			0,
+			LZ4F_noBlockChecksum,
+		},
+		level,
+		0,
+		0,
+		{ 0, 0, 0 },
+	};
+
+	return LZ4F_compressFrame(dst, LZ4F_compressFrameBound(srcSize, &prefs), src, srcSize, &prefs);
 }
 
+static const LZ4F_decompressOptions_t decompOpts = {
+	1, // pledges that last 64KB decompressed data will remain available unmodified between invocations
+	1, // disable checksum calculation and verification to save CPU time. This line is why we even choose to use liblz4 1.9.4
+	0, // reserved 0
+	0, // reserved 1
+};
+
 int cDecompress(char *src, int srcSize, char *dst, int dstSize) {
-  return LZ4_decompress_safe(src, dst, srcSize, dstSize);
+	// create decompression context
+	LZ4F_dctx* ctx;
+
+	// check if context creation was successful
+	size_t const dctxStatus = LZ4F_createDecompressionContext(&ctx, LZ4F_VERSION);
+	if (LZ4F_isError(dctxStatus)) {
+		return -1;
+	}
+	if (!ctx) {
+		return -1;
+	}
+
+
+	// actual decompression
+	size_t sSize = srcSize;
+	size_t dSize = dstSize;
+
+	size_t result = LZ4F_decompress(ctx, dst, &dSize, src, &sSize, &decompOpts);
+
+	// release context
+	LZ4F_freeDecompressionContext(ctx);
+
+	if (LZ4F_isError(result)) {
+		return -1;
+	}
+
+	// LZ4_decompress writes the amount of decompressed bytes into dSize
+	return dSize;
 }
 */
 import "C"
@@ -77,7 +130,7 @@ func (e *Encoder) Compress(data []byte, dst io.Writer) (n int, err error) {
 
 	// sanity check whether the computed worst case has been exceeded in C call
 	if len(buf) < compLen {
-		return n, errors.New("Buffer size mismatch for compressed data")
+		return n, errors.New("buffer size mismatch for compressed data")
 	}
 
 	if n, err = dst.Write(buf[0:compLen]); err != nil {
@@ -97,7 +150,7 @@ func (e *Encoder) Decompress(in, out []byte, src io.Reader) (n int, err error) {
 		return 0, err
 	}
 	if nBytesRead != len(in) {
-		return 0, errors.New("Incorrect number of bytes read from data source")
+		return 0, errors.New("incorrect number of bytes read from data source")
 	}
 
 	// decompress data
@@ -108,7 +161,7 @@ func (e *Encoder) Decompress(in, out []byte, src io.Reader) (n int, err error) {
 		C.int(len(out))),
 	)
 	if nBytesDecompressed < 0 {
-		return 0, errors.New("Invalid LZ4 data detected during decompression")
+		return 0, errors.New("invalid LZ4 data detected during decompression")
 	}
 
 	return nBytesDecompressed, nil

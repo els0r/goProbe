@@ -78,14 +78,15 @@ fetch:
 
 lib:
 
+	## C DEPENDENCIES ##
 	echo "*** fetching dynamic libraries ***"
 	curl -LO $(LZ4_URL); tar xf v$(LZ4_VERSION).tar.gz
 
-build:
-
-	## DEPENDENCIES ##
 	echo "*** compiling lz4 $(LZ4_VERSION) ***"
 	cd $(LZ4_LIB); make
+
+build:
+
 
 	## VERSION ###
 	echo "*** setting version information ***"
