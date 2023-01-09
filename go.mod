@@ -3,6 +3,7 @@ module github.com/els0r/goProbe
 require (
 	github.com/els0r/log v1.0.1-0.20190303012150-3e228cb82ff0
 	github.com/els0r/status v1.0.0
+	github.com/fako1024/gopacket v1.1.20-0.20220816131758-4518db4bf798
 	github.com/go-chi/chi/v5 v5.0.7
 	github.com/go-chi/docgen v1.2.0
 	github.com/json-iterator/go v1.1.12
@@ -10,10 +11,10 @@ require (
 	github.com/spf13/cobra v1.5.0
 	github.com/throttled/throttled v2.2.5+incompatible
 	github.com/valyala/gozstd v1.17.0
+	golang.org/x/net v0.0.0-20220805013720-a33c5aa5df48
 )
 
 require (
-	github.com/fako1024/gopacket v1.1.20-0.20220816131758-4518db4bf798 // indirect
 	github.com/fatih/color v1.13.0 // indirect
 	github.com/gomodule/redigo v1.8.9 // indirect
 	github.com/hashicorp/golang-lru v0.5.4 // indirect
@@ -24,7 +25,6 @@ require (
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/stretchr/testify v1.8.0 // indirect
-	golang.org/x/net v0.0.0-20220805013720-a33c5aa5df48 // indirect
 	golang.org/x/sys v0.0.0-20220804214406-8e32c043e418 // indirect
 )
 
