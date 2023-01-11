@@ -20,7 +20,7 @@ import (
 
 	"github.com/els0r/goProbe/pkg/goDB"
 	"github.com/els0r/log"
-	"github.com/fako1024/gopacket/pcap"
+	"github.com/google/gopacket/pcap"
 )
 
 const (
@@ -426,9 +426,13 @@ func (c *Capture) process() {
 			return fmt.Errorf("capture error: %s", err)
 		}
 
-		if err := gppacket.Populate(packet); err == nil {
+		if err := gppacket.Populate(packet.packet, packet.inbound); err == nil {
 
-			//fmt.Println("Packet on PCAP:", goDB.RawIPToString(gppacket.sip[:]), "->", goDB.RawIPToString(gppacket.dip[:]), strconv.Itoa(int(uint16(gppacket.dport[0])<<8|uint16(gppacket.dport[1]))), gppacket.numBytes, base64.RawStdEncoding.EncodeToString(gppacket.epHash[:]), base64.RawStdEncoding.EncodeToString(gppacket.epHashReverse[:]))
+			// fmt.Println("Packet captured:", goDB.RawIPToString(gppacket.sip[:]), "->", goDB.RawIPToString(gppacket.dip[:]),
+			// 	strconv.Itoa(int(uint16(gppacket.dport[0])<<8|uint16(gppacket.dport[1]))),
+			// 	gppacket.numBytes,
+			// 	base64.RawStdEncoding.EncodeToString(gppacket.epHash[:]), base64.RawStdEncoding.EncodeToString(gppacket.epHashReverse[:]),
+			// )
 
 			c.flowLog.Add(&gppacket)
 			errcount = 0
@@ -440,7 +444,7 @@ func (c *Capture) process() {
 			// of the error would be taken, which results in a non-minimal set of errors
 			if _, exists := c.errMap[err.Error()]; !exists {
 				// log the packet to the pcap error logs
-				if logerr := PacketLog.Log(c.iface, packet, Snaplen); logerr != nil {
+				if logerr := PacketLog.Log(c.iface, packet.packet, Snaplen); logerr != nil {
 					c.logger.Info("failed to log faulty packet: " + logerr.Error())
 				}
 			}

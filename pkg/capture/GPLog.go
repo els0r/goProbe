@@ -18,9 +18,9 @@ import (
 	"os"
 	"sync"
 
-	"github.com/fako1024/gopacket"
-	"github.com/fako1024/gopacket/layers"
-	"github.com/fako1024/gopacket/pcapgo"
+	"github.com/google/gopacket"
+	"github.com/google/gopacket/layers"
+	"github.com/google/gopacket/pcapgo"
 )
 
 // PacketLogWriter provides methods to write packets to file for a given interface

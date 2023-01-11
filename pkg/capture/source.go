@@ -1,6 +1,6 @@
 package capture
 
-import "github.com/fako1024/gopacket"
+import "github.com/google/gopacket"
 
 var defaultDecodeOptions = gopacket.DecodeOptions{
 	Lazy:   true,
@@ -13,9 +13,14 @@ type CaptureStats struct {
 	PacketsIfDropped int
 }
 
+type Packet struct {
+	packet  gopacket.Packet
+	inbound bool
+}
+
 type Source interface {
 	Init(iface, bpfFilter string, captureLength, bufSize int, promisc bool) error
-	NextPacket() (gopacket.Packet, error)
+	NextPacket() (Packet, error)
 	Stats() (*CaptureStats, error)
 	LinkType() gopacket.Decoder
 	Close()

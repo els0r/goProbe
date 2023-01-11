@@ -3,7 +3,7 @@
 
 package capture
 
-import "github.com/fako1024/gopacket/pcap"
+import "github.com/google/gopacket/pcap"
 
 var errCaptureTimeout = pcap.NextErrorTimeoutExpired
 

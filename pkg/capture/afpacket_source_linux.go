@@ -6,10 +6,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/fako1024/gopacket"
 	"github.com/fako1024/gopacket/afpacket"
-	"github.com/fako1024/gopacket/layers"
-	"github.com/fako1024/gopacket/pcap"
+	"github.com/google/gopacket"
+	"github.com/google/gopacket/layers"
+	"github.com/google/gopacket/pcap"
 	"golang.org/x/net/bpf"
 )
 
@@ -17,20 +17,28 @@ type AFPacketSource struct {
 	handle *afpacket.TPacket
 }
 
-func (p *AFPacketSource) NextPacket() (gopacket.Packet, error) {
+func (p *AFPacketSource) NextPacket() (Packet, error) {
 	data, ci, err := p.handle.ZeroCopyReadPacketData()
 	if err != nil {
-		return nil, err
+		return Packet{}, err
+	}
+
+	// translates the capture info from fako's gopacket to the standard google one. An unfortunate
+	// detour, but necessary as long as the afpacket additions aren't part of the google upstream
+	gpci := gopacket.CaptureInfo{
+		AncillaryData:  ci.AncillaryData,
+		CaptureLength:  ci.CaptureLength,
+		InterfaceIndex: ci.InterfaceIndex,
+		Length:         ci.Length,
+		Timestamp:      ci.Timestamp,
 	}
 
 	packet := gopacket.NewPacket(data, layers.LinkTypeEthernet, defaultDecodeOptions)
 	m := packet.Metadata()
-	m.CaptureInfo = ci
+	m.CaptureInfo = gpci
 	m.Truncated = m.Truncated || ci.CaptureLength < ci.Length
 
-	// fmt.Println("GOT AF_PACKET", packet.String())
-
-	return packet, nil
+	return Packet{packet: packet, inbound: ci.Inbound == 1}, nil
 }
 
 func (p *AFPacketSource) Init(iface, bpfFilter string, captureLength, bufSize int, promisc bool) error {

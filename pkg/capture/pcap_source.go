@@ -3,52 +3,40 @@ package capture
 import (
 	"fmt"
 
-	"github.com/fako1024/gopacket"
-	"github.com/fako1024/gopacket/layers"
-	"github.com/fako1024/gopacket/pcap"
+	"github.com/google/gopacket"
+	"github.com/google/gopacket/layers"
+	"github.com/google/gopacket/pcap"
 )
 
 ////////////////////////////////////////////////////////
 
 type PcapSource struct {
 	directions [2]*directionSource
+	packets    chan nextPacketData
 }
 
 type directionSource struct {
-	bpfPrefix string
-	// helper var to save checking everytime if the packet is
-	// coming from inbound or outbound traffic
-	inbound        uint8
-	handle         *pcap.Handle
-	nextPacketChan chan *nextPacketData
+	direction pcap.Direction
+	handle    *pcap.Handle
 }
 
 type nextPacketData struct {
-	packet gopacket.Packet
+	packet Packet
 	err    error
 }
 
-const (
-	bpfInbound  = "inbound"
-	bpfOutbound = "outbound"
-)
-
-func newDirectionSource(bpfPrefix string) *directionSource {
-	ds := &directionSource{
-		bpfPrefix:      bpfPrefix,
-		nextPacketChan: make(chan *nextPacketData, 1),
-	}
-	if bpfPrefix == bpfInbound {
-		ds.inbound = 1
-	}
-	return ds
+func newDirectionSource(direction pcap.Direction) *directionSource {
+	return &directionSource{direction: direction}
 }
 
-func (src *directionSource) nextPacket() {
-	npd := &nextPacketData{}
-	defer func() { src.nextPacketChan <- npd }()
+func (src *directionSource) nextPacket(packets chan<- nextPacketData) {
+	npd := nextPacketData{}
+	defer func() { packets <- npd }()
 
-	data, ci, err := src.handle.ZeroCopyReadPacketData()
+	// TODO: line is currently commented, since it leads to inconsistencies in captured traffic. Observed when comparing to the
+	// stable goProbe version (which uses ReadPacketData) under the hood.
+	// data, ci, err := src.handle.ZeroCopyReadPacketData()
+	data, ci, err := src.handle.ReadPacketData()
 	if err != nil {
 		npd.err = err
 		return
@@ -57,75 +45,88 @@ func (src *directionSource) nextPacket() {
 	packet := gopacket.NewPacket(data, src.handle.LinkType(), defaultDecodeOptions)
 	m := packet.Metadata()
 
-	// set direction for packet
-	ci.Inbound = src.inbound
-
 	m.CaptureInfo = ci
 	m.Truncated = m.Truncated || ci.CaptureLength < ci.Length
 
-	npd.packet = packet
+	npd.packet = Packet{
+		packet:  packet,
+		inbound: src.direction == pcap.DirectionIn,
+	}
 
 	return
 }
 
-func (p *PcapSource) NextPacket() (gopacket.Packet, error) {
-
-	var npd *nextPacketData
-
-	for _, direction := range p.directions {
-		go direction.nextPacket()
+func (p *PcapSource) NextPacket() (Packet, error) {
+	for i := range p.directions {
+		go p.directions[i].nextPacket(p.packets)
 	}
-	// whichever direction returns first will supply the packet to the caller
-	select {
-	case npd = <-p.directions[0].nextPacketChan:
-		return npd.packet, npd.err
-	case npd = <-p.directions[1].nextPacketChan:
-		return npd.packet, npd.err
+	npd := <-p.packets
+	return npd.packet, npd.err
+}
+
+func directionToString(direction pcap.Direction) string {
+	switch direction {
+	case pcap.DirectionIn:
+		return "INBOUND"
+	case pcap.DirectionOut:
+		return "OUTBOUND"
+	case pcap.DirectionInOut:
+		return "BI-DIRECTIONAL"
 	}
+	return fmt.Sprintf("pcap.Direction(%d)", direction)
+}
+
+func (ds *directionSource) init(iface, bpfFilter string, captureLength, bufSize int, promisc bool) error {
+	inactiveHandle, err := setupInactiveHandle(iface, captureLength, bufSize, promisc)
+	if err != nil {
+		return fmt.Errorf("Interface '%s': failed to create inactive handle for direction %s: %w", iface, directionToString(ds.direction), err)
+	}
+	defer inactiveHandle.CleanUp()
+
+	PcapMutex.Lock()
+	ds.handle, err = inactiveHandle.Activate()
+	PcapMutex.Unlock()
+	if err != nil {
+		return fmt.Errorf("Interface '%s': failed to activate handle for direction %s: %w", iface, directionToString(ds.direction), err)
+	}
+
+	// link type might be null if the
+	// specified interface does not exist (anymore)
+	if ds.handle.LinkType() == layers.LinkTypeNull {
+		return fmt.Errorf("Interface '%s': has link type null", iface)
+	}
+
+	PcapMutex.Lock()
+	err = ds.handle.SetBPFFilter(bpfFilter)
+	if err != nil {
+		PcapMutex.Unlock()
+		return fmt.Errorf("Interface '%s': failed to set bpf filter to %q: %w", iface, bpfFilter, err)
+	}
+	err = ds.handle.SetDirection(ds.direction)
+	PcapMutex.Unlock()
+	if err != nil {
+		return fmt.Errorf("Interface '%s': failed to set direction to %s: %w", iface, directionToString(ds.direction), err)
+	}
+	return nil
 }
 
 func (p *PcapSource) Init(iface, bpfFilter string, captureLength, bufSize int, promisc bool) error {
+	p.packets = make(chan nextPacketData, 1024)
 
-	for i, direction := range []string{bpfInbound, bpfOutbound} {
+	for i, direction := range []pcap.Direction{pcap.DirectionIn, pcap.DirectionOut} {
 		ds := newDirectionSource(direction)
 
 		// each direction gets half the buffer size specified. This may not accurately reflect the traffic composition, as in there may be more
 		// outbound than inbound traffic.
 		// TODO: to be considered for future iterations of this code: have some form of learning based on historic traffic patterns as to
 		// how the buffer can be accurately sized
-		inactiveHandle, err := setupInactiveHandle(iface, captureLength, bufSize/2, promisc)
+		err := ds.init(iface, bpfFilter, captureLength, bufSize/2, promisc)
 		if err != nil {
-			return fmt.Errorf("Interface '%s': failed to create inactive handle for direction %q: %w", iface, direction, err)
-		}
-		defer inactiveHandle.CleanUp()
-
-		PcapMutex.Lock()
-		ds.handle, err = inactiveHandle.Activate()
-		PcapMutex.Unlock()
-		if err != nil {
-			return fmt.Errorf("Interface '%s': failed to activate handle for direction %q: %w", iface, direction, err)
+			return err
 		}
 
-		// link type might be null if the
-		// specified interface does not exist (anymore)
-		if ds.handle.LinkType() == layers.LinkTypeNull {
-			return fmt.Errorf("Interface '%s': has link type null", iface)
-		}
-
-		// prepend direction bpf filter
-		dirBpfFilter := fmt.Sprintf("%s and (%s)", direction, bpfFilter)
-
-		PcapMutex.Lock()
-		// TODO: currently fails because of https://github.com/nmap/npcap/issues/403
-		// more info: https://tcpdump-workers.tcpdump.narkive.com/HVicNWd4/relation-of-pcap-setdirection-and-inbound-outbound-filter-qualifiers
-		err = ds.handle.SetBPFFilter(dirBpfFilter)
-		PcapMutex.Unlock()
-		if err != nil {
-			return fmt.Errorf("Interface '%s': failed to set bpf filter to %s: %w", iface, dirBpfFilter, err)
-		}
 		p.directions[i] = ds
 	}
-
 	return nil
 }
 
@@ -157,7 +158,9 @@ func (p *PcapSource) Stats() (*CaptureStats, error) {
 
 func (p *PcapSource) Close() {
 	for _, direction := range p.directions {
-		direction.handle.Close()
+		if direction != nil {
+			direction.handle.Close()
+		}
 	}
 }
 
