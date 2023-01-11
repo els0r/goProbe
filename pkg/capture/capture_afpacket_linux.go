@@ -1,5 +1,5 @@
-//go:build linux && !force_pcap
-// +build linux,!force_pcap
+//go:build linux && !force_pcap && !force_pfring
+// +build linux,!force_pcap,!force_pfring
 
 package capture
 

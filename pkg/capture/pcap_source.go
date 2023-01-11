@@ -20,21 +20,15 @@ type directionSource struct {
 	handle    *pcap.Handle
 }
 
-type nextPacketData struct {
-	packet Packet
-	err    error
-}
-
-func newDirectionSource(direction pcap.Direction) *directionSource {
-	return &directionSource{direction: direction}
-}
-
 func (src *directionSource) nextPacket(packets chan<- nextPacketData) {
 	npd := nextPacketData{}
 	defer func() { packets <- npd }()
 
 	// TODO: line is currently commented, since it leads to inconsistencies in captured traffic. Observed when comparing to the
-	// stable goProbe version (which uses ReadPacketData) under the hood.
+	// stable goProbe version (which uses ReadPacketData) under the hood
+	// Needs to be investigated, where the packet data is invalidated. The symptom is: less flows are captured than with ReadPacketData,
+	// while the same packet/traffic volume is recorded. Looking at the dominant flows, they match up rather nicely, so the hypothesis
+	// is that "data" gets overwritten with one of the next packets,
 	// data, ci, err := src.handle.ZeroCopyReadPacketData()
 	data, ci, err := src.handle.ReadPacketData()
 	if err != nil {
@@ -114,7 +108,7 @@ func (p *PcapSource) Init(iface, bpfFilter string, captureLength, bufSize int, p
 	p.packets = make(chan nextPacketData, 1024)
 
 	for i, direction := range []pcap.Direction{pcap.DirectionIn, pcap.DirectionOut} {
-		ds := newDirectionSource(direction)
+		ds := &directionSource{direction: direction}
 
 		// each direction gets half the buffer size specified. This may not accurately reflect the traffic composition, as in there may be more
 		// outbound than inbound traffic.
@@ -128,15 +122,6 @@ func (p *PcapSource) Init(iface, bpfFilter string, captureLength, bufSize int, p
 		p.directions[i] = ds
 	}
 	return nil
-}
-
-// add is a convenience method to total capture stats. This is relevant in the scope of
-// adding statistics from the two directions. The result of the addition is written back
-// to a to reduce allocations
-func add(a, b *CaptureStats) {
-	a.PacketsReceived += b.PacketsReceived
-	a.PacketsDropped += b.PacketsDropped
-	a.PacketsIfDropped += b.PacketsIfDropped
 }
 
 func (p *PcapSource) Stats() (*CaptureStats, error) {
