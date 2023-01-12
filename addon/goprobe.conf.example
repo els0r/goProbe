@@ -1,0 +1,22 @@
+{
+  "db_path": "/tmp/goProbe/db",
+  "interfaces": {
+    "eth0": {
+      "bpf_filter": "not arp and not icmp",
+      "buf_size": 2097152,
+      "promisc": false
+    }
+  },
+  "logging": {
+    "destination": "console",
+    "level": "debug"
+  },
+  "api": {
+    "host": "192.168.1.1",
+    "port": "6060",
+    "request_logging": true,
+    "keys": [
+      "9999999999999999999999999999999999999999999999999999999999999999"
+    ]
+  }
+}

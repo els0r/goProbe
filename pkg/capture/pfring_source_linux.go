@@ -51,6 +51,8 @@ func (p *pfRingDirectionSource) init(iface, bpfFilter string, captureLength, buf
 	if err != nil {
 		return fmt.Errorf("Interface '%s': failed to enable PF ring: %w", iface, p.direction, err)
 	}
+	p.handle = handle
+
 	return nil
 }
 
