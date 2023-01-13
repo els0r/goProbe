@@ -32,8 +32,10 @@ type Key struct {
 
 // ExtraKey is a Key with time and interface information
 type ExtraKey struct {
-	Time  int64
-	Iface string
+	Time     int64
+	Hostname string
+	HostID   uint
+	Iface    string
 	Key
 }
 

@@ -1,9 +1,11 @@
 package query
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -153,7 +155,7 @@ func (s *Statement) log() {
 	defer querylog.Close()
 
 	// opportunistically write statement to disk
-	err = jsoniter.NewEncoder(querylog).Encode(s)
+	_ = jsoniter.NewEncoder(querylog).Encode(s)
 }
 
 // Execute runs the query with the provided parameters
@@ -271,16 +273,36 @@ func (s *Statement) Execute() error {
 	}
 
 	/// DATA PRESENATION ///
-	var mapEntries = make([]Entry, len(agg.aggregatedMap))
+	var results = make([]Result, len(agg.aggregatedMap))
 	var val goDB.Val
+	var key goDB.ExtraKey
 	count := 0
 
-	for mapEntries[count].k, val = range agg.aggregatedMap {
+	for key, val = range agg.aggregatedMap {
+		results[count].Labels.Timestamp = time.Unix(key.Time, 0)
+		results[count].Labels.Iface = key.Iface
+		results[count].Labels.HostID = key.HostID
+		results[count].Labels.Hostname = key.Hostname
 
-		mapEntries[count].nBr = val.NBytesRcvd
-		mapEntries[count].nPr = val.NPktsRcvd
-		mapEntries[count].nBs = val.NBytesSent
-		mapEntries[count].nPs = val.NPktsSent
+		var ok bool
+		results[count].Attributes.SrcIP, ok = netip.AddrFromSlice(key.Sip[:])
+		if !ok {
+			fmt.Println("failed to parse IP: %v", key.Sip)
+			continue
+		}
+		results[count].Attributes.DstIP, ok = netip.AddrFromSlice(key.Dip[:])
+		if !ok {
+			fmt.Println("failed to parse IP: %v", key.Sip)
+			continue
+		}
+		results[count].Attributes.IPProto = key.Protocol
+		results[count].Attributes.DstPort = binary.LittleEndian.Uint16(key.Dport[:])
+
+		// assign counters
+		results[count].Counters.BytesReceived = val.NBytesRcvd
+		results[count].Counters.PacketsReceived = val.NPktsRcvd
+		results[count].Counters.BytesSent = val.NBytesSent
+		results[count].Counters.PacketsSent = val.NPktsSent
 
 		count++
 	}
@@ -292,7 +314,7 @@ func (s *Statement) Execute() error {
 
 	// there is no need to sort influxdb datapoints
 	if s.Format != "influxdb" {
-		By(s.SortBy, s.Direction, s.SortAscending).Sort(mapEntries)
+		By(s.SortBy, s.Direction, s.SortAscending).Sort(results)
 	}
 
 	// Find map from ips to domains for reverse DNS
@@ -310,8 +332,8 @@ func (s *Statement) Execute() error {
 			}
 		}
 
-		for i, l := 0, len(mapEntries); i < l && i < s.ResolveRows; i++ {
-			key := mapEntries[i].k
+		for i, l := 0, len(results); i < l && i < s.ResolveRows; i++ {
+			key := results[i].k
 			if sip != nil {
 				ips = append(ips, sip.ExtractStrings(&key)[0])
 			}
@@ -338,19 +360,19 @@ func (s *Statement) Execute() error {
 
 	// stop timing everything related to the query and store the hits
 	s.Stats.Duration = time.Now().Sub(s.Stats.Start)
-	s.Stats.Hits = len(mapEntries)
+	s.Stats.Hits = len(results)
 
 	// fill the printer
-	if s.NumResults < len(mapEntries) {
-		mapEntries = mapEntries[:s.NumResults]
+	if s.NumResults < len(results) {
+		results = results[:s.NumResults]
 	}
-	s.Stats.HitsDisplayed = len(mapEntries)
+	s.Stats.HitsDisplayed = len(results)
 	for doneFilling := false; !doneFilling; {
 		select {
 		case err = <-memErrors:
 			return fmt.Errorf("%w: %v", errorMemoryBreach, err)
 		default:
-			for _, entry := range mapEntries {
+			for _, entry := range results {
 				printer.AddRow(entry)
 			}
 			doneFilling = true
