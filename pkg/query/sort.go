@@ -3,7 +3,6 @@ package query
 import (
 	"sort"
 
-	"github.com/els0r/goProbe/pkg/goDB"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -18,18 +17,11 @@ const (
 	SortTime
 )
 
-// Entry stores the fields after which we sort (bytes or packets)
-type Entry struct {
-	k        goDB.ExtraKey
-	nBr, nBs uint64
-	nPr, nPs uint64
-}
-
-type by func(e1, e2 *Entry) bool
+type by func(e1, e2 *Result) bool
 
 type entrySorter struct {
-	entries []Entry
-	less    func(e1, e2 *Entry) bool
+	entries Results
+	less    func(e1, e2 *Result) bool
 }
 
 // String implement human-readable printing of the sort order
@@ -75,7 +67,7 @@ func (s SortOrder) UnmarshalJSON(b []byte) error {
 }
 
 // Sort is a method on the function type, By, that sorts the argument slice according to the function
-func (b by) Sort(entries []Entry) {
+func (b by) Sort(entries []Result) {
 	es := &entrySorter{
 		entries: entries,
 		less:    b, // closure for sort order defintion
@@ -105,70 +97,70 @@ func By(sort SortOrder, direction Direction, ascending bool) by {
 		switch direction {
 		case DirectionBoth, DirectionSum:
 			if ascending {
-				return func(e1, e2 *Entry) bool {
-					return e1.nPs+e1.nPr < e2.nPs+e2.nPr
+				return func(e1, e2 *Result) bool {
+					return e1.Counters.PacketsSent+e1.Counters.PacketsReceived < e2.Counters.PacketsSent+e2.Counters.PacketsReceived
 				}
 			}
-			return func(e1, e2 *Entry) bool {
-				return e1.nPs+e1.nPr > e2.nPs+e2.nPr
+			return func(e1, e2 *Result) bool {
+				return e1.Counters.PacketsSent+e1.Counters.PacketsReceived > e2.Counters.PacketsSent+e2.Counters.PacketsReceived
 			}
 		case DirectionIn:
 			if ascending {
-				return func(e1, e2 *Entry) bool {
-					return e1.nPr < e2.nPr
+				return func(e1, e2 *Result) bool {
+					return e1.Counters.PacketsReceived < e2.Counters.PacketsReceived
 				}
 			}
-			return func(e1, e2 *Entry) bool {
-				return e1.nPr > e2.nPr
+			return func(e1, e2 *Result) bool {
+				return e1.Counters.PacketsReceived > e2.Counters.PacketsReceived
 			}
 		case DirectionOut:
 			if ascending {
-				return func(e1, e2 *Entry) bool {
-					return e1.nPs < e2.nPs
+				return func(e1, e2 *Result) bool {
+					return e1.Counters.PacketsSent < e2.Counters.PacketsSent
 				}
 			}
-			return func(e1, e2 *Entry) bool {
-				return e1.nPs > e2.nPs
+			return func(e1, e2 *Result) bool {
+				return e1.Counters.PacketsSent > e2.Counters.PacketsSent
 			}
 		}
 	case SortTraffic:
 		switch direction {
 		case DirectionBoth, DirectionSum:
 			if ascending {
-				return func(e1, e2 *Entry) bool {
-					return e1.nBs+e1.nBr < e2.nBs+e2.nBr
+				return func(e1, e2 *Result) bool {
+					return e1.Counters.BytesSent+e1.Counters.BytesReceived < e2.Counters.BytesSent+e2.Counters.BytesReceived
 				}
 			}
-			return func(e1, e2 *Entry) bool {
-				return e1.nBs+e1.nBr > e2.nBs+e2.nBr
+			return func(e1, e2 *Result) bool {
+				return e1.Counters.BytesSent+e1.Counters.BytesReceived > e2.Counters.BytesSent+e2.Counters.BytesReceived
 			}
 		case DirectionIn:
 			if ascending {
-				return func(e1, e2 *Entry) bool {
-					return e1.nBr < e2.nBr
+				return func(e1, e2 *Result) bool {
+					return e1.Counters.BytesReceived < e2.Counters.BytesReceived
 				}
 			}
-			return func(e1, e2 *Entry) bool {
-				return e1.nBr > e2.nBr
+			return func(e1, e2 *Result) bool {
+				return e1.Counters.BytesReceived > e2.Counters.BytesReceived
 			}
 		case DirectionOut:
 			if ascending {
-				return func(e1, e2 *Entry) bool {
-					return e1.nBs < e2.nBs
+				return func(e1, e2 *Result) bool {
+					return e1.Counters.BytesSent < e2.Counters.BytesSent
 				}
 			}
-			return func(e1, e2 *Entry) bool {
-				return e1.nBs > e2.nBs
+			return func(e1, e2 *Result) bool {
+				return e1.Counters.BytesSent > e2.Counters.BytesSent
 			}
 		}
 	case SortTime:
 		if ascending {
-			return func(e1, e2 *Entry) bool {
-				return e1.k.Time < e2.k.Time
+			return func(e1, e2 *Result) bool {
+				return e1.Labels.Timestamp.Before(e2.Labels.Timestamp)
 			}
 		}
-		return func(e1, e2 *Entry) bool {
-			return e1.k.Time > e2.k.Time
+		return func(e1, e2 *Result) bool {
+			return e1.Labels.Timestamp.After(e2.Labels.Timestamp)
 		}
 	}
 

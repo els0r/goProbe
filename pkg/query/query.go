@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/els0r/goProbe/pkg/goDB"
-	"github.com/els0r/goProbe/pkg/query/dns"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -287,12 +286,12 @@ func (s *Statement) Execute() error {
 		var ok bool
 		results[count].Attributes.SrcIP, ok = netip.AddrFromSlice(key.Sip[:])
 		if !ok {
-			fmt.Println("failed to parse IP: %v", key.Sip)
+			fmt.Printf("failed to parse IP: %v\n", key.Sip)
 			continue
 		}
 		results[count].Attributes.DstIP, ok = netip.AddrFromSlice(key.Dip[:])
 		if !ok {
-			fmt.Println("failed to parse IP: %v", key.Sip)
+			fmt.Printf("failed to parse IP: %v\n", key.Sip)
 			continue
 		}
 		results[count].Attributes.IPProto = key.Protocol
@@ -318,8 +317,8 @@ func (s *Statement) Execute() error {
 	}
 
 	// Find map from ips to domains for reverse DNS
-	var ips2domains map[string]string
-	var resolveDuration time.Duration
+	// var ips2domains map[string]string
+	// var resolveDuration time.Duration
 	if s.Resolve && goDB.HasDNSAttributes(s.Query.Attributes) {
 		var ips []string
 		var sip, dip goDB.Attribute
@@ -333,58 +332,58 @@ func (s *Statement) Execute() error {
 		}
 
 		for i, l := 0, len(results); i < l && i < s.ResolveRows; i++ {
-			key := results[i].k
+			attr := results[i].Attributes
 			if sip != nil {
-				ips = append(ips, sip.ExtractStrings(&key)[0])
+				ips = append(ips, attr.SrcIP.String())
 			}
 			if dip != nil {
-				ips = append(ips, dip.ExtractStrings(&key)[0])
+				ips = append(ips, attr.DstIP.String())
 			}
 		}
 
-		resolveStart := time.Now()
-		ips2domains = dns.TimedReverseLookup(ips, s.ResolveTimeout)
-		resolveDuration = time.Now().Sub(resolveStart)
+		// resolveStart := time.Now()
+		// ips2domains = dns.TimedReverseLookup(ips, s.ResolveTimeout)
+		// resolveDuration = time.Since(resolveStart)
 	}
 
 	// get the right printer
-	var printer TablePrinter
-	printer, err = s.NewTablePrinter(
-		ips2domains,
-		agg.totals,
-		count,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to create printer: %s", err)
-	}
+	// var printer TablePrinter
+	// printer, err = s.NewTablePrinter(
+	// 	ips2domains,
+	// 	agg.totals,
+	// 	count,
+	// )
+	// if err != nil {
+	// 	return fmt.Errorf("failed to create printer: %s", err)
+	// }
 
 	// stop timing everything related to the query and store the hits
 	s.Stats.Duration = time.Now().Sub(s.Stats.Start)
 	s.Stats.Hits = len(results)
 
 	// fill the printer
-	if s.NumResults < len(results) {
-		results = results[:s.NumResults]
-	}
-	s.Stats.HitsDisplayed = len(results)
-	for doneFilling := false; !doneFilling; {
-		select {
-		case err = <-memErrors:
-			return fmt.Errorf("%w: %v", errorMemoryBreach, err)
-		default:
-			for _, entry := range results {
-				printer.AddRow(entry)
-			}
-			doneFilling = true
-		}
-	}
-	printer.Footer(s.Conditions, tSpanFirst, tSpanLast, s.Stats.Duration, resolveDuration)
+	// if s.NumResults < len(results) {
+	// 	results = results[:s.NumResults]
+	// }
+	// s.Stats.HitsDisplayed = len(results)
+	// for doneFilling := false; !doneFilling; {
+	// 	select {
+	// 	case err = <-memErrors:
+	// 		return fmt.Errorf("%w: %v", errorMemoryBreach, err)
+	// 	default:
+	// 		for _, entry := range results {
+	// 			printer.AddRow(entry)
+	// 		}
+	// 		doneFilling = true
+	// 	}
+	// }
+	// printer.Footer(s.Conditions, tSpanFirst, tSpanLast, s.Stats.Duration, resolveDuration)
 
-	// print the data
-	err = printer.Print()
-	if err != nil {
-		return err
-	}
+	// // print the data
+	// err = printer.Print()
+	// if err != nil {
+	// 	return err
+	// }
 
 	return nil
 }
@@ -399,10 +398,10 @@ func createWorkManager(dbPath string, iface string, tfirst, tlast int64, query *
 }
 
 func (s *Statement) noResults() error {
-	if s.External || s.Format == "json" {
-		msg := ErrorMsgExternal{Status: "empty", Message: errorNoResults.Error()}
-		return jsoniter.NewEncoder(s.Output).Encode(msg)
-	}
+	// if s.External || s.Format == "json" {
+	// 	msg := ErrorMsgExternal{Status: "empty", Message: errorNoResults.Error()}
+	// 	return jsoniter.NewEncoder(s.Output).Encode(msg)
+	// }
 	_, err := fmt.Fprintf(s.Output, "%s\n", errorNoResults.Error())
 	return err
 }
