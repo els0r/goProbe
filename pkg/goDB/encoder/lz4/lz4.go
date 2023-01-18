@@ -66,10 +66,7 @@ int cDecompress(char *src, size_t srcSize, char *dst, size_t dstSize) {
 
 	// check if context creation was successful
 	size_t const dctxStatus = LZ4F_createDecompressionContext(&ctx, LZ4F_VERSION);
-	if (LZ4F_isError(dctxStatus)) {
-		return -1;
-	}
-	if (!ctx) {
+	if (LZ4F_isError(dctxStatus) || !ctx) {
 		return -1;
 	}
 
