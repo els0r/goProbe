@@ -134,11 +134,11 @@ func recompressFile(path string, dryRun bool) error {
 		)
 		origData, err := oldFile.ReadBlock(block.Timestamp)
 		if err != nil {
-			logger.Error("failed to read block")
+			logger.Errorf("failed to read block: %v", err)
 			continue
 		}
 		if block.EncoderType == encoders.EncoderTypeLZ4Custom {
-			logger.Info("found lz4 custom block")
+			logger.Info("found lz4 custom block. Converting")
 		}
 		err = newFile.WriteBlock(block.Timestamp, origData)
 		if err != nil {

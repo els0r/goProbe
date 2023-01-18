@@ -9,7 +9,6 @@ type Option func(*GPFile)
 func WithEncoder(e encoders.Type) Option {
 	return func(g *GPFile) {
 		g.defaultEncoderType = e
-
 		return
 	}
 }

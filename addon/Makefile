@@ -68,27 +68,36 @@ fetch:
 	go mod tidy
 	go mod download
 
-build:
-
+build_version:
 
 	## VERSION ###
 	echo "*** setting version information ***"
 	COMMIT_SHA=$(COMMIT_SHA) go generate $(VERSION_PATH)
 	echo "commit is $(COMMIT_SHA)"
 
+build_goprobe:
+
 	## GO CODE COMPILATION ##
 	echo "*** compiling $(GO_PRODUCT) ***"
 	echo "$(GPBUILD) $(BASEPATH)/cmd/$(GO_PRODUCT)"
 	$(GPBUILD) $(BASEPATH)/cmd/$(GO_PRODUCT)
 
+build_goquery:
+
 	echo "*** compiling $(GO_QUERY) ***"
 	$(GPBUILD) $(BASEPATH)/cmd/$(GO_QUERY)
+
+build_goconvert:
 
 	echo "*** compiling goConvert ***"
 	$(GPBUILD) $(BASEPATH)/cmd/goConvert
 
+build_legacy:
+
 	echo "*** compiling legacy DB conversion tool ***"
 	$(GPBUILD) $(BASEPATH)/cmd/legacy
+
+build: build_version build_goprobe build_goquery build_goconvert build_legacy
 
 install: go_install
 
@@ -102,10 +111,10 @@ go_install:
 	mkdir -p absolute/etc/systemd/system     && chmod 755 absolute/etc/systemd/system
 
 	echo "*** installing binaries ***"
-	mv $(GOPATH)/bin/goProbe 	absolute/bin
-	mv $(GOPATH)/bin/goQuery   	absolute/bin
-	mv $(GOPATH)/bin/goConvert  absolute/bin
-	mv $(GOPATH)/bin/legacy     absolute/bin
+	cp $(GOPATH)/bin/goProbe 	absolute/bin
+	cp $(GOPATH)/bin/goQuery   	absolute/bin
+	cp $(GOPATH)/bin/goConvert  absolute/bin
+	cp $(GOPATH)/bin/legacy     absolute/bin
 
 	# systemd service definition
 	cp goprobe.service absolute/etc/systemd/system/goprobe.service

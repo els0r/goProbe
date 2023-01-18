@@ -17,7 +17,6 @@ var testEncoders = []encoders.Type{
 }
 
 func TestNewByString(t *testing.T) {
-
 	var tests = []struct {
 		name              string
 		encoderTypeString string
