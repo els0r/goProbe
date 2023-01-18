@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/els0r/goProbe/pkg/goDB/encoder"
@@ -50,21 +51,37 @@ type GPFile struct {
 	lastSeekPos int64
 
 	// defaultEncoderType governs how data blocks are (de-)compressed by default
-	defaultEncoderType encoders.Type
-	defaultEncoder     encoder.Encoder
+	defaultEncoderType                 encoders.Type
+	defaultHighCardintalityEncoderType encoders.Type
+	defaultEncoder                     encoder.Encoder
 
 	// accessMode denotes if the file is opened for read or write operations (to avoid
 	// race conditions and unpredictable behavior, only one mode is possible at a time)
 	accessMode int
 }
 
+var defaultHighCardinalityEncoderType = encoders.EncoderTypeNull
+
+func isHighCardinalityColumn(filename string) bool {
+	fn := strings.ToLower(strings.TrimSpace(filepath.Base(filename)))
+	// crude, for now, since the prefix has to coincide with the `columnFileNames` in
+	// pkg/goDB/Query.go
+	for _, prefix := range []string{"bytes_", "pkts_"} {
+		if strings.HasPrefix(fn, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
 // New returns a new GPFile object to read and write goProbe flow data
 func New(filename string, accessMode int, options ...Option) (*GPFile, error) {
 
 	g := &GPFile{
-		filename:           filename,
-		accessMode:         accessMode,
-		defaultEncoderType: defaultEncoderType,
+		filename:                           filename,
+		accessMode:                         accessMode,
+		defaultEncoderType:                 defaultEncoderType,
+		defaultHighCardintalityEncoderType: defaultHighCardinalityEncoderType,
 	}
 
 	// apply functional options
@@ -72,8 +89,13 @@ func New(filename string, accessMode int, options ...Option) (*GPFile, error) {
 		opt(g)
 	}
 
-	// Initialize default encoder based on requested encoder type
+	// Initialize default encoder based on requested encoder type. If the colunn has
+	// a high-cardinality, the default encoder is overwritten with the high cardinality
+	// encoder
 	var err error
+	if isHighCardinalityColumn(filename) {
+		g.defaultEncoderType = g.defaultHighCardintalityEncoderType
+	}
 	if g.defaultEncoder, err = encoder.New(g.defaultEncoderType); err != nil {
 		return nil, err
 	}
@@ -138,9 +160,18 @@ func (g *GPFile) ReadBlock(timestamp int64) ([]byte, error) {
 	}
 
 	// Perform decompression of data and store in output slice
-	blockData := make([]byte, block.Len)
+	var nRead int
+
 	uncompData := make([]byte, block.RawLen)
-	nRead, err := g.defaultEncoder.Decompress(blockData, uncompData, g.file)
+	if block.EncoderType != encoders.EncoderTypeNull {
+		blockData := make([]byte, block.Len)
+		nRead, err = g.defaultEncoder.Decompress(blockData, uncompData, g.file)
+	} else {
+		// micro-optimization that saves the allocation of blockData for decompression
+		// in the Null decompression case, since it is essentially just a byte read
+		// and the src bytes aren't used
+		nRead, err = g.defaultEncoder.Decompress(nil, uncompData, g.file)
+	}
 	if err != nil {
 		return nil, err
 	}

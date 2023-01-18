@@ -138,7 +138,7 @@ func recompressFile(path string, dryRun bool) error {
 			continue
 		}
 		if block.EncoderType == encoders.EncoderTypeLZ4Custom {
-			logger.Info("found lz4 custom block. Converting")
+			logger.Debug("found lz4 custom block. Converting")
 		}
 		err = newFile.WriteBlock(block.Timestamp, origData)
 		if err != nil {
