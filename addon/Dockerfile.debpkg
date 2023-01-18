@@ -6,6 +6,15 @@ ARG GO_PRODUCT=goProbe
 
 WORKDIR /build
 
+# build lz4 so it can be linked against
+ARG LZ4_VERSION = 1.9.4
+ARG LZ4_URL     = https://github.com/lz4/lz4/archive/refs/tags/v${LZ4_VERSION}.tar.gz
+ARG LZ4_LIB     = lz4-${LZ4_VERSION}
+
+RUN curl -LO ${LZ4_URL} && \
+    tar xf v${LZ4_VERSION}.tar.gz && \
+    cd ${LZ4_LIB} && make && make install
+
 RUN git clone https://github.com/els0r/goProbe \
  && cd goProbe/addon \
  && make all \
