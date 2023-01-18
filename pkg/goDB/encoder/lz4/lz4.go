@@ -95,6 +95,8 @@ import (
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 )
 
+const defaultCompressionLevel = 4
+
 // Encoder compresses data with the LZ4 algorithm (omitting certain bounds-checks for performance reasons)
 type Encoder struct {
 	// compression level
@@ -106,8 +108,9 @@ type Option func(*Encoder)
 
 // New creates a new LZ4 Encoder that can be used to compress/decompress data
 func New(opts ...Option) *Encoder {
-	// compression level of 512 is used by default
-	l := &Encoder{level: 512}
+	// compression level of 4 is used by default as it offers higher compression speeds than maximum compression,
+	// while retaining an agreeable compression ratio
+	l := &Encoder{level: defaultCompressionLevel}
 
 	// apply options
 	for _, opt := range opts {

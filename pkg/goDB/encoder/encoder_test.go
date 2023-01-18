@@ -114,28 +114,6 @@ func BenchmarkEncodersCompress(b *testing.B) {
 	}
 }
 
-func BenchmarkLZ4LevelsCompress(b *testing.B) {
-	var nBytes = int64(len(encodingCorpus))
-
-	for i := 0; i <= 9; i++ {
-		level := 1 << i
-		b.Run(encoders.EncoderTypeLZ4.String()+fmt.Sprintf("-lvl-%d", level), func(b *testing.B) {
-			enc := lz4.New(lz4.WithCompressionLevel(level))
-
-			b.ReportAllocs()
-			b.SetBytes(nBytes)
-			b.ResetTimer()
-			buf := bytes.NewBuffer(nil)
-
-			for i := 0; i < b.N; i++ {
-				enc.Compress(encodingCorpus, buf)
-			}
-
-			_ = buf
-		})
-	}
-}
-
 func BenchmarkEncodersDecompress(b *testing.B) {
 	var nBytes = int64(len(encodingCorpus))
 
@@ -163,6 +141,28 @@ func BenchmarkEncodersDecompress(b *testing.B) {
 				_ = in
 				_ = out
 			}
+		})
+	}
+}
+
+func BenchmarkLZ4LevelsCompress(b *testing.B) {
+	var nBytes = int64(len(encodingCorpus))
+
+	for i := 0; i <= 9; i++ {
+		level := 1 << i
+		b.Run(encoders.EncoderTypeLZ4.String()+fmt.Sprintf("-lvl-%d", level), func(b *testing.B) {
+			enc := lz4.New(lz4.WithCompressionLevel(level))
+
+			b.ReportAllocs()
+			b.SetBytes(nBytes)
+			b.ResetTimer()
+			buf := bytes.NewBuffer(nil)
+
+			for i := 0; i < b.N; i++ {
+				enc.Compress(encodingCorpus, buf)
+			}
+
+			_ = buf
 		})
 	}
 }
