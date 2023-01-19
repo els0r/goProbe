@@ -66,7 +66,10 @@ int cDecompress(char *src, size_t srcSize, char *dst, size_t dstSize) {
 
 	// check if context creation was successful
 	size_t const dctxStatus = LZ4F_createDecompressionContext(&ctx, LZ4F_VERSION);
-	if (LZ4F_isError(dctxStatus) || !ctx) {
+	if (LZ4F_isError(dctxStatus)) {
+		return dctxStatus;
+	}
+	if (!ctx) {
 		return -1;
 	}
 
@@ -77,7 +80,7 @@ int cDecompress(char *src, size_t srcSize, char *dst, size_t dstSize) {
 	LZ4F_freeDecompressionContext(ctx);
 
 	if (LZ4F_isError(result)) {
-		return -1;
+		return result;
 	}
 
 	// LZ4_decompress writes the amount of decompressed bytes into dSize
@@ -151,12 +154,12 @@ func (e *Encoder) Compress(data []byte, dst io.Writer) (n int, err error) {
 	// properly handle error codes from lz4
 	if compLen < 0 {
 		errName := C.GoString(C.getErrorName(C.int(compLen)))
-		return n, fmt.Errorf("compression returned error: %s (%d)", errName, compLen)
+		return n, fmt.Errorf("lz4: compression failed: %s (%d)", errName, compLen)
 	}
 
 	// sanity check whether the computed worst case has been exceeded in C call
 	if len(dstBuf) < compLen {
-		return n, errors.New("buffer size mismatch for compressed data")
+		return n, errors.New("lz4: buffer size mismatch for compressed data")
 	}
 
 	if n, err = dst.Write(dstBuf[0:compLen]); err != nil {
@@ -176,7 +179,7 @@ func (e *Encoder) Decompress(in, out []byte, src io.Reader) (n int, err error) {
 		return 0, err
 	}
 	if nBytesRead != len(in) {
-		return 0, errors.New("incorrect number of bytes read from data source")
+		return 0, errors.New("lz4: incorrect number of bytes read from data source")
 	}
 
 	// decompress data
@@ -187,7 +190,8 @@ func (e *Encoder) Decompress(in, out []byte, src io.Reader) (n int, err error) {
 		C.size_t(len(out))),
 	)
 	if nBytesDecompressed < 0 {
-		return 0, errors.New("invalid LZ4 data detected during decompression")
+		errName := C.GoString(C.getErrorName(C.int(nBytesDecompressed)))
+		return 0, fmt.Errorf("lz4: decompression failed: %s (%d)", errName, nBytesDecompressed)
 	}
 
 	return nBytesDecompressed, nil
