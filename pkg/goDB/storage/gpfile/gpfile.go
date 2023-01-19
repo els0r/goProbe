@@ -212,6 +212,23 @@ func (g *GPFile) WriteBlock(timestamp int64, blockData []byte) error {
 	if err != nil {
 		return err
 	}
+	encType := g.defaultEncoderType
+
+	// if compressed size is bigger than input size, make sure to rewrite the bytes
+	// with NullCompression to optimize storage and increase read speed
+	if nWritten > len(blockData) {
+		encType = encoders.EncoderTypeNull
+
+		enc, err := encoder.New(encType)
+		if err != nil {
+			return fmt.Errorf("failed to select %s encoder for optimal compression ratio: %w", encType, err)
+		}
+		g.fileBuffer.Reset(g.file)
+		nWritten, err = enc.Compress(blockData, g.fileBuffer)
+		if err != nil {
+			return fmt.Errorf("failed to re-encode with %s encoder: %w", encType, err)
+		}
+	}
 	if err = g.fileBuffer.Flush(); err != nil {
 		return err
 	}
@@ -221,7 +238,7 @@ func (g *GPFile) WriteBlock(timestamp int64, blockData []byte) error {
 		Offset:      g.header.CurrentOffset,
 		Len:         nWritten,
 		RawLen:      len(blockData),
-		EncoderType: g.defaultEncoderType,
+		EncoderType: encType,
 	}
 	g.header.CurrentOffset += int64(nWritten)
 
