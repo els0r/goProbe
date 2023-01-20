@@ -33,6 +33,10 @@ const (
 
 	// DBWriteInterval defines the periodic write out interval of goProbe
 	DBWriteInterval int64 = 300
+
+	// MetaInfoFileName exposes the name of the file from which timestamp information is
+	// obtained for the query plan
+	MetaInfoFileName = "bytes_rcvd.gpf"
 )
 
 // DBWorkload stores all relevant parameters to load a block and execute a query on it

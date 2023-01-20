@@ -51,18 +51,18 @@ type GPFile struct {
 	lastSeekPos int64
 
 	// defaultEncoderType governs how data blocks are (de-)compressed by default
-	defaultEncoderType                 encoders.Type
-	defaultHighCardintalityEncoderType encoders.Type
-	defaultEncoder                     encoder.Encoder
+	defaultEncoderType            encoders.Type
+	defaultHighEntropyEncoderType encoders.Type
+	defaultEncoder                encoder.Encoder
 
 	// accessMode denotes if the file is opened for read or write operations (to avoid
 	// race conditions and unpredictable behavior, only one mode is possible at a time)
 	accessMode int
 }
 
-var defaultHighCardinalityEncoderType = encoders.EncoderTypeNull
+var defaultHighEntropyEncoderType = encoders.EncoderTypeNull
 
-func isHighCardinalityColumn(filename string) bool {
+func isHighEntropyColumn(filename string) bool {
 	fn := strings.ToLower(strings.TrimSpace(filepath.Base(filename)))
 	// crude, for now, since the prefix has to coincide with the `columnFileNames` in
 	// pkg/goDB/Query.go
@@ -78,10 +78,10 @@ func isHighCardinalityColumn(filename string) bool {
 func New(filename string, accessMode int, options ...Option) (*GPFile, error) {
 
 	g := &GPFile{
-		filename:                           filename,
-		accessMode:                         accessMode,
-		defaultEncoderType:                 defaultEncoderType,
-		defaultHighCardintalityEncoderType: defaultHighCardinalityEncoderType,
+		filename:                      filename,
+		accessMode:                    accessMode,
+		defaultEncoderType:            defaultEncoderType,
+		defaultHighEntropyEncoderType: defaultHighEntropyEncoderType,
 	}
 
 	// apply functional options
@@ -93,8 +93,8 @@ func New(filename string, accessMode int, options ...Option) (*GPFile, error) {
 	// a high-cardinality, the default encoder is overwritten with the high cardinality
 	// encoder
 	var err error
-	if isHighCardinalityColumn(filename) {
-		g.defaultEncoderType = g.defaultHighCardintalityEncoderType
+	if isHighEntropyColumn(filename) {
+		g.defaultEncoderType = g.defaultHighEntropyEncoderType
 	}
 	if g.defaultEncoder, err = encoder.New(g.defaultEncoderType); err != nil {
 		return nil, err

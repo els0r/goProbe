@@ -2,29 +2,30 @@
 package lz4
 
 /*
-#cgo linux LDFLAGS: -llz4 -O3 -g
-#cgo darwin,amd64 LDFLAGS: -llz4 -O3 -g
-#cgo darwin,arm64 LDFLAGS: -llz4 -O3 -g
+#cgo linux CFLAGS: -O2 -g
+#cgo linux LDFLAGS: -llz4
+#cgo darwin,amd64 LDFLAGS: -llz4
+#cgo darwin,arm64 LDFLAGS: -llz4
 #include <stdlib.h>
 #include <stdio.h>
 #include "lz4frame.h"
 
-int cCompress(char *src, size_t srcSize, char *dst, size_t dstSize, int level) {
+size_t cCompress(const void *src, size_t srcSize, void *dst, size_t dstSize, int level) {
 	// initialize the frame compression preferences
 	// taken from https://github.com/lz4/lz4/blob/dev/examples/frameCompress.c
 	const LZ4F_preferences_t prefs = {
 		{
-			LZ4F_default,
+			LZ4F_max256KB,
 			LZ4F_blockLinked,
 			LZ4F_noContentChecksum,
 			LZ4F_frame,
-			0,
+			srcSize,
 			0,
 			LZ4F_noBlockChecksum,
 		},
 		level,
-		0,
-		0,
+		1,
+		1,
 		{ 0, 0, 0 },
 	};
 	return LZ4F_compressFrame(dst, dstSize, src, srcSize, &prefs);
@@ -33,20 +34,20 @@ int cCompress(char *src, size_t srcSize, char *dst, size_t dstSize, int level) {
 size_t getCompressBound(size_t srcSize, int level) {
 	const LZ4F_preferences_t prefs = {
 		{
-			LZ4F_default,
+			LZ4F_max256KB,
 			LZ4F_blockLinked,
 			LZ4F_noContentChecksum,
 			LZ4F_frame,
-			0,
+			srcSize,
 			0,
 			LZ4F_noBlockChecksum,
 		},
 		level,
-		0,
-		0,
+		1,
+		1,
 		{ 0, 0, 0 },
 	};
-	LZ4F_compressFrameBound(srcSize, &prefs);
+	return LZ4F_compressFrameBound(srcSize, &prefs);
 }
 
 static const LZ4F_decompressOptions_t decompOpts = {
@@ -60,7 +61,7 @@ const char* getErrorName(int code) {
 	return LZ4F_getErrorName(code);
 }
 
-int cDecompress(char *src, size_t srcSize, char *dst, size_t dstSize) {
+size_t cDecompress(const void *src, size_t srcSize, void *dst, size_t dstSize) {
 	// create decompression context
 	LZ4F_dctx* ctx;
 
@@ -74,14 +75,22 @@ int cDecompress(char *src, size_t srcSize, char *dst, size_t dstSize) {
 	}
 
 	// actual decompression
-	size_t result = LZ4F_decompress(ctx, dst, &dstSize, src, &srcSize, &decompOpts);
+	// read from src until there are no more bytes to be read
+	const void* srcPtr = (const char*)src;
+	const void* const srcEnd = (const char*)src + srcSize;
+	size_t result = 1;
+	while (srcPtr < srcEnd && result != 0) {
+		size_t sSize = (const char*)srcEnd - (const char*)srcPtr;
+
+		result = LZ4F_decompress(ctx, dst, &dstSize, src, &sSize, &decompOpts);
+		if (LZ4F_isError(result)) {
+			return result;
+		}
+		srcPtr = (const char*)srcPtr + sSize;
+	}
 
 	// release context
 	LZ4F_freeDecompressionContext(ctx);
-
-	if (LZ4F_isError(result)) {
-		return result;
-	}
 
 	// LZ4_decompress writes the amount of decompressed bytes into dSize
 	return dstSize;
@@ -144,9 +153,9 @@ func (e *Encoder) Compress(data []byte, dst io.Writer) (n int, err error) {
 	var dstBuf = make([]byte, dstCapacity)
 
 	var compLen = int(C.cCompress(
-		(*C.char)(unsafe.Pointer(&data[0])),
+		unsafe.Pointer(&data[0]),
 		C.size_t(len(data)),
-		(*C.char)(unsafe.Pointer(&dstBuf[0])),
+		unsafe.Pointer(&dstBuf[0]),
 		C.size_t(dstCapacity),
 		C.int(e.level)),
 	)
@@ -161,6 +170,9 @@ func (e *Encoder) Compress(data []byte, dst io.Writer) (n int, err error) {
 	if len(dstBuf) < compLen {
 		return n, errors.New("lz4: buffer size mismatch for compressed data")
 	}
+
+	// TODO: Debug. Remove
+	fmt.Printf("comp: %x\n", dstBuf[:4])
 
 	if n, err = dst.Write(dstBuf[0:compLen]); err != nil {
 		return n, err
@@ -182,11 +194,14 @@ func (e *Encoder) Decompress(in, out []byte, src io.Reader) (n int, err error) {
 		return 0, errors.New("lz4: incorrect number of bytes read from data source")
 	}
 
+	// TODO: Debug. Remove
+	fmt.Printf("dec: %x\n", in[:4])
+
 	// decompress data
 	nBytesDecompressed := int(C.cDecompress(
-		(*C.char)(unsafe.Pointer(&in[0])),
+		unsafe.Pointer(&in[0]),
 		C.size_t(len(in)),
-		(*C.char)(unsafe.Pointer(&out[0])),
+		unsafe.Pointer(&out[0]),
 		C.size_t(len(out))),
 	)
 	if nBytesDecompressed < 0 {

@@ -18,7 +18,7 @@ func WithEncoder(e encoders.Type) Option {
 // internally
 func WithHighCardinalityEncoder(e encoders.Type) Option {
 	return func(g *GPFile) {
-		g.defaultHighCardintalityEncoderType = e
+		g.defaultHighEntropyEncoderType = e
 		return
 	}
 }
