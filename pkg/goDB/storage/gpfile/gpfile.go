@@ -46,6 +46,9 @@ type GPFile struct {
 	// header denotes the block header (list of blocks) contained in this file
 	header storage.BlockHeader
 
+	// typeWidth stores the size of the data type written to the file
+	typeWidth int
+
 	// Current / last seek position in file for read operation, used for optimized
 	// sequential read
 	lastSeekPos int64
@@ -63,20 +66,34 @@ type GPFile struct {
 var defaultHighEntropyEncoderType = encoders.EncoderTypeNull
 
 func isHighEntropyColumn(filename string) bool {
-	fn := strings.ToLower(strings.TrimSpace(filepath.Base(filename)))
 	// crude, for now, since the prefix has to coincide with the `columnFileNames` in
 	// pkg/goDB/Query.go
 	for _, prefix := range []string{"bytes_", "pkts_"} {
-		if strings.HasPrefix(fn, prefix) {
+		if strings.HasPrefix(filename, prefix) {
 			return true
 		}
 	}
 	return false
 }
 
+// this function presumes that filename already follows the column naming convention. It is
+// meant to be used only inside the New() method
+func calculateTypeWidth(filename string) int {
+	if strings.HasPrefix(filename, "sip") || strings.HasPrefix(filename, "dip") {
+		return 16
+	}
+	if strings.HasPrefix(filename, "dport") {
+		return 2
+	}
+	if strings.HasPrefix(filename, "proto") {
+		return 1
+	}
+	// counters
+	return 4
+}
+
 // New returns a new GPFile object to read and write goProbe flow data
 func New(filename string, accessMode int, options ...Option) (*GPFile, error) {
-
 	g := &GPFile{
 		filename:                      filename,
 		accessMode:                    accessMode,
@@ -89,12 +106,17 @@ func New(filename string, accessMode int, options ...Option) (*GPFile, error) {
 		opt(g)
 	}
 
+	fileBaseName := strings.ToLower(strings.TrimSpace(filepath.Base(filename)))
+
 	// Initialize default encoder based on requested encoder type. If the colunn has
 	// a high-cardinality, the default encoder is overwritten with the high cardinality
 	// encoder
 	var err error
-	if isHighEntropyColumn(filename) {
+	if isHighEntropyColumn(fileBaseName) {
 		g.defaultEncoderType = g.defaultHighEntropyEncoderType
+		g.typeWidth = 4
+	} else {
+		g.typeWidth = calculateTypeWidth(fileBaseName)
 	}
 	if g.defaultEncoder, err = encoder.New(g.defaultEncoderType); err != nil {
 		return nil, err
@@ -185,6 +207,10 @@ func (g *GPFile) ReadBlock(timestamp int64) ([]byte, error) {
 
 // WriteBlock writes data for a given timestamp to the file
 func (g *GPFile) WriteBlock(timestamp int64, blockData []byte) error {
+	bl, exists := g.header.Blocks[timestamp]
+	if exists {
+		return fmt.Errorf("timestamp %d already present: offset=%d", timestamp, bl.Offset)
+	}
 
 	// Check that the file has been opened in the correct mode
 	if g.accessMode != ModeWrite {
@@ -195,7 +221,7 @@ func (g *GPFile) WriteBlock(timestamp int64, blockData []byte) error {
 	if len(blockData) == 0 {
 		g.header.Blocks[timestamp] = storage.Block{
 			Offset:      g.header.CurrentOffset,
-			EncoderType: g.defaultEncoderType,
+			EncoderType: encoders.EncoderTypeNull,
 		}
 		return g.writeHeader()
 	}
@@ -259,6 +285,21 @@ func (g *GPFile) Delete() error {
 		return err
 	}
 	return os.Remove(g.filename + HeaderFileSuffix)
+}
+
+// Filename exposes the location of the GPF file
+func (g *GPFile) Filename() string {
+	return g.filename
+}
+
+// DefaultEncoder exposes the default encoding of the GPF file
+func (g *GPFile) DefaultEncoder() encoder.Encoder {
+	return g.defaultEncoder
+}
+
+// TypeWidth returns the size of the data type stored
+func (g *GPFile) TypeWidth() int {
+	return g.typeWidth
 }
 
 ////////////////////////////////////////////////////////////////////////////////
