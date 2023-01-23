@@ -99,12 +99,9 @@ size_t cDecompress(const void *src, size_t srcSize, void *dst, size_t dstSize) {
 import "C"
 
 import (
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
-	"math/rand"
-	"os"
 	"unsafe"
 
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
@@ -174,26 +171,9 @@ func (e *Encoder) Compress(data []byte, dst io.Writer) (n int, err error) {
 		return n, errors.New("lz4: buffer size mismatch for compressed data")
 	}
 
-	if n, err = dst.Write(dstBuf[0:compLen]); err != nil {
+	if n, err = dst.Write(dstBuf[:compLen]); err != nil {
 		return n, err
 	}
-
-	// TODO:
-	// 	Debug.Remove
-	fid := rand.Int31()
-	fmt.Printf("%d comp: raw %x; len=%d\n", fid, data, len(data))
-	fmt.Printf("%d comp: [%x] %x; len=%d; compLen=%d; n=%d\n", fid, dstBuf[:4], dstBuf[4:compLen], len(dstBuf), compLen, n)
-
-	err = os.MkdirAll("/tmp/debug_files", 0755)
-	if err != nil {
-		return n, err
-	}
-	fname := fmt.Sprintf("/tmp/debug_files/%d", fid)
-	err = os.WriteFile(fname, dstBuf[0:compLen], 0644)
-	if err != nil {
-		return n, err
-	}
-	//
 
 	return n, nil
 }
@@ -211,13 +191,6 @@ func (e *Encoder) Decompress(in, out []byte, src io.Reader) (n int, err error) {
 		return 0, errors.New("lz4: incorrect number of bytes read from data source")
 	}
 
-	// TODO: Debug. Remove
-	header := binary.BigEndian.Uint32(in[:4])
-
-	if header != uint32(0x04224d18) {
-		fmt.Printf("dec: [%x] %x\n", header, in[4:])
-	}
-
 	// decompress data
 	nBytesDecompressed := int(C.cDecompress(
 		unsafe.Pointer(&in[0]),
@@ -225,9 +198,6 @@ func (e *Encoder) Decompress(in, out []byte, src io.Reader) (n int, err error) {
 		unsafe.Pointer(&out[0]),
 		C.size_t(len(out))),
 	)
-	if header != uint32(0x04224d18) {
-		fmt.Printf("dec: payload %x\n", out)
-	}
 	if nBytesDecompressed < 0 {
 		errName := C.GoString(C.getErrorName(C.int(nBytesDecompressed)))
 		return 0, fmt.Errorf("lz4: decompression failed: %s (%d)", errName, nBytesDecompressed)

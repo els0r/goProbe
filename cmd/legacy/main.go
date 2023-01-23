@@ -140,7 +140,7 @@ func recompressFile(path string, dryRun bool) error {
 		)
 		origData, err := oldFile.ReadBlock(block.Timestamp)
 		if err != nil {
-			logger.Errorf("failed to read block: %v", err)
+			logger.Errorf("failed to read block (type: %v): %v", block.EncoderType, err)
 			continue
 		}
 		if block.EncoderType == encoders.EncoderTypeLZ4Custom {
@@ -174,22 +174,33 @@ func recompressFile(path string, dryRun bool) error {
 	return nil
 }
 
+type timedBlock struct {
+	ts   int64
+	data []byte
+}
+
 func convertLegacy(path string, dryRun bool) error {
+
+	if strings.HasPrefix(strings.ToLower(filepath.Base(path)), "l7proto") && !retainL7proto {
+		logrus.StandardLogger().Infof("obsolete layer 7 protocol column detected. Removing file")
+		if !dryRun {
+			if err := os.Remove(path); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
 
 	// Open the legacy file
 	legacyFile, err := NewLegacyGPFile(path)
 	if err != nil {
 		return err
 	}
-	defer legacyFile.Close()
-
-	if strings.HasPrefix(strings.ToLower(filepath.Base(legacyFile.filename)), "l7proto") && !retainL7proto {
-		logrus.StandardLogger().Infof("obsolete layer 7 protocol column detected. Removing file")
-		if err := os.Remove(path); err != nil {
-			return err
+	defer func() {
+		if closeErr := legacyFile.Close(); closeErr != nil && err == nil {
+			err = closeErr
 		}
-		return nil
-	}
+	}()
 
 	tmpPath := path + ".tmp"
 	os.Remove(tmpPath)
@@ -203,7 +214,8 @@ func convertLegacy(path string, dryRun bool) error {
 	defer os.Remove(tmpPath + gpfile.HeaderFileSuffix)
 
 	timestamps := legacyFile.GetTimestamps()
-	overallSizeWritten := 0
+	var allBlocks []timedBlock
+
 	for _, ts := range timestamps {
 		logger := logrus.StandardLogger().WithFields(
 			logrus.Fields{
@@ -215,6 +227,7 @@ func convertLegacy(path string, dryRun bool) error {
 		if ts == 0 {
 			continue
 		}
+
 		block, err := legacyFile.ReadTimedBlock(ts)
 		if err != nil {
 			if err.Error() == "Incorrect number of bytes read for decompression" || strings.HasPrefix(err.Error(), "Invalid LZ4 data detected during decompression") {
@@ -227,16 +240,31 @@ func convertLegacy(path string, dryRun bool) error {
 
 		// Cut off the now unneccessary block prefix / suffix
 		block = block[8 : len(block)-8]
+		allBlocks = append(allBlocks, timedBlock{
+			ts:   ts,
+			data: block,
+		})
+	}
 
-		if ts == 1464393580 {
-			fmt.Println(block, len(block))
-		}
+	// Sort by timestamp to cover potential out-of-order scenarios
+	sort.Slice(allBlocks, func(i, j int) bool {
+		return allBlocks[i].ts < allBlocks[j].ts
+	})
 
-		if err := newFile.WriteBlock(ts, block); err != nil {
+	overallSizeWritten := 0
+	for _, block := range allBlocks {
+		logger := logrus.StandardLogger().WithFields(
+			logrus.Fields{
+				"ts":     block.ts,
+				"ts_str": time.Unix(block.ts, 0).String(),
+				"path":   path,
+			},
+		)
+		if err := newFile.WriteBlock(block.ts, block.data); err != nil {
 			logger.Errorf("failed to write block to new file: %v", err)
 			return err
 		}
-		overallSizeWritten += len(block)
+		overallSizeWritten += len(block.data)
 	}
 
 	if err := newFile.Close(); err != nil {

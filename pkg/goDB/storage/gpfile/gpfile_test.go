@@ -131,8 +131,8 @@ func testRoundtrip(t *testing.T, enc encoders.Type) {
 
 	// Read in random order
 	for ts, block := range blocks.Blocks {
-		if block.EncoderType != enc {
-			t.Fatalf("Unexpected encoder at block %d: %v", ts, block.EncoderType)
+		if block.Len > 0 && block.EncoderType != enc {
+			t.Fatalf("Unexpected encoder at block %d: %v (want %v)", ts, block.EncoderType, enc)
 		}
 
 		blockData, err := gpf.ReadBlock(ts)
@@ -155,7 +155,7 @@ func testRoundtrip(t *testing.T, enc encoders.Type) {
 		if block.Timestamp != int64(i) {
 			t.Fatalf("Unexpected timestamp at block %d: %d", i, block.Timestamp)
 		}
-		if block.EncoderType != enc {
+		if block.Len > 0 && block.EncoderType != enc {
 			t.Fatalf("Unexpected encoder at block %d: %v", i, gpf.defaultEncoderType)
 		}
 

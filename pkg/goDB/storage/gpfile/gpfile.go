@@ -21,7 +21,8 @@ const (
 	defaultPermissions = 0644
 
 	// defaultEncoderType denotes the default encoder / compressor
-	defaultEncoderType = encoders.EncoderTypeLZ4
+	defaultEncoderType            = encoders.EncoderTypeLZ4
+	defaultHighEntropyEncoderType = encoders.EncoderTypeNull
 
 	// headerVersion denotes the current header version
 	headerVersion = 1
@@ -62,8 +63,6 @@ type GPFile struct {
 	// race conditions and unpredictable behavior, only one mode is possible at a time)
 	accessMode int
 }
-
-var defaultHighEntropyEncoderType = encoders.EncoderTypeNull
 
 func isHighEntropyColumn(filename string) bool {
 	// crude, for now, since the prefix has to coincide with the `columnFileNames` in
