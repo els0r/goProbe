@@ -45,7 +45,8 @@ func (a *API) handleQuery(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// execute query
-	if err = stmt.Execute(); err != nil {
+	_, err = stmt.Execute()
+	if err != nil {
 		a.errorHandler.Handle(w, http.StatusInternalServerError, err, "failed to execute query")
 		return
 	}

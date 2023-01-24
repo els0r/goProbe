@@ -1,4 +1,4 @@
-package query
+package types
 
 import jsoniter "github.com/json-iterator/go"
 

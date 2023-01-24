@@ -13,6 +13,8 @@
 
 package goDB
 
+import "net/netip"
+
 // DBData holds all data for the flow attributes and counters
 type DBData struct {
 	// counters
@@ -38,102 +40,34 @@ func NewDBData(br []byte, bs []byte, pr []byte, ps []byte, dip []byte, sip []byt
 	return DBData{br, bs, pr, ps, dip, sip, dport, proto, tstamp, iface}
 }
 
-// GOOGLE's utility functions for printing IPv4/6 addresses ----------------------
-// Convert i to hexadecimal string
-func itox(i uint, min int) string {
-
-	// Assemble hexadecimal in reverse order.
-	var b [32]byte
-	bp := len(b)
-	for ; i > 0 || min > 0; i /= 16 {
-		bp--
-		b[bp] = "0123456789abcdef"[byte(i%16)]
-		min--
+func RawIPToAddr(ip []byte) netip.Addr {
+	zeros := numZeros(ip)
+	ind := len(ip)
+	if zeros == 12 {
+		// only read first 4 bytes (IPv4)
+		ind = 4
 	}
-
-	return string(b[bp:])
+	netIP, ok := netip.AddrFromSlice(ip[:ind])
+	if !ok {
+		return netip.Addr{}
+	}
+	return netIP
 }
 
-// Convert i to decimal string.
-func itod(i uint) string {
-	if i == 0 {
-		return "0"
-	}
-
-	// Assemble decimal in reverse order.
-	var b [32]byte
-	bp := len(b)
-	for ; i > 0; i /= 10 {
-		bp--
-		b[bp] = byte(i%10) + '0'
-	}
-
-	return string(b[bp:])
-}
-
-/// END GOOGLE ///
-
-// RawIPToString converts the ip byte arrays to string. The formatting logic for IPv6
-// is directly copied over from the go IP package in order to save an
-// additional import just for string operations
-func RawIPToString(ip []byte) string {
-	var (
-		numZeros uint8
-		iplen    = len(ip)
-	)
+func numZeros(ip []byte) uint8 {
+	var numZeros uint8
 
 	// count zeros in order to determine whether the address
 	// is IPv4 or IPv6
-	for i := 4; i < iplen; i++ {
+	for i := 4; i < len(ip); i++ {
 		if (ip[i] & 0xFF) == 0x00 {
 			numZeros++
 		}
 	}
+	return numZeros
+}
 
-	// construct ipv4 string
-	if numZeros == 12 {
-		return itod(uint(ip[0])) + "." +
-			itod(uint(ip[1])) + "." +
-			itod(uint(ip[2])) + "." +
-			itod(uint(ip[3]))
-	}
-	/// START OF GOOGLE CODE SNIPPET ///
-	p := ip
-
-	// Find longest run of zeros.
-	e0 := -1
-	e1 := -1
-	for i := 0; i < iplen; i += 2 {
-		j := i
-		for j < iplen && p[j] == 0 && p[j+1] == 0 {
-			j += 2
-		}
-		if j > i && j-i > e1-e0 {
-			e0 = i
-			e1 = j
-		}
-	}
-
-	// The symbol "::" MUST NOT be used to shorten just one 16 bit 0 field.
-	if e1-e0 <= 2 {
-		e0 = -1
-		e1 = -1
-	}
-
-	// Print with possible :: in place of run of zeros
-	var s string
-	for i := 0; i < iplen; i += 2 {
-		if i == e0 {
-			s += "::"
-			i = e1
-			if i >= iplen {
-				break
-			}
-		} else if i > 0 {
-			s += ":"
-		}
-		s += itox((uint(p[i])<<8)|uint(p[i+1]), 1)
-	}
-
-	return s
+// RawIPToString converts the ip byte arrays to string
+func RawIPToString(ip []byte) string {
+	return RawIPToAddr(ip).String()
 }

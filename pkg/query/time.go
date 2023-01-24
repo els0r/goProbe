@@ -95,15 +95,24 @@ func parseRelativeTime(rtime string) (int64, error) {
 
 	// support for time.Duration string
 	if !strings.Contains(rtime, ":") {
-		s := strings.Split(rtime, "d")
 		var ds string
-		if len(s) == 2 {
+		if strings.Contains(rtime, "d") {
+			s := strings.Split(rtime, "d")
+			if s[0] == "" {
+				return 0, fmt.Errorf("expecting number before 'd' token")
+			}
+
 			num, err := strconv.ParseInt(s[0], 10, 64)
 			if err != nil {
 				return 0, err
 			}
 			secBackwards += 86400 * num
 			ds = strings.Join(s[1:], "")
+
+			// return if only a "d" duration was supplied
+			if ds == "" {
+				return (time.Now().Unix() - secBackwards), nil
+			}
 		} else {
 			ds = rtime
 		}
@@ -140,14 +149,17 @@ func parseRelativeTime(rtime string) (int64, error) {
 					return 0, err
 				}
 				secBackwards += 60 * num
+			case 's':
+				if num, err = strconv.ParseInt(chunk[:len(chunk)-1], 10, 64); err != nil {
+					return 0, err
+				}
+				secBackwards += num
 			default:
 				return 0, errors.New("incorrect relative time specification")
 			}
 		}
 	}
-
 	return (time.Now().Unix() - secBackwards), nil
-
 }
 
 // ParseTimeArgument is the entry point for external calls and converts valid formats to a unix timtestamp

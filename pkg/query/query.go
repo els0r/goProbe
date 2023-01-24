@@ -1,18 +1,23 @@
 package query
 
 import (
+	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
-	"net/netip"
 	"os"
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/els0r/goProbe/pkg/goDB"
+	"github.com/els0r/goProbe/pkg/query/dns"
+	"github.com/els0r/goProbe/pkg/results"
+	"github.com/els0r/goProbe/pkg/types"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -33,22 +38,23 @@ type Statement struct {
 	QueryType  string `json:"query_type"`
 
 	// which direction is added
-	Direction Direction `json:"direction"`
+	Direction types.Direction `json:"direction"`
 
 	// time selection
 	First int64 `json:"from"`
 	Last  int64 `json:"to"`
 
 	// formatting
-	Format        string    `json:"format"`
-	NumResults    int       `json:"limit"`
-	SortBy        SortOrder `json:"sort_by"`
-	SortAscending bool      `json:"sort_ascending,omitempty"`
-	Output        io.Writer `json:"-"`
+	Format        string            `json:"format"`
+	NumResults    int               `json:"limit"`
+	SortBy        results.SortOrder `json:"sort_by"`
+	SortAscending bool              `json:"sort_ascending,omitempty"`
+	Output        io.Writer         `json:"-"`
 
 	// parameters for external calls
 	External bool   `json:"external,omitempty"` // for error messages
 	Caller   string `json:"caller,omitempty"`   // who called the query
+	Flat     bool   `json:"flat,omitempty"`     // serialize results as-is. Only makes sense in the json encoding case
 
 	// resolution parameters (probably part of table printer)
 	Resolve        bool          `json:"dns_resolution,omitempty"`
@@ -58,9 +64,6 @@ type Statement struct {
 	// file system
 	DBPath    string `json:"db"`
 	MaxMemPct int    `json:"-"`
-
-	// query statistics
-	Stats ExecutionStats `json:"query_stats"`
 
 	// error during execution
 	Err *Error `json:"error,omitempty"`
@@ -99,23 +102,6 @@ func (q *Error) MarshalJSON() ([]byte, error) {
 	return jsoniter.Marshal(q.Error())
 }
 
-// ExecutionStats stores the statements execution statistics
-type ExecutionStats struct {
-	Start         time.Time     `json:"start"`
-	Duration      time.Duration `json:"duration_ns"`
-	HitsDisplayed int           `json:"hits_displayed"`
-	Hits          int           `json:"hits"`
-}
-
-// String prints the statistics
-func (e ExecutionStats) String() string {
-	return fmt.Sprintf("{start: %s, query-duration: %s, hits: %d}",
-		e.Start.Format(time.ANSIC),
-		e.Duration,
-		e.Hits,
-	)
-}
-
 // String prints the executable statement in human-readable form
 func (s *Statement) String() string {
 	str := fmt.Sprintf("{type: %s, ifaces: %s",
@@ -133,12 +119,8 @@ func (s *Statement) String() string {
 		tTo.Format(time.ANSIC),
 	)
 	if s.Resolve {
-		str += fmt.Sprintf(", dns-resolution: %t, dns-timeout: %ds, dns-rows-resolved: %d",
-			s.Resolve, s.ResolveTimeout, s.ResolveRows,
-		)
+		str += fmt.Sprintf(", dns-resolution: %t", s.Resolve)
 	}
-	// print statistics
-	str += fmt.Sprintf(", stats: %s", s.Stats)
 	str += "}"
 	return str
 }
@@ -158,9 +140,19 @@ func (s *Statement) log() {
 }
 
 // Execute runs the query with the provided parameters
-func (s *Statement) Execute() error {
-
-	var err error
+func (s *Statement) Execute() (result *results.Result, err error) {
+	result = &results.Result{
+		Summary: results.Summary{
+			Timings: results.Timings{
+				// Start timing
+				QueryStart: time.Now(),
+			},
+		},
+	}
+	sort.Slice(s.Ifaces, func(i, j int) bool {
+		return s.Ifaces[i] < s.Ifaces[j]
+	})
+	result.Summary.Interfaces = s.Ifaces
 
 	// start ticker to check memory consumption every second
 	memErrors := make(chan error, 1)
@@ -181,7 +173,7 @@ func (s *Statement) Execute() error {
 	defer func() {
 		if err != nil {
 			// get duration of execution even under error
-			s.Stats.Duration = time.Now().Sub(s.Stats.Start)
+			result.Summary.Timings.QueryDuration = time.Since(result.Summary.Timings.QueryStart)
 
 			s.Err = &Error{err}
 		}
@@ -189,17 +181,18 @@ func (s *Statement) Execute() error {
 		s.log()
 	}()
 
-	// Start timing
-	s.Stats = ExecutionStats{
-		Start: time.Now(),
-	}
-
 	// cross-check parameters
 	if len(s.Ifaces) == 0 {
-		return fmt.Errorf("no interfaces provided")
+		return result, fmt.Errorf("no interfaces provided")
 	}
 	if s.Query == nil {
-		return fmt.Errorf("query is not executable")
+		return result, fmt.Errorf("query is not executable")
+	}
+	result.Query = results.Query{
+		Attributes: s.Query.AttributesToString(),
+	}
+	if s.Query.Conditional != nil {
+		result.Query.Condition = s.Query.Conditional.String()
 	}
 
 	// create work managers
@@ -207,7 +200,7 @@ func (s *Statement) Execute() error {
 	for _, iface := range s.Ifaces {
 		wm, nonempty, err := createWorkManager(s.DBPath, iface, s.First, s.Last, s.Query, numProcessingUnits)
 		if err != nil {
-			return err
+			return result, err
 		}
 		// Only add work managers that have work to do.
 		if nonempty {
@@ -226,6 +219,9 @@ func (s *Statement) Execute() error {
 			tSpanLast = t1
 		}
 	}
+
+	result.Summary.TimeFirst = tSpanFirst
+	result.Summary.TimeLast = tSpanLast
 
 	// Channel for handling of returned maps
 	mapChan := make(chan map[goDB.ExtraKey]goDB.Val, 1024)
@@ -252,7 +248,7 @@ func (s *Statement) Execute() error {
 			runtime.GC()
 			debug.FreeOSMemory()
 
-			return err
+			return result, err
 		}
 	}
 
@@ -265,43 +261,57 @@ func (s *Statement) Execute() error {
 	if err != nil {
 		switch err {
 		case errorNoResults:
-			return s.noResults()
+			return result, s.noResults()
 		default:
-			return err
+			return result, err
 		}
 	}
 
-	/// DATA PRESENATION ///
-	var results = make([]Result, len(agg.aggregatedMap))
-	var val goDB.Val
-	var key goDB.ExtraKey
+	/// DATA PRESENTATION ///
+	var sip, dip, dport, proto goDB.Attribute
+	for _, attribute := range s.Query.Attributes {
+		switch attribute.Name() {
+		case "sip":
+			sip = attribute
+		case "dip":
+			dip = attribute
+		case "dport":
+			dport = attribute
+		case "proto":
+			proto = attribute
+		}
+	}
+
+	var rs = make(results.Rows, len(agg.aggregatedMap))
 	count := 0
 
-	for key, val = range agg.aggregatedMap {
-		results[count].Labels.Timestamp = time.Unix(key.Time, 0)
-		results[count].Labels.Iface = key.Iface
-		results[count].Labels.HostID = key.HostID
-		results[count].Labels.Hostname = key.Hostname
+	for key, val := range agg.aggregatedMap {
 
-		var ok bool
-		results[count].Attributes.SrcIP, ok = netip.AddrFromSlice(key.Sip[:])
-		if !ok {
-			fmt.Printf("failed to parse IP: %v\n", key.Sip)
-			continue
+		if key.Time != 0 {
+			ts := time.Unix(key.Time, 0)
+			rs[count].Labels.Timestamp = &ts
 		}
-		results[count].Attributes.DstIP, ok = netip.AddrFromSlice(key.Dip[:])
-		if !ok {
-			fmt.Printf("failed to parse IP: %v\n", key.Sip)
-			continue
+		rs[count].Labels.Iface = key.Iface
+		rs[count].Labels.HostID = key.HostID
+		rs[count].Labels.Hostname = key.Hostname
+		if sip != nil {
+			rs[count].Attributes.SrcIP = goDB.RawIPToAddr(key.Sip[:])
 		}
-		results[count].Attributes.IPProto = key.Protocol
-		results[count].Attributes.DstPort = binary.LittleEndian.Uint16(key.Dport[:])
+		if dip != nil {
+			rs[count].Attributes.DstIP = goDB.RawIPToAddr(key.Dip[:])
+		}
+		if proto != nil {
+			rs[count].Attributes.IPProto = key.Protocol
+		}
+		if dport != nil {
+			rs[count].Attributes.DstPort = binary.LittleEndian.Uint16(key.Dport[:])
+		}
 
 		// assign counters
-		results[count].Counters.BytesReceived = val.NBytesRcvd
-		results[count].Counters.PacketsReceived = val.NPktsRcvd
-		results[count].Counters.BytesSent = val.NBytesSent
-		results[count].Counters.PacketsSent = val.NPktsSent
+		rs[count].Counters.BytesReceived = val.NBytesRcvd
+		rs[count].Counters.PacketsReceived = val.NPktsRcvd
+		rs[count].Counters.BytesSent = val.NBytesSent
+		rs[count].Counters.PacketsSent = val.NPktsSent
 
 		count++
 	}
@@ -311,28 +321,12 @@ func (s *Statement) Execute() error {
 	runtime.GC()
 	debug.FreeOSMemory()
 
-	// there is no need to sort influxdb datapoints
-	if s.Format != "influxdb" {
-		By(s.SortBy, s.Direction, s.SortAscending).Sort(results)
-	}
-
 	// Find map from ips to domains for reverse DNS
-	// var ips2domains map[string]string
-	// var resolveDuration time.Duration
+	var ips2domains map[string]string
 	if s.Resolve && goDB.HasDNSAttributes(s.Query.Attributes) {
 		var ips []string
-		var sip, dip goDB.Attribute
-		for _, attribute := range s.Query.Attributes {
-			if attribute.Name() == "sip" {
-				sip = attribute
-			}
-			if attribute.Name() == "dip" {
-				dip = attribute
-			}
-		}
-
-		for i, l := 0, len(results); i < l && i < s.ResolveRows; i++ {
-			attr := results[i].Attributes
+		for i, l := 0, len(rs); i < l && i < s.ResolveRows; i++ {
+			attr := rs[i].Attributes
 			if sip != nil {
 				ips = append(ips, attr.SrcIP.String())
 			}
@@ -341,51 +335,75 @@ func (s *Statement) Execute() error {
 			}
 		}
 
-		// resolveStart := time.Now()
-		// ips2domains = dns.TimedReverseLookup(ips, s.ResolveTimeout)
-		// resolveDuration = time.Since(resolveStart)
+		resolveStart := time.Now()
+		ips2domains = dns.TimedReverseLookup(ips, s.ResolveTimeout)
+		result.Summary.Timings.ResolutionDuration = time.Since(resolveStart)
 	}
+	result.Summary.Totals = agg.totals
 
 	// get the right printer
-	// var printer TablePrinter
-	// printer, err = s.NewTablePrinter(
-	// 	ips2domains,
-	// 	agg.totals,
-	// 	count,
-	// )
-	// if err != nil {
-	// 	return fmt.Errorf("failed to create printer: %s", err)
-	// }
+	var printer TablePrinter
+
+	b := makeBasePrinter(
+		s.Output,
+		s.SortBy,
+		s.HasAttrTime, s.HasAttrIface,
+		s.Direction,
+		s.Query.Attributes,
+		ips2domains,
+		agg.totals,
+		strings.Join(s.Ifaces, ","),
+	)
+
+	switch s.Format {
+	case "txt":
+		printer = NewTextTablePrinter(b, count, s.ResolveTimeout)
+	case "json":
+		printer = NewJSONTablePrinter(b, s.QueryType, true)
+	case "csv":
+		printer = NewCSVTablePrinter(b)
+	default:
+		return result, fmt.Errorf("unknown output format %s", s.Format)
+	}
+
+	// sort the results
+	results.By(s.SortBy, s.Direction, s.SortAscending).Sort(rs)
 
 	// stop timing everything related to the query and store the hits
-	s.Stats.Duration = time.Now().Sub(s.Stats.Start)
-	s.Stats.Hits = len(results)
+	result.Summary.Timings.QueryDuration = time.Since(result.Summary.Timings.QueryStart)
+	result.Summary.Hits.Total = len(rs)
 
 	// fill the printer
-	// if s.NumResults < len(results) {
-	// 	results = results[:s.NumResults]
-	// }
-	// s.Stats.HitsDisplayed = len(results)
-	// for doneFilling := false; !doneFilling; {
-	// 	select {
-	// 	case err = <-memErrors:
-	// 		return fmt.Errorf("%w: %v", errorMemoryBreach, err)
-	// 	default:
-	// 		for _, entry := range results {
-	// 			printer.AddRow(entry)
-	// 		}
-	// 		doneFilling = true
-	// 	}
-	// }
-	// printer.Footer(s.Conditions, tSpanFirst, tSpanLast, s.Stats.Duration, resolveDuration)
+	if s.NumResults < len(rs) {
+		rs = rs[:s.NumResults]
+	}
+	result.Summary.Hits.Displayed = len(rs)
 
-	// // print the data
-	// err = printer.Print()
-	// if err != nil {
-	// 	return err
-	// }
+	printCtx, printCancel := context.WithCancel(context.Background())
+	defer printCancel()
 
-	return nil
+	var memErr error
+	go func() {
+		select {
+		case memErr = <-memErrors:
+			memErr = fmt.Errorf("%w: %v", errorMemoryBreach, err)
+			printCancel()
+			return
+		case <-printCtx.Done():
+			return
+		}
+	}()
+	err = printer.AddRows(printCtx, rs)
+	if err != nil {
+		if memErr != nil {
+			return result, memErr
+		}
+		return result, err
+	}
+	printer.Footer(result)
+
+	// print the data
+	return result, printer.Print()
 }
 
 func createWorkManager(dbPath string, iface string, tfirst, tlast int64, query *goDB.Query, numProcessingUnits int) (workManager *goDB.DBWorkManager, nonempty bool, err error) {
@@ -398,10 +416,10 @@ func createWorkManager(dbPath string, iface string, tfirst, tlast int64, query *
 }
 
 func (s *Statement) noResults() error {
-	// if s.External || s.Format == "json" {
-	// 	msg := ErrorMsgExternal{Status: "empty", Message: errorNoResults.Error()}
-	// 	return jsoniter.NewEncoder(s.Output).Encode(msg)
-	// }
+	if s.External || s.Format == "json" {
+		msg := ErrorMsgExternal{Status: "empty", Message: errorNoResults.Error()}
+		return jsoniter.NewEncoder(s.Output).Encode(msg)
+	}
 	_, err := fmt.Fprintf(s.Output, "%s\n", errorNoResults.Error())
 	return err
 }

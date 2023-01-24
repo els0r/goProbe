@@ -147,3 +147,13 @@ func NewQuery(attributes []Attribute, conditional Node, hasAttrTime, hasAttrIfac
 
 	return q
 }
+
+// AttributesToString is a convenience method for translating the query attributes
+// into a human-readable name
+func (q *Query) AttributesToString() []string {
+	s := make([]string, len(q.Attributes))
+	for i, a := range q.Attributes {
+		s[i] = a.Name()
+	}
+	return s
+}

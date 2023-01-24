@@ -46,7 +46,7 @@ func TestEmptyOutput(t *testing.T) {
 			stmt.Output = buf
 
 			// execute query
-			err = stmt.Execute()
+			_, err = stmt.Execute()
 			if err != nil {
 				t.Fatalf("execute query: %s", err)
 			}
@@ -101,7 +101,7 @@ func TestSimpleQuery(t *testing.T) {
 			}
 
 			// execute query
-			err = stmt.Execute()
+			_, err = stmt.Execute()
 			if err != nil {
 				t.Fatalf("execute query: %s", err)
 			}

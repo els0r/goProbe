@@ -138,7 +138,7 @@ func benchQuery(b *testing.B, buf *bytes.Buffer, flushFunc func(), iface, query 
 		}
 
 		// run query
-		err = query.Execute()
+		_, err = query.Execute()
 		if err != nil {
 			b.Fatalf("error during execute: ` + "%%s" + `", err)
 		}

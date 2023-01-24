@@ -1,5 +1,7 @@
 package query
 
+import "github.com/els0r/goProbe/pkg/results"
+
 // Defaults for query arguments
 var (
 	DefaultDBPath         = "/usr/local/goProbe/db"
@@ -15,15 +17,14 @@ var (
 
 // PermittedFormats stores all supported output formats
 var PermittedFormats = map[string]struct{}{
-	"txt":      {},
-	"json":     {},
-	"csv":      {},
-	"influxdb": {},
+	"txt":  {},
+	"json": {},
+	"csv":  {},
 }
 
 // PermittedSortBy sorts all permitted sorting orders
-var PermittedSortBy = map[string]SortOrder{
-	"bytes":   SortTraffic,
-	"packets": SortPackets,
-	"time":    SortTime,
+var PermittedSortBy = map[string]results.SortOrder{
+	"bytes":   results.SortTraffic,
+	"packets": results.SortPackets,
+	"time":    results.SortTime,
 }

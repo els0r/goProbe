@@ -9,6 +9,8 @@ import (
 
 	"github.com/els0r/goProbe/pkg/goDB"
 	"github.com/els0r/goProbe/pkg/query/dns"
+	"github.com/els0r/goProbe/pkg/results"
+	"github.com/els0r/goProbe/pkg/types"
 )
 
 // NewArgs creates new query arguments with the defaults set
@@ -44,6 +46,9 @@ type Args struct {
 	// required
 	Query  string // the query type such as sip,dip
 	Ifaces string
+
+	Hostname string
+	HostID   uint
 
 	// data filtering
 	Condition string
@@ -166,24 +171,19 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 		s.HasAttrIface = true
 	}
 
-	// If output format is influx, always take time with you
-	if s.Format == "influxdb" {
-		s.HasAttrTime = true
-	}
-
 	// override sorting direction and number of entries for time based queries
 	if s.HasAttrTime {
-		s.SortBy = SortTime
+		s.SortBy = results.SortTime
 		s.SortAscending = true
 		s.NumResults = MaxResults
 	}
 
 	// parse time bound
-	s.Last, err = goDB.ParseTimeArgument(a.Last)
+	s.Last, err = ParseTimeArgument(a.Last)
 	if err != nil {
 		return s, fmt.Errorf("invalid time format for --last: %s", err)
 	}
-	s.First, err = goDB.ParseTimeArgument(a.First)
+	s.First, err = ParseTimeArgument(a.First)
 	if err != nil {
 		return s, fmt.Errorf("invalid time format for --first: %s", err)
 	}
@@ -202,13 +202,13 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 
 	switch {
 	case a.Sum:
-		s.Direction = DirectionSum
+		s.Direction = types.DirectionSum
 	case a.In && !a.Out:
-		s.Direction = DirectionIn
+		s.Direction = types.DirectionIn
 	case !a.In && a.Out:
-		s.Direction = DirectionOut
+		s.Direction = types.DirectionOut
 	default:
-		s.Direction = DirectionBoth
+		s.Direction = types.DirectionBoth
 	}
 
 	// check resolve timeout and DNS

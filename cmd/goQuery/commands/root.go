@@ -166,7 +166,7 @@ func entrypoint(cmd *cobra.Command, args []string) error {
 	}
 
 	// run the query
-	err = query.Execute()
+	_, err = query.Execute()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Query execution failed: %s\n", err)
 		return err
