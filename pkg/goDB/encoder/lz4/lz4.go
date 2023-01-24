@@ -2,10 +2,10 @@
 package lz4
 
 /*
-#cgo linux CFLAGS: -O2 -g
-#cgo linux LDFLAGS: -llz4
-#cgo darwin,amd64 LDFLAGS: -llz4
-#cgo darwin,arm64 LDFLAGS: -llz4
+#cgo linux CFLAGS: -O3 -g
+#cgo linux LDFLAGS: -O3 -llz4
+#cgo darwin,amd64 LDFLAGS: -O3 -llz4
+#cgo darwin,arm64 LDFLAGS: -O3 -llz4
 #include <stdlib.h>
 #include <stdio.h>
 #include "lz4frame.h"
@@ -107,7 +107,7 @@ import (
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 )
 
-const defaultCompressionLevel = 4
+const defaultCompressionLevel = 6
 
 // Encoder compresses data with the LZ4 algorithm (omitting certain bounds-checks for performance reasons)
 type Encoder struct {

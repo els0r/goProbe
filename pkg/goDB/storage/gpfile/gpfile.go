@@ -22,7 +22,7 @@ const (
 
 	// defaultEncoderType denotes the default encoder / compressor
 	defaultEncoderType            = encoders.EncoderTypeLZ4
-	defaultHighEntropyEncoderType = encoders.EncoderTypeNull
+	defaultHighEntropyEncoderType = encoders.EncoderTypeLZ4
 
 	// headerVersion denotes the current header version
 	headerVersion = 1
@@ -46,9 +46,6 @@ type GPFile struct {
 
 	// header denotes the block header (list of blocks) contained in this file
 	header storage.BlockHeader
-
-	// typeWidth stores the size of the data type written to the file
-	typeWidth int
 
 	// Current / last seek position in file for read operation, used for optimized
 	// sequential read
@@ -75,22 +72,6 @@ func isHighEntropyColumn(filename string) bool {
 	return false
 }
 
-// this function presumes that filename already follows the column naming convention. It is
-// meant to be used only inside the New() method
-func calculateTypeWidth(filename string) int {
-	if strings.HasPrefix(filename, "sip") || strings.HasPrefix(filename, "dip") {
-		return 16
-	}
-	if strings.HasPrefix(filename, "dport") {
-		return 2
-	}
-	if strings.HasPrefix(filename, "proto") {
-		return 1
-	}
-	// counters
-	return 4
-}
-
 // New returns a new GPFile object to read and write goProbe flow data
 func New(filename string, accessMode int, options ...Option) (*GPFile, error) {
 	g := &GPFile{
@@ -113,9 +94,6 @@ func New(filename string, accessMode int, options ...Option) (*GPFile, error) {
 	var err error
 	if isHighEntropyColumn(fileBaseName) {
 		g.defaultEncoderType = g.defaultHighEntropyEncoderType
-		g.typeWidth = 4
-	} else {
-		g.typeWidth = calculateTypeWidth(fileBaseName)
 	}
 	if g.defaultEncoder, err = encoder.New(g.defaultEncoderType); err != nil {
 		return nil, err
@@ -294,11 +272,6 @@ func (g *GPFile) Filename() string {
 // DefaultEncoder exposes the default encoding of the GPF file
 func (g *GPFile) DefaultEncoder() encoder.Encoder {
 	return g.defaultEncoder
-}
-
-// TypeWidth returns the size of the data type stored
-func (g *GPFile) TypeWidth() int {
-	return g.typeWidth
 }
 
 ////////////////////////////////////////////////////////////////////////////////

@@ -14,7 +14,6 @@
 package goDB
 
 import (
-	"encoding/binary"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -22,6 +21,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/els0r/goProbe/pkg/goDB/encoder/bitpack"
 	"github.com/els0r/goProbe/pkg/goDB/storage/gpfile"
 	"github.com/els0r/log"
 )
@@ -317,18 +317,26 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workload DBWorkload, resultMap map
 		}
 
 		// Check whether all blocks have matching number of entries
-		numEntries := int(len(blocks[BytesRcvdColIdx]) / 8)
+		numEntries := bitpack.Len(blocks[BytesRcvdColIdx])
 		for _, colIdx := range query.columnIndizes {
 			l := len(blocks[colIdx])
-			if l/columnSizeofs[colIdx] != numEntries {
-				blockBroken = true
-				w.logger.Warnf("[Bl %d] Incorrect number of entries in file [%s.gpf]. Expected %d, found %d", b, columnFileNames[colIdx], numEntries, l/columnSizeofs[colIdx])
-				break
-			}
-			if l%columnSizeofs[colIdx] != 0 {
-				blockBroken = true
-				w.logger.Warnf("[Bl %d] Entry size does not evenly divide block size in file [%s.gpf]", b, columnFileNames[colIdx])
-				break
+			if colIdx.IsCounterCol() {
+				if bitpack.Len(blocks[colIdx]) != numEntries {
+					blockBroken = true
+					w.logger.Warnf("[Bl %d] Incorrect number of entries in file [%s.gpf]. Expected %d, found %d", b, columnFileNames[colIdx], numEntries, bitpack.Len(blocks[colIdx]))
+					break
+				}
+			} else {
+				if l/columnSizeofs[colIdx] != numEntries {
+					blockBroken = true
+					w.logger.Warnf("[Bl %d] Incorrect number of entries in file [%s.gpf]. Expected %d, found %d", b, columnFileNames[colIdx], numEntries, l/columnSizeofs[colIdx])
+					break
+				}
+				if l%columnSizeofs[colIdx] != 0 {
+					blockBroken = true
+					w.logger.Warnf("[Bl %d] Entry size does not evenly divide block size in file [%s.gpf]", b, columnFileNames[colIdx])
+					break
+				}
 			}
 		}
 
@@ -361,10 +369,11 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workload DBWorkload, resultMap map
 				// Update aggregates
 				var delta Val
 
-				delta.NBytesRcvd = binary.BigEndian.Uint64(blocks[BytesRcvdColIdx][i*8 : i*8+8])
-				delta.NBytesSent = binary.BigEndian.Uint64(blocks[BytesSentColIdx][i*8 : i*8+8])
-				delta.NPktsRcvd = binary.BigEndian.Uint64(blocks[PacketsRcvdColIdx][i*8 : i*8+8])
-				delta.NPktsSent = binary.BigEndian.Uint64(blocks[PacketsSentColIdx][i*8 : i*8+8])
+				// Unpack counters using bit packing
+				delta.NBytesRcvd = bitpack.Uint64At(blocks[BytesRcvdColIdx], i)
+				delta.NBytesSent = bitpack.Uint64At(blocks[BytesSentColIdx], i)
+				delta.NPktsRcvd = bitpack.Uint64At(blocks[PacketsRcvdColIdx], i)
+				delta.NPktsSent = bitpack.Uint64At(blocks[PacketsSentColIdx], i)
 
 				if val, exists := resultMap[key]; exists {
 					val.NBytesRcvd += delta.NBytesRcvd

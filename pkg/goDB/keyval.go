@@ -14,7 +14,9 @@
 package goDB
 
 import (
+	"bytes"
 	"fmt"
+	"sort"
 
 	"github.com/els0r/goProbe/pkg/goDB/protocols"
 	jsoniter "github.com/json-iterator/go"
@@ -45,6 +47,12 @@ type Val struct {
 
 // AggFlowMap stores all flows where the source port from the FlowLog has been aggregated
 type AggFlowMap map[Key]*Val
+
+type ListItem struct {
+	Key
+	*Val
+}
+type AggFlowList []ListItem
 
 // ATTENTION: apart from the obvious use case, the following methods are used to provide flow information
 // via syslog, so don't unnecessarily change the order of the fields.
@@ -99,4 +107,39 @@ func (a AggFlowMap) MarshalJSON() ([]byte, error) {
 		)
 	}
 	return jsoniter.Marshal(toMarshal)
+}
+
+// Flatten converts a flow map to a flat table / list
+func (a AggFlowMap) Flatten() (list AggFlowList) {
+	list = make(AggFlowList, 0, len(a))
+	for K, V := range a {
+		list = append(list, ListItem{K, V})
+	}
+
+	return
+}
+
+// Sort orders relevant flow columns so that they become more compressible
+func (l AggFlowList) Sort() AggFlowList {
+	sort.Slice(l, func(i, j int) bool {
+
+		iv, jv := l[i], l[j]
+
+		if comp := bytes.Compare(iv.Sip[:], jv.Sip[:]); comp != 0 {
+			return comp < 0
+		}
+		if comp := bytes.Compare(iv.Dip[:], jv.Dip[:]); comp != 0 {
+			return comp < 0
+		}
+		if comp := bytes.Compare(iv.Dport[:], jv.Dport[:]); comp != 0 {
+			return comp < 0
+		}
+		if iv.Protocol != jv.Protocol {
+			return iv.Protocol < jv.Protocol
+		}
+
+		return false
+	})
+
+	return l
 }
