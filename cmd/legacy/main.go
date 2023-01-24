@@ -187,8 +187,10 @@ func (c converter) convertDir(w work, dryRun bool) error {
 			return fmt.Errorf("failed to get block metdadata from file set: %w", err)
 		}
 
-		if _, err = writer.Write(block.data, blockMetadata, block.ts); err != nil {
-			return fmt.Errorf("failed to write flows: %w", err)
+		if !dryRun {
+			if _, err = writer.Write(block.data, blockMetadata, block.ts); err != nil {
+				return fmt.Errorf("failed to write flows: %w", err)
+			}
 		}
 	}
 
