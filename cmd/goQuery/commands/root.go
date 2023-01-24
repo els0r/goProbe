@@ -123,7 +123,6 @@ func entrypoint(cmd *cobra.Command, args []string) error {
 			return err
 		}
 	} else {
-
 		// check that query type or other subcommands were provided
 		if len(args) == 0 {
 			err := errors.New("No query type or command provided")

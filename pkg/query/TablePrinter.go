@@ -603,7 +603,7 @@ func (TextFormatter) Count(val uint64) string {
 
 	units := []string{" ", "k", "M", "G", "T", "P", "E", "Z", "Y"}
 
-	for val > 1000 {
+	for val >= 1000 {
 		val /= 1000
 		valF /= 1000.0
 		count++
@@ -770,8 +770,9 @@ func (t *TextTablePrinter) Footer(result *results.Result) {
 			TextFormatter{}.Duration(result.Summary.Timings.ResolutionDuration),
 			TextFormatter{}.Duration(t.resolveTimeout))
 	}
-	fmt.Fprintf(t.footwriter, "Query stats\t: %s hits in %s\n",
-		TextFormatter{}.Count(uint64(t.numFlows)),
+	fmt.Fprintf(t.footwriter, "Query stats\t: displayed top %s hits out of %s in %s\n",
+		strings.TrimSpace(TextFormatter{}.Count(uint64(result.Summary.Hits.Displayed))),
+		TextFormatter{}.Count(uint64(result.Summary.Hits.Total)),
 		TextFormatter{}.Duration(result.Summary.Timings.QueryDuration))
 	if result.Query.Condition != "" {
 		fmt.Fprintf(t.footwriter, "Conditions:\t: %s\n",
