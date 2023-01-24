@@ -62,11 +62,10 @@ func PrintMetaTable(gpf *gpfile.GPFile, w io.Writer) error {
                 File: %s
              Version: %d
     Number of Blocks: %d
-     Data Type Width: %d byte(s)
                 Size: %d bytes
     Default Encoding: %s
 
-`, gpf.Filename(), blocks.Version, len(blocks.Blocks), gpf.TypeWidth(), blocks.CurrentOffset, gpf.DefaultEncoder().Type())
+`, gpf.Filename(), blocks.Version, len(blocks.Blocks) /*gpf.TypeWidth(),*/, blocks.CurrentOffset, gpf.DefaultEncoder().Type())
 
 	tw := tabwriter.NewWriter(w, 0, 0, 4, ' ', tabwriter.AlignRight)
 

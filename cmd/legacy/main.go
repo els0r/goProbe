@@ -3,69 +3,76 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
-	"text/tabwriter"
-	"time"
 
+	"github.com/els0r/goProbe/pkg/goDB"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
-	"github.com/els0r/goProbe/pkg/goDB/storage/gpfile"
 	"github.com/sirupsen/logrus"
 )
 
-var retainL7proto bool
+type work struct {
+	iface string
+	path  string
+}
+
+type converter struct {
+	dbDir string
+	pipe  chan work
+}
 
 func main() {
 
 	var (
-		dbPath     string
-		dryRun     bool
-		recompress bool
-		nWorkers   int
-		wg         sync.WaitGroup
+		inPath, outPath string
+		dryRun          bool
+		nWorkers        int
+		wg              sync.WaitGroup
 	)
-	flag.StringVar(&dbPath, "path", "", "Path to legacy goDB")
+	flag.StringVar(&inPath, "path", "", "Path to legacy goDB")
+	flag.StringVar(&outPath, "output", "", "Path to output goDB")
 	flag.BoolVar(&dryRun, "dry-run", true, "Perform a dry-run")
-	flag.BoolVar(&recompress, "recompress", false, "Convert lz4custom into lz4")
-	flag.BoolVar(&retainL7proto, "retain-l7proto", false, "Also convert obsolete l7 protocol column")
 	flag.IntVar(&nWorkers, "n", 4, "Number of parallel conversion workers")
 	flag.Parse()
 
-	if dbPath == "" {
-		logrus.StandardLogger().Fatal("Path to legacy goDB requried")
+	if inPath == "" || outPath == "" {
+		logrus.StandardLogger().Fatal("Paths to legacy / output goDB requried")
 	}
 
-	workChan := make(chan string, 64)
+	c := converter{
+		dbDir: outPath,
+		pipe:  make(chan work, 64),
+	}
+
 	for i := 0; i < nWorkers; i++ {
 		wg.Add(1)
 		go func() {
-			for file := range workChan {
-				if err := convert(file, dryRun, recompress); err != nil {
-					logrus.StandardLogger().Fatalf("Error converting legacy file %s: %s", file, err)
+			for w := range c.pipe {
+				if err := c.convertDir(w, dryRun); err != nil {
+					logrus.StandardLogger().Fatalf("Error converting legacy dir %s: %s", w.path, err)
 				}
-				logrus.StandardLogger().Infof("Converted legacy file %s", file)
+				logrus.StandardLogger().Infof("Converted legacy dir %s", w.path)
 			}
 			wg.Done()
 		}()
 	}
 
 	// Get all interfaces
-	dirents, err := ioutil.ReadDir(dbPath)
+	ifaces, err := ioutil.ReadDir(inPath)
 	if err != nil {
 		logrus.StandardLogger().Fatal(err)
 	}
-	for _, dirent := range dirents {
-		if !dirent.IsDir() {
+	for _, iface := range ifaces {
+		if !iface.IsDir() {
 			continue
 		}
 
 		// Get all date directories (usually days)
-		dates, err := ioutil.ReadDir(filepath.Join(dbPath, dirent.Name()))
+		dates, err := ioutil.ReadDir(filepath.Join(inPath, iface.Name()))
 		if err != nil {
 			logrus.StandardLogger().Fatal(err)
 		}
@@ -74,175 +81,92 @@ func main() {
 				continue
 			}
 
-			// Get all files in date directory
-			files, err := ioutil.ReadDir(filepath.Join(dbPath, dirent.Name(), date.Name()))
-			if err != nil {
-				logrus.StandardLogger().Fatal(err)
-			}
-			for _, file := range files {
-				fullPath := filepath.Join(dbPath, dirent.Name(), date.Name(), file.Name())
-				if filepath.Ext(strings.TrimSpace(fullPath)) != ".gpf" {
-					continue
-				}
-
-				// Check if the expected header file already exists (and skip, if so)
-				if _, err := os.Stat(fullPath + gpfile.HeaderFileSuffix); err == nil {
-					if !recompress {
-						logrus.StandardLogger().Infof("File %s already converted, skipping...", fullPath)
-						continue
-					}
-				}
-
-				workChan <- fullPath
+			c.pipe <- work{
+				iface: iface.Name(),
+				path:  filepath.Join(inPath, iface.Name(), date.Name()),
 			}
 		}
 	}
-	close(workChan)
+
+	close(c.pipe)
 	wg.Wait()
 }
 
-func convert(path string, dryRun, recompress bool) error {
-	if !recompress {
-		return convertLegacy(path, dryRun)
-	}
-	return recompressFile(path, dryRun)
+type blockFlows struct {
+	ts    int64
+	iface string
+	data  goDB.AggFlowMap
 }
 
-func recompressFile(path string, dryRun bool) error {
-	oldFile, err := gpfile.New(path, gpfile.ModeRead)
+type fileSet interface {
+	GetTimestamps() ([]int64, error)
+	GetBlock(ts int64) (goDB.AggFlowMap, error)
+	Close() error
+}
+
+func isLegacyDir(path string) (bool, error) {
+	dirents, err := os.ReadDir(path)
 	if err != nil {
+		return false, err
+	}
+
+	var countGPFs, countMeta int
+	for _, dirent := range dirents {
+		if strings.HasSuffix(strings.ToLower(dirent.Name()), ".gpf") {
+			countGPFs++
+		} else if strings.HasSuffix(strings.ToLower(dirent.Name()), ".gpf.meta") {
+			countMeta++
+		}
+	}
+
+	return countMeta != countGPFs, nil
+}
+
+func (c converter) convertDir(w work, dryRun bool) error {
+
+	var (
+		fs  fileSet
+		err error
+	)
+	if isLegacy, err := isLegacyDir(w.path); err != nil {
 		return err
-	}
-
-	tmpPath := path + ".tmp"
-	os.Remove(tmpPath)
-	os.Remove(tmpPath + gpfile.HeaderFileSuffix)
-
-	newFile, err := gpfile.New(tmpPath, gpfile.ModeWrite)
-	if err != nil {
-		return err
-	}
-	defer os.Remove(tmpPath)
-	defer os.Remove(tmpPath + gpfile.HeaderFileSuffix)
-
-	blocks, err := oldFile.Blocks()
-	if err != nil {
-		return fmt.Errorf("failed to access metadata: %w", err)
-	}
-
-	overallSizeWritten := 0
-	for _, block := range blocks.OrderedList() {
-		logger := logrus.StandardLogger().WithFields(
-			logrus.Fields{
-				"timestamp": block.Timestamp,
-				"encoder":   block.EncoderType,
-			},
-		)
-		origData, err := oldFile.ReadBlock(block.Timestamp)
+	} else if isLegacy {
+		fs, err = NewLegacyFileSet(w.path)
 		if err != nil {
-			logger.Errorf("failed to read block (type: %v): %v", block.EncoderType, err)
-			continue
+			return fmt.Errorf("failed to read legacy data set in %s: %w", w.path, err)
 		}
-		if block.EncoderType == encoders.EncoderTypeLZ4Custom {
-			logger.Debug("found lz4 custom block. Converting")
-		}
-		err = newFile.WriteBlock(block.Timestamp, origData)
+	} else {
+		fs, err = NewModernFileSet(w.path)
 		if err != nil {
-			return fmt.Errorf("failed to recompress block at time %d: %w", block.Timestamp, err)
-		}
-		overallSizeWritten += len(origData)
-	}
-	if err := newFile.Close(); err != nil {
-		return err
-	}
-
-	if !dryRun {
-		if err := os.Rename(tmpPath+gpfile.HeaderFileSuffix, path+gpfile.HeaderFileSuffix); err != nil {
-			return err
-		}
-		if overallSizeWritten > 0 {
-			if err := os.Rename(tmpPath, path); err != nil {
-				return err
-			}
-		} else {
-			logrus.StandardLogger().Infof("No flow data detected in file %s, no need to write data file (only header was written), removing legacy data file\n", path)
-			if err := os.Remove(path); err != nil {
-				return err
-			}
+			return fmt.Errorf("failed to read modern data set in %s: %w", w.path, err)
 		}
 	}
-	return nil
-}
 
-type timedBlock struct {
-	ts   int64
-	data []byte
-}
-
-func convertLegacy(path string, dryRun bool) error {
-
-	if strings.HasPrefix(strings.ToLower(filepath.Base(path)), "l7proto") && !retainL7proto {
-		logrus.StandardLogger().Infof("obsolete layer 7 protocol column detected. Removing file")
-		if !dryRun {
-			if err := os.Remove(path); err != nil {
-				return err
-			}
-		}
-		return nil
-	}
-
-	// Open the legacy file
-	legacyFile, err := NewLegacyGPFile(path)
-	if err != nil {
-		return err
-	}
 	defer func() {
-		if closeErr := legacyFile.Close(); closeErr != nil && err == nil {
-			err = closeErr
+		if err := fs.Close(); err != nil {
+			panic(err)
 		}
 	}()
 
-	tmpPath := path + ".tmp"
-	os.Remove(tmpPath)
-	os.Remove(tmpPath + gpfile.HeaderFileSuffix)
-
-	newFile, err := gpfile.New(tmpPath, gpfile.ModeWrite)
+	var allBlocks []blockFlows
+	timestamps, err := fs.GetTimestamps()
 	if err != nil {
 		return err
 	}
-	defer os.Remove(tmpPath)
-	defer os.Remove(tmpPath + gpfile.HeaderFileSuffix)
-
-	timestamps := legacyFile.GetTimestamps()
-	var allBlocks []timedBlock
-
 	for _, ts := range timestamps {
-		logger := logrus.StandardLogger().WithFields(
-			logrus.Fields{
-				"ts":     ts,
-				"ts_str": time.Unix(ts, 0).String(),
-				"path":   path,
-			},
-		)
 		if ts == 0 {
 			continue
 		}
 
-		block, err := legacyFile.ReadTimedBlock(ts)
+		flows, err := fs.GetBlock(ts)
 		if err != nil {
-			if err.Error() == "Incorrect number of bytes read for decompression" || strings.HasPrefix(err.Error(), "Invalid LZ4 data detected during decompression") {
-				logger.Warnf("error: %v. Skipping block", err)
-				continue
-			}
-			logger.Errorf("failed to read timed block from legacy file: %v", err)
-			return err
+			return fmt.Errorf("failed to get block from file set: %w", err)
 		}
 
-		// Cut off the now unneccessary block prefix / suffix
-		block = block[8 : len(block)-8]
-		allBlocks = append(allBlocks, timedBlock{
-			ts:   ts,
-			data: block,
+		allBlocks = append(allBlocks, blockFlows{
+			ts:    ts,
+			iface: w.iface,
+			data:  flows,
 		})
 	}
 
@@ -251,58 +175,22 @@ func convertLegacy(path string, dryRun bool) error {
 		return allBlocks[i].ts < allBlocks[j].ts
 	})
 
-	overallSizeWritten := 0
+	metadata, err := goDB.ReadMetadata(filepath.Join(w.path, goDB.MetadataFileName))
+	if err != nil {
+		return fmt.Errorf("failed to read metadata from %s: %w", filepath.Join(w.path, goDB.MetadataFileName), err)
+	}
+	writer := goDB.NewDBWriter(c.dbDir, w.iface, encoders.EncoderTypeLZ4)
+
 	for _, block := range allBlocks {
-		logger := logrus.StandardLogger().WithFields(
-			logrus.Fields{
-				"ts":     block.ts,
-				"ts_str": time.Unix(block.ts, 0).String(),
-				"path":   path,
-			},
-		)
-		if err := newFile.WriteBlock(block.ts, block.data); err != nil {
-			logger.Errorf("failed to write block to new file: %v", err)
-			return err
+		blockMetadata, err := metadata.GetBlock(block.ts)
+		if err != nil {
+			return fmt.Errorf("failed to get block metdadata from file set: %w", err)
 		}
-		overallSizeWritten += len(block.data)
-	}
 
-	if err := newFile.Close(); err != nil {
-		return err
-	}
-
-	if !dryRun {
-		if err := os.Rename(tmpPath+gpfile.HeaderFileSuffix, path+gpfile.HeaderFileSuffix); err != nil {
-			return err
-		}
-		if overallSizeWritten > 0 {
-			if err := os.Rename(tmpPath, path); err != nil {
-				return err
-			}
-		} else {
-			logrus.StandardLogger().Infof("No flow data detected in file %s, no need to write data file (only header was written), removing legacy data file\n", path)
-			if err := os.Remove(path); err != nil {
-				return err
-			}
+		if _, err = writer.Write(block.data, blockMetadata, block.ts); err != nil {
+			return fmt.Errorf("failed to write flows: %w", err)
 		}
 	}
 
 	return nil
-}
-
-func TablePrint(timestamps []int64, w io.Writer, sortByTime bool) error {
-	if sortByTime {
-		sort.SliceStable(timestamps, func(i, j int) bool {
-			return timestamps[i] <= timestamps[j]
-		})
-	}
-
-	tw := tabwriter.NewWriter(w, 8, 4, 0, '\t', tabwriter.AlignRight)
-	fmt.Fprintln(tw, "\t#\tts\ttime (UTC)\t")
-	fmt.Fprintln(tw, "\t_\t__\t__________\t")
-
-	for i, ts := range timestamps {
-		fmt.Fprintf(tw, "\t%d\t%d\t%s\t\n", i, ts, time.Unix(ts, 0).UTC())
-	}
-	return tw.Flush()
 }
