@@ -17,8 +17,8 @@ package capture
 import (
 	"fmt"
 
-	"github.com/fako1024/gopacket"
-	"github.com/fako1024/gopacket/layers"
+	"github.com/google/gopacket"
+	"github.com/google/gopacket/layers"
 )
 
 var (
@@ -92,7 +92,7 @@ func (p *GPPacket) computeEPHash() {
 }
 
 // Populate takes a raw packet and populates a GPPacket structure from it.
-func (p *GPPacket) Populate(srcPacket gopacket.Packet) error {
+func (p *GPPacket) Populate(srcPacket gopacket.Packet, inbound bool) error {
 
 	// first things first: reset packet from previous run
 	p.reset()
@@ -104,10 +104,7 @@ func (p *GPPacket) Populate(srcPacket gopacket.Packet) error {
 	p.numBytes = uint16(srcPacket.Metadata().CaptureInfo.Length)
 
 	// read the direction from which the packet entered the interface
-	p.dirInbound = false
-	if srcPacket.Metadata().CaptureInfo.Inbound == 1 {
-		p.dirInbound = true
-	}
+	p.dirInbound = inbound
 
 	// for ESP traffic (which lacks a transport layer)
 	var skipTransport bool

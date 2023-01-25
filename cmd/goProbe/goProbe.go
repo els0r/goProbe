@@ -265,7 +265,7 @@ func handleRotations(manager *capture.Manager, logger log.Logger) {
 
 			manager.LastRotation = time.Now()
 			woChan := make(chan capture.TaggedAggFlowMap, capture.MaxIfaces)
-			writeoutsChan <- capture.Writeout{woChan, captureManager.LastRotation}
+			writeoutsChan <- capture.Writeout{Chan: woChan, Timestamp: captureManager.LastRotation}
 			manager.RotateAll(woChan)
 			close(woChan)
 
