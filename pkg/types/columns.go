@@ -9,85 +9,133 @@
 //
 /////////////////////////////////////////////////////////////////////////////////
 
-package goDB
+package types
 
 import (
+	"encoding/binary"
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/els0r/goProbe/pkg/goDB/protocols"
 )
 
+type Column interface {
+	Name() string
+	Width() Width
+}
+
 // Attribute interface. It is not meant to be implemented by structs
 // outside this package
 type Attribute interface {
-	Name() string
+	// the attribute needs to be able to represent itself as a String
+	fmt.Stringer
 
-	// ExtractStrings() extracts a list of records representing the
-	// attribute from a given key.
-	ExtractStrings(key *ExtraKey) []string
+	// an Attribute is a columnn
+	Column
+
+	// Resolvable defines whether the attribute can be resolved via a DNS
+	// reverse lookup
+	Resolvable() bool
 
 	// Ensures that this interface cannot be implemented outside this
 	// package.
 	attributeMarker()
 }
 
+type ipAttribute struct {
+	data [IPWidth]byte
+}
+
 // SipAttribute implements the source IP attribute
-type SipAttribute struct{}
+type SipAttribute struct {
+	ipAttribute
+}
+
+// Width returns the amount of bytes the IP attribute takes up on disk
+func (ipAttribute) Width() Width {
+	return IPWidth
+}
+
+// Resolvable defines whether the attribute can be resolved via a DNS
+func (ipAttribute) Resolvable() bool {
+	return true
+}
+
+func (i ipAttribute) String() string {
+	return RawIPToString(i.data[:])
+}
 
 // Name returns the attributes name
 func (SipAttribute) Name() string {
 	return "sip"
 }
 
-// ExtractStrings converts the sip byte slice into a human-readable IP address
-func (SipAttribute) ExtractStrings(key *ExtraKey) []string {
-	return []string{RawIPToString(key.Sip[:])}
-}
-
 func (SipAttribute) attributeMarker() {}
 
 // DipAttribute implements the destination IP attribute
-type DipAttribute struct{}
+type DipAttribute struct {
+	ipAttribute
+}
 
 // Name returns the attribute's name
 func (DipAttribute) Name() string {
 	return "dip"
 }
 
-// ExtractStrings converts the dip byte slice into a human-readable IP address
-func (DipAttribute) ExtractStrings(key *ExtraKey) []string {
-	return []string{RawIPToString(key.Dip[:])}
-}
 func (DipAttribute) attributeMarker() {}
 
 // ProtoAttribute implements the IP protocol attribute
-type ProtoAttribute struct{}
+type ProtoAttribute struct {
+	data uint8
+}
+
+func (p ProtoAttribute) String() string {
+	return protocols.GetIPProto(int(p.data))
+}
+
+func (ProtoAttribute) Width() Width {
+	return ProtoWidth
+}
 
 // Name returns the attribute's name
 func (ProtoAttribute) Name() string {
 	return "proto"
 }
 
-// ExtractStrings converts the numeric IP protocol into a human-readable name (e.g. "UDP")
-func (ProtoAttribute) ExtractStrings(key *ExtraKey) []string {
-	return []string{protocols.GetIPProto(int(key.Protocol))}
+func (ProtoAttribute) Resolvable() bool {
+	return false
 }
 
 func (ProtoAttribute) attributeMarker() {}
 
 // DportAttribute implements the destination port attribute
-type DportAttribute struct{}
+type DportAttribute struct {
+	data [PortWidth]byte
+}
+
+func (DportAttribute) Width() Width {
+	return PortWidth
+}
+
+func (d DportAttribute) String() string {
+	return fmt.Sprint(d.ToUint16())
+}
+
+func (DportAttribute) Resolvable() bool {
+	return false
+}
+
+func (d DportAttribute) ToUint16() uint16 {
+	return PortToUint16(d.data)
+}
+
+func PortToUint16(b [PortWidth]byte) uint16 {
+	return binary.BigEndian.Uint16(b[:])
+}
 
 // Name returns the attribute's name
 func (DportAttribute) Name() string {
 	return "dport"
-}
-
-// ExtractStrings converts the dport byte slice into a numeric port number (e.g. 443)
-func (DportAttribute) ExtractStrings(key *ExtraKey) []string {
-	return []string{strconv.Itoa(int(uint16(key.Dport[0])<<8 | uint16(key.Dport[1])))}
 }
 
 func (DportAttribute) attributeMarker() {}
@@ -100,9 +148,9 @@ func NewAttribute(name string) (Attribute, error) {
 		return SipAttribute{}, nil
 	case "dip", "dst": // dst is an alias for dip
 		return DipAttribute{}, nil
-	case "proto":
+	case "proto", "protocol", "ipproto": // ipproto/protocol is an alias for proto
 		return ProtoAttribute{}, nil
-	case "dport":
+	case "dport", "port": // port is an alias for dport
 		return DportAttribute{}, nil
 	default:
 		return nil, fmt.Errorf("Unknown attribute name: '%s'", name)
@@ -164,7 +212,7 @@ func ParseQueryType(queryType string) (attributes []Attribute, hasAttrTime, hasA
 // (e.g. check for IP attributes)
 func HasDNSAttributes(attributes []Attribute) bool {
 	for _, attr := range attributes {
-		if attr.Name() == "sip" || attr.Name() == "dip" {
+		if attr.Resolvable() {
 			return true
 		}
 	}

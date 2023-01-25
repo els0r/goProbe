@@ -18,9 +18,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
-)
 
-const DefaultTimeOutputFormat = "2006-01-02 15:04:05"
+	"github.com/els0r/goProbe/pkg/types"
+)
 
 // TimeFormats stores all supported tie formats
 var timeFormats = []string{
@@ -31,7 +31,7 @@ var timeFormats = []string{
 	time.RFC822Z,  // "02 Jan 06 15:04 -0700" // RFC822 with numeric zone
 	time.RFC1123Z, // "Mon, 02 Jan 2006 15:04:05 -0700" // RFC1123 with numeric zone
 
-	DefaultTimeOutputFormat,
+	types.DefaultTimeOutputFormat,
 
 	// custom additions
 	"2006-01-02 15:04:05 -0700",

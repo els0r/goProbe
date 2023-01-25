@@ -6,6 +6,7 @@ import (
 
 	"github.com/els0r/goProbe/pkg/api/json"
 	"github.com/els0r/goProbe/pkg/query"
+	jsoniter "github.com/json-iterator/go"
 )
 
 // handleQuery can be used to query the flow database that goPorbe writes
@@ -45,9 +46,24 @@ func (a *API) handleQuery(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// execute query
-	_, err = stmt.Execute()
+	result, err := stmt.Execute(r.Context())
 	if err != nil {
 		a.errorHandler.Handle(w, http.StatusInternalServerError, err, "failed to execute query")
+		return
+	}
+
+	if args.Format == "json" {
+		err = jsoniter.NewEncoder(w).Encode(result)
+		if err != nil {
+			a.errorHandler.Handle(w, http.StatusInternalServerError, err, "failed to JSON serialize results")
+			return
+		}
+		return
+	}
+
+	err = stmt.Print(r.Context(), result)
+	if err != nil {
+		a.errorHandler.Handle(w, http.StatusInternalServerError, err, "failed to write results")
 		return
 	}
 }

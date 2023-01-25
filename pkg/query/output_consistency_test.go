@@ -13,6 +13,7 @@ package query
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -110,7 +111,7 @@ func TestOutputConsistency(t *testing.T) {
 			}
 
 			// run query
-			_, err = stmt.Execute()
+			_, err = stmt.Execute(context.Background())
 			if err != nil {
 				t.Fatalf("[%d] failed to run query: %s", i, err)
 			}

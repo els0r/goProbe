@@ -2,8 +2,6 @@ package query
 
 import (
 	"context"
-	"encoding/binary"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -54,7 +52,6 @@ type Statement struct {
 	// parameters for external calls
 	External bool   `json:"external,omitempty"` // for error messages
 	Caller   string `json:"caller,omitempty"`   // who called the query
-	Flat     bool   `json:"flat,omitempty"`     // serialize results as-is. Only makes sense in the json encoding case
 
 	// resolution parameters (probably part of table printer)
 	Resolve        bool          `json:"dns_resolution,omitempty"`
@@ -140,7 +137,7 @@ func (s *Statement) log() {
 }
 
 // Execute runs the query with the provided parameters
-func (s *Statement) Execute() (result *results.Result, err error) {
+func (s *Statement) Execute(ctx context.Context) (result *results.Result, err error) {
 	result = &results.Result{
 		Summary: results.Summary{
 			Timings: results.Timings{
@@ -155,19 +152,10 @@ func (s *Statement) Execute() (result *results.Result, err error) {
 	result.Summary.Interfaces = s.Ifaces
 
 	// start ticker to check memory consumption every second
-	memErrors := make(chan error, 1)
-	stopHeapWatch := watchHeap(s.MaxMemPct, memErrors)
+	heapWatchCtx, cancelHeapWatch := context.WithCancel(ctx)
+	defer cancelHeapWatch()
 
-	// make sure the memory ticker stops upon function return
-	defer func() {
-
-		// if a memory breach occurred, the memory monitor is shut
-		// down already
-		if errors.Is(err, errorMemoryBreach) {
-			return
-		}
-		stopHeapWatch <- struct{}{}
-	}()
+	memErrors := watchHeap(heapWatchCtx, s.MaxMemPct)
 
 	// make sure execution stats and logging are taken care of
 	defer func() {
@@ -232,7 +220,6 @@ func (s *Statement) Execute() (result *results.Result, err error) {
 	for _, workManager := range workManagers {
 		err = workManager.ExecuteWorkerReadJobs(mapChan, memErrors)
 		if err != nil {
-
 			// an error from the routine can only be of type memory error
 			err = fmt.Errorf("%w: %v", errorMemoryBreach, err)
 
@@ -267,8 +254,8 @@ func (s *Statement) Execute() (result *results.Result, err error) {
 		}
 	}
 
-	/// DATA PRESENTATION ///
-	var sip, dip, dport, proto goDB.Attribute
+	/// RESULTS PREPARATION ///
+	var sip, dip, dport, proto types.Attribute
 	for _, attribute := range s.Query.Attributes {
 		switch attribute.Name() {
 		case "sip":
@@ -295,16 +282,16 @@ func (s *Statement) Execute() (result *results.Result, err error) {
 		rs[count].Labels.HostID = key.HostID
 		rs[count].Labels.Hostname = key.Hostname
 		if sip != nil {
-			rs[count].Attributes.SrcIP = goDB.RawIPToAddr(key.Sip[:])
+			rs[count].Attributes.SrcIP = types.RawIPToAddr(key.Sip[:])
 		}
 		if dip != nil {
-			rs[count].Attributes.DstIP = goDB.RawIPToAddr(key.Dip[:])
+			rs[count].Attributes.DstIP = types.RawIPToAddr(key.Dip[:])
 		}
 		if proto != nil {
 			rs[count].Attributes.IPProto = key.Protocol
 		}
 		if dport != nil {
-			rs[count].Attributes.DstPort = binary.LittleEndian.Uint16(key.Dport[:])
+			rs[count].Attributes.DstPort = types.PortToUint16(key.Dport)
 		}
 
 		// assign counters
@@ -321,12 +308,45 @@ func (s *Statement) Execute() (result *results.Result, err error) {
 	runtime.GC()
 	debug.FreeOSMemory()
 
+	result.Summary.Totals = agg.totals
+
+	// sort the results
+	results.By(s.SortBy, s.Direction, s.SortAscending).Sort(rs)
+
+	// stop timing everything related to the query and store the hits
+	result.Summary.Timings.QueryDuration = time.Since(result.Summary.Timings.QueryStart)
+	result.Summary.Hits.Total = len(rs)
+
+	if s.NumResults < len(rs) {
+		rs = rs[:s.NumResults]
+	}
+	result.Summary.Hits.Displayed = len(rs)
+	result.Rows = rs
+
+	return result, nil
+}
+
+func (s *Statement) Print(ctx context.Context, result *results.Result) error {
+	var sip, dip types.Attribute
+
+	var hasDNSattributes bool
+	for _, attribute := range s.Query.Attributes {
+		switch attribute.Name() {
+		case "sip":
+			sip = attribute
+			hasDNSattributes = true
+		case "dip":
+			dip = attribute
+			hasDNSattributes = true
+		}
+	}
+
 	// Find map from ips to domains for reverse DNS
 	var ips2domains map[string]string
-	if s.Resolve && goDB.HasDNSAttributes(s.Query.Attributes) {
+	if s.Resolve && hasDNSattributes {
 		var ips []string
-		for i, l := 0, len(rs); i < l && i < s.ResolveRows; i++ {
-			attr := rs[i].Attributes
+		for i, l := 0, len(result.Rows); i < l && i < s.ResolveRows; i++ {
+			attr := result.Rows[i].Attributes
 			if sip != nil {
 				ips = append(ips, attr.SrcIP.String())
 			}
@@ -339,47 +359,33 @@ func (s *Statement) Execute() (result *results.Result, err error) {
 		ips2domains = dns.TimedReverseLookup(ips, s.ResolveTimeout)
 		result.Summary.Timings.ResolutionDuration = time.Since(resolveStart)
 	}
-	result.Summary.Totals = agg.totals
 
 	// get the right printer
-	var printer TablePrinter
-
-	b := makeBasePrinter(
+	printer, err := results.NewTablePrinter(
 		s.Output,
+		s.Format,
 		s.SortBy,
 		s.HasAttrTime, s.HasAttrIface,
 		s.Direction,
 		s.Query.Attributes,
 		ips2domains,
-		agg.totals,
+		result.Summary.Totals,
+		result.Summary.Hits.Total,
+		s.ResolveTimeout,
+		s.QueryType,
 		strings.Join(s.Ifaces, ","),
 	)
-
-	switch s.Format {
-	case "txt":
-		printer = NewTextTablePrinter(b, count, s.ResolveTimeout)
-	case "json":
-		printer = NewJSONTablePrinter(b, s.QueryType, true)
-	case "csv":
-		printer = NewCSVTablePrinter(b)
-	default:
-		return result, fmt.Errorf("unknown output format %s", s.Format)
+	if err != nil {
+		return err
 	}
 
-	// sort the results
-	results.By(s.SortBy, s.Direction, s.SortAscending).Sort(rs)
+	// start ticker to check memory consumption every second
+	heapWatchCtx, cancelHeapWatch := context.WithCancel(ctx)
+	defer cancelHeapWatch()
 
-	// stop timing everything related to the query and store the hits
-	result.Summary.Timings.QueryDuration = time.Since(result.Summary.Timings.QueryStart)
-	result.Summary.Hits.Total = len(rs)
+	memErrors := watchHeap(heapWatchCtx, s.MaxMemPct)
 
-	// fill the printer
-	if s.NumResults < len(rs) {
-		rs = rs[:s.NumResults]
-	}
-	result.Summary.Hits.Displayed = len(rs)
-
-	printCtx, printCancel := context.WithCancel(context.Background())
+	printCtx, printCancel := context.WithCancel(ctx)
 	defer printCancel()
 
 	var memErr error
@@ -393,17 +399,16 @@ func (s *Statement) Execute() (result *results.Result, err error) {
 			return
 		}
 	}()
-	err = printer.AddRows(printCtx, rs)
+	err = printer.AddRows(printCtx, result.Rows)
 	if err != nil {
 		if memErr != nil {
-			return result, memErr
+			return memErr
 		}
-		return result, err
+		return err
 	}
 	printer.Footer(result)
 
-	// print the data
-	return result, printer.Print()
+	return printer.Print()
 }
 
 func createWorkManager(dbPath string, iface string, tfirst, tlast int64, query *goDB.Query, numProcessingUnits int) (workManager *goDB.DBWorkManager, nonempty bool, err error) {
@@ -417,7 +422,7 @@ func createWorkManager(dbPath string, iface string, tfirst, tlast int64, query *
 
 func (s *Statement) noResults() error {
 	if s.External || s.Format == "json" {
-		msg := ErrorMsgExternal{Status: "empty", Message: errorNoResults.Error()}
+		msg := results.ErrorMsgExternal{Status: types.StatusEmpty, Message: errorNoResults.Error()}
 		return jsoniter.NewEncoder(s.Output).Encode(msg)
 	}
 	_, err := fmt.Fprintf(s.Output, "%s\n", errorNoResults.Error())

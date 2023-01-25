@@ -19,14 +19,15 @@ import (
 	"sort"
 
 	"github.com/els0r/goProbe/pkg/goDB/protocols"
+	"github.com/els0r/goProbe/pkg/types"
 	jsoniter "github.com/json-iterator/go"
 )
 
 // Key stores the 5-tuple which defines a goProbe flow
 type Key struct {
-	Sip      [16]byte
-	Dip      [16]byte
-	Dport    [2]byte
+	Sip      [types.IPWidth]byte
+	Dip      [types.IPWidth]byte
+	Dport    [types.PortWidth]byte
 	Protocol byte
 }
 
@@ -62,9 +63,9 @@ type AggFlowList []ListItem
 // String prints the key as a comma separated attribute list
 func (k Key) String() string {
 	return fmt.Sprintf("%s,%s,%d,%s",
-		RawIPToString(k.Sip[:]),
-		RawIPToString(k.Dip[:]),
-		int(uint16(k.Dport[0])<<8|uint16(k.Dport[1])),
+		types.RawIPToString(k.Sip[:]),
+		types.RawIPToString(k.Dip[:]),
+		int(types.PortToUint16(k.Dport)),
 		protocols.GetIPProto(int(k.Protocol)),
 	)
 }
@@ -78,9 +79,9 @@ func (k Key) MarshalJSON() ([]byte, error) {
 			Dport uint16 `json:"dport"`
 			Proto string `json:"ip_protocol"`
 		}{
-			RawIPToString(k.Sip[:]),
-			RawIPToString(k.Dip[:]),
-			uint16(uint16(k.Dport[0])<<8 | uint16(k.Dport[1])),
+			types.RawIPToString(k.Sip[:]),
+			types.RawIPToString(k.Dip[:]),
+			types.PortToUint16(k.Dport),
 			protocols.GetIPProto(int(k.Protocol)),
 		},
 	)

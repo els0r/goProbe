@@ -9,7 +9,7 @@
 //
 /////////////////////////////////////////////////////////////////////////////////
 
-package query
+package results
 
 import (
 	"context"
@@ -20,11 +20,8 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/els0r/goProbe/pkg/goDB"
 	"github.com/els0r/goProbe/pkg/goDB/protocols"
-	"github.com/els0r/goProbe/pkg/results"
 	"github.com/els0r/goProbe/pkg/types"
-	jsoniter "github.com/json-iterator/go"
 )
 
 // OutputColumn ranges over all possible output columns.
@@ -64,7 +61,7 @@ const (
 // columns returns the list of OutputColumns that (might) be printed.
 // timed indicates whether we're supposed to print timestamps. attributes lists
 // all attributes we have to print. d tells us which counters to print.
-func columns(hasAttrTime, hasAttrIface bool, attributes []goDB.Attribute, d types.Direction) (cols []OutputColumn) {
+func columns(hasAttrTime, hasAttrIface bool, attributes []types.Attribute, d types.Direction) (cols []OutputColumn) {
 	if hasAttrTime {
 		cols = append(cols, OutcolTime)
 	}
@@ -143,7 +140,7 @@ func tryLookup(ips2domains map[string]string, ip string) string {
 // The format argument is used to format the string appropriatly for the desired
 // output format. ips2domains is needed for reverse DNS lookups. totals is needed
 // for percentage calculations. e contains the actual data that is extracted.
-func extract(format Formatter, ips2domains map[string]string, totals results.Counters, row results.Row, col OutputColumn) string {
+func extract(format Formatter, ips2domains map[string]string, totals Counters, row Row, col OutputColumn) string {
 	nz := func(u uint64) uint64 {
 		if u == 0 {
 			u = (1 << 64) - 1
@@ -197,7 +194,7 @@ func extract(format Formatter, ips2domains map[string]string, totals results.Cou
 
 // extractTotal is similar to extract but extracts a total from totals rather
 // than an element of an Entry.
-func extractTotal(format Formatter, totals results.Counters, col OutputColumn) string {
+func extractTotal(format Formatter, totals Counters, col OutputColumn) string {
 	switch col {
 	case OutcolInBytes, OutcolBothBytesRcvd:
 		return format.Size(totals.BytesReceived)
@@ -216,15 +213,15 @@ func extractTotal(format Formatter, totals results.Counters, col OutputColumn) s
 	}
 }
 
-// describe comes up with a nice string for the given results.SortOrder and types.Direction.
-func describe(o results.SortOrder, d types.Direction) string {
+// describe comes up with a nice string for the given SortOrder and types.Direction.
+func describe(o SortOrder, d types.Direction) string {
 	result := "accumulated "
 	switch o {
-	case results.SortPackets:
+	case SortPackets:
 		result += "packets "
-	case results.SortTraffic:
+	case SortTraffic:
 		result += "data volume "
-	case results.SortTime:
+	case SortTime:
 		return "first packet time" // TODO(lob): Is this right?
 	}
 
@@ -250,9 +247,9 @@ func describe(o results.SortOrder, d types.Direction) string {
 //
 // Note that some impementations may start printing data before you call Print().
 type TablePrinter interface {
-	AddRow(row results.Row)
-	AddRows(ctx context.Context, rows results.Rows) error
-	Footer(result *results.Result)
+	AddRow(row Row)
+	AddRows(ctx context.Context, rows Rows) error
+	Footer(result *Result)
 	Print() error
 }
 
@@ -261,48 +258,66 @@ type TablePrinter interface {
 type basePrinter struct {
 	output io.Writer
 
-	sort results.SortOrder
+	sort SortOrder
 
 	hasAttrTime, hasAttrIface bool
 
 	direction types.Direction
 
 	// query attributes
-	attributes []goDB.Attribute
+	attributes []types.Attribute
 
 	ips2domains map[string]string
 
 	// needed for computing percentages
-	totals results.Counters
+	totals Counters
 
 	ifaces string
 
 	cols []OutputColumn
 }
 
-func makeBasePrinter(
+// newBasePrinter sets up the basic printing facilities
+func newBasePrinter(
 	output io.Writer,
-	sort results.SortOrder,
+	sort SortOrder,
 	hasAttrTime, hasAttrIface bool,
 	direction types.Direction,
-	attributes []goDB.Attribute,
+	attributes []types.Attribute,
 	ips2domains map[string]string,
-	totals results.Counters,
+	totals Counters,
 	ifaces string,
 ) basePrinter {
-	result := basePrinter{
-		output,
-		sort,
-		hasAttrTime, hasAttrIface,
-		direction,
-		attributes,
-		ips2domains,
-		totals,
-		ifaces,
+	result := basePrinter{output, sort, hasAttrTime, hasAttrIface, direction, attributes, ips2domains, totals, ifaces,
 		columns(hasAttrTime, hasAttrIface, attributes, direction),
 	}
 
 	return result
+}
+
+func NewTablePrinter(output io.Writer, format string,
+	sort SortOrder,
+	hasAttrTime, hasAttrIface bool,
+	direction types.Direction,
+	attributes []types.Attribute,
+	ips2domains map[string]string,
+	totals Counters,
+	numFlows int,
+	resolveTimeout time.Duration,
+	queryType string,
+	ifaces string) (TablePrinter, error) {
+	b := newBasePrinter(output, sort, hasAttrTime, hasAttrIface, direction, attributes, ips2domains, totals, ifaces)
+
+	var printer TablePrinter
+	switch format {
+	case "txt":
+		printer = NewTextTablePrinter(b, numFlows, resolveTimeout)
+	case "csv":
+		printer = NewCSVTablePrinter(b)
+	default:
+		return nil, fmt.Errorf("unknown output format %s", format)
+	}
+	return printer, nil
 }
 
 // CSVFormatter writes lines in CSV format
@@ -375,7 +390,7 @@ func NewCSVTablePrinter(b basePrinter) *CSVTablePrinter {
 }
 
 // AddRow writes a row to the CSVTablePrinter
-func (c *CSVTablePrinter) AddRow(row results.Row) {
+func (c *CSVTablePrinter) AddRow(row Row) {
 	c.fields = c.fields[:0]
 	for _, col := range c.cols {
 		c.fields = append(c.fields, extract(CSVFormatter{}, c.ips2domains, c.totals, row, col))
@@ -383,12 +398,12 @@ func (c *CSVTablePrinter) AddRow(row results.Row) {
 	c.writer.Write(c.fields)
 }
 
-func (c *CSVTablePrinter) AddRows(ctx context.Context, rows results.Rows) error {
+func (c *CSVTablePrinter) AddRows(ctx context.Context, rows Rows) error {
 	return addRows(ctx, c, rows)
 }
 
 // Footer appends the CSV footer to the table
-func (c *CSVTablePrinter) Footer(result *results.Result) {
+func (c *CSVTablePrinter) Footer(result *Result) {
 	var summaryEntries [CountOutcol]string
 	summaryEntries[OutcolInPkts] = "Overall packets"
 	summaryEntries[OutcolInBytes] = "Overall data volume (bytes)"
@@ -413,146 +428,6 @@ func (c *CSVTablePrinter) Footer(result *results.Result) {
 func (c *CSVTablePrinter) Print() error {
 	c.writer.Flush()
 	return nil
-}
-
-// JSONFormatter writes flows in JSON
-type JSONFormatter struct{}
-
-// Size marshals s into a JSON string
-func (JSONFormatter) Size(s uint64) string {
-	result, _ := jsoniter.Marshal(s)
-	return string(result)
-}
-
-// Duration marshals d into a JSON string
-func (JSONFormatter) Duration(d time.Duration) string {
-	result, _ := jsoniter.Marshal(d)
-	return string(result)
-}
-
-// Count marshals c into a JSON string
-func (JSONFormatter) Count(c uint64) string {
-	result, _ := jsoniter.Marshal(c)
-	return string(result)
-}
-
-// Float marshals f into a JSON string
-func (JSONFormatter) Float(f float64) string {
-	result, _ := jsoniter.Marshal(f)
-	return string(result)
-}
-
-// Time marshals epoch into a JSON string
-func (JSONFormatter) Time(epoch int64) string {
-	// convert to string first for legacy reasons
-	result, _ := jsoniter.Marshal(fmt.Sprint(epoch))
-	return string(result)
-}
-
-// String marshals s into a JSON string
-func (JSONFormatter) String(s string) string {
-	result, _ := jsoniter.Marshal(s)
-	return string(result)
-}
-
-var jsonKeys = [CountOutcol]string{
-	"time",
-	"iface",
-	"sip",
-	"dip",
-	"dport",
-	"proto",
-	"packets", "packets_percent", "bytes", "bytes_percent",
-	"packets", "packets_percent", "bytes", "bytes_percent",
-	"packets", "packets_percent", "bytes", "bytes_percent",
-	"packets_rcvd", "packets_sent", "packets_percent", "bytes_rcvd", "bytes_sent", "bytes_percent",
-}
-
-// JSONTablePrinter stores all flows as JSON objects and prints them to stdout
-type JSONTablePrinter struct {
-	basePrinter
-	rows      []map[string]*jsoniter.RawMessage
-	data      map[string]interface{}
-	flat      bool
-	queryType string
-}
-
-// NewJSONTablePrinter creates a new JSONTablePrinter
-func NewJSONTablePrinter(b basePrinter, queryType string, flat bool) *JSONTablePrinter {
-	return &JSONTablePrinter{basePrinter: b,
-		rows:      nil,
-		data:      make(map[string]interface{}),
-		flat:      flat,
-		queryType: queryType,
-	}
-}
-
-// AddRow adds a new JSON formatted row to the JSON printer
-func (j *JSONTablePrinter) AddRow(row results.Row) {
-	r := make(map[string]*jsoniter.RawMessage)
-	for _, col := range j.cols {
-		val := jsoniter.RawMessage(extract(JSONFormatter{}, j.ips2domains, j.totals, row, col))
-		r[jsonKeys[col]] = &val
-	}
-	j.rows = append(j.rows, r)
-}
-
-func addRows(ctx context.Context, p TablePrinter, rows results.Rows) error {
-	for _, result := range rows {
-		select {
-		case <-ctx.Done():
-			// printer filling was cancelled
-			return fmt.Errorf("context cancelled before fully filled")
-		default:
-			p.AddRow(result)
-		}
-	}
-	return nil
-}
-
-func (j *JSONTablePrinter) AddRows(ctx context.Context, rows results.Rows) error {
-	if j.flat {
-		j.data[j.queryType] = rows
-		return nil
-	}
-	return addRows(ctx, j, rows)
-}
-
-// Footer adds the summary footer in JSON format
-func (j *JSONTablePrinter) Footer(result *results.Result) {
-	j.data["status"] = "ok"
-	j.data["ext_ips"] = externalIPs()
-
-	summary := map[string]interface{}{
-		"interface": j.ifaces,
-	}
-	var summaryEntries [CountOutcol]string
-	summaryEntries[OutcolInPkts] = "total_packets"
-	summaryEntries[OutcolInBytes] = "total_bytes"
-	summaryEntries[OutcolOutPkts] = "total_packets"
-	summaryEntries[OutcolOutBytes] = "total_bytes"
-	summaryEntries[OutcolSumPkts] = "total_packets"
-	summaryEntries[OutcolSumBytes] = "total_bytes"
-	summaryEntries[OutcolBothPktsRcvd] = "total_packets_rcvd"
-	summaryEntries[OutcolBothPktsSent] = "total_packets_sent"
-	summaryEntries[OutcolBothBytesRcvd] = "total_bytes_rcvd"
-	summaryEntries[OutcolBothBytesSent] = "total_bytes_sent"
-	for _, col := range j.cols {
-		if summaryEntries[col] != "" {
-			val := jsoniter.RawMessage(extractTotal(JSONFormatter{}, j.totals, col))
-			summary[summaryEntries[col]] = &val
-		}
-	}
-
-	j.data["summary"] = summary
-}
-
-// Print prints out the JSON formatted flows to stdout
-func (j *JSONTablePrinter) Print() error {
-	if !j.flat {
-		j.data[j.queryType] = j.rows
-	}
-	return jsoniter.NewEncoder(j.output).Encode(j.data)
 }
 
 // TextFormatter table formats goProbe flows (goQuery's default)
@@ -625,7 +500,7 @@ func (TextFormatter) Float(f float64) string {
 
 // Time formats epoch to "06-01-02 15:04:05"
 func (TextFormatter) Time(epoch int64) string {
-	return time.Unix(epoch, 0).Format(DefaultTimeOutputFormat)
+	return time.Unix(epoch, 0).Format(types.DefaultTimeOutputFormat)
 }
 
 // String returns s
@@ -682,6 +557,7 @@ func NewTextTablePrinter(b basePrinter, numFlows int, resolveTimeout time.Durati
 	for _, col := range t.cols {
 		fmt.Fprint(t.writer, header1[col])
 		fmt.Fprint(t.writer, "\t")
+
 	}
 	fmt.Fprintln(t.writer)
 
@@ -694,8 +570,21 @@ func NewTextTablePrinter(b basePrinter, numFlows int, resolveTimeout time.Durati
 	return t
 }
 
+func addRows(ctx context.Context, p TablePrinter, rows Rows) error {
+	for _, row := range rows {
+		select {
+		case <-ctx.Done():
+			// printer filling was cancelled
+			return fmt.Errorf("context cancelled before fully filled")
+		default:
+			p.AddRow(row)
+		}
+	}
+	return nil
+}
+
 // AddRow adds a flow entry to the table printer
-func (t *TextTablePrinter) AddRow(row results.Row) {
+func (t *TextTablePrinter) AddRow(row Row) {
 	for _, col := range t.cols {
 		fmt.Fprintf(t.writer, "%s\t", extract(TextFormatter{}, t.ips2domains, t.totals, row, col))
 	}
@@ -703,12 +592,12 @@ func (t *TextTablePrinter) AddRow(row results.Row) {
 	t.numPrinted++
 }
 
-func (t *TextTablePrinter) AddRows(ctx context.Context, rows results.Rows) error {
+func (t *TextTablePrinter) AddRows(ctx context.Context, rows Rows) error {
 	return addRows(ctx, t, rows)
 }
 
 // Footer appends the summary to the table printer
-func (t *TextTablePrinter) Footer(result *results.Result) {
+func (t *TextTablePrinter) Footer(result *Result) {
 	var isTotal [CountOutcol]bool
 	isTotal[OutcolInPkts] = true
 	isTotal[OutcolInBytes] = true
@@ -760,8 +649,8 @@ func (t *TextTablePrinter) Footer(result *results.Result) {
 
 	// Summary
 	fmt.Fprintf(t.footwriter, "Timespan / Interface\t: [%s, %s] / %s\n",
-		result.Summary.TimeFirst.Format(DefaultTimeOutputFormat),
-		result.Summary.TimeLast.Format(DefaultTimeOutputFormat),
+		result.Summary.TimeFirst.Format(types.DefaultTimeOutputFormat),
+		result.Summary.TimeLast.Format(types.DefaultTimeOutputFormat),
 		strings.Join(result.Summary.Interfaces, ","))
 	fmt.Fprintf(t.footwriter, "Sorted by\t: %s\n",
 		describe(t.sort, t.direction))
@@ -770,9 +659,24 @@ func (t *TextTablePrinter) Footer(result *results.Result) {
 			TextFormatter{}.Duration(result.Summary.Timings.ResolutionDuration),
 			TextFormatter{}.Duration(t.resolveTimeout))
 	}
+
+	var hitsDisplayed string
+	if result.Summary.Hits.Displayed < 1000 {
+		hitsDisplayed = fmt.Sprintf("%d", result.Summary.Hits.Displayed)
+	} else {
+		hitsDisplayed = strings.TrimSpace(TextFormatter{}.Count(uint64(result.Summary.Hits.Displayed)))
+	}
+
+	var hitsTotal string
+	if result.Summary.Hits.Total < 1000 {
+		hitsTotal = fmt.Sprintf("%d", result.Summary.Hits.Total)
+	} else {
+		hitsTotal = strings.TrimSpace(TextFormatter{}.Count(uint64(result.Summary.Hits.Total)))
+	}
+
 	fmt.Fprintf(t.footwriter, "Query stats\t: displayed top %s hits out of %s in %s\n",
-		strings.TrimSpace(TextFormatter{}.Count(uint64(result.Summary.Hits.Displayed))),
-		TextFormatter{}.Count(uint64(result.Summary.Hits.Total)),
+		hitsDisplayed,
+		hitsTotal,
 		TextFormatter{}.Duration(result.Summary.Timings.QueryDuration))
 	if result.Query.Condition != "" {
 		fmt.Fprintf(t.footwriter, "Conditions:\t: %s\n",
@@ -789,10 +693,4 @@ func (t *TextTablePrinter) Print() error {
 	fmt.Fprintln(t.output)
 
 	return nil
-}
-
-// ErrorMsgExternal storowa status and message for external callers
-type ErrorMsgExternal struct {
-	Status  string `json:"status"`
-	Message string `json:"statusMessage"`
 }

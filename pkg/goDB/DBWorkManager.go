@@ -281,7 +281,7 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workload DBWorkload, resultMap map
 
 	// Load the GPFiles corresponding to the columns we need for the query. Each file is loaded at most once.
 	var columnFiles [ColIdxCount]*gpfile.GPFile
-	for _, colIdx := range query.columnIndizes {
+	for _, colIdx := range query.columnIndices {
 		if columnFiles[colIdx], err = gpfile.New(filepath.Join(w.dbIfaceDir, dir, columnFileNames[colIdx]+".gpf"), gpfile.ModeRead); err == nil {
 			defer columnFiles[colIdx].Close()
 		} else {
@@ -298,7 +298,7 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workload DBWorkload, resultMap map
 			blockBroken = false
 		)
 
-		for _, colIdx := range query.columnIndizes {
+		for _, colIdx := range query.columnIndices {
 
 			// Read the block from the file
 			if blocks[colIdx], err = columnFiles[colIdx].ReadBlock(tstamp); err != nil {
@@ -318,7 +318,7 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workload DBWorkload, resultMap map
 
 		// Check whether all blocks have matching number of entries
 		numEntries := bitpack.Len(blocks[BytesRcvdColIdx])
-		for _, colIdx := range query.columnIndizes {
+		for _, colIdx := range query.columnIndices {
 			l := len(blocks[colIdx])
 			if colIdx.IsCounterCol() {
 				if bitpack.Len(blocks[colIdx]) != numEntries {
@@ -352,7 +352,7 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workload DBWorkload, resultMap map
 		byteWidthPktsSent := bitpack.ByteWidth(blocks[PacketsSentColIdx])
 		for i := 0; i < numEntries; i++ {
 			// Populate key for current entry
-			for _, colIdx := range query.queryAttributeIndizes {
+			for _, colIdx := range query.queryAttributeIndices {
 				copyToKeyFns[colIdx](i, &key, blocks[colIdx])
 			}
 
@@ -362,7 +362,7 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workload DBWorkload, resultMap map
 				conditionalSatisfied = true
 			} else {
 				// Populate comparison value for current entry
-				for _, colIdx := range query.conditionalAttributeIndizes {
+				for _, colIdx := range query.conditionalAttributeIndices {
 					copyToKeyFns[colIdx](i, &comparisonValue, blocks[colIdx])
 				}
 

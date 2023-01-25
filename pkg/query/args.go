@@ -158,8 +158,8 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 		return s, fmt.Errorf("unknown sorting parameter '%s' specified", a.SortBy)
 	}
 
-	var queryAttributes []goDB.Attribute
-	queryAttributes, s.HasAttrTime, s.HasAttrIface, err = goDB.ParseQueryType(a.Query)
+	var queryAttributes []types.Attribute
+	queryAttributes, s.HasAttrTime, s.HasAttrIface, err = types.ParseQueryType(a.Query)
 	if err != nil {
 		return s, fmt.Errorf("failed to parse query type: %s", err)
 	}
@@ -193,7 +193,7 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 
 	// check external calls
 	if a.External {
-		a.Condition = excludeManagementNet(a.Condition)
+		a.Condition = results.ExcludeManagementNet(a.Condition)
 
 		if a.In && a.Out {
 			a.Sum, a.In, a.Out = true, false, false

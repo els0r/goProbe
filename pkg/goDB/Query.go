@@ -15,9 +15,11 @@
 
 package goDB
 
+import "github.com/els0r/goProbe/pkg/types"
+
 type columnIndex int
 
-// Indizes for all column types
+// Indices for all column types
 const (
 	// First the attribute columns...
 	SipColIdx, _ columnIndex = iota, iota
@@ -59,7 +61,7 @@ var columnFileNames = [ColIdxCount]string{
 type Query struct {
 	// list of attributes that will be compared, e.g. "dip" "sip"
 	// in a "talk_conv" query
-	Attributes  []Attribute
+	Attributes  []types.Attribute
 	Conditional Node
 
 	hasAttrTime, hasAttrIface bool
@@ -67,17 +69,17 @@ type Query struct {
 	// Each of the following slices represents a set in the sense that each column index can occur at most once in each slice.
 	// They are populated during the call to NewQuery
 
-	// Set of indizes of all attributes used in the query, except for the special "time" attribute.
-	// Example: For query type talk_conv, queryAttributeIndizes would contain SipColIdx and DipColIdx
-	queryAttributeIndizes []columnIndex
-	// Set of indizes of all attributes used in the conditional.
-	// Example: For the conditional "dport = 80 & dnet = 0.0.0.0/0" conditionalAttributeIndizes
+	// Set of indices of all attributes used in the query, except for the special "time" attribute.
+	// Example: For query type talk_conv, queryAttributeIndices would contain SipColIdx and DipColIdx
+	queryAttributeIndices []columnIndex
+	// Set of indices of all attributes used in the conditional.
+	// Example: For the conditional "dport = 80 & dnet = 0.0.0.0/0" conditionalAttributeIndices
 	// would contain DipColIdx and DportColIdx
-	conditionalAttributeIndizes []columnIndex
-	// Set containing the union of queryAttributeIndizes, conditionalAttributeIndizes, and
+	conditionalAttributeIndices []columnIndex
+	// Set containing the union of queryAttributeIndices, conditionalAttributeIndices, and
 	// {BytesSentColIdx, PacketsRcvdColIdx, PacketsSentColIdx, ColIdxCount}.
 	// The latter four elements are needed for every query since they contain the variables we aggregate.
-	columnIndizes []columnIndex
+	columnIndices []columnIndex
 }
 
 // Computes a columnIndex from a column name. In principle we could merge
@@ -113,7 +115,7 @@ func conditionalAttributeNameToColumnIndex(name string) (colIdx columnIndex) {
 }
 
 // NewQuery creates a new Query object based on the parsed command line parameters
-func NewQuery(attributes []Attribute, conditional Node, hasAttrTime, hasAttrIface bool) *Query {
+func NewQuery(attributes []types.Attribute, conditional Node, hasAttrTime, hasAttrIface bool) *Query {
 	q := &Query{
 		Attributes:   attributes,
 		Conditional:  conditional,
@@ -126,23 +128,23 @@ func NewQuery(attributes []Attribute, conditional Node, hasAttrTime, hasAttrIfac
 
 	for _, attrib := range q.Attributes {
 		colIdx := queryAttributeNameToColumnIndex(attrib.Name())
-		q.queryAttributeIndizes = append(q.queryAttributeIndizes, colIdx)
+		q.queryAttributeIndices = append(q.queryAttributeIndices, colIdx)
 		isAttributeIndex[colIdx] = true
 	}
 
 	if q.Conditional != nil {
 		for attribName := range q.Conditional.attributes() {
 			colIdx := conditionalAttributeNameToColumnIndex(attribName)
-			q.conditionalAttributeIndizes = append(q.conditionalAttributeIndizes, colIdx)
+			q.conditionalAttributeIndices = append(q.conditionalAttributeIndices, colIdx)
 			isAttributeIndex[colIdx] = true
 		}
 	}
 	for colIdx := columnIndex(0); colIdx < ColIdxAttributeCount; colIdx++ {
 		if isAttributeIndex[colIdx] {
-			q.columnIndizes = append(q.columnIndizes, colIdx)
+			q.columnIndices = append(q.columnIndices, colIdx)
 		}
 	}
-	q.columnIndizes = append(q.columnIndizes,
+	q.columnIndices = append(q.columnIndices,
 		BytesRcvdColIdx, BytesSentColIdx, PacketsRcvdColIdx, PacketsSentColIdx)
 
 	return q

@@ -8,6 +8,12 @@ import (
 	"github.com/els0r/goProbe/pkg/types"
 )
 
+// ErrorMsgExternal stores status and message for external callers
+type ErrorMsgExternal struct {
+	Status  types.Status `json:"status"`
+	Message string       `json:"statusMessage"`
+}
+
 // Result bundles the data rows returned and the query meta information
 type Result struct {
 	Status  types.Status `json:"status"`
@@ -19,7 +25,7 @@ type Result struct {
 // Query stores the kind of query that was run
 type Query struct {
 	Attributes []string `json:"attributes"`
-	Condition  string   `json:"condition"`
+	Condition  string   `json:"condition,omitempty"`
 }
 
 // Summary stores the total traffic volume and packets observed over the
@@ -55,7 +61,7 @@ func (h Hits) String() string {
 // Row is a human-readable, aggregatable representation of goDB's data
 type Row struct {
 	// Partition Attributes
-	Labels Labels `json:"l"`
+	Labels Labels `json:"l,omitempty"`
 
 	// Attributes which can be grouped by
 	Attributes Attributes `json:"a"`

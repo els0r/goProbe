@@ -19,6 +19,7 @@ import (
 
 	"github.com/els0r/goProbe/pkg/goDB"
 	"github.com/els0r/goProbe/pkg/goDB/protocols"
+	"github.com/els0r/goProbe/pkg/types"
 	"github.com/els0r/log"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -82,10 +83,10 @@ func (f *FlowLog) TablePrint(w *tabwriter.Writer) error {
 
 		fmt.Fprintf(w, fmtStr,
 			prefix,
-			goDB.RawIPToString(g.sip[:]),
-			uint16(uint16(g.sport[0])<<8|uint16(g.sport[1])),
-			goDB.RawIPToString(g.dip[:]),
-			uint16(uint16(g.dport[0])<<8|uint16(g.dport[1])),
+			types.RawIPToString(g.sip[:]),
+			types.PortToUint16(g.sport),
+			types.RawIPToString(g.dip[:]),
+			types.PortToUint16(g.dport),
 			protocols.GetIPProto(int(g.protocol)),
 			g.nBytesRcvd, g.nBytesSent, g.nPktsRcvd, g.nPktsSent)
 	}

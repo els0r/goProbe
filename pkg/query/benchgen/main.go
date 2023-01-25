@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"text/template"
 
@@ -17,6 +16,7 @@ package query
 
 import (
 	"bytes"
+	"context"
 	"os/exec"
 	"testing"
 
@@ -138,7 +138,7 @@ func benchQuery(b *testing.B, buf *bytes.Buffer, flushFunc func(), iface, query 
 		}
 
 		// run query
-		_, err = query.Execute()
+		_, err = query.Execute(context.Background())
 		if err != nil {
 			b.Fatalf("error during execute: ` + "%%s" + `", err)
 		}
@@ -239,9 +239,7 @@ func main() {
 		err               error
 	)
 
-	gopath := os.Getenv("GOPATH")
-
-	outfile := filepath.Join(gopath, testDir, "benchmarks_test.go")
+	outfile := "benchmarks_test.go"
 
 	err = os.RemoveAll(outfile)
 	if err != nil {

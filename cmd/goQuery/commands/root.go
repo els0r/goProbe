@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/els0r/goProbe/pkg/query"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/spf13/cobra"
 )
 
@@ -160,15 +162,28 @@ func entrypoint(cmd *cobra.Command, args []string) error {
 	// convert the command line parameters
 	query, err := queryArgs.Prepare()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Query preparation failed: %s\n", err)
+		fmt.Fprintf(os.Stderr, "Query preparation failed: %v\n", err)
 		return err
 	}
 
+	ctx := context.Background()
+
 	// run the query
-	_, err = query.Execute()
+	result, err := query.Execute(ctx)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Query execution failed: %s\n", err)
+		fmt.Fprintf(os.Stderr, "Query execution failed: %v\n", err)
 		return err
 	}
-	return nil
+
+	// serialize raw result if json is selected
+	if query.Format == "json" {
+		err = jsoniter.NewEncoder(query.Output).Encode(result)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Results serialization failed: %v\n", err)
+			return err
+		}
+		return nil
+	}
+
+	return query.Print(ctx, result)
 }

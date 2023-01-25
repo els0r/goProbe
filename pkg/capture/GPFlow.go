@@ -13,8 +13,8 @@
 package capture
 
 import (
-	"github.com/els0r/goProbe/pkg/goDB"
 	"github.com/els0r/goProbe/pkg/goDB/protocols"
+	"github.com/els0r/goProbe/pkg/types"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -51,10 +51,10 @@ func (f *GPFlow) MarshalJSON() ([]byte, error) {
 			NPktsRcvd  uint64 `json:"packetsRcvd"`
 			NPktsSent  uint64 `json:"packetsSent"`
 		}{
-			goDB.RawIPToString(f.sip[:]),
-			goDB.RawIPToString(f.dip[:]),
-			uint16(uint16(f.sport[0])<<8 | uint16(f.sport[1])),
-			uint16(uint16(f.dport[0])<<8 | uint16(f.dport[1])),
+			types.RawIPToString(f.sip[:]),
+			types.RawIPToString(f.dip[:]),
+			types.PortToUint16(f.sport),
+			types.PortToUint16(f.dport),
 			protocols.GetIPProto(int(f.protocol)),
 			f.nBytesRcvd, f.nBytesSent, f.nPktsRcvd, f.nPktsSent},
 	)
@@ -147,7 +147,8 @@ func (f *GPFlow) hasIdentifiedDirection() bool {
 
 // HasBeenIdle checks whether the flow has received packets into any direction. In the flow
 // lifecycle this is the last stage.
-//    New -> Update -> Reset -> Idle -> Delete
+//
+//	New -> Update -> Reset -> Idle -> Delete
 func (f *GPFlow) HasBeenIdle() bool {
 	return (f.nPktsRcvd == 0) && (f.nPktsSent == 0)
 }
