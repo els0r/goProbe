@@ -12,6 +12,7 @@ import (
 
 	"github.com/els0r/goProbe/pkg/goDB"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
+	"github.com/els0r/goProbe/pkg/goDB/storage/gpfile"
 	"github.com/sirupsen/logrus"
 )
 
@@ -26,6 +27,7 @@ type converter struct {
 }
 
 func main() {
+	logger := logrus.StandardLogger()
 
 	var (
 		inPath, outPath string
@@ -40,7 +42,7 @@ func main() {
 	flag.Parse()
 
 	if inPath == "" || outPath == "" {
-		logrus.StandardLogger().Fatal("Paths to legacy / output goDB requried")
+		logger.Fatal("Paths to legacy / output goDB requried")
 	}
 
 	c := converter{
@@ -112,14 +114,15 @@ func isLegacyDir(path string) (bool, error) {
 
 	var countGPFs, countMeta int
 	for _, dirent := range dirents {
-		if strings.HasSuffix(strings.ToLower(dirent.Name()), ".gpf") {
+		dname := strings.TrimSpace(strings.ToLower(dirent.Name()))
+		if strings.HasSuffix(dname, gpfile.FileSuffix) {
 			countGPFs++
-		} else if strings.HasSuffix(strings.ToLower(dirent.Name()), ".gpf.meta") {
+		} else if strings.HasSuffix(dname, gpfile.FileSuffix+gpfile.HeaderFileSuffix) {
 			countMeta++
 		}
 	}
 
-	return countMeta != countGPFs, nil
+	return countMeta == 0 && countGPFs > 0, nil
 }
 
 func (c converter) convertDir(w work, dryRun bool) error {

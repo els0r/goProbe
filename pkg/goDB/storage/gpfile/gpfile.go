@@ -13,6 +13,8 @@ import (
 )
 
 const (
+	// FileSuffix denotes the suffix used for the raw data stored
+	FileSuffix = ".gpf"
 
 	// HeaderFileSuffix denotes the suffix used for the header data
 	HeaderFileSuffix = ".meta"
