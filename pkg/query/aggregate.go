@@ -58,7 +58,7 @@ func aggregate(mapChan <-chan map[goDB.ExtraKey]goDB.Val) chan aggregateResult {
 
 		// push the final result
 		if len(finalMap) == 0 {
-			resultChan <- aggregateResult{err: errorNoResults}
+			resultChan <- aggregateResult{}
 			return
 		}
 

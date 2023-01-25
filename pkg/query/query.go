@@ -84,8 +84,6 @@ const (
 func (i internalError) Error() string {
 	var s string
 	switch i {
-	case errorNoResults:
-		s = "query returned no results"
 	case errorMemoryBreach:
 		s = "memory limit exceeded"
 	case errorInternalProcessing:
@@ -139,6 +137,7 @@ func (s *Statement) log() {
 // Execute runs the query with the provided parameters
 func (s *Statement) Execute(ctx context.Context) (result *results.Result, err error) {
 	result = &results.Result{
+		Status: types.StatusOK,
 		Summary: results.Summary{
 			Timings: results.Timings{
 				// Start timing
@@ -151,18 +150,62 @@ func (s *Statement) Execute(ctx context.Context) (result *results.Result, err er
 	})
 	result.Summary.Interfaces = s.Ifaces
 
+	// cross-check parameters
+	if len(s.Ifaces) == 0 {
+		return result, fmt.Errorf("no interfaces provided")
+	}
+	if s.Query == nil {
+		return result, fmt.Errorf("query is not executable")
+	}
+	result.Query = results.Query{
+		Attributes: s.Query.AttributesToString(),
+	}
+	if s.Query.Conditional != nil {
+		result.Query.Condition = s.Query.Conditional.String()
+	}
+
 	// start ticker to check memory consumption every second
 	heapWatchCtx, cancelHeapWatch := context.WithCancel(ctx)
 	defer cancelHeapWatch()
 
 	memErrors := watchHeap(heapWatchCtx, s.MaxMemPct)
 
+	queryCtx, cancelQuery := context.WithCancel(ctx)
+	defer cancelQuery()
+
+	// Channel for handling of returned maps
+	mapChan := make(chan map[goDB.ExtraKey]goDB.Val, 1024)
+	aggregateChan := aggregate(mapChan)
+
+	go func() {
+		select {
+		case err = <-memErrors:
+			err = fmt.Errorf("%w: %v", errorMemoryBreach, err)
+			cancelQuery()
+
+			// close the map channel. This will make sure that the aggregation routine
+			// actually finishes
+			close(mapChan)
+
+			// empty the aggregateChan
+			agg := <-aggregateChan
+
+			// call the garbage collector
+			agg.aggregatedMap = nil
+			runtime.GC()
+			debug.FreeOSMemory()
+
+			return
+		case <-queryCtx.Done():
+			return
+		}
+	}()
+
 	// make sure execution stats and logging are taken care of
 	defer func() {
 		if err != nil {
 			// get duration of execution even under error
 			result.Summary.Timings.QueryDuration = time.Since(result.Summary.Timings.QueryStart)
-
 			s.Err = &Error{err}
 		}
 		// log the query
@@ -211,32 +254,10 @@ func (s *Statement) Execute(ctx context.Context) (result *results.Result, err er
 	result.Summary.TimeFirst = tSpanFirst
 	result.Summary.TimeLast = tSpanLast
 
-	// Channel for handling of returned maps
-	mapChan := make(chan map[goDB.ExtraKey]goDB.Val, 1024)
-	aggregateChan := aggregate(mapChan)
-
 	// spawn reader processing units and make them work on the individual DB blocks
 	// processing by interface is sequential, e.g. for multi-interface queries
 	for _, workManager := range workManagers {
-		err = workManager.ExecuteWorkerReadJobs(mapChan, memErrors)
-		if err != nil {
-			// an error from the routine can only be of type memory error
-			err = fmt.Errorf("%w: %v", errorMemoryBreach, err)
-
-			// close the map channel. This will make sure that the aggregation routine
-			// actually finishes
-			close(mapChan)
-
-			// empty the aggregateChan
-			agg := <-aggregateChan
-
-			// call the garbage collector
-			agg.aggregatedMap = nil
-			runtime.GC()
-			debug.FreeOSMemory()
-
-			return result, err
-		}
+		workManager.ExecuteWorkerReadJobs(queryCtx, mapChan)
 	}
 
 	// we are done with all worker jobs
@@ -244,14 +265,15 @@ func (s *Statement) Execute(ctx context.Context) (result *results.Result, err er
 
 	// wait for the job to complete
 	agg := <-aggregateChan
-	err = agg.err
+
+	// first inspect if err is set due to problems not related to aggregation
 	if err != nil {
-		switch err {
-		case errorNoResults:
-			return result, s.noResults()
-		default:
-			return result, err
-		}
+		return result, err
+	}
+
+	// check aggregation for errors
+	if agg.err != nil {
+		return result, agg.err
 	}
 
 	/// RESULTS PREPARATION ///
@@ -418,13 +440,4 @@ func createWorkManager(dbPath string, iface string, tfirst, tlast int64, query *
 	}
 	nonempty, err = workManager.CreateWorkerJobs(tfirst, tlast, query)
 	return
-}
-
-func (s *Statement) noResults() error {
-	if s.External || s.Format == "json" {
-		msg := results.ErrorMsgExternal{Status: types.StatusEmpty, Message: errorNoResults.Error()}
-		return jsoniter.NewEncoder(s.Output).Encode(msg)
-	}
-	_, err := fmt.Fprintf(s.Output, "%s\n", errorNoResults.Error())
-	return err
 }

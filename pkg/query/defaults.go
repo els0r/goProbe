@@ -1,6 +1,10 @@
 package query
 
-import "github.com/els0r/goProbe/pkg/results"
+import (
+	"time"
+
+	"github.com/els0r/goProbe/pkg/results"
+)
 
 // Defaults for query arguments
 var (
@@ -12,6 +16,7 @@ var (
 	DefaultOut            = false
 	DefaultResolveRows    = 25
 	DefaultResolveTimeout = 1 // seconds
+	DefaultQueryTimeout   = 0 * time.Second
 	DefaultSortBy         = "bytes"
 )
 

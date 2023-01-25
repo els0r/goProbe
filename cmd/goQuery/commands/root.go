@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/els0r/goProbe/pkg/query"
+	"github.com/els0r/goProbe/pkg/results"
+	"github.com/els0r/goProbe/pkg/types"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/spf13/cobra"
 )
@@ -83,11 +85,13 @@ func init() {
 	rootCmd.Flags().IntVarP(&cmdLineParams.ResolveRows, "resolve-rows", "", query.DefaultResolveRows, helpMap["ResolveRows"])
 	rootCmd.Flags().IntVarP(&cmdLineParams.ResolveTimeout, "resolve-timeout", "", query.DefaultResolveTimeout, helpMap["ResolveTimeout"])
 	rootCmd.Flags().IntVarP(&cmdLineParams.MaxMemPct, "max-mem", "", query.DefaultMaxMemPct, helpMap["MaxMemPct"])
+
+	// Duration
+	rootCmd.Flags().DurationVarP(&cmdLineParams.QueryTimeout, "timeout", "", query.DefaultQueryTimeout, helpMap["QueryTimeout"])
 }
 
 // main program entrypoint
 func entrypoint(cmd *cobra.Command, args []string) error {
-
 	// assign query args
 	var queryArgs = *cmdLineParams
 
@@ -166,13 +170,29 @@ func entrypoint(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	ctx := context.Background()
+	var ctx context.Context
+	if cmdLineParams.QueryTimeout == 0 {
+		ctx = context.Background()
+	} else {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(context.Background(), cmdLineParams.QueryTimeout)
+		defer cancel()
+	}
 
 	// run the query
 	result, err := query.Execute(ctx)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Query execution failed: %v\n", err)
 		return err
+	}
+	// empty results should be handled here exclusively
+	if len(result.Rows) == 0 {
+		if query.External || query.Format == "json" {
+			msg := results.ErrorMsgExternal{Status: types.StatusEmpty, Message: results.ErrorNoResults.Error()}
+			return jsoniter.NewEncoder(query.Output).Encode(msg)
+		}
+		fmt.Fprintln(query.Output, results.ErrorNoResults.Error())
+		return nil
 	}
 
 	// serialize raw result if json is selected
@@ -184,6 +204,10 @@ func entrypoint(cmd *cobra.Command, args []string) error {
 		}
 		return nil
 	}
-
-	return query.Print(ctx, result)
+	err = query.Print(ctx, result)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Result printing failed: %v\n", err)
+		return err
+	}
+	return nil
 }

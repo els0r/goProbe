@@ -85,6 +85,9 @@ type Args struct {
 
 	// stores who produced these args (caller)
 	Caller string
+
+	// query is aborted after timeout expires
+	QueryTimeout time.Duration
 }
 
 // String formats aruguments in human-readable form

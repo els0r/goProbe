@@ -571,11 +571,11 @@ func NewTextTablePrinter(b basePrinter, numFlows int, resolveTimeout time.Durati
 }
 
 func addRows(ctx context.Context, p TablePrinter, rows Rows) error {
-	for _, row := range rows {
+	for i, row := range rows {
 		select {
 		case <-ctx.Done():
 			// printer filling was cancelled
-			return fmt.Errorf("context cancelled before fully filled")
+			return fmt.Errorf("query cancelled before fully filled. %d/%d rows processed", i, len(rows))
 		default:
 			p.AddRow(row)
 		}

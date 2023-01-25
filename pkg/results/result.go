@@ -1,11 +1,16 @@
 package results
 
 import (
+	"errors"
 	"fmt"
 	"net/netip"
 	"time"
 
 	"github.com/els0r/goProbe/pkg/types"
+)
+
+var (
+	ErrorNoResults = errors.New("query returned no results")
 )
 
 // ErrorMsgExternal stores status and message for external callers
