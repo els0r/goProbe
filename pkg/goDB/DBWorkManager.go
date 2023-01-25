@@ -346,6 +346,10 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workload DBWorkload, resultMap map
 		}
 
 		// Iterate over block entries
+		byteWidthBytesRcvd := bitpack.ByteWidth(blocks[BytesRcvdColIdx])
+		byteWidthBytesSent := bitpack.ByteWidth(blocks[BytesSentColIdx])
+		byteWidthPktsRcvd := bitpack.ByteWidth(blocks[PacketsRcvdColIdx])
+		byteWidthPktsSent := bitpack.ByteWidth(blocks[PacketsSentColIdx])
 		for i := 0; i < numEntries; i++ {
 			// Populate key for current entry
 			for _, colIdx := range query.queryAttributeIndizes {
@@ -370,10 +374,10 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workload DBWorkload, resultMap map
 				var delta Val
 
 				// Unpack counters using bit packing
-				delta.NBytesRcvd = bitpack.Uint64At(blocks[BytesRcvdColIdx], i)
-				delta.NBytesSent = bitpack.Uint64At(blocks[BytesSentColIdx], i)
-				delta.NPktsRcvd = bitpack.Uint64At(blocks[PacketsRcvdColIdx], i)
-				delta.NPktsSent = bitpack.Uint64At(blocks[PacketsSentColIdx], i)
+				delta.NBytesRcvd = bitpack.Uint64At(blocks[BytesRcvdColIdx], i, byteWidthBytesRcvd)
+				delta.NBytesSent = bitpack.Uint64At(blocks[BytesSentColIdx], i, byteWidthBytesSent)
+				delta.NPktsRcvd = bitpack.Uint64At(blocks[PacketsRcvdColIdx], i, byteWidthPktsRcvd)
+				delta.NPktsSent = bitpack.Uint64At(blocks[PacketsSentColIdx], i, byteWidthPktsSent)
 
 				if val, exists := resultMap[key]; exists {
 					val.NBytesRcvd += delta.NBytesRcvd

@@ -181,10 +181,10 @@ func dbData(iface string, timestamp int64, aggFlowMap AggFlowMap) ([ColIdxCount]
 	}
 
 	// Perform bit packing on the counter columns
-	dbData[BytesRcvdColIdx] = bitpack.Pack(bytesRcvd, dbData[BytesRcvdColIdx])
-	dbData[BytesSentColIdx] = bitpack.Pack(bytesSent, dbData[BytesSentColIdx])
-	dbData[PacketsRcvdColIdx] = bitpack.Pack(pktsRcvd, dbData[PacketsRcvdColIdx])
-	dbData[PacketsSentColIdx] = bitpack.Pack(pktsSent, dbData[PacketsSentColIdx])
+	dbData[BytesRcvdColIdx] = bitpack.Pack(bytesRcvd)
+	dbData[BytesSentColIdx] = bitpack.Pack(bytesSent)
+	dbData[PacketsRcvdColIdx] = bitpack.Pack(pktsRcvd)
+	dbData[PacketsSentColIdx] = bitpack.Pack(pktsSent)
 
 	return dbData, *summUpdate
 }

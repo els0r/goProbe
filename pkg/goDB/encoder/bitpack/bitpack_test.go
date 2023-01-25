@@ -1,6 +1,7 @@
 package bitpack
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -25,14 +26,16 @@ func TestTable(t *testing.T) {
 			input:  []uint64{0, 1},
 			output: []byte{0x1, 0x0, 0x1},
 		},
+		{
+			input:  []uint64{0, 1, intPow(2, 63)},
+			output: []byte{0x8, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x80},
+		},
 	}
 
 	for _, c := range testTable {
 
-		var buf []byte
-
 		// Test packing
-		buf = Pack(c.input, buf)
+		buf := Pack(c.input)
 		assert.Equal(t, c.output, buf)
 
 		// Test unpacking / round-trip
@@ -49,12 +52,27 @@ func TestTable(t *testing.T) {
 		assert.Equal(t, Len(buf), len(c.input))
 	}
 }
+func TestAllByteWidths(t *testing.T) {
+	for i := 0; i < 64; i += 8 {
+		t.Run(fmt.Sprintf("%d_bytes", i/8+1), func(t *testing.T) {
+			input := []uint64{intPow(2, uint64(i))}
+
+			// Test packing
+			buf := Pack(input)
+
+			// Test unpacking / round-trip
+			orig := Unpack(buf)
+			assert.Equal(t, input, orig)
+
+			assert.Equal(t, Len(buf), len(input))
+		})
+	}
+}
 
 func TestFlipCases(t *testing.T) {
 	for nBytes := 1; nBytes <= 8; nBytes++ {
 		val := intPow(2, 8*uint64(nBytes)) - 1
-		var buf []byte
-		buf = Pack([]uint64{val, val - 1}, buf)
+		buf := Pack([]uint64{val, val - 1})
 
 		assert.Equal(t, buf[0], byte(nBytes))
 		assert.Equal(t, len(buf), 2*nBytes+1)
@@ -66,6 +84,65 @@ func TestFlipCases(t *testing.T) {
 			assert.Equal(t, buf[i], byte(255))
 		}
 	}
+}
+
+func BenchmarkEncode(b *testing.B) {
+	b.Run("worst", func(b *testing.B) {
+		var input []uint64
+		for i := 1; i < 512; i++ {
+			input = append(input, intPow(2, uint64(i%63)))
+		}
+
+		b.ReportAllocs()
+		b.SetBytes(int64(len(input) * 8))
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			Pack(input)
+		}
+	})
+}
+
+func BenchmarkDecodeAsBlock(b *testing.B) {
+	b.Run("worst", func(b *testing.B) {
+		var input []uint64
+		for i := 1; i < 512; i++ {
+			input = append(input, intPow(2, uint64(i%63)))
+		}
+
+		buf := Pack(input)
+
+		b.ReportAllocs()
+		b.SetBytes(int64(len(input) * 8))
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			Unpack(buf)
+		}
+	})
+}
+
+func BenchmarkDecodeIndividually(b *testing.B) {
+	b.Run("worst", func(b *testing.B) {
+		var input []uint64
+		for i := 1; i <= 512; i++ {
+			input = append(input, intPow(2, 63))
+		}
+
+		buf := Pack(input)
+
+		b.ReportAllocs()
+		b.SetBytes(int64(len(input) * 8))
+		b.ResetTimer()
+		neededBytes := ByteWidth(buf)
+
+		for i := 0; i < b.N; i++ {
+			for j := 0; j < 512; j++ {
+				v := Uint64At(buf, j, neededBytes)
+				_ = v
+			}
+		}
+	})
 }
 
 func intPow(n, m uint64) uint64 {

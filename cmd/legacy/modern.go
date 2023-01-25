@@ -166,6 +166,15 @@ func (l ModernFileSet) GetBlock(ts int64) (goDB.AggFlowMap, error) {
 		len(pktsSentBlock) == 8*len(protoBlock) {
 		useBitPacking = false
 	}
+	var (
+		byteWidthBytesRcvd, byteWidthBytesSent, byteWidthPktsRcvd, byteWidthPktsSent int
+	)
+	if useBitPacking {
+		byteWidthBytesRcvd = bitpack.ByteWidth(bytesRcvdBlock)
+		byteWidthBytesSent = bitpack.ByteWidth(bytesSentBlock)
+		byteWidthPktsRcvd = bitpack.ByteWidth(pktsRcvdBlock)
+		byteWidthPktsSent = bitpack.ByteWidth(pktsSentBlock)
+	}
 
 	for i := 0; i < len(protoBlock); i++ {
 
@@ -179,10 +188,10 @@ func (l ModernFileSet) GetBlock(ts int64) (goDB.AggFlowMap, error) {
 
 		// Unpack counters using bit packing if enabled, otherwise just copy them using fixed bit width
 		if useBitPacking {
-			V.NBytesRcvd = bitpack.Uint64At(bytesRcvdBlock, i)
-			V.NBytesSent = bitpack.Uint64At(bytesSentBlock, i)
-			V.NPktsRcvd = bitpack.Uint64At(pktsRcvdBlock, i)
-			V.NPktsSent = bitpack.Uint64At(pktsSentBlock, i)
+			V.NBytesRcvd = bitpack.Uint64At(bytesRcvdBlock, i, byteWidthBytesRcvd)
+			V.NBytesSent = bitpack.Uint64At(bytesSentBlock, i, byteWidthBytesSent)
+			V.NPktsRcvd = bitpack.Uint64At(pktsRcvdBlock, i, byteWidthPktsRcvd)
+			V.NPktsSent = bitpack.Uint64At(pktsSentBlock, i, byteWidthPktsSent)
 		} else {
 			V.NBytesRcvd = binary.BigEndian.Uint64(bytesRcvdBlock[i*8 : i*8+8])
 			V.NBytesSent = binary.BigEndian.Uint64(bytesSentBlock[i*8 : i*8+8])
