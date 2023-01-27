@@ -45,7 +45,11 @@ func TestTable(t *testing.T) {
 		// Test extraction of all individual values
 		expectedNeededBytes := c.output[0]
 		for i := 0; i < len(c.input); i++ {
-			assert.Equal(t, c.input[i], Uint64(buf[i*int(expectedNeededBytes)+1:i*int(expectedNeededBytes)+1+int(expectedNeededBytes)]))
+			assert.Equal(t, c.input[i], unpackTable[expectedNeededBytes]((buf[i*int(expectedNeededBytes)+1 : i*int(expectedNeededBytes)+1+int(expectedNeededBytes)])))
+		}
+
+		for i := 0; i < len(c.input); i++ {
+			assert.Equal(t, c.input[i], Uint64At(buf, i, int(expectedNeededBytes)))
 		}
 
 		// Test extraction of number of elements

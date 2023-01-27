@@ -66,16 +66,10 @@ func Unpack(b []byte) []uint64 {
 	return res
 }
 
-// Uint64 returns the decoded singular value for the provided (sub)slice, assuming that
-// the length of the slice represents the byte width of the encoding
-func Uint64(b []byte) (res uint64) {
-	return unpackTable[len(b)](b)
-}
-
 // Uint64At returns the decoded singular value from the provided slice at a given index from the
 // original slice
 func Uint64At(b []byte, at int, neededBytes int) (res uint64) {
-	return Uint64(b[neededBytes*at+1 : neededBytes*at+1+neededBytes])
+	return unpackTable[neededBytes]((b[neededBytes*at+1 : neededBytes*at+1+neededBytes]))
 }
 
 // Len returns the number of encoded elements in the compressed bfer / byte slice

@@ -1,5 +1,6 @@
 *.bz2
 *.deb
+*.test
 absolute
 cmd/goProbe/goProbe
 cmd/goQuery/goQuery
