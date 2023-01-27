@@ -96,7 +96,7 @@ func (l LegacyFileSet) Close() error {
 }
 
 func (l LegacyFileSet) GetTimestamps() ([]int64, error) {
-	return l.sipFile.timestamps, nil
+	return l.bytesRcvdFile.timestamps, nil
 }
 
 func (l LegacyFileSet) getBlock(f *LegacyGPFile, ts int64) ([]byte, error) {
@@ -169,9 +169,16 @@ func (l LegacyFileSet) GetBlock(ts int64) (goDB.AggFlowMap, error) {
 		V.NPktsRcvd = binary.BigEndian.Uint64(pktsRcvdBlock[i*8 : i*8+8])
 		V.NPktsSent = binary.BigEndian.Uint64(pktsSentBlock[i*8 : i*8+8])
 
-		// fmt.Printf("%s -> %d/%d/%d/%d\n", K, V.NBytesRcvd, V.NBytesSent, V.NPktsRcvd, V.NPktsSent)
-
-		data[K] = &V
+		entry, exists := data[K]
+		if exists {
+			entry.NBytesRcvd += V.NBytesRcvd
+			entry.NBytesSent += V.NBytesSent
+			entry.NPktsRcvd += V.NPktsRcvd
+			entry.NPktsSent += V.NPktsSent
+			data[K] = entry
+		} else {
+			data[K] = &V
+		}
 	}
 
 	return data, nil

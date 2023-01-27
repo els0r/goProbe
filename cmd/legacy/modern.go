@@ -199,7 +199,16 @@ func (l ModernFileSet) GetBlock(ts int64) (goDB.AggFlowMap, error) {
 			V.NPktsSent = binary.BigEndian.Uint64(pktsSentBlock[i*8 : i*8+8])
 		}
 
-		data[K] = &V
+		entry, exists := data[K]
+		if exists {
+			entry.NBytesRcvd += V.NBytesRcvd
+			entry.NBytesSent += V.NBytesSent
+			entry.NPktsRcvd += V.NPktsRcvd
+			entry.NPktsSent += V.NPktsSent
+			data[K] = entry
+		} else {
+			data[K] = &V
+		}
 	}
 
 	return data, nil
