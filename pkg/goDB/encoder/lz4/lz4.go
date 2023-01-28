@@ -10,7 +10,7 @@ package lz4
 #include <stdio.h>
 #include "lz4frame.h"
 
-size_t cCompress(const void *src, size_t srcSize, void *dst, size_t dstSize, int level) {
+size_t lz4Compress(const void *src, size_t srcSize, void *dst, size_t dstSize, int level) {
 	// initialize the frame compression preferences
 	// taken from https://github.com/lz4/lz4/blob/dev/examples/frameCompress.c
 	const LZ4F_preferences_t prefs = {
@@ -31,7 +31,7 @@ size_t cCompress(const void *src, size_t srcSize, void *dst, size_t dstSize, int
 	return LZ4F_compressFrame(dst, dstSize, src, srcSize, &prefs);
 }
 
-size_t getCompressBound(size_t srcSize, int level) {
+size_t lz4GetCompressBound(size_t srcSize, int level) {
 	const LZ4F_preferences_t prefs = {
 		{
 			LZ4F_default,
@@ -57,11 +57,11 @@ static const LZ4F_decompressOptions_t decompOpts = {
 	0, // reserved 1
 };
 
-const char* getErrorName(int code) {
+const char* lz4GetErrorName(int code) {
 	return LZ4F_getErrorName(code);
 }
 
-size_t cDecompress(const void *src, size_t srcSize, void *dst, size_t dstSize) {
+size_t lz4Decompress(const void *src, size_t srcSize, void *dst, size_t dstSize) {
 	// create decompression context
 	LZ4F_dctx* ctx;
 
@@ -145,14 +145,14 @@ func (e *Encoder) Type() encoders.Type {
 
 // Compress compresses the input data and writes it to dst
 func (e *Encoder) Compress(data []byte, dst io.Writer) (n int, err error) {
-	dstCapacity := int(C.getCompressBound(
+	dstCapacity := int(C.lz4GetCompressBound(
 		C.size_t(len(data)),
 		C.int(e.level),
 	))
 
 	var dstBuf = make([]byte, dstCapacity)
 
-	var compLen = int(C.cCompress(
+	var compLen = int(C.lz4Compress(
 		unsafe.Pointer(&data[0]),
 		C.size_t(len(data)),
 		unsafe.Pointer(&dstBuf[0]),
@@ -162,7 +162,7 @@ func (e *Encoder) Compress(data []byte, dst io.Writer) (n int, err error) {
 
 	// properly handle error codes from lz4
 	if compLen < 0 {
-		errName := C.GoString(C.getErrorName(C.int(compLen)))
+		errName := C.GoString(C.lz4GetErrorName(C.int(compLen)))
 		return n, fmt.Errorf("lz4: compression failed: %s (%d)", errName, compLen)
 	}
 
@@ -192,14 +192,14 @@ func (e *Encoder) Decompress(in, out []byte, src io.Reader) (n int, err error) {
 	}
 
 	// decompress data
-	nBytesDecompressed := int(C.cDecompress(
+	nBytesDecompressed := int(C.lz4Decompress(
 		unsafe.Pointer(&in[0]),
 		C.size_t(len(in)),
 		unsafe.Pointer(&out[0]),
 		C.size_t(len(out))),
 	)
 	if nBytesDecompressed < 0 {
-		errName := C.GoString(C.getErrorName(C.int(nBytesDecompressed)))
+		errName := C.GoString(C.lz4GetErrorName(C.int(nBytesDecompressed)))
 		return 0, fmt.Errorf("lz4: decompression failed: %s (%d)", errName, nBytesDecompressed)
 	}
 
