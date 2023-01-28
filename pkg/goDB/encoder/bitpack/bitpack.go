@@ -68,7 +68,7 @@ func Unpack(b []byte) []uint64 {
 
 // Uint64At returns the decoded singular value from the provided slice at a given index from the
 // original slice
-func Uint64At(b []byte, at int, neededBytes int) (res uint64) {
+func Uint64At(b []byte, at int, neededBytes int) uint64 {
 	return unpackTable[neededBytes]((b[neededBytes*at+1 : neededBytes*at+1+neededBytes]))
 }
 
@@ -179,42 +179,42 @@ func pack8(b []byte, x uint64) {
 
 func packAll1(b []byte, data []uint64) {
 	for i := 0; i < len(data); i++ {
-		pack1(b[i:], data[i])
+		pack1(b[i:i+1], data[i])
 	}
 }
 func packAll2(b []byte, data []uint64) {
 	for i := 0; i < len(data); i++ {
-		pack2(b[i*2:], data[i])
+		pack2(b[i*2:i*2+2], data[i])
 	}
 }
 func packAll3(b []byte, data []uint64) {
 	for i := 0; i < len(data); i++ {
-		pack3(b[i*3:], data[i])
+		pack3(b[i*3:i*3+3], data[i])
 	}
 }
 func packAll4(b []byte, data []uint64) {
 	for i := 0; i < len(data); i++ {
-		pack4(b[i*4:], data[i])
+		pack4(b[i*4:i*4+4], data[i])
 	}
 }
 func packAll5(b []byte, data []uint64) {
 	for i := 0; i < len(data); i++ {
-		pack5(b[i*5:], data[i])
+		pack5(b[i*5:i*5+5], data[i])
 	}
 }
 func packAll6(b []byte, data []uint64) {
 	for i := 0; i < len(data); i++ {
-		pack6(b[i*6:], data[i])
+		pack6(b[i*6:i*6+6], data[i])
 	}
 }
 func packAll7(b []byte, data []uint64) {
 	for i := 0; i < len(data); i++ {
-		pack7(b[i*7:], data[i])
+		pack7(b[i*7:i*7+7], data[i])
 	}
 }
 func packAll8(b []byte, data []uint64) {
 	for i := 0; i < len(data); i++ {
-		pack8(b[i*8:], data[i])
+		pack8(b[i*8:i*8+8], data[i])
 	}
 }
 
