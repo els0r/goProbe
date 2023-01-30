@@ -6,6 +6,8 @@ import (
 
 	"github.com/els0r/goProbe/pkg/api/json"
 	"github.com/els0r/goProbe/pkg/query"
+	"github.com/els0r/goProbe/pkg/results"
+	"github.com/els0r/goProbe/pkg/types"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -51,8 +53,14 @@ func (a *API) handleQuery(w http.ResponseWriter, r *http.Request) {
 		a.errorHandler.Handle(w, http.StatusInternalServerError, err, "failed to execute query")
 		return
 	}
-
 	if args.Format == "json" {
+		// handle empty results only for the external case. Otherwise,
+		// return the entire result data structure with empty "rows"
+		if len(result.Rows) == 0 && stmt.External {
+			msg := results.ErrorMsgExternal{Status: types.StatusEmpty, Message: results.ErrorNoResults.Error()}
+			jsoniter.NewEncoder(w).Encode(msg)
+			return
+		}
 		err = jsoniter.NewEncoder(w).Encode(result)
 		if err != nil {
 			a.errorHandler.Handle(w, http.StatusInternalServerError, err, "failed to JSON serialize results")
