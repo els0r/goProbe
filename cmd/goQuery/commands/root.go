@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,6 +10,9 @@ import (
 	"time"
 
 	"github.com/els0r/goProbe/pkg/query"
+	"github.com/els0r/goProbe/pkg/results"
+	"github.com/els0r/goProbe/pkg/types"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/spf13/cobra"
 )
 
@@ -81,11 +85,13 @@ func init() {
 	rootCmd.Flags().IntVarP(&cmdLineParams.ResolveRows, "resolve-rows", "", query.DefaultResolveRows, helpMap["ResolveRows"])
 	rootCmd.Flags().IntVarP(&cmdLineParams.ResolveTimeout, "resolve-timeout", "", query.DefaultResolveTimeout, helpMap["ResolveTimeout"])
 	rootCmd.Flags().IntVarP(&cmdLineParams.MaxMemPct, "max-mem", "", query.DefaultMaxMemPct, helpMap["MaxMemPct"])
+
+	// Duration
+	rootCmd.Flags().DurationVarP(&cmdLineParams.QueryTimeout, "timeout", "", query.DefaultQueryTimeout, helpMap["QueryTimeout"])
 }
 
 // main program entrypoint
 func entrypoint(cmd *cobra.Command, args []string) error {
-
 	// assign query args
 	var queryArgs = *cmdLineParams
 
@@ -123,7 +129,6 @@ func entrypoint(cmd *cobra.Command, args []string) error {
 			return err
 		}
 	} else {
-
 		// check that query type or other subcommands were provided
 		if len(args) == 0 {
 			err := errors.New("No query type or command provided")
@@ -161,14 +166,47 @@ func entrypoint(cmd *cobra.Command, args []string) error {
 	// convert the command line parameters
 	query, err := queryArgs.Prepare()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Query preparation failed: %s\n", err)
+		fmt.Fprintf(os.Stderr, "Query preparation failed: %v\n", err)
 		return err
 	}
 
+	var ctx context.Context
+	if cmdLineParams.QueryTimeout == 0 {
+		ctx = context.Background()
+	} else {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(context.Background(), cmdLineParams.QueryTimeout)
+		defer cancel()
+	}
+
 	// run the query
-	err = query.Execute()
+	result, err := query.Execute(ctx)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Query execution failed: %s\n", err)
+		fmt.Fprintf(os.Stderr, "Query execution failed: %v\n", err)
+		return err
+	}
+	// empty results should be handled here exclusively
+	if len(result.Rows) == 0 {
+		if query.External || query.Format == "json" {
+			msg := results.ErrorMsgExternal{Status: types.StatusEmpty, Message: results.ErrorNoResults.Error()}
+			return jsoniter.NewEncoder(query.Output).Encode(msg)
+		}
+		fmt.Fprintln(query.Output, results.ErrorNoResults.Error())
+		return nil
+	}
+
+	// serialize raw result if json is selected
+	if query.Format == "json" {
+		err = jsoniter.NewEncoder(query.Output).Encode(result)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Results serialization failed: %v\n", err)
+			return err
+		}
+		return nil
+	}
+	err = query.Print(ctx, result)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Result printing failed: %v\n", err)
 		return err
 	}
 	return nil

@@ -36,7 +36,7 @@ var cleanCmd = &cobra.Command{
 			return errors.New("clean requires exactly one date as argument")
 		}
 		// convert date into timestamp
-		tClean, err := goDB.ParseTimeArgument(args[0])
+		tClean, err := query.ParseTimeArgument(args[0])
 		if err != nil {
 			return fmt.Errorf("failed to set clean date: %s", err)
 		}

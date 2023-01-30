@@ -2,7 +2,7 @@ package commands
 
 var helpBase = `
   goquery -i <interfaces> [-hax] [--in|--out|--sum] [-n <max_n>] [--resolve]
-  [-e txt|csv|json|influxdb] [-d <db-path>] [-f <timestamp>] [-l <timestamp>]
+  [-e txt|csv|json] [-d <db-path>] [-f <timestamp>] [-l <timestamp>]
   [-c <conditions>] [-s <column>] ` + supportedCmds + `
 
   Flow database query tool to extract flow statistics from the goDB database
@@ -35,12 +35,12 @@ var helpBaseLong = helpBase + `
       agg_talk_port   aggregation of conversation and applications
                       (equivalent to columns "sip,dip,dport,proto")
       raw             a raw dump of all flows, including timestamps and interfaces
-                        (equiv. to columns "time,iface,sip,dip,dport,proto")
+                      (equivalent to columns "time,iface,sip,dip,dport,proto")
 `
 
 var helpMap = map[string]string{
 	"Ifaces": `Interfaces for which the query should be performed
-(e.g. "eth0", "eth0,t4_33760").
+(e.g. "eth0 "eth0,t4_33760").
 You can specify "ANY" to query all interfaces.
 `,
 	"Help": `Display this help text.
@@ -59,24 +59,52 @@ ALLOWED FORMATS
   Mon, 02 Jan 2006 15:04:05 -0700       RFC1123 with numeric zone
 
   02.01.2006 15:04:05                   CUSTOM
-  02.01.2006 15:04
-  02.01.06 15:04
-  2006-01-02 15:04:05
-  2006-01-02 15:04
-  2.1.06 15:04:05
-  2.1.06 15:04
-  2.1.2006 15:04:05
-  2.1.2006 15:04
-  02.1.2006 15:04:05
-  02.1.2006 15:04
-  2.01.2006 15:04:05
-  2.01.2006 15:04
-  02.1.06 15:04:05
-  02.1.06 15:04
-  2.01.06 15:04:05
-  2.01.06 15:04
+	2006-01-02 15:04:05 -0700
+	2006-01-02 15:04 -0700
+	2006-01-02 15:04
+	06-01-02 15:04:05 -0700
+	06-01-02 15:04 -0700
+	06-01-02 15:04:05
+	06-01-02 15:04
+	02-01-2006 15:04:05 -0700
+	02-01-2006 15:04 -0700
+	02-01-2006 15:04:05
+	02-01-2006 15:04
+	02-01-06 15:04:05 -0700
+	02-01-06 15:04 -0700
+	02-01-06 15:04:05
+	02-01-06 15:04
+	02.01.2006 15:04
+	02.01.2006 15:04 -0700
+	02.01.06 15:04
+	02.01.06 15:04 -0700
+	2.1.06 15:04:05
+	2.1.06 15:04:05 -0700
+	2.1.06 15:04
+	2.1.06 15:04 -0700
+	2.1.2006 15:04:05
+	2.1.2006 15:04:05 -0700
+	2.1.2006 15:04
+	2.1.2006 15:04 -0700
+	02.1.2006 15:04:05
+	02.1.2006 15:04:05 -0700
+	02.1.2006 15:04
+	02.1.2006 15:04 -0700
+	2.01.2006 15:04:05
+	2.01.2006 15:04:05 -0700
+	2.01.2006 15:04
+	2.01.2006 15:04 -0700
+	02.1.06 15:04:05
+	02.1.06 15:04:05 -0700
+	02.1.06 15:04
+	02.1.06 15:04 -0700
+	2.01.06 15:04:05
+	2.01.06 15:04:05 -0700
+	2.01.06 15:04
+	2.01.06 15:04 -0700
 
   -15d:04h:05m                          RELATIVE
+  -15d4h5m
 
 Relative time will be evaluated with respect to NOW. The call can
 be varied to include any (integer) combination of days (d), hours
@@ -283,7 +311,10 @@ different when the packets were captured.
 	"ResolveRows": `Maximum number of output rows to perform DNS resolution against. Before
 setting this to some high value (e.g. 1000), consider that this may incur
 a high load on the DNS resolver and network!
-`}
+`,
+	"QueryTimeout": `Abort query processing after timeout expires
+`,
+}
 
 var adminHelp = `Advanced maintenance options (should not be used in interactive mode).
 

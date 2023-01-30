@@ -2,18 +2,13 @@ package query
 
 import (
 	"github.com/els0r/goProbe/pkg/goDB"
+	"github.com/els0r/goProbe/pkg/results"
 )
 
 type aggregateResult struct {
 	aggregatedMap map[goDB.ExtraKey]goDB.Val
-	totals        Counts
+	totals        results.Counters
 	err           error
-}
-
-// Counts is a convenience wrapper around the summed counters
-type Counts struct {
-	PktsRcvd, PktsSent   uint64
-	BytesRcvd, BytesSent uint64
 }
 
 // receive maps on mapChan until mapChan gets closed.
@@ -29,7 +24,7 @@ func aggregate(mapChan <-chan map[goDB.ExtraKey]goDB.Val) chan aggregateResult {
 		defer close(resultChan)
 
 		var finalMap = make(map[goDB.ExtraKey]goDB.Val)
-		var totals Counts
+		var totals results.Counters
 
 		// Temporary goDB.Val because map values cannot be updated in-place
 		var tempVal goDB.Val
@@ -42,10 +37,10 @@ func aggregate(mapChan <-chan map[goDB.ExtraKey]goDB.Val) chan aggregateResult {
 			}
 
 			for k, v := range item {
-				totals.BytesRcvd += v.NBytesRcvd
+				totals.BytesReceived += v.NBytesRcvd
 				totals.BytesSent += v.NBytesSent
-				totals.PktsRcvd += v.NPktsRcvd
-				totals.PktsSent += v.NPktsSent
+				totals.PacketsReceived += v.NPktsRcvd
+				totals.PacketsSent += v.NPktsSent
 
 				if tempVal, exists = finalMap[k]; exists {
 					tempVal.NBytesRcvd += v.NBytesRcvd
@@ -63,7 +58,7 @@ func aggregate(mapChan <-chan map[goDB.ExtraKey]goDB.Val) chan aggregateResult {
 
 		// push the final result
 		if len(finalMap) == 0 {
-			resultChan <- aggregateResult{err: errorNoResults}
+			resultChan <- aggregateResult{}
 			return
 		}
 

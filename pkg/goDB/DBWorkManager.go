@@ -14,11 +14,13 @@
 package goDB
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/els0r/goProbe/pkg/goDB/encoder/bitpack"
@@ -152,14 +154,9 @@ func (w *DBWorkManager) CreateWorkerJobs(tfirst int64, tlast int64, query *Query
 }
 
 // main query processing
-func (w *DBWorkManager) grabAndProcessWorkload(workloadChan <-chan DBWorkload, mapChan chan map[ExtraKey]Val, cancel <-chan struct{}) <-chan struct{} {
-
-	done := make(chan struct{})
-
+func (w *DBWorkManager) grabAndProcessWorkload(ctx context.Context, wg *sync.WaitGroup, workloadChan <-chan DBWorkload, mapChan chan map[ExtraKey]Val) {
 	go func() {
-		defer func(doneChan chan struct{}) {
-			doneChan <- struct{}{}
-		}(done)
+		defer wg.Done()
 
 		// parse conditions
 		var err error
@@ -167,7 +164,8 @@ func (w *DBWorkManager) grabAndProcessWorkload(workloadChan <-chan DBWorkload, m
 		var workload DBWorkload
 		for chanOpen := true; chanOpen; {
 			select {
-			case <-cancel:
+			case <-ctx.Done():
+				// query was cancelled, exit
 				return
 			case workload, chanOpen = <-workloadChan:
 				if chanOpen {
@@ -175,8 +173,7 @@ func (w *DBWorkManager) grabAndProcessWorkload(workloadChan <-chan DBWorkload, m
 					resultMap := make(map[ExtraKey]Val)
 
 					// if there is an error during one of the read jobs, throw a syslog message and terminate
-					if err = w.readBlocksAndEvaluate(workload, resultMap); err != nil {
-
+					if err = w.readBlocksAndEvaluate(ctx, workload, resultMap); err != nil {
 						w.logger.Error(err.Error())
 						mapChan <- nil
 						return
@@ -188,28 +185,17 @@ func (w *DBWorkManager) grabAndProcessWorkload(workloadChan <-chan DBWorkload, m
 		}
 		return
 	}()
-	return done
-}
-
-type workerCommunication struct {
-	cancel chan struct{}
-	done   <-chan struct{}
 }
 
 // ExecuteWorkerReadJobs runs the query concurrently with multiple sprocessing units
-func (w *DBWorkManager) ExecuteWorkerReadJobs(mapChan chan map[ExtraKey]Val, memErrors <-chan error) error {
-
+func (w *DBWorkManager) ExecuteWorkerReadJobs(ctx context.Context, mapChan chan map[ExtraKey]Val) {
 	workloadChan := make(chan DBWorkload, len(w.workloads))
 
-	var controlChannels []workerCommunication
-
+	var wg = new(sync.WaitGroup)
+	wg.Add(w.numProcessingUnits)
 	for i := 0; i < w.numProcessingUnits; i++ {
-		comms := workerCommunication{cancel: make(chan struct{}, 1)}
-
 		// start worker up
-		comms.done = w.grabAndProcessWorkload(workloadChan, mapChan, comms.cancel)
-
-		controlChannels = append(controlChannels, comms)
+		w.grabAndProcessWorkload(ctx, wg, workloadChan, mapChan)
 	}
 
 	// push the workloads onto the channel
@@ -218,36 +204,8 @@ func (w *DBWorkManager) ExecuteWorkerReadJobs(mapChan chan map[ExtraKey]Val, mem
 	}
 	close(workloadChan)
 
-	// check if the workers are done and also monitor memory
-	var (
-		err       error
-		completed int
-	)
-	for {
-		for i, c := range controlChannels {
-			select {
-			case err = <-memErrors:
-				if err != nil {
-					// log the memory error and assign type memory breach
-					// for callers of this function
-					w.logger.Error(err)
-
-					// send cancel to all workers
-					for _, c := range controlChannels {
-						c.cancel <- struct{}{}
-					}
-				}
-			case <-c.done:
-				completed++
-				w.logger.Debugf("worker %d finished, %d/%d are done", i, completed, w.numProcessingUnits)
-
-				// return once done with processing
-				if completed == w.numProcessingUnits {
-					return err
-				}
-			}
-		}
-	}
+	// check if all workers are done
+	wg.Wait()
 }
 
 // Array of functions to extract a specific entry from a block (represented as a byteslice)
@@ -269,7 +227,7 @@ var copyToKeyFns = [ColIdxAttributeCount]func(int, *ExtraKey, []byte){
 
 // Block evaluation and aggregation -----------------------------------------------------
 // this is where the actual reading and aggregation magic happens
-func (w *DBWorkManager) readBlocksAndEvaluate(workload DBWorkload, resultMap map[ExtraKey]Val) error {
+func (w *DBWorkManager) readBlocksAndEvaluate(ctx context.Context, workload DBWorkload, resultMap map[ExtraKey]Val) error {
 	var err error
 
 	var (
@@ -281,7 +239,7 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workload DBWorkload, resultMap map
 
 	// Load the GPFiles corresponding to the columns we need for the query. Each file is loaded at most once.
 	var columnFiles [ColIdxCount]*gpfile.GPFile
-	for _, colIdx := range query.columnIndizes {
+	for _, colIdx := range query.columnIndices {
 		if columnFiles[colIdx], err = gpfile.New(filepath.Join(w.dbIfaceDir, dir, columnFileNames[colIdx]+".gpf"), gpfile.ModeRead); err == nil {
 			defer columnFiles[colIdx].Close()
 		} else {
@@ -292,101 +250,106 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workload DBWorkload, resultMap map
 	// Process the workload
 	// The workload consists of timestamps whose blocks we should process.
 	for b, tstamp := range workload.load {
+		select {
+		case <-ctx.Done():
+			w.logger.Infof("[D %s; B %d] Query cancelled. %d/%d blocks processed", dir, tstamp, b, len(workload.load))
+			return nil
+		default:
+			var (
+				blocks      [ColIdxCount][]byte
+				blockBroken bool
+			)
 
-		var (
-			blocks      [ColIdxCount][]byte
-			blockBroken = false
-		)
+			for _, colIdx := range query.columnIndices {
 
-		for _, colIdx := range query.columnIndizes {
-
-			// Read the block from the file
-			if blocks[colIdx], err = columnFiles[colIdx].ReadBlock(tstamp); err != nil {
-				blockBroken = true
-				w.logger.Warnf("[D %s; B %d] Failed to read %s.gpf: %s", dir, tstamp, columnFileNames[colIdx], err.Error())
-				break
-			}
-		}
-
-		if query.hasAttrTime {
-			key.Time = tstamp
-		}
-
-		if query.hasAttrIface {
-			key.Iface = w.iface
-		}
-
-		// Check whether all blocks have matching number of entries
-		numEntries := bitpack.Len(blocks[BytesRcvdColIdx])
-		for _, colIdx := range query.columnIndizes {
-			l := len(blocks[colIdx])
-			if colIdx.IsCounterCol() {
-				if bitpack.Len(blocks[colIdx]) != numEntries {
+				// Read the block from the file
+				if blocks[colIdx], err = columnFiles[colIdx].ReadBlock(tstamp); err != nil {
 					blockBroken = true
-					w.logger.Warnf("[Bl %d] Incorrect number of entries in file [%s.gpf]. Expected %d, found %d", b, columnFileNames[colIdx], numEntries, bitpack.Len(blocks[colIdx]))
-					break
-				}
-			} else {
-				if l/columnSizeofs[colIdx] != numEntries {
-					blockBroken = true
-					w.logger.Warnf("[Bl %d] Incorrect number of entries in file [%s.gpf]. Expected %d, found %d", b, columnFileNames[colIdx], numEntries, l/columnSizeofs[colIdx])
-					break
-				}
-				if l%columnSizeofs[colIdx] != 0 {
-					blockBroken = true
-					w.logger.Warnf("[Bl %d] Entry size does not evenly divide block size in file [%s.gpf]", b, columnFileNames[colIdx])
+					w.logger.Warnf("[D %s; B %d] Failed to read %s.gpf: %s", dir, tstamp, columnFileNames[colIdx], err.Error())
 					break
 				}
 			}
-		}
 
-		// In case any error was observed during above sanity checks, skip this whole block
-		if blockBroken {
-			continue
-		}
-
-		// Iterate over block entries
-		byteWidthBytesRcvd := bitpack.ByteWidth(blocks[BytesRcvdColIdx])
-		byteWidthBytesSent := bitpack.ByteWidth(blocks[BytesSentColIdx])
-		byteWidthPktsRcvd := bitpack.ByteWidth(blocks[PacketsRcvdColIdx])
-		byteWidthPktsSent := bitpack.ByteWidth(blocks[PacketsSentColIdx])
-		for i := 0; i < numEntries; i++ {
-			// Populate key for current entry
-			for _, colIdx := range query.queryAttributeIndizes {
-				copyToKeyFns[colIdx](i, &key, blocks[colIdx])
+			if query.hasAttrTime {
+				key.Time = tstamp
 			}
 
-			// Check whether conditional is satisfied for current entry
-			var conditionalSatisfied bool
-			if query.Conditional == nil {
-				conditionalSatisfied = true
-			} else {
-				// Populate comparison value for current entry
-				for _, colIdx := range query.conditionalAttributeIndizes {
-					copyToKeyFns[colIdx](i, &comparisonValue, blocks[colIdx])
-				}
-
-				conditionalSatisfied = query.Conditional.evaluate(&comparisonValue)
+			if query.hasAttrIface {
+				key.Iface = w.iface
 			}
 
-			if conditionalSatisfied {
-				// Update aggregates
-				var delta Val
-
-				// Unpack counters using bit packing
-				delta.NBytesRcvd = bitpack.Uint64At(blocks[BytesRcvdColIdx], i, byteWidthBytesRcvd)
-				delta.NBytesSent = bitpack.Uint64At(blocks[BytesSentColIdx], i, byteWidthBytesSent)
-				delta.NPktsRcvd = bitpack.Uint64At(blocks[PacketsRcvdColIdx], i, byteWidthPktsRcvd)
-				delta.NPktsSent = bitpack.Uint64At(blocks[PacketsSentColIdx], i, byteWidthPktsSent)
-
-				if val, exists := resultMap[key]; exists {
-					val.NBytesRcvd += delta.NBytesRcvd
-					val.NBytesSent += delta.NBytesSent
-					val.NPktsRcvd += delta.NPktsRcvd
-					val.NPktsSent += delta.NPktsSent
-					resultMap[key] = val
+			// Check whether all blocks have matching number of entries
+			numEntries := bitpack.Len(blocks[BytesRcvdColIdx])
+			for _, colIdx := range query.columnIndices {
+				l := len(blocks[colIdx])
+				if colIdx.IsCounterCol() {
+					if bitpack.Len(blocks[colIdx]) != numEntries {
+						blockBroken = true
+						w.logger.Warnf("[Bl %d] Incorrect number of entries in file [%s.gpf]. Expected %d, found %d", b, columnFileNames[colIdx], numEntries, bitpack.Len(blocks[colIdx]))
+						break
+					}
 				} else {
-					resultMap[key] = delta
+					if l/columnSizeofs[colIdx] != numEntries {
+						blockBroken = true
+						w.logger.Warnf("[Bl %d] Incorrect number of entries in file [%s.gpf]. Expected %d, found %d", b, columnFileNames[colIdx], numEntries, l/columnSizeofs[colIdx])
+						break
+					}
+					if l%columnSizeofs[colIdx] != 0 {
+						blockBroken = true
+						w.logger.Warnf("[Bl %d] Entry size does not evenly divide block size in file [%s.gpf]", b, columnFileNames[colIdx])
+						break
+					}
+				}
+			}
+
+			// In case any error was observed during above sanity checks, skip this whole block
+			if blockBroken {
+				continue
+			}
+
+			// Iterate over block entries
+			byteWidthBytesRcvd := bitpack.ByteWidth(blocks[BytesRcvdColIdx])
+			byteWidthBytesSent := bitpack.ByteWidth(blocks[BytesSentColIdx])
+			byteWidthPktsRcvd := bitpack.ByteWidth(blocks[PacketsRcvdColIdx])
+			byteWidthPktsSent := bitpack.ByteWidth(blocks[PacketsSentColIdx])
+			for i := 0; i < numEntries; i++ {
+				// Populate key for current entry
+				for _, colIdx := range query.queryAttributeIndices {
+					copyToKeyFns[colIdx](i, &key, blocks[colIdx])
+				}
+
+				// Check whether conditional is satisfied for current entry
+				var conditionalSatisfied bool
+				if query.Conditional == nil {
+					conditionalSatisfied = true
+				} else {
+					// Populate comparison value for current entry
+					for _, colIdx := range query.conditionalAttributeIndices {
+						copyToKeyFns[colIdx](i, &comparisonValue, blocks[colIdx])
+					}
+
+					conditionalSatisfied = query.Conditional.evaluate(&comparisonValue)
+				}
+
+				if conditionalSatisfied {
+					// Update aggregates
+					var delta Val
+
+					// Unpack counters using bit packing
+					delta.NBytesRcvd = bitpack.Uint64At(blocks[BytesRcvdColIdx], i, byteWidthBytesRcvd)
+					delta.NBytesSent = bitpack.Uint64At(blocks[BytesSentColIdx], i, byteWidthBytesSent)
+					delta.NPktsRcvd = bitpack.Uint64At(blocks[PacketsRcvdColIdx], i, byteWidthPktsRcvd)
+					delta.NPktsSent = bitpack.Uint64At(blocks[PacketsSentColIdx], i, byteWidthPktsSent)
+
+					if val, exists := resultMap[key]; exists {
+						val.NBytesRcvd += delta.NBytesRcvd
+						val.NBytesSent += delta.NBytesSent
+						val.NPktsRcvd += delta.NPktsRcvd
+						val.NPktsSent += delta.NPktsSent
+						resultMap[key] = val
+					} else {
+						resultMap[key] = delta
+					}
 				}
 			}
 		}

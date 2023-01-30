@@ -2,6 +2,7 @@ package query
 
 import (
 	"bytes"
+	"context"
 	"testing"
 
 	jsoniter "github.com/json-iterator/go"
@@ -46,7 +47,7 @@ func TestEmptyOutput(t *testing.T) {
 			stmt.Output = buf
 
 			// execute query
-			err = stmt.Execute()
+			_, err = stmt.Execute(context.Background())
 			if err != nil {
 				t.Fatalf("execute query: %s", err)
 			}
@@ -101,7 +102,7 @@ func TestSimpleQuery(t *testing.T) {
 			}
 
 			// execute query
-			err = stmt.Execute()
+			_, err = stmt.Execute(context.Background())
 			if err != nil {
 				t.Fatalf("execute query: %s", err)
 			}

@@ -8,10 +8,11 @@
 //
 /////////////////////////////////////////////////////////////////////////////////
 
+//go:build !OSAG
 // +build !OSAG
 
-package query
+package results
 
-func externalIPs() []string {
+func ExternalIPs() []string {
 	return []string{}
 }

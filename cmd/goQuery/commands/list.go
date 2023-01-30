@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/els0r/goProbe/pkg/goDB"
-	"github.com/els0r/goProbe/pkg/query"
+	"github.com/els0r/goProbe/pkg/results"
 	"github.com/els0r/goProbe/pkg/util"
 	"github.com/spf13/cobra"
 )
@@ -62,7 +62,7 @@ func listInterfaces(dbPath string, external bool) error {
 
 			is := summary.Interfaces[iface]
 
-			tf := query.NewTextFormatter()
+			tf := results.NewTextFormatter()
 			fmt.Fprintf(wtxt, "%s\t%s\t%s\t%s\t%s\t\n",
 				ifaceDesc,
 				tf.Count(is.FlowCount),
@@ -72,7 +72,7 @@ func listInterfaces(dbPath string, external bool) error {
 			totalFlowCount += is.FlowCount
 			totalTraffic += is.Traffic
 		}
-		tf := query.NewTextFormatter()
+		tf := results.NewTextFormatter()
 		fmt.Fprintln(wtxt, "\t \t \t \t \t")
 		fmt.Fprintf(wtxt, "Total\t%s\t%s\t\t\t\n",
 			tf.Count(totalFlowCount),

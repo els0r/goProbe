@@ -8,14 +8,15 @@
 //
 /////////////////////////////////////////////////////////////////////////////////
 
+//go:build !OSAG
 // +build !OSAG
 
-package query
+package results
 
-func excludeManagementNet(conditional string) string {
+func ExcludeManagementNet(conditional string) string {
 	return conditional
 }
 
-func hideManagementTraffic(conditional string) string {
+func HideManagementTraffic(conditional string) string {
 	return conditional
 }

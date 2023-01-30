@@ -1,17 +1,21 @@
 package query
 
 import (
-	"errors"
+	"context"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/els0r/goProbe/pkg/goDB"
 	"github.com/els0r/goProbe/pkg/query/dns"
+	"github.com/els0r/goProbe/pkg/results"
+	"github.com/els0r/goProbe/pkg/types"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -32,18 +36,18 @@ type Statement struct {
 	QueryType  string `json:"query_type"`
 
 	// which direction is added
-	Direction Direction `json:"direction"`
+	Direction types.Direction `json:"direction"`
 
 	// time selection
 	First int64 `json:"from"`
 	Last  int64 `json:"to"`
 
 	// formatting
-	Format        string    `json:"format"`
-	NumResults    int       `json:"limit"`
-	SortBy        SortOrder `json:"sort_by"`
-	SortAscending bool      `json:"sort_ascending,omitempty"`
-	Output        io.Writer `json:"-"`
+	Format        string            `json:"format"`
+	NumResults    int               `json:"limit"`
+	SortBy        results.SortOrder `json:"sort_by"`
+	SortAscending bool              `json:"sort_ascending,omitempty"`
+	Output        io.Writer         `json:"-"`
 
 	// parameters for external calls
 	External bool   `json:"external,omitempty"` // for error messages
@@ -57,9 +61,6 @@ type Statement struct {
 	// file system
 	DBPath    string `json:"db"`
 	MaxMemPct int    `json:"-"`
-
-	// query statistics
-	Stats ExecutionStats `json:"query_stats"`
 
 	// error during execution
 	Err *Error `json:"error,omitempty"`
@@ -83,8 +84,6 @@ const (
 func (i internalError) Error() string {
 	var s string
 	switch i {
-	case errorNoResults:
-		s = "query returned no results"
 	case errorMemoryBreach:
 		s = "memory limit exceeded"
 	case errorInternalProcessing:
@@ -96,23 +95,6 @@ func (i internalError) Error() string {
 // MarshalJSON implements the Marshaler interface for human-readable error logging
 func (q *Error) MarshalJSON() ([]byte, error) {
 	return jsoniter.Marshal(q.Error())
-}
-
-// ExecutionStats stores the statements execution statistics
-type ExecutionStats struct {
-	Start         time.Time     `json:"start"`
-	Duration      time.Duration `json:"duration_ns"`
-	HitsDisplayed int           `json:"hits_displayed"`
-	Hits          int           `json:"hits"`
-}
-
-// String prints the statistics
-func (e ExecutionStats) String() string {
-	return fmt.Sprintf("{start: %s, query-duration: %s, hits: %d}",
-		e.Start.Format(time.ANSIC),
-		e.Duration,
-		e.Hits,
-	)
 }
 
 // String prints the executable statement in human-readable form
@@ -132,12 +114,8 @@ func (s *Statement) String() string {
 		tTo.Format(time.ANSIC),
 	)
 	if s.Resolve {
-		str += fmt.Sprintf(", dns-resolution: %t, dns-timeout: %ds, dns-rows-resolved: %d",
-			s.Resolve, s.ResolveTimeout, s.ResolveRows,
-		)
+		str += fmt.Sprintf(", dns-resolution: %t", s.Resolve)
 	}
-	// print statistics
-	str += fmt.Sprintf(", stats: %s", s.Stats)
 	str += "}"
 	return str
 }
@@ -153,52 +131,99 @@ func (s *Statement) log() {
 	defer querylog.Close()
 
 	// opportunistically write statement to disk
-	err = jsoniter.NewEncoder(querylog).Encode(s)
+	_ = jsoniter.NewEncoder(querylog).Encode(s)
 }
 
 // Execute runs the query with the provided parameters
-func (s *Statement) Execute() error {
+func (s *Statement) Execute(ctx context.Context) (result *results.Result, err error) {
+	result = &results.Result{
+		Status: types.StatusOK,
+		Summary: results.Summary{
+			Timings: results.Timings{
+				// Start timing
+				QueryStart: time.Now(),
+			},
+		},
+	}
+	sort.Slice(s.Ifaces, func(i, j int) bool {
+		return s.Ifaces[i] < s.Ifaces[j]
+	})
+	result.Summary.Interfaces = s.Ifaces
 
-	var err error
+	// cross-check parameters
+	if len(s.Ifaces) == 0 {
+		return result, fmt.Errorf("no interfaces provided")
+	}
+	if s.Query == nil {
+		return result, fmt.Errorf("query is not executable")
+	}
+	result.Query = results.Query{
+		Attributes: s.Query.AttributesToString(),
+	}
+	if s.Query.Conditional != nil {
+		result.Query.Condition = s.Query.Conditional.String()
+	}
 
 	// start ticker to check memory consumption every second
-	memErrors := make(chan error, 1)
-	stopHeapWatch := watchHeap(s.MaxMemPct, memErrors)
+	heapWatchCtx, cancelHeapWatch := context.WithCancel(ctx)
+	defer cancelHeapWatch()
 
-	// make sure the memory ticker stops upon function return
-	defer func() {
+	memErrors := watchHeap(heapWatchCtx, s.MaxMemPct)
 
-		// if a memory breach occurred, the memory monitor is shut
-		// down already
-		if errors.Is(err, errorMemoryBreach) {
+	queryCtx, cancelQuery := context.WithCancel(ctx)
+	defer cancelQuery()
+
+	// Channel for handling of returned maps
+	mapChan := make(chan map[goDB.ExtraKey]goDB.Val, 1024)
+	aggregateChan := aggregate(mapChan)
+
+	go func() {
+		select {
+		case err = <-memErrors:
+			err = fmt.Errorf("%w: %v", errorMemoryBreach, err)
+			cancelQuery()
+
+			// close the map channel. This will make sure that the aggregation routine
+			// actually finishes
+			close(mapChan)
+
+			// empty the aggregateChan
+			agg := <-aggregateChan
+
+			// call the garbage collector
+			agg.aggregatedMap = nil
+			runtime.GC()
+			debug.FreeOSMemory()
+
+			return
+		case <-queryCtx.Done():
 			return
 		}
-		stopHeapWatch <- struct{}{}
 	}()
 
 	// make sure execution stats and logging are taken care of
 	defer func() {
 		if err != nil {
 			// get duration of execution even under error
-			s.Stats.Duration = time.Now().Sub(s.Stats.Start)
-
+			result.Summary.Timings.QueryDuration = time.Since(result.Summary.Timings.QueryStart)
 			s.Err = &Error{err}
 		}
 		// log the query
 		s.log()
 	}()
 
-	// Start timing
-	s.Stats = ExecutionStats{
-		Start: time.Now(),
-	}
-
 	// cross-check parameters
 	if len(s.Ifaces) == 0 {
-		return fmt.Errorf("no interfaces provided")
+		return result, fmt.Errorf("no interfaces provided")
 	}
 	if s.Query == nil {
-		return fmt.Errorf("query is not executable")
+		return result, fmt.Errorf("query is not executable")
+	}
+	result.Query = results.Query{
+		Attributes: s.Query.AttributesToString(),
+	}
+	if s.Query.Conditional != nil {
+		result.Query.Condition = s.Query.Conditional.String()
 	}
 
 	// create work managers
@@ -206,7 +231,7 @@ func (s *Statement) Execute() error {
 	for _, iface := range s.Ifaces {
 		wm, nonempty, err := createWorkManager(s.DBPath, iface, s.First, s.Last, s.Query, numProcessingUnits)
 		if err != nil {
-			return err
+			return result, err
 		}
 		// Only add work managers that have work to do.
 		if nonempty {
@@ -226,33 +251,13 @@ func (s *Statement) Execute() error {
 		}
 	}
 
-	// Channel for handling of returned maps
-	mapChan := make(chan map[goDB.ExtraKey]goDB.Val, 1024)
-	aggregateChan := aggregate(mapChan)
+	result.Summary.TimeFirst = tSpanFirst
+	result.Summary.TimeLast = tSpanLast
 
 	// spawn reader processing units and make them work on the individual DB blocks
 	// processing by interface is sequential, e.g. for multi-interface queries
 	for _, workManager := range workManagers {
-		err = workManager.ExecuteWorkerReadJobs(mapChan, memErrors)
-		if err != nil {
-
-			// an error from the routine can only be of type memory error
-			err = fmt.Errorf("%w: %v", errorMemoryBreach, err)
-
-			// close the map channel. This will make sure that the aggregation routine
-			// actually finishes
-			close(mapChan)
-
-			// empty the aggregateChan
-			agg := <-aggregateChan
-
-			// call the garbage collector
-			agg.aggregatedMap = nil
-			runtime.GC()
-			debug.FreeOSMemory()
-
-			return err
-		}
+		workManager.ExecuteWorkerReadJobs(queryCtx, mapChan)
 	}
 
 	// we are done with all worker jobs
@@ -260,27 +265,62 @@ func (s *Statement) Execute() error {
 
 	// wait for the job to complete
 	agg := <-aggregateChan
-	err = agg.err
+
+	// first inspect if err is set due to problems not related to aggregation
 	if err != nil {
-		switch err {
-		case errorNoResults:
-			return s.noResults()
-		default:
-			return err
+		return result, err
+	}
+
+	// check aggregation for errors
+	if agg.err != nil {
+		return result, agg.err
+	}
+
+	/// RESULTS PREPARATION ///
+	var sip, dip, dport, proto types.Attribute
+	for _, attribute := range s.Query.Attributes {
+		switch attribute.Name() {
+		case "sip":
+			sip = attribute
+		case "dip":
+			dip = attribute
+		case "dport":
+			dport = attribute
+		case "proto":
+			proto = attribute
 		}
 	}
 
-	/// DATA PRESENATION ///
-	var mapEntries = make([]Entry, len(agg.aggregatedMap))
-	var val goDB.Val
+	var rs = make(results.Rows, len(agg.aggregatedMap))
 	count := 0
 
-	for mapEntries[count].k, val = range agg.aggregatedMap {
+	for key, val := range agg.aggregatedMap {
 
-		mapEntries[count].nBr = val.NBytesRcvd
-		mapEntries[count].nPr = val.NPktsRcvd
-		mapEntries[count].nBs = val.NBytesSent
-		mapEntries[count].nPs = val.NPktsSent
+		if key.Time != 0 {
+			ts := time.Unix(key.Time, 0)
+			rs[count].Labels.Timestamp = &ts
+		}
+		rs[count].Labels.Iface = key.Iface
+		rs[count].Labels.HostID = key.HostID
+		rs[count].Labels.Hostname = key.Hostname
+		if sip != nil {
+			rs[count].Attributes.SrcIP = types.RawIPToAddr(key.Sip[:])
+		}
+		if dip != nil {
+			rs[count].Attributes.DstIP = types.RawIPToAddr(key.Dip[:])
+		}
+		if proto != nil {
+			rs[count].Attributes.IPProto = key.Protocol
+		}
+		if dport != nil {
+			rs[count].Attributes.DstPort = types.PortToUint16(key.Dport)
+		}
+
+		// assign counters
+		rs[count].Counters.BytesReceived = val.NBytesRcvd
+		rs[count].Counters.PacketsReceived = val.NPktsRcvd
+		rs[count].Counters.BytesSent = val.NBytesSent
+		rs[count].Counters.PacketsSent = val.NPktsSent
 
 		count++
 	}
@@ -290,81 +330,107 @@ func (s *Statement) Execute() error {
 	runtime.GC()
 	debug.FreeOSMemory()
 
-	// there is no need to sort influxdb datapoints
-	if s.Format != "influxdb" {
-		By(s.SortBy, s.Direction, s.SortAscending).Sort(mapEntries)
+	result.Summary.Totals = agg.totals
+
+	// sort the results
+	results.By(s.SortBy, s.Direction, s.SortAscending).Sort(rs)
+
+	// stop timing everything related to the query and store the hits
+	result.Summary.Timings.QueryDuration = time.Since(result.Summary.Timings.QueryStart)
+	result.Summary.Hits.Total = len(rs)
+
+	if s.NumResults < len(rs) {
+		rs = rs[:s.NumResults]
+	}
+	result.Summary.Hits.Displayed = len(rs)
+	result.Rows = rs
+
+	return result, nil
+}
+
+func (s *Statement) Print(ctx context.Context, result *results.Result) error {
+	var sip, dip types.Attribute
+
+	var hasDNSattributes bool
+	for _, attribute := range s.Query.Attributes {
+		switch attribute.Name() {
+		case "sip":
+			sip = attribute
+			hasDNSattributes = true
+		case "dip":
+			dip = attribute
+			hasDNSattributes = true
+		}
 	}
 
 	// Find map from ips to domains for reverse DNS
 	var ips2domains map[string]string
-	var resolveDuration time.Duration
-	if s.Resolve && goDB.HasDNSAttributes(s.Query.Attributes) {
+	if s.Resolve && hasDNSattributes {
 		var ips []string
-		var sip, dip goDB.Attribute
-		for _, attribute := range s.Query.Attributes {
-			if attribute.Name() == "sip" {
-				sip = attribute
-			}
-			if attribute.Name() == "dip" {
-				dip = attribute
-			}
-		}
-
-		for i, l := 0, len(mapEntries); i < l && i < s.ResolveRows; i++ {
-			key := mapEntries[i].k
+		for i, l := 0, len(result.Rows); i < l && i < s.ResolveRows; i++ {
+			attr := result.Rows[i].Attributes
 			if sip != nil {
-				ips = append(ips, sip.ExtractStrings(&key)[0])
+				ips = append(ips, attr.SrcIP.String())
 			}
 			if dip != nil {
-				ips = append(ips, dip.ExtractStrings(&key)[0])
+				ips = append(ips, attr.DstIP.String())
 			}
 		}
 
 		resolveStart := time.Now()
 		ips2domains = dns.TimedReverseLookup(ips, s.ResolveTimeout)
-		resolveDuration = time.Now().Sub(resolveStart)
+		result.Summary.Timings.ResolutionDuration = time.Since(resolveStart)
 	}
 
 	// get the right printer
-	var printer TablePrinter
-	printer, err = s.NewTablePrinter(
+	printer, err := results.NewTablePrinter(
+		s.Output,
+		s.Format,
+		s.SortBy,
+		s.HasAttrTime, s.HasAttrIface,
+		s.Direction,
+		s.Query.Attributes,
 		ips2domains,
-		agg.totals,
-		count,
+		result.Summary.Totals,
+		result.Summary.Hits.Total,
+		s.ResolveTimeout,
+		s.QueryType,
+		strings.Join(s.Ifaces, ","),
 	)
-	if err != nil {
-		return fmt.Errorf("failed to create printer: %s", err)
-	}
-
-	// stop timing everything related to the query and store the hits
-	s.Stats.Duration = time.Now().Sub(s.Stats.Start)
-	s.Stats.Hits = len(mapEntries)
-
-	// fill the printer
-	if s.NumResults < len(mapEntries) {
-		mapEntries = mapEntries[:s.NumResults]
-	}
-	s.Stats.HitsDisplayed = len(mapEntries)
-	for doneFilling := false; !doneFilling; {
-		select {
-		case err = <-memErrors:
-			return fmt.Errorf("%w: %v", errorMemoryBreach, err)
-		default:
-			for _, entry := range mapEntries {
-				printer.AddRow(entry)
-			}
-			doneFilling = true
-		}
-	}
-	printer.Footer(s.Conditions, tSpanFirst, tSpanLast, s.Stats.Duration, resolveDuration)
-
-	// print the data
-	err = printer.Print()
 	if err != nil {
 		return err
 	}
 
-	return nil
+	// start ticker to check memory consumption every second
+	heapWatchCtx, cancelHeapWatch := context.WithCancel(ctx)
+	defer cancelHeapWatch()
+
+	memErrors := watchHeap(heapWatchCtx, s.MaxMemPct)
+
+	printCtx, printCancel := context.WithCancel(ctx)
+	defer printCancel()
+
+	var memErr error
+	go func() {
+		select {
+		case memErr = <-memErrors:
+			memErr = fmt.Errorf("%w: %v", errorMemoryBreach, err)
+			printCancel()
+			return
+		case <-printCtx.Done():
+			return
+		}
+	}()
+	err = printer.AddRows(printCtx, result.Rows)
+	if err != nil {
+		if memErr != nil {
+			return memErr
+		}
+		return err
+	}
+	printer.Footer(result)
+
+	return printer.Print()
 }
 
 func createWorkManager(dbPath string, iface string, tfirst, tlast int64, query *goDB.Query, numProcessingUnits int) (workManager *goDB.DBWorkManager, nonempty bool, err error) {
@@ -374,13 +440,4 @@ func createWorkManager(dbPath string, iface string, tfirst, tlast int64, query *
 	}
 	nonempty, err = workManager.CreateWorkerJobs(tfirst, tlast, query)
 	return
-}
-
-func (s *Statement) noResults() error {
-	if s.External || s.Format == "json" {
-		msg := ErrorMsgExternal{Status: "empty", Message: errorNoResults.Error()}
-		return jsoniter.NewEncoder(s.Output).Encode(msg)
-	}
-	_, err := fmt.Fprintf(s.Output, "%s\n", errorNoResults.Error())
-	return err
 }

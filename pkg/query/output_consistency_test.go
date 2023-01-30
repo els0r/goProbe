@@ -13,6 +13,7 @@ package query
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -34,7 +35,7 @@ const (
 
 // Compares output of goQuery with known good outputs.
 //
-// Idea
+// # Idea
 //
 // For the output consistency tests, the goal is to compare the output of the program
 // (on a semantic level, so we can't just use string comparison) to known good outputs
@@ -46,7 +47,7 @@ const (
 // * The test itself is broken
 // In either case, this is valuable information.
 //
-// Implementation
+// # Implementation
 //
 // Since there are many different combinations of command line arguments and
 // goQuery outputs can quickly become rather large, we don't use table driven
@@ -110,7 +111,7 @@ func TestOutputConsistency(t *testing.T) {
 			}
 
 			// run query
-			err = stmt.Execute()
+			_, err = stmt.Execute(context.Background())
 			if err != nil {
 				t.Fatalf("[%d] failed to run query: %s", i, err)
 			}

@@ -1,6 +1,7 @@
 package query
 
 import (
+	"context"
 	"fmt"
 	"runtime"
 	"runtime/debug"
@@ -17,9 +18,8 @@ const (
 )
 
 // watchHeap makes sure to alert on too high memory consumption
-func watchHeap(maxAllowedMemPct int, errors chan error) chan struct{} {
-	stopChan := make(chan struct{})
-
+func watchHeap(ctx context.Context, maxAllowedMemPct int) (errors chan error) {
+	errors = make(chan error)
 	go func() {
 		// obtain physical memory of this host
 		var (
@@ -61,11 +61,11 @@ func watchHeap(maxAllowedMemPct int, errors chan error) chan struct{} {
 					debug.FreeOSMemory()
 					lastGC = time.Now()
 				}
-			case <-stopChan:
+			case <-ctx.Done():
 				memTicker.Stop()
 				return
 			}
 		}
 	}()
-	return stopChan
+	return errors
 }

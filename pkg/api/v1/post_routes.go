@@ -43,7 +43,7 @@ func (a *API) handleReload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	woChan := make(chan capture.TaggedAggFlowMap, capture.MaxIfaces)
-	writeoutsChan <- capture.Writeout{woChan, time.Now()}
+	writeoutsChan <- capture.Writeout{Chan: woChan, Timestamp: time.Now()}
 	a.c.Update(config.Interfaces, woChan)
 	close(woChan)
 

@@ -8,32 +8,30 @@
 //
 /////////////////////////////////////////////////////////////////////////////////
 
-package goDB
+package types
 
 import (
 	"reflect"
 	"testing"
 )
 
-var testKey = ExtraKey{
-	Key: Key{
-		Sip:      [16]byte{0xA1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
-		Dip:      [16]byte{3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5, 8, 9, 7, 9, 3},
-		Dport:    [2]byte{0xCB, 0xF1},
-		Protocol: 6,
-	},
-	Time: 0,
-}
+var (
+	Sip      = [16]byte{0xA1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}
+	Dip      = [16]byte{3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5, 8, 9, 7, 9, 3}
+	Dport    = [2]byte{0xCB, 0xF1}
+	Protocol = uint8(6)
+	Time     = 0
+)
 
 var tests = []struct {
 	Attribute        Attribute
 	Name             string
-	ExtractedStrings []string
+	ExtractedStrings string
 }{
-	{SipAttribute{}, "sip", []string{"a102:304:506:708:90a:b0c:d0e:f10"}},
-	{DipAttribute{}, "dip", []string{"301:401:509:206:503:508:907:903"}},
-	{DportAttribute{}, "dport", []string{"52209"}},
-	{ProtoAttribute{}, "proto", []string{"TCP"}},
+	{SipAttribute{ipAttribute{data: Sip}}, "sip", "a102:304:506:708:90a:b0c:d0e:f10"},
+	{DipAttribute{ipAttribute{data: Dip}}, "dip", "301:401:509:206:503:508:907:903"},
+	{DportAttribute{Dport}, "dport", "52209"},
+	{ProtoAttribute{Protocol}, "proto", "TCP"},
 }
 
 func TestAttributes(t *testing.T) {
@@ -41,8 +39,9 @@ func TestAttributes(t *testing.T) {
 		if test.Attribute.Name() != test.Name {
 			t.Fatalf("wrong name")
 		}
-		if !reflect.DeepEqual(test.Attribute.ExtractStrings(&testKey), test.ExtractedStrings) {
-			t.Fatalf("expected: %s got: %s", test.ExtractedStrings, test.Attribute.ExtractStrings(&testKey))
+		es := test.Attribute.String()
+		if !reflect.DeepEqual(es, test.ExtractedStrings) {
+			t.Fatalf("%s: expected: %s got: %s", test.Attribute.Name(), test.ExtractedStrings, es)
 		}
 	}
 }
