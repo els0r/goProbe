@@ -119,8 +119,8 @@ go_install:
 	# systemd service definition
 	cp goprobe.service absolute/etc/systemd/system/goprobe.service
 
-	echo "*** generating example configuration ***"
-	echo -e "{\n\t\"db_path\" : \"/usr/local/$(GO_PRODUCT)/db\",\n\t\"interfaces\" : {\n\t\t\"eth0\" : {\n\t\t\t\"bpf_filter\" : \"not arp and not icmp\",\n\t\t\t\"buf_size\" : 2097152,\n\t\t\t\"promisc\" : false\n\t\t}\n\t}\n}" > absolute/etc/goprobe.conf.example
+	echo "*** copying example configuration ***"
+	cp goprobe.conf.example absolute/etc/
 
 	#set the appropriate permissions for files
 	chmod -R 755 absolute/bin
