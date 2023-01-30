@@ -6,6 +6,7 @@ import (
 
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/lz4"
+	"github.com/els0r/goProbe/pkg/goDB/encoder/lz4cust"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/null"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/zstd"
 )
@@ -19,7 +20,8 @@ type Encoder interface {
 	// Compress will take the input data slice and write it to dst. The number of written compressed bytes is returned with n
 	Compress(data []byte, dst io.Writer) (n int, err error)
 
-	// Decompress reads compressed bytes from src into in, decompresses it into out and returns the number of bytes decompressed. It is the responsibility of the caller to ensure that in and out are properly sized
+	// Decompress reads compressed bytes from src into in, decompresses it into out and returns the number of bytes decompressed.
+	// It is the responsibility of the caller to ensure that in and out are properly sized
 	Decompress(in, out []byte, src io.Reader) (n int, err error)
 }
 
@@ -30,6 +32,9 @@ func New(t encoders.Type) (Encoder, error) {
 		return null.New(), nil
 	case encoders.EncoderTypeLZ4:
 		return lz4.New(), nil
+	case encoders.EncoderTypeLZ4Custom:
+		// TODO: turn this into an error with deprecation notice in future releases
+		return lz4cust.New(), nil
 	case encoders.EncoderTypeZSTD:
 		return zstd.New(), nil
 	default:

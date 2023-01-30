@@ -6,7 +6,7 @@ import (
 	"strconv"
 
 	"github.com/els0r/goProbe/pkg/goDB/encoder"
-	"github.com/els0r/goProbe/pkg/goDB/encoder/lz4"
+	"github.com/els0r/goProbe/pkg/goDB/encoder/lz4cust"
 )
 
 const (
@@ -84,8 +84,8 @@ func NewLegacyGPFile(p string) (*LegacyGPFile, error) {
 		pos += 8
 	}
 
-	// the GP File uses LZ4 data block compression by default
-	gpf := &LegacyGPFile{h, ts, le, p, f, make([]byte, BufSize*3), 0, lz4.New()}
+	// the GP File uses (custom) LZ4 data block compression by default
+	gpf := &LegacyGPFile{h, ts, le, p, f, make([]byte, BufSize*3), 0, lz4cust.New()}
 
 	return gpf, nil
 }

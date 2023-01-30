@@ -2,19 +2,21 @@ package encoder
 
 import (
 	"bytes"
+	"fmt"
 	"testing"
 
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
+	"github.com/els0r/goProbe/pkg/goDB/encoder/lz4"
 )
 
 var testEncoders = []encoders.Type{
 	encoders.EncoderTypeNull,
 	encoders.EncoderTypeLZ4,
+	encoders.EncoderTypeLZ4Custom,
 	encoders.EncoderTypeZSTD,
 }
 
 func TestNewByString(t *testing.T) {
-
 	var tests = []struct {
 		name              string
 		encoderTypeString string
@@ -24,6 +26,7 @@ func TestNewByString(t *testing.T) {
 		{"empty string", "", encoders.EncoderTypeNull, false},
 		{"null encoder", "null", encoders.EncoderTypeNull, false},
 		{"lz4 encoder", "lz4", encoders.EncoderTypeLZ4, false},
+		{"lz4 encoder custom", "lz4cust", encoders.EncoderTypeLZ4Custom, false},
 		{"lz4 encoder (uppercase)", "LZ4", encoders.EncoderTypeLZ4, false},
 		{"zstd encoder", "zstd", encoders.EncoderTypeZSTD, false},
 		{"zstd encoder (uppercase)", "ZSTD", encoders.EncoderTypeZSTD, false},
@@ -104,6 +107,8 @@ func BenchmarkEncodersCompress(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				enc.Compress(encodingCorpus, buf)
 			}
+
+			_ = buf
 		})
 	}
 }
@@ -131,7 +136,32 @@ func BenchmarkEncodersDecompress(b *testing.B) {
 				out := make([]byte, nBytes, nBytes)
 				in := make([]byte, nWritten, nWritten)
 				enc.Decompress(in, out, buf)
+
+				_ = in
+				_ = out
 			}
+		})
+	}
+}
+
+func BenchmarkLZ4LevelsCompress(b *testing.B) {
+	var nBytes = int64(len(encodingCorpus))
+
+	for i := 0; i <= 9; i++ {
+		level := 1 << i
+		b.Run(encoders.EncoderTypeLZ4.String()+fmt.Sprintf("-lvl-%d", level), func(b *testing.B) {
+			enc := lz4.New(lz4.WithCompressionLevel(level))
+
+			b.ReportAllocs()
+			b.SetBytes(nBytes)
+			b.ResetTimer()
+			buf := bytes.NewBuffer(nil)
+
+			for i := 0; i < b.N; i++ {
+				enc.Compress(encodingCorpus, buf)
+			}
+
+			_ = buf
 		})
 	}
 }

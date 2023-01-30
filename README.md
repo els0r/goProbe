@@ -3,7 +3,6 @@ goProbe
 [![Github Release](https://img.shields.io/github/release/els0r/goProbe.svg)](https://github.com/els0r/goProbe/releases)
 [![GoDoc](https://godoc.org/github.com/els0r/goProbe?status.svg)](https://godoc.org/github.com/els0r/goProbe/)
 [![Go Report Card](https://goreportcard.com/badge/github.com/els0r/goProbe)](https://goreportcard.com/report/github.com/els0r/goProbe)
-[![Build Status](https://cloud.drone.io/api/badges/els0r/goProbe/status.svg)](https://cloud.drone.io/els0r/goProbe)
 
 This package comprises:
 

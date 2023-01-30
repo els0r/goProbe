@@ -15,6 +15,11 @@ type Block struct {
 	RawLen      int           `json:"r,omitempty"`
 }
 
+// IsEmpty checks if the block does not store any data
+func (b Block) IsEmpty() bool {
+	return b.Len == 0 && b.RawLen == 0
+}
+
 // BlockHeader denotes a list of blocks pertaining to a storage backend
 type BlockHeader struct {
 	Blocks        map[int64]Block `json:"b,omitempty"`

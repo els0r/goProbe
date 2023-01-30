@@ -46,6 +46,9 @@ COMMIT_SHA_SHORT := $(shell git rev-parse --short HEAD)
 GIT_VERSION := $(shell git describe --tags)
 BUILD_DATE  := $(shell date +%FT%T%z)
 
+GOOS := $(shell uname | tr '[:upper:]' '[:lower:]')
+GOARCH := $(shell uname -m)
+
 # Debian build variables
 DEB_VERSION := $(shell echo $(GIT_VERSION) | sed 's/v//g')
 DEB_VERSION := '$(DEB_VERSION)-$(COMMIT_SHA_SHORT)'
@@ -55,11 +58,9 @@ DEB_BASE_IMAGE?=golang:latest
 VERSION_PATH = $(BASEPATH)/pkg/version
 
 GO_BUILDTAGS = netcgo public $(UNAME_OS)
-GPBUILD      = go install -v -tags '$(GO_BUILDTAGS)'
-GPTESTBUILD  = go test -c -tags '$(GO_BUILDTAGS)'
 
-GOOS := $(shell uname | tr '[:upper:]' '[:lower:]')
-GOARCH := $(shell uname -m)
+GPBUILD      := go install -v -tags '$(GO_BUILDTAGS)'
+GPTESTBUILD  := go test -c -tags '$(GO_BUILDTAGS)'
 
 fetch:
 
@@ -67,26 +68,36 @@ fetch:
 	go mod tidy
 	go mod download
 
-
-compile:
+build_version:
 
 	## VERSION ###
 	echo "*** setting version information ***"
-	COMMIT_SHA=$(COMMIT_SHA) go generate $(BASEPATH)/pkg/version
+	COMMIT_SHA=$(COMMIT_SHA) go generate $(VERSION_PATH)
 	echo "commit is $(COMMIT_SHA)"
+
+build_goprobe:
 
 	## GO CODE COMPILATION ##
 	echo "*** compiling $(GO_PRODUCT) ***"
+	echo "$(GPBUILD) $(BASEPATH)/cmd/$(GO_PRODUCT)"
 	$(GPBUILD) $(BASEPATH)/cmd/$(GO_PRODUCT)
+
+build_goquery:
 
 	echo "*** compiling $(GO_QUERY) ***"
 	$(GPBUILD) $(BASEPATH)/cmd/$(GO_QUERY)
 
+build_goconvert:
+
 	echo "*** compiling goConvert ***"
 	$(GPBUILD) $(BASEPATH)/cmd/goConvert
 
+build_legacy:
+
 	echo "*** compiling legacy DB conversion tool ***"
 	$(GPBUILD) $(BASEPATH)/cmd/legacy
+
+build: build_version build_goprobe build_goquery build_goconvert build_legacy
 
 install: go_install
 
@@ -100,10 +111,10 @@ go_install:
 	mkdir -p absolute/etc/systemd/system     && chmod 755 absolute/etc/systemd/system
 
 	echo "*** installing binaries ***"
-	mv $(GOPATH)/bin/goProbe 	absolute/bin
-	mv $(GOPATH)/bin/goQuery   	absolute/bin
-	mv $(GOPATH)/bin/goConvert  absolute/bin
-	mv $(GOPATH)/bin/legacy     absolute/bin
+	cp $(GOPATH)/bin/goProbe 	absolute/bin
+	cp $(GOPATH)/bin/goQuery   	absolute/bin
+	cp $(GOPATH)/bin/goConvert  absolute/bin
+	cp $(GOPATH)/bin/legacy     absolute/bin
 
 	# systemd service definition
 	cp goprobe.service absolute/etc/systemd/system/goprobe.service
@@ -154,9 +165,12 @@ clean:
 	echo "*** removing dependencies and binaries ***"
 	rm -rf cmd/$(GO_PRODUCT)/$(GO_PRODUCT) cmd/$(GO_QUERY)/$(GO_QUERY) cmd/goConvert/goConvert
 
+	rm -f v$(LZ4_VERSION).tar.gz
+	rm -rf $(LZ4_LIB)
+
 	rm -f $(GO_PRODUCT).tar.bz2
 	rm -f $(GO_PRODUCT)-$(DEB_VERSION).deb
 
-all: clean fetch compile install
+all: clean fetch build install
 
 .SILENT:

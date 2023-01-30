@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/els0r/goProbe/pkg/goDB/encoder"
@@ -12,6 +13,8 @@ import (
 )
 
 const (
+	// FileSuffix denotes the suffix used for the raw data stored
+	FileSuffix = ".gpf"
 
 	// HeaderFileSuffix denotes the suffix used for the header data
 	HeaderFileSuffix = ".meta"
@@ -20,7 +23,8 @@ const (
 	defaultPermissions = 0644
 
 	// defaultEncoderType denotes the default encoder / compressor
-	defaultEncoderType = encoders.EncoderTypeLZ4
+	defaultEncoderType            = encoders.EncoderTypeLZ4
+	defaultHighEntropyEncoderType = encoders.EncoderTypeLZ4
 
 	// headerVersion denotes the current header version
 	headerVersion = 1
@@ -50,21 +54,33 @@ type GPFile struct {
 	lastSeekPos int64
 
 	// defaultEncoderType governs how data blocks are (de-)compressed by default
-	defaultEncoderType encoders.Type
-	defaultEncoder     encoder.Encoder
+	defaultEncoderType            encoders.Type
+	defaultHighEntropyEncoderType encoders.Type
+	defaultEncoder                encoder.Encoder
 
 	// accessMode denotes if the file is opened for read or write operations (to avoid
 	// race conditions and unpredictable behavior, only one mode is possible at a time)
 	accessMode int
 }
 
+func isHighEntropyColumn(filename string) bool {
+	// crude, for now, since the prefix has to coincide with the `columnFileNames` in
+	// pkg/goDB/Query.go
+	for _, prefix := range []string{"bytes_", "pkts_"} {
+		if strings.HasPrefix(filename, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
 // New returns a new GPFile object to read and write goProbe flow data
 func New(filename string, accessMode int, options ...Option) (*GPFile, error) {
-
 	g := &GPFile{
-		filename:           filename,
-		accessMode:         accessMode,
-		defaultEncoderType: defaultEncoderType,
+		filename:                      filename,
+		accessMode:                    accessMode,
+		defaultEncoderType:            defaultEncoderType,
+		defaultHighEntropyEncoderType: defaultHighEntropyEncoderType,
 	}
 
 	// apply functional options
@@ -72,8 +88,15 @@ func New(filename string, accessMode int, options ...Option) (*GPFile, error) {
 		opt(g)
 	}
 
-	// Initialize default encoder based on requested encoder type
+	fileBaseName := strings.ToLower(strings.TrimSpace(filepath.Base(filename)))
+
+	// Initialize default encoder based on requested encoder type. If the colunn has
+	// a high-cardinality, the default encoder is overwritten with the high cardinality
+	// encoder
 	var err error
+	if isHighEntropyColumn(fileBaseName) {
+		g.defaultEncoderType = g.defaultHighEntropyEncoderType
+	}
 	if g.defaultEncoder, err = encoder.New(g.defaultEncoderType); err != nil {
 		return nil, err
 	}
@@ -138,14 +161,23 @@ func (g *GPFile) ReadBlock(timestamp int64) ([]byte, error) {
 	}
 
 	// Perform decompression of data and store in output slice
-	blockData := make([]byte, block.Len)
+	var nRead int
+
 	uncompData := make([]byte, block.RawLen)
-	nRead, err := g.defaultEncoder.Decompress(blockData, uncompData, g.file)
+	if block.EncoderType != encoders.EncoderTypeNull {
+		blockData := make([]byte, block.Len)
+		nRead, err = g.defaultEncoder.Decompress(blockData, uncompData, g.file)
+	} else {
+		// micro-optimization that saves the allocation of blockData for decompression
+		// in the Null decompression case, since it is essentially just a byte read
+		// and the src bytes aren't used
+		nRead, err = g.defaultEncoder.Decompress(nil, uncompData, g.file)
+	}
 	if err != nil {
 		return nil, err
 	}
 	if nRead != block.RawLen {
-		return nil, fmt.Errorf("Unexpected amount of bytes after decompression, want %d, have %d", block.Len, nRead)
+		return nil, fmt.Errorf("Unexpected amount of bytes after decompression, want %d, have %d", block.RawLen, nRead)
 	}
 	g.lastSeekPos += int64(block.Len)
 
@@ -154,6 +186,10 @@ func (g *GPFile) ReadBlock(timestamp int64) ([]byte, error) {
 
 // WriteBlock writes data for a given timestamp to the file
 func (g *GPFile) WriteBlock(timestamp int64, blockData []byte) error {
+	bl, exists := g.header.Blocks[timestamp]
+	if exists {
+		return fmt.Errorf("timestamp %d already present: offset=%d", timestamp, bl.Offset)
+	}
 
 	// Check that the file has been opened in the correct mode
 	if g.accessMode != ModeWrite {
@@ -164,7 +200,7 @@ func (g *GPFile) WriteBlock(timestamp int64, blockData []byte) error {
 	if len(blockData) == 0 {
 		g.header.Blocks[timestamp] = storage.Block{
 			Offset:      g.header.CurrentOffset,
-			EncoderType: g.defaultEncoderType,
+			EncoderType: encoders.EncoderTypeNull,
 		}
 		return g.writeHeader()
 	}
@@ -181,6 +217,23 @@ func (g *GPFile) WriteBlock(timestamp int64, blockData []byte) error {
 	if err != nil {
 		return err
 	}
+	encType := g.defaultEncoderType
+
+	// if compressed size is bigger than input size, make sure to rewrite the bytes
+	// with NullCompression to optimize storage and increase read speed
+	if nWritten > len(blockData) {
+		encType = encoders.EncoderTypeNull
+
+		enc, err := encoder.New(encType)
+		if err != nil {
+			return fmt.Errorf("failed to select %s encoder for optimal compression ratio: %w", encType, err)
+		}
+		g.fileBuffer.Reset(g.file)
+		nWritten, err = enc.Compress(blockData, g.fileBuffer)
+		if err != nil {
+			return fmt.Errorf("failed to re-encode with %s encoder: %w", encType, err)
+		}
+	}
 	if err = g.fileBuffer.Flush(); err != nil {
 		return err
 	}
@@ -190,7 +243,7 @@ func (g *GPFile) WriteBlock(timestamp int64, blockData []byte) error {
 		Offset:      g.header.CurrentOffset,
 		Len:         nWritten,
 		RawLen:      len(blockData),
-		EncoderType: g.defaultEncoderType,
+		EncoderType: encType,
 	}
 	g.header.CurrentOffset += int64(nWritten)
 
@@ -211,6 +264,16 @@ func (g *GPFile) Delete() error {
 		return err
 	}
 	return os.Remove(g.filename + HeaderFileSuffix)
+}
+
+// Filename exposes the location of the GPF file
+func (g *GPFile) Filename() string {
+	return g.filename
+}
+
+// DefaultEncoder exposes the default encoding of the GPF file
+func (g *GPFile) DefaultEncoder() encoder.Encoder {
+	return g.defaultEncoder
 }
 
 ////////////////////////////////////////////////////////////////////////////////

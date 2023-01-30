@@ -1,7 +1,7 @@
 //go:build darwin || linux
 // +build darwin linux
 
-package lz4
+package lz4cust
 
 /*
 #cgo linux LDFLAGS: ${SRCDIR}/liblz4_linux.a

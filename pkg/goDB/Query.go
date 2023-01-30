@@ -35,19 +35,21 @@ const (
 
 // Sizeof (entry) for all column types
 const (
-	SipSizeof         int = 16
-	DipSizeof         int = 16
-	ProtoSizeof       int = 1
-	DportSizeof       int = 2
-	BytesRcvdSizeof   int = 8
-	BytesSentSizeof   int = 8
-	PacketsRcvdSizeof int = 8
-	PacketsSentSizeof int = 8
+	SipSizeof   int = 16
+	DipSizeof   int = 16
+	ProtoSizeof int = 1
+	DportSizeof int = 2
 )
+
+// IsCounterCol returns if a column is a counter (and hence does
+// not use fixed-width encoding)
+func (c columnIndex) IsCounterCol() bool {
+	return c >= ColIdxAttributeCount && c <= PacketsSentColIdx
+}
 
 var columnSizeofs = [ColIdxCount]int{
 	SipSizeof, DipSizeof, ProtoSizeof, DportSizeof,
-	BytesRcvdSizeof, BytesSentSizeof, PacketsRcvdSizeof, PacketsSentSizeof}
+}
 
 var columnFileNames = [ColIdxCount]string{
 	"sip", "dip", "proto", "dport",

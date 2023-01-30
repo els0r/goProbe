@@ -11,13 +11,13 @@
 package goDB
 
 import (
-	"encoding/binary"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
 	"time"
 
+	"github.com/els0r/goProbe/pkg/goDB/encoder/bitpack"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 	"github.com/els0r/goProbe/pkg/goDB/storage/gpfile"
 )
@@ -150,8 +150,9 @@ func dbData(iface string, timestamp int64, aggFlowMap AggFlowMap) ([ColIdxCount]
 	var dbData [ColIdxCount][]byte
 	summUpdate := new(InterfaceSummaryUpdate)
 
-	for i := columnIndex(0); i < ColIdxCount; i++ {
-		dbData[i] = make([]byte, 0, columnSizeofs[i]*len(aggFlowMap))
+	list := aggFlowMap.Flatten().Sort()
+	for i := columnIndex(0); i < ColIdxAttributeCount; i++ {
+		dbData[i] = make([]byte, 0, columnSizeofs[i]*len(list))
 	}
 
 	summUpdate.Timestamp = time.Unix(timestamp, 0)
@@ -159,32 +160,31 @@ func dbData(iface string, timestamp int64, aggFlowMap AggFlowMap) ([ColIdxCount]
 
 	// loop through the flow map to extract the relevant
 	// values into database blocks.
-	counterBytes := make([]byte, 8)
-	for K, V := range aggFlowMap {
+	var bytesRcvd, bytesSent, pktsRcvd, pktsSent []uint64
+	for _, flow := range list {
 
 		summUpdate.FlowCount++
-		summUpdate.Traffic += V.NBytesRcvd
-		summUpdate.Traffic += V.NBytesSent
+		summUpdate.Traffic += flow.NBytesRcvd
+		summUpdate.Traffic += flow.NBytesSent
 
 		// counters
-		binary.BigEndian.PutUint64(counterBytes, V.NBytesRcvd)
-		dbData[BytesRcvdColIdx] = append(dbData[BytesRcvdColIdx], counterBytes...)
-
-		binary.BigEndian.PutUint64(counterBytes, V.NBytesSent)
-		dbData[BytesSentColIdx] = append(dbData[BytesSentColIdx], counterBytes...)
-
-		binary.BigEndian.PutUint64(counterBytes, V.NPktsRcvd)
-		dbData[PacketsRcvdColIdx] = append(dbData[PacketsRcvdColIdx], counterBytes...)
-
-		binary.BigEndian.PutUint64(counterBytes, V.NPktsSent)
-		dbData[PacketsSentColIdx] = append(dbData[PacketsSentColIdx], counterBytes...)
+		bytesRcvd = append(bytesRcvd, flow.NBytesRcvd)
+		bytesSent = append(bytesSent, flow.NBytesSent)
+		pktsRcvd = append(pktsRcvd, flow.NPktsRcvd)
+		pktsSent = append(pktsSent, flow.NPktsSent)
 
 		// attributes
-		dbData[DipColIdx] = append(dbData[DipColIdx], K.Dip[:]...)
-		dbData[SipColIdx] = append(dbData[SipColIdx], K.Sip[:]...)
-		dbData[DportColIdx] = append(dbData[DportColIdx], K.Dport[:]...)
-		dbData[ProtoColIdx] = append(dbData[ProtoColIdx], K.Protocol)
+		dbData[DipColIdx] = append(dbData[DipColIdx], flow.Dip[:]...)
+		dbData[SipColIdx] = append(dbData[SipColIdx], flow.Sip[:]...)
+		dbData[DportColIdx] = append(dbData[DportColIdx], flow.Dport[:]...)
+		dbData[ProtoColIdx] = append(dbData[ProtoColIdx], flow.Protocol)
 	}
+
+	// Perform bit packing on the counter columns
+	dbData[BytesRcvdColIdx] = bitpack.Pack(bytesRcvd)
+	dbData[BytesSentColIdx] = bitpack.Pack(bytesSent)
+	dbData[PacketsRcvdColIdx] = bitpack.Pack(pktsRcvd)
+	dbData[PacketsSentColIdx] = bitpack.Pack(pktsSent)
 
 	return dbData, *summUpdate
 }

@@ -9,7 +9,16 @@ type Option func(*GPFile)
 func WithEncoder(e encoders.Type) Option {
 	return func(g *GPFile) {
 		g.defaultEncoderType = e
+		return
+	}
+}
 
+// WithHighCardinalityEncoder allows to set the compression implementation for
+// high cardinality columns. What constitutes high cardinality is determined
+// internally
+func WithHighCardinalityEncoder(e encoders.Type) Option {
+	return func(g *GPFile) {
+		g.defaultHighEntropyEncoderType = e
 		return
 	}
 }

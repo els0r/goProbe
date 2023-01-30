@@ -11,6 +11,7 @@
 package goDB
 
 import (
+	"fmt"
 	"os"
 
 	jsoniter "github.com/json-iterator/go"
@@ -38,6 +39,17 @@ type Metadata struct {
 // NewMetadata creates a new Metdata struct
 func NewMetadata() *Metadata {
 	return &Metadata{}
+}
+
+// GetBlock return the block metadata for a given timestamp
+func (m *Metadata) GetBlock(ts int64) (BlockMetadata, error) {
+	for _, block := range m.Blocks {
+		if block.Timestamp == ts {
+			return block, nil
+		}
+	}
+
+	return BlockMetadata{}, fmt.Errorf("cannot find block metadata for timestamp %d", ts)
 }
 
 // ReadMetadata reads the metadata from the supplied filepath
