@@ -1,3 +1,6 @@
+//go:build linux && force_pfring
+// +build linux,force_pfring
+
 package capture
 
 import (
