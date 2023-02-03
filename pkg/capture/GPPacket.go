@@ -22,10 +22,6 @@ import (
 )
 
 var (
-	byteArray1Zeros  = byte(0x00)
-	byteArray2Zeros  = [2]byte{0x00, 0x00}
-	byteArray4Zeros  = [4]byte{0x00, 0x00, 0x00, 0x00}
-	byteArray16Zeros = [16]byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
 	byteArray37Zeros = [37]byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
 )
 
@@ -37,58 +33,26 @@ const (
 )
 
 // EPHash is a typedef that allows us to replace the type of hash
-type EPHash [37]byte
+type EPHash []byte
 
 // GPPacket stores all relevant packet details for a flow
 type GPPacket struct {
-	// core fields
-	sip      [16]byte
-	dip      [16]byte
-	sport    [2]byte
-	dport    [2]byte
-	protocol byte
+
+	// packet size
 	numBytes uint16
 
 	// direction indicator fields
 	tcpFlags byte
 
-	// packet descriptors
+	// packet inbound or outbound on interface
+	dirInbound bool
+
+	// flag to easily determine if a packet is IPv4 or IPv6
+	isIPv4 bool
+
+	// packet descriptors / hashes
 	epHash        EPHash
 	epHashReverse EPHash
-	dirInbound    bool // packet inbound or outbound on interface
-}
-
-func (p *GPPacket) computeEPHash() {
-	// carve out the ports
-	dport := uint16(p.dport[0])<<8 | uint16(p.dport[1])
-	sport := uint16(p.sport[0])<<8 | uint16(p.sport[1])
-
-	// prepare byte arrays:
-	// include different fields into the hashing arrays in order to
-	// discern between session based traffic and udp traffic. When
-	// session based traffic is observed, the source port is taken
-	// into account. A major exception is traffic over port 53 as
-	// considering every single DNS request/response would
-	// significantly fill up the flow map
-	copy(p.epHash[0:], p.sip[:])
-	copy(p.epHash[16:], p.dip[:])
-	copy(p.epHash[32:], p.dport[:])
-	if p.protocol == 6 && dport != 53 && sport != 53 {
-		copy(p.epHash[34:], p.sport[:])
-	} else {
-		p.epHash[34], p.epHash[35] = 0, 0
-	}
-	p.epHash[36] = p.protocol
-
-	copy(p.epHashReverse[0:], p.dip[:])
-	copy(p.epHashReverse[16:], p.sip[:])
-	copy(p.epHashReverse[32:], p.sport[:])
-	if p.protocol == 6 && dport != 53 && sport != 53 {
-		copy(p.epHashReverse[34:], p.dport[:])
-	} else {
-		p.epHashReverse[34], p.epHashReverse[35] = 0, 0
-	}
-	p.epHashReverse[36] = p.protocol
 }
 
 // Populate takes a raw packet and populates a GPPacket structure from it.
@@ -122,18 +86,20 @@ func (p *GPPacket) Populate(srcPacket gopacket.Packet, inbound bool) error {
 
 		// get ip info
 		ipsrc, ipdst := srcPacket.NetworkLayer().NetworkFlow().Endpoints()
-
-		copy(p.sip[:], ipsrc.Raw())
-		copy(p.dip[:], ipdst.Raw())
+		copy(p.epHash[0:16], ipsrc.Raw())
+		copy(p.epHash[16:32], ipdst.Raw())
+		copy(p.epHashReverse[0:16], p.epHash[16:32])
+		copy(p.epHashReverse[16:32], p.epHash[0:16])
 
 		// read out the next layer protocol
 		// the default value is reserved by IANA and thus will never occur unless
 		// the protocol could not be correctly identified
-		p.protocol = 0xFF
+		var protocol byte = 0xFF
 		switch srcPacket.NetworkLayer().LayerType() {
 		case layers.LayerTypeIPv4:
 
-			p.protocol = nwL[9]
+			protocol = nwL[9]
+			p.isIPv4 = true
 
 			// only run the fragmentation checks on fragmented TCP/UDP packets. For
 			// ESP, we don't have any transport layer information so there's no
@@ -141,7 +107,7 @@ func (p *GPPacket) Populate(srcPacket gopacket.Packet, inbound bool) error {
 			//
 			// Note: an ESP fragment will carry fragmentation information like any
 			// other IP packet. The fragment offset will of be MTU - 20 bytes (IP layer).
-			if p.protocol == ESP {
+			if protocol == ESP {
 				skipTransport = true
 			} else {
 				// check for IP fragmentation
@@ -155,8 +121,9 @@ func (p *GPPacket) Populate(srcPacket gopacket.Packet, inbound bool) error {
 				}
 			}
 		case layers.LayerTypeIPv6:
-			p.protocol = nwL[6]
+			protocol = nwL[6]
 		}
+		p.epHash[36], p.epHashReverse[36] = protocol, protocol
 
 		if !skipTransport && srcPacket.TransportLayer() != nil {
 			// get layer contents
@@ -171,13 +138,24 @@ func (p *GPPacket) Populate(srcPacket gopacket.Packet, inbound bool) error {
 			psrc, dsrc := srcPacket.TransportLayer().TransportFlow().Endpoints()
 
 			// only get raw bytes if we actually have TCP or UDP
-			if p.protocol == TCP || p.protocol == UDP {
-				copy(p.sport[:], psrc.Raw())
-				copy(p.dport[:], dsrc.Raw())
+			if protocol == TCP || protocol == UDP {
+				dport := dsrc.Raw()
+				sport := psrc.Raw()
+				copy(p.epHash[32:34], dport)
+				copy(p.epHashReverse[32:34], sport)
+
+				// If session based traffic is observed, the source port is taken
+				// into account. A major exception is traffic over port 53 as
+				// considering every single DNS request/response would
+				// significantly fill up the flow map
+				if protocol == 6 && (dport[0] != 0 || dport[1] != 53) && (sport[0] != 0 || sport[1] != 53) {
+					copy(p.epHash[34:36], sport)
+					copy(p.epHashReverse[34:36], dport)
+				}
 			}
 
 			// if the protocol is TCP, grab the flag information
-			if p.protocol == TCP {
+			if protocol == TCP {
 				if tpHeaderSize < 14 {
 					return fmt.Errorf("Incomplete TCP header: %d", tpL)
 				}
@@ -204,19 +182,16 @@ func (p *GPPacket) Populate(srcPacket gopacket.Packet, inbound bool) error {
 		return nil
 	}
 
-	p.computeEPHash()
 	return nil
 }
 
 func (p *GPPacket) reset() {
-	p.sip = byteArray16Zeros
-	p.dip = byteArray16Zeros
-	p.dport = byteArray2Zeros
-	p.sport = byteArray2Zeros
-	p.protocol = byteArray1Zeros
 	p.numBytes = uint16(0)
-	p.tcpFlags = byteArray1Zeros
-	p.epHash = byteArray37Zeros
-	p.epHashReverse = byteArray37Zeros
+	p.tcpFlags = 0
+	if len(p.epHash) != 37 || len(p.epHashReverse) != 37 {
+		p.epHash, p.epHashReverse = make(EPHash, 37), make(EPHash, 37)
+	}
+	copy(p.epHash, byteArray37Zeros[:])
+	copy(p.epHashReverse, byteArray37Zeros[:])
 	p.dirInbound = false
 }

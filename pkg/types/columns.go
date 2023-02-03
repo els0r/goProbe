@@ -43,7 +43,7 @@ type Attribute interface {
 }
 
 type ipAttribute struct {
-	data [IPWidth]byte
+	data []byte
 }
 
 // SipAttribute implements the source IP attribute
@@ -52,8 +52,8 @@ type SipAttribute struct {
 }
 
 // Width returns the amount of bytes the IP attribute takes up on disk
-func (ipAttribute) Width() Width {
-	return IPWidth
+func (i ipAttribute) Width() Width {
+	return len(i.data)
 }
 
 // Resolvable defines whether the attribute can be resolved via a DNS
@@ -110,11 +110,11 @@ func (ProtoAttribute) attributeMarker() {}
 
 // DportAttribute implements the destination port attribute
 type DportAttribute struct {
-	data [PortWidth]byte
+	data []byte
 }
 
 func (DportAttribute) Width() Width {
-	return PortWidth
+	return DPortWidth
 }
 
 func (d DportAttribute) String() string {
@@ -129,7 +129,7 @@ func (d DportAttribute) ToUint16() uint16 {
 	return PortToUint16(d.data)
 }
 
-func PortToUint16(b [PortWidth]byte) uint16 {
+func PortToUint16(b []byte) uint16 {
 	return binary.BigEndian.Uint16(b[:])
 }
 

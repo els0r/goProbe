@@ -265,12 +265,12 @@ func TestList(t *testing.T) {
 		{
 			"list all two",
 			[]*Config{
-				&Config{
+				{
 					Identifier: "id_1",
 					Endpoint:   "192.168.0.253:58000",
 					Versions:   []string{"v1"},
 				},
-				&Config{
+				{
 					Identifier: "id_2",
 					Endpoint:   "192.168.0.254:58000",
 					Versions:   []string{"v1"},

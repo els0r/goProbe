@@ -59,13 +59,13 @@ func generateCompareValue(condition *conditionNode) error {
 	case "sip":
 		switch condition.comparator {
 		case "=":
-			condition.compareValue = func(currentValue *ExtraKey) bool {
-				return bytes.Compare(currentValue.Sip[:], value[:SipSizeof]) == 0
+			condition.compareValue = func(currentValue Key) bool {
+				return bytes.Compare(currentValue.GetSip(), value) == 0
 			}
 			return nil
 		case "!=":
-			condition.compareValue = func(currentValue *ExtraKey) bool {
-				return bytes.Compare(currentValue.Sip[:], value[:SipSizeof]) != 0
+			condition.compareValue = func(currentValue Key) bool {
+				return bytes.Compare(currentValue.GetSip(), value) != 0
 			}
 			return nil
 		default:
@@ -74,13 +74,13 @@ func generateCompareValue(condition *conditionNode) error {
 	case "dip":
 		switch condition.comparator {
 		case "=":
-			condition.compareValue = func(currentValue *ExtraKey) bool {
-				return bytes.Compare(currentValue.Dip[:], value[:DipSizeof]) == 0
+			condition.compareValue = func(currentValue Key) bool {
+				return bytes.Compare(currentValue.GetDip(), value) == 0
 			}
 			return nil
 		case "!=":
-			condition.compareValue = func(currentValue *ExtraKey) bool {
-				return bytes.Compare(currentValue.Dip[:], value[:DipSizeof]) != 0
+			condition.compareValue = func(currentValue Key) bool {
+				return bytes.Compare(currentValue.GetDip(), value) != 0
 			}
 			return nil
 		default:
@@ -104,23 +104,23 @@ func generateCompareValue(condition *conditionNode) error {
 			// NOT EQUALS TO makes sense
 			switch condition.comparator {
 			case "=":
-				condition.compareValue = func(currentValue *ExtraKey) bool {
-					ip := currentValue.Sip
+				condition.compareValue = func(currentValue Key) bool {
+					ip := currentValue
 					// apply the netmask on the relevant byte in order to obtain
 					// the network address
 					ip[index] = ip[index] & netmaskByte
 
-					return bytes.Compare(ip[:lenBytes], value[:lenBytes]) == 0
+					return bytes.Compare(ip.GetSip()[:lenBytes], value[:lenBytes]) == 0
 				}
 				return nil
 			case "!=":
-				condition.compareValue = func(currentValue *ExtraKey) bool {
-					ip := currentValue.Sip
+				condition.compareValue = func(currentValue Key) bool {
+					ip := currentValue
 					// apply the netmask on the relevant byte in order to obtain
 					// the network address
 					ip[index] = ip[index] & netmaskByte
 
-					return !(bytes.Compare(ip[:lenBytes], value[:lenBytes]) == 0)
+					return !(bytes.Compare(ip.GetSip()[:lenBytes], value[:lenBytes]) == 0)
 				}
 				return nil
 			default:
@@ -131,13 +131,13 @@ func generateCompareValue(condition *conditionNode) error {
 			// comparison
 			switch condition.comparator {
 			case "=":
-				condition.compareValue = func(currentValue *ExtraKey) bool {
-					return bytes.Compare(currentValue.Sip[:index], value[:index]) == 0
+				condition.compareValue = func(currentValue Key) bool {
+					return bytes.Compare(currentValue.GetSip()[:index], value[:index]) == 0
 				}
 				return nil
 			case "!=":
-				condition.compareValue = func(currentValue *ExtraKey) bool {
-					return bytes.Compare(currentValue.Sip[:index], value[:index]) != 0
+				condition.compareValue = func(currentValue Key) bool {
+					return bytes.Compare(currentValue.GetSip()[:index], value[:index]) != 0
 				}
 				return nil
 			default:
@@ -162,23 +162,23 @@ func generateCompareValue(condition *conditionNode) error {
 			// NOT EQUALS TO makes sense
 			switch condition.comparator {
 			case "=":
-				condition.compareValue = func(currentValue *ExtraKey) bool {
-					ip := currentValue.Dip
+				condition.compareValue = func(currentValue Key) bool {
+					ip := currentValue
 					// apply the netmask on the relevant byte in order to obtain
 					// the network address
 					ip[index] = ip[index] & netmaskByte
 
-					return bytes.Compare(ip[:lenBytes], value[:lenBytes]) == 0
+					return bytes.Compare(ip.GetDip()[:lenBytes], value[:lenBytes]) == 0
 				}
 				return nil
 			case "!=":
-				condition.compareValue = func(currentValue *ExtraKey) bool {
-					ip := currentValue.Dip
+				condition.compareValue = func(currentValue Key) bool {
+					ip := currentValue
 					// apply the netmask on the relevant byte in order to obtain
 					// the network address
 					ip[index] = ip[index] & netmaskByte
 
-					return !(bytes.Compare(ip[:lenBytes], value[:lenBytes]) == 0)
+					return !(bytes.Compare(ip.GetDip()[:lenBytes], value[:lenBytes]) == 0)
 				}
 				return nil
 			default:
@@ -189,13 +189,13 @@ func generateCompareValue(condition *conditionNode) error {
 			// comparison
 			switch condition.comparator {
 			case "=":
-				condition.compareValue = func(currentValue *ExtraKey) bool {
-					return bytes.Compare(currentValue.Dip[:index], value[:index]) == 0
+				condition.compareValue = func(currentValue Key) bool {
+					return bytes.Compare(currentValue.GetDip()[:index], value[:index]) == 0
 				}
 				return nil
 			case "!=":
-				condition.compareValue = func(currentValue *ExtraKey) bool {
-					return bytes.Compare(currentValue.Dip[:index], value[:index]) != 0
+				condition.compareValue = func(currentValue Key) bool {
+					return bytes.Compare(currentValue.GetDip()[:index], value[:index]) != 0
 				}
 				return nil
 			default:
@@ -205,33 +205,33 @@ func generateCompareValue(condition *conditionNode) error {
 	case "dport":
 		switch condition.comparator {
 		case "=":
-			condition.compareValue = func(currentValue *ExtraKey) bool {
-				return bytes.Compare(currentValue.Dport[:], value[:DportSizeof]) == 0
+			condition.compareValue = func(currentValue Key) bool {
+				return bytes.Compare(currentValue.GetDport(), value[:DportSizeof]) == 0
 			}
 			return nil
 		case "!=":
-			condition.compareValue = func(currentValue *ExtraKey) bool {
-				return bytes.Compare(currentValue.Dport[:], value[:DportSizeof]) != 0
+			condition.compareValue = func(currentValue Key) bool {
+				return bytes.Compare(currentValue.GetDport(), value[:DportSizeof]) != 0
 			}
 			return nil
 		case "<":
-			condition.compareValue = func(currentValue *ExtraKey) bool {
-				return bytes.Compare(currentValue.Dport[:], value[:DportSizeof]) < 0
+			condition.compareValue = func(currentValue Key) bool {
+				return bytes.Compare(currentValue.GetDport(), value[:DportSizeof]) < 0
 			}
 			return nil
 		case ">":
-			condition.compareValue = func(currentValue *ExtraKey) bool {
-				return bytes.Compare(currentValue.Dport[:], value[:DportSizeof]) > 0
+			condition.compareValue = func(currentValue Key) bool {
+				return bytes.Compare(currentValue.GetDport(), value[:DportSizeof]) > 0
 			}
 			return nil
 		case "<=":
-			condition.compareValue = func(currentValue *ExtraKey) bool {
-				return bytes.Compare(currentValue.Dport[:], value[:DportSizeof]) <= 0
+			condition.compareValue = func(currentValue Key) bool {
+				return bytes.Compare(currentValue.GetDport(), value[:DportSizeof]) <= 0
 			}
 			return nil
 		case ">=":
-			condition.compareValue = func(currentValue *ExtraKey) bool {
-				return bytes.Compare(currentValue.Dport[:], value[:DportSizeof]) >= 0
+			condition.compareValue = func(currentValue Key) bool {
+				return bytes.Compare(currentValue.GetDport(), value[:DportSizeof]) >= 0
 			}
 			return nil
 		default:
@@ -240,33 +240,33 @@ func generateCompareValue(condition *conditionNode) error {
 	case "proto":
 		switch condition.comparator {
 		case "=":
-			condition.compareValue = func(currentValue *ExtraKey) bool {
-				return currentValue.Protocol == value[0]
+			condition.compareValue = func(currentValue Key) bool {
+				return currentValue.GetProto() == value[0]
 			}
 			return nil
 		case "!=":
-			condition.compareValue = func(currentValue *ExtraKey) bool {
-				return currentValue.Protocol != value[0]
+			condition.compareValue = func(currentValue Key) bool {
+				return currentValue.GetProto() != value[0]
 			}
 			return nil
 		case "<":
-			condition.compareValue = func(currentValue *ExtraKey) bool {
-				return currentValue.Protocol < value[0]
+			condition.compareValue = func(currentValue Key) bool {
+				return currentValue.GetProto() < value[0]
 			}
 			return nil
 		case ">":
-			condition.compareValue = func(currentValue *ExtraKey) bool {
-				return currentValue.Protocol > value[0]
+			condition.compareValue = func(currentValue Key) bool {
+				return currentValue.GetProto() > value[0]
 			}
 			return nil
 		case "<=":
-			condition.compareValue = func(currentValue *ExtraKey) bool {
-				return currentValue.Protocol <= value[0]
+			condition.compareValue = func(currentValue Key) bool {
+				return currentValue.GetProto() <= value[0]
 			}
 			return nil
 		case ">=":
-			condition.compareValue = func(currentValue *ExtraKey) bool {
-				return currentValue.Protocol >= value[0]
+			condition.compareValue = func(currentValue Key) bool {
+				return currentValue.GetProto() >= value[0]
 			}
 			return nil
 		default:
@@ -282,14 +282,16 @@ func generateCompareValue(condition *conditionNode) error {
 // validation logic  (e.g. no IPv4 address with digits greater than 255).
 //
 // Input:
-//   condition:    a conditionNode
+//
+//	condition:    a conditionNode
 //
 // Output:
-//   byte[]:       the value of the condition node serialized into a byte slice of the same
-//                 format stored in the database.
-//   int:          (Optionally) if the attribute of condition is a CIDR (e.g. 192.168.0.0/18)
-//                 the length of the netmask (18 in this case)
-//   error:        message whenever a condition was incorrectly specified
+//
+//	byte[]:       the value of the condition node serialized into a byte slice of the same
+//	              format stored in the database.
+//	int:          (Optionally) if the attribute of condition is a CIDR (e.g. 192.168.0.0/18)
+//	              the length of the netmask (18 in this case)
+//	error:        message whenever a condition was incorrectly specified
 func conditionBytesAndNetmask(condition conditionNode) ([]byte, int, error) {
 
 	// translate the indicated value into bytes
@@ -339,14 +341,20 @@ func conditionBytesAndNetmask(condition conditionNode) ([]byte, int, error) {
 				return nil, 0, errors.New("Could not parse ip address: " + value)
 			}
 
+			maskWidth := int64(4)
+			if isIPv6Address {
+				maskWidth = 16
+			}
+
 			// zero out unused bytes of IP
-			for i := (netmask + 7) / 8; i < 16; i++ {
+			for i := (netmask + 7) / 8; i < maskWidth; i++ {
 				condBytes[i] = 0
 			}
 			// apply masking
-			if netmask/8 < 16 {
+			if netmask/8 < maskWidth {
 				condBytes[netmask/8] &= uint8(0xFF) << uint8(8-(netmask%8))
 			}
+
 		case "proto":
 			if num, err = strconv.ParseUint(value, 10, 8); err != nil {
 				if num, isIn = protocols.GetIPProtoID(value); !isIn {
@@ -381,9 +389,7 @@ func IPStringToBytes(ip string) ([]byte, error) {
 	}
 
 	if isIPv4 {
-		ipaddr[0], ipaddr[1], ipaddr[2], ipaddr[3] = ipaddr[12], ipaddr[13], ipaddr[14], ipaddr[15]
-		ipaddr[12], ipaddr[13], ipaddr[14], ipaddr[15] = 0, 0, 0, 0
-		ipaddr[10], ipaddr[11] = 0, 0 // Zero out v4InV6Prefix set by net.ParseIP
+		return []byte{ipaddr[12], ipaddr[13], ipaddr[14], ipaddr[15]}, nil
 	}
 
 	return ipaddr, nil

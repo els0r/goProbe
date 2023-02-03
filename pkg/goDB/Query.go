@@ -19,6 +19,8 @@ import "github.com/els0r/goProbe/pkg/types"
 
 type columnIndex int
 
+const ipSizeOf = -1
+
 // Indices for all column types
 const (
 	// First the attribute columns...
@@ -37,8 +39,8 @@ const (
 
 // Sizeof (entry) for all column types
 const (
-	SipSizeof   int = 16
-	DipSizeof   int = 16
+	SipSizeof   int = ipSizeOf
+	DipSizeof   int = ipSizeOf
 	ProtoSizeof int = 1
 	DportSizeof int = 2
 )

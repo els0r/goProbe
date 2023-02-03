@@ -20,7 +20,7 @@ var IPStringToBytesTests = []struct {
 	outIP   []byte
 	success bool
 }{
-	{"1.2.3.4", []byte{1, 2, 3, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, true},
+	{"1.2.3.4", []byte{1, 2, 3, 4}, true},
 	{"300.1.2.3", nil, false},
 	{"1122:3344:5566:7788:99AA:BBCC:DDEE:FF31", []byte{0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x31}, true},
 	{"1122:3344:5566::BBCC:DDEE:FF31", []byte{0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0, 0, 0, 0, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x31}, true},
@@ -54,8 +54,8 @@ var conditionBytesAndNetmaskTests = []struct {
 	success    bool
 }{
 	// valid ipv4
-	{conditionNode{attribute: "sip", comparator: "=", value: "192.168.178.1"}, []byte{192, 168, 178, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 0, true},
-	{conditionNode{attribute: "dip", comparator: "=", value: "192.168.178.1"}, []byte{192, 168, 178, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 0, true},
+	{conditionNode{attribute: "sip", comparator: "=", value: "192.168.178.1"}, []byte{192, 168, 178, 1}, 0, true},
+	{conditionNode{attribute: "dip", comparator: "=", value: "192.168.178.1"}, []byte{192, 168, 178, 1}, 0, true},
 	// wrong attribute
 	{conditionNode{attribute: "dport", comparator: "=", value: "192.168.178.1"}, nil, 0, false},
 	{conditionNode{attribute: "proto", comparator: "=", value: "192.168.178.1"}, nil, 0, false},
@@ -76,11 +76,11 @@ var conditionBytesAndNetmaskTests = []struct {
 	{conditionNode{attribute: "sip", comparator: "=", value: "fe80:::2"}, nil, 0, false},
 
 	// valid CIDR
-	{conditionNode{attribute: "snet", comparator: "=", value: "255.168.178.1/0"}, []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 0, true},
-	{conditionNode{attribute: "snet", comparator: "=", value: "255.168.178.1/1"}, []byte{128, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 1, true},
-	{conditionNode{attribute: "snet", comparator: "=", value: "255.168.178.1/8"}, []byte{255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 8, true},
-	{conditionNode{attribute: "dnet", comparator: "=", value: "255.255.255.1/13"}, []byte{255, 248, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 13, true},
-	{conditionNode{attribute: "dnet", comparator: "=", value: "255.255.255.255/32"}, []byte{255, 255, 255, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 32, true},
+	{conditionNode{attribute: "snet", comparator: "=", value: "255.168.178.1/0"}, []byte{0, 0, 0, 0}, 0, true},
+	{conditionNode{attribute: "snet", comparator: "=", value: "255.168.178.1/1"}, []byte{128, 0, 0, 0}, 1, true},
+	{conditionNode{attribute: "snet", comparator: "=", value: "255.168.178.1/8"}, []byte{255, 0, 0, 0}, 8, true},
+	{conditionNode{attribute: "dnet", comparator: "=", value: "255.255.255.1/13"}, []byte{255, 248, 0, 0}, 13, true},
+	{conditionNode{attribute: "dnet", comparator: "=", value: "255.255.255.255/32"}, []byte{255, 255, 255, 255}, 32, true},
 	{conditionNode{attribute: "snet", comparator: "=", value: "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff/0"}, []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 0, true},
 	{conditionNode{attribute: "snet", comparator: "=", value: "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff/47"}, []byte{255, 255, 255, 255, 255, 254, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 47, true},
 	{conditionNode{attribute: "snet", comparator: "=", value: "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff/64"}, []byte{255, 255, 255, 255, 255, 255, 255, 255, 0, 0, 0, 0, 0, 0, 0, 0}, 64, true},
@@ -144,8 +144,8 @@ func TestConditionBytesAndNetmask(t *testing.T) {
 					test.input, err)
 			}
 			if !reflect.DeepEqual(test.outBytes, bytes) || test.outNetmask != netmask {
-				t.Fatalf("Returned an unexpected output. Expected output: %v, %v. Actual output: %v, %v",
-					test.outBytes, test.outNetmask, bytes, netmask)
+				t.Fatalf("Returned an unexpected output for input `%s`. Expected output: %v, %v. Actual output: %v, %v",
+					test.input, test.outBytes, test.outNetmask, bytes, netmask)
 			}
 		}
 	}

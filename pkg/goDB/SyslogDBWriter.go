@@ -40,7 +40,7 @@ func (s *SyslogDBWriter) Write(flowmap AggFlowMap, iface string, timestamp int64
 			fmt.Sprintf("%d,%s,%s,%s",
 				timestamp,
 				iface,
-				flowKey.String(),
+				flowKey,
 				flowVal.String(),
 			),
 		)

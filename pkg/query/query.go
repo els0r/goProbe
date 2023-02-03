@@ -174,7 +174,7 @@ func (s *Statement) Execute(ctx context.Context) (result *results.Result, err er
 	defer cancelQuery()
 
 	// Channel for handling of returned maps
-	mapChan := make(chan map[goDB.ExtraKey]goDB.Val, 1024)
+	mapChan := make(chan map[string]goDB.Val, 1024)
 	aggregateChan := aggregate(mapChan)
 
 	go func() {
@@ -294,26 +294,27 @@ func (s *Statement) Execute(ctx context.Context) (result *results.Result, err er
 	var rs = make(results.Rows, len(agg.aggregatedMap))
 	count := 0
 
-	for key, val := range agg.aggregatedMap {
+	for keyStr, val := range agg.aggregatedMap {
 
-		if key.Time != 0 {
-			ts := time.Unix(key.Time, 0)
+		key := goDB.ExtendedKey(keyStr)
+
+		if ts, hasTS := key.AttrTime(); hasTS {
 			rs[count].Labels.Timestamp = &ts
 		}
-		rs[count].Labels.Iface = key.Iface
-		rs[count].Labels.HostID = key.HostID
-		rs[count].Labels.Hostname = key.Hostname
+		rs[count].Labels.Iface, _ = key.AttrIface()
+		rs[count].Labels.HostID = val.HostID
+		rs[count].Labels.Hostname = val.Hostname
 		if sip != nil {
-			rs[count].Attributes.SrcIP = types.RawIPToAddr(key.Sip[:])
+			rs[count].Attributes.SrcIP = types.RawIPToAddr(key.Key().GetSip())
 		}
 		if dip != nil {
-			rs[count].Attributes.DstIP = types.RawIPToAddr(key.Dip[:])
+			rs[count].Attributes.DstIP = types.RawIPToAddr(key.Key().GetDip())
 		}
 		if proto != nil {
-			rs[count].Attributes.IPProto = key.Protocol
+			rs[count].Attributes.IPProto = key.Key().GetProto()
 		}
 		if dport != nil {
-			rs[count].Attributes.DstPort = types.PortToUint16(key.Dport)
+			rs[count].Attributes.DstPort = types.PortToUint16(key.Key().GetDport())
 		}
 
 		// assign counters
