@@ -6,7 +6,7 @@ import (
 )
 
 type aggregateResult struct {
-	aggregatedMap map[goDB.ExtraKey]goDB.Val
+	aggregatedMap map[string]goDB.Val
 	totals        results.Counters
 	err           error
 }
@@ -15,7 +15,7 @@ type aggregateResult struct {
 // Then send aggregation result over resultChan.
 // If an error occurs, aggregate may return prematurely.
 // Closes resultChan on termination.
-func aggregate(mapChan <-chan map[goDB.ExtraKey]goDB.Val) chan aggregateResult {
+func aggregate(mapChan <-chan map[string]goDB.Val) chan aggregateResult {
 
 	// create channel that returns the final aggregate result
 	resultChan := make(chan aggregateResult, 1)
@@ -23,7 +23,7 @@ func aggregate(mapChan <-chan map[goDB.ExtraKey]goDB.Val) chan aggregateResult {
 	go func() {
 		defer close(resultChan)
 
-		var finalMap = make(map[goDB.ExtraKey]goDB.Val)
+		var finalMap = make(map[string]goDB.Val)
 		var totals results.Counters
 
 		// Temporary goDB.Val because map values cannot be updated in-place

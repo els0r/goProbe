@@ -71,7 +71,7 @@ type Node interface {
 
 	// Evaluates the conditional. Make sure that you called
 	// instrument before calling this.
-	evaluate(*ExtraKey) bool
+	evaluate(Key) bool
 
 	// Returns the set of attributes used in the conditional.
 	attributes() map[string]struct{}
@@ -82,7 +82,7 @@ type conditionNode struct {
 	comparator   string
 	value        string
 	currentValue []byte
-	compareValue func(*ExtraKey) bool
+	compareValue func(Key) bool
 }
 
 func newConditionNode(attribute, comparator, value string) conditionNode {
@@ -101,7 +101,7 @@ func (n conditionNode) instrument() (Node, error) {
 	err := generateCompareValue(&n)
 	return n, err
 }
-func (n conditionNode) evaluate(comparisonValue *ExtraKey) bool {
+func (n conditionNode) evaluate(comparisonValue Key) bool {
 	return n.compareValue(comparisonValue)
 }
 func (n conditionNode) attributes() map[string]struct{} {
@@ -128,7 +128,7 @@ func (n notNode) transform(transformer func(conditionNode) (Node, error)) (Node,
 	n.node, err = n.node.transform(transformer)
 	return n, err
 }
-func (n notNode) evaluate(comparisonValue *ExtraKey) bool {
+func (n notNode) evaluate(comparisonValue Key) bool {
 	return !n.node.evaluate(comparisonValue)
 }
 func (n notNode) attributes() map[string]struct{} {
@@ -163,7 +163,7 @@ func (n andNode) transform(transformer func(conditionNode) (Node, error)) (Node,
 	n.right, err = n.right.transform(transformer)
 	return n, err
 }
-func (n andNode) evaluate(comparisonValue *ExtraKey) bool {
+func (n andNode) evaluate(comparisonValue Key) bool {
 	return n.left.evaluate(comparisonValue) && n.right.evaluate(comparisonValue)
 }
 func (n andNode) attributes() map[string]struct{} {
@@ -202,7 +202,7 @@ func (n orNode) transform(transformer func(conditionNode) (Node, error)) (Node, 
 	n.right, err = n.right.transform(transformer)
 	return n, err
 }
-func (n orNode) evaluate(comparisonValue *ExtraKey) bool {
+func (n orNode) evaluate(comparisonValue Key) bool {
 	return n.left.evaluate(comparisonValue) || n.right.evaluate(comparisonValue)
 }
 func (n orNode) attributes() map[string]struct{} {

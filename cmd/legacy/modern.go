@@ -8,6 +8,7 @@ import (
 	"github.com/els0r/goProbe/pkg/goDB"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/bitpack"
 	"github.com/els0r/goProbe/pkg/goDB/storage/gpfile"
+	"github.com/sirupsen/logrus"
 )
 
 type ModernFileSet struct {
@@ -178,13 +179,20 @@ func (l ModernFileSet) GetBlock(ts int64) (goDB.AggFlowMap, error) {
 
 	for i := 0; i < len(protoBlock); i++ {
 
+		sip := rawIPToAddr(sipBlock[i*16 : i*16+16])
+		dip := rawIPToAddr(dipBlock[i*16 : i*16+16])
+		if sip.Is4() != dip.Is4() {
+			logrus.StandardLogger().Warnf("source / destination IP v4 / v6 mismatch: %s / %s, will convert to IPv6\n", sip, dip)
+		}
+
 		var K goDB.Key
 		var V goDB.Val
 
-		copy(K.Sip[:], sipBlock[i*16:i*16+16])
-		copy(K.Dip[:], dipBlock[i*16:i*16+16])
-		copy(K.Dport[:], dportBlock[i*2:i*2+2])
-		K.Protocol = protoBlock[i]
+		if sip.Is4() && dip.Is4() {
+			K = goDB.NewV4KeyStatic(sip.As4(), dip.As4(), dportBlock[i*2:i*2+2], protoBlock[i])
+		} else {
+			K = goDB.NewV6KeyStatic(sip.As16(), dip.As16(), dportBlock[i*2:i*2+2], protoBlock[i])
+		}
 
 		// Unpack counters using bit packing if enabled, otherwise just copy them using fixed bit width
 		if useBitPacking {
@@ -199,15 +207,15 @@ func (l ModernFileSet) GetBlock(ts int64) (goDB.AggFlowMap, error) {
 			V.NPktsSent = binary.BigEndian.Uint64(pktsSentBlock[i*8 : i*8+8])
 		}
 
-		entry, exists := data[K]
+		entry, exists := data[string(K)]
 		if exists {
 			entry.NBytesRcvd += V.NBytesRcvd
 			entry.NBytesSent += V.NBytesSent
 			entry.NPktsRcvd += V.NPktsRcvd
 			entry.NPktsSent += V.NPktsSent
-			data[K] = entry
+			data[string(K)] = entry
 		} else {
-			data[K] = &V
+			data[string(K)] = &V
 		}
 	}
 

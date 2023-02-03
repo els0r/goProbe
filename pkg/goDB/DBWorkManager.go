@@ -15,6 +15,7 @@ package goDB
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -25,6 +26,7 @@ import (
 
 	"github.com/els0r/goProbe/pkg/goDB/encoder/bitpack"
 	"github.com/els0r/goProbe/pkg/goDB/storage/gpfile"
+	"github.com/els0r/goProbe/pkg/types"
 	"github.com/els0r/log"
 )
 
@@ -154,7 +156,7 @@ func (w *DBWorkManager) CreateWorkerJobs(tfirst int64, tlast int64, query *Query
 }
 
 // main query processing
-func (w *DBWorkManager) grabAndProcessWorkload(ctx context.Context, wg *sync.WaitGroup, workloadChan <-chan DBWorkload, mapChan chan map[ExtraKey]Val) {
+func (w *DBWorkManager) grabAndProcessWorkload(ctx context.Context, wg *sync.WaitGroup, workloadChan <-chan DBWorkload, mapChan chan map[string]Val) {
 	go func() {
 		defer wg.Done()
 
@@ -170,7 +172,7 @@ func (w *DBWorkManager) grabAndProcessWorkload(ctx context.Context, wg *sync.Wai
 			case workload, chanOpen = <-workloadChan:
 				if chanOpen {
 					// create the map in which the workload will store the aggregations
-					resultMap := make(map[ExtraKey]Val)
+					resultMap := make(map[string]Val)
 
 					// if there is an error during one of the read jobs, throw a syslog message and terminate
 					if err = w.readBlocksAndEvaluate(ctx, workload, resultMap); err != nil {
@@ -188,7 +190,7 @@ func (w *DBWorkManager) grabAndProcessWorkload(ctx context.Context, wg *sync.Wai
 }
 
 // ExecuteWorkerReadJobs runs the query concurrently with multiple sprocessing units
-func (w *DBWorkManager) ExecuteWorkerReadJobs(ctx context.Context, mapChan chan map[ExtraKey]Val) {
+func (w *DBWorkManager) ExecuteWorkerReadJobs(ctx context.Context, mapChan chan map[string]Val) {
 	workloadChan := make(chan DBWorkload, len(w.workloads))
 
 	var wg = new(sync.WaitGroup)
@@ -210,24 +212,32 @@ func (w *DBWorkManager) ExecuteWorkerReadJobs(ctx context.Context, mapChan chan 
 
 // Array of functions to extract a specific entry from a block (represented as a byteslice)
 // to a field in the Key struct.
-var copyToKeyFns = [ColIdxAttributeCount]func(int, *ExtraKey, []byte){
-	func(i int, key *ExtraKey, bytes []byte) {
-		copy(key.Sip[:], bytes[i*SipSizeof:i*SipSizeof+SipSizeof])
+var copyToKeyFns = [ColIdxAttributeCount]func(int, int, ExtendedKey, []byte){
+	func(i, numV4 int, key ExtendedKey, bytes []byte) {
+		if key.IsIPv4() {
+			key.Key().PutSip(bytes[i*4 : i*4+4])
+		} else {
+			key.Key().PutSip(bytes[numV4*4+(i-numV4)*16 : numV4*4+(i-numV4)*16+16])
+		}
 	},
-	func(i int, key *ExtraKey, bytes []byte) {
-		copy(key.Dip[:], bytes[i*DipSizeof:i*DipSizeof+DipSizeof])
+	func(i, numV4 int, key ExtendedKey, bytes []byte) {
+		if key.IsIPv4() {
+			key.Key().PutDip(bytes[i*4 : i*4+4])
+		} else {
+			key.Key().PutDip(bytes[numV4*4+(i-numV4)*16 : numV4*4+(i-numV4)*16+16])
+		}
 	},
-	func(i int, key *ExtraKey, bytes []byte) {
-		key.Protocol = bytes[i*1]
+	func(i, numV4 int, key ExtendedKey, bytes []byte) {
+		key.Key().PutProto(bytes[i])
 	},
-	func(i int, key *ExtraKey, bytes []byte) {
-		copy(key.Dport[:], bytes[i*DportSizeof:i*DportSizeof+DportSizeof])
+	func(i, numV4 int, key ExtendedKey, bytes []byte) {
+		key.Key().PutDport(bytes[i*DportSizeof : i*DportSizeof+DportSizeof])
 	},
 }
 
 // Block evaluation and aggregation -----------------------------------------------------
 // this is where the actual reading and aggregation magic happens
-func (w *DBWorkManager) readBlocksAndEvaluate(ctx context.Context, workload DBWorkload, resultMap map[ExtraKey]Val) error {
+func (w *DBWorkManager) readBlocksAndEvaluate(ctx context.Context, workload DBWorkload, resultMap map[string]Val) error {
 	var err error
 
 	var (
@@ -235,7 +245,10 @@ func (w *DBWorkManager) readBlocksAndEvaluate(ctx context.Context, workload DBWo
 		dir   = workload.workDir
 	)
 
-	var key, comparisonValue ExtraKey
+	var (
+		v4Key, v4ComparisonValue ExtendedKey
+		v6Key, v6ComparisonValue ExtendedKey
+	)
 
 	// Load the GPFiles corresponding to the columns we need for the query. Each file is loaded at most once.
 	var columnFiles [ColIdxCount]*gpfile.GPFile
@@ -258,6 +271,8 @@ func (w *DBWorkManager) readBlocksAndEvaluate(ctx context.Context, workload DBWo
 			var (
 				blocks      [ColIdxCount][]byte
 				blockBroken bool
+				ts          int64
+				iface       string
 			)
 
 			for _, colIdx := range query.columnIndices {
@@ -270,15 +285,21 @@ func (w *DBWorkManager) readBlocksAndEvaluate(ctx context.Context, workload DBWo
 				}
 			}
 
+			// Initialize any (static) key extensions potentially present in the query
 			if query.hasAttrTime {
-				key.Time = tstamp
+				ts = tstamp
 			}
-
 			if query.hasAttrIface {
-				key.Iface = w.iface
+				iface = w.iface
 			}
+			v4Key = NewEmptyV4Key().Extend(ts, iface)
+			v6Key = NewEmptyV6Key().Extend(ts, iface)
 
 			// Check whether all blocks have matching number of entries
+			// TODO: Quick-shot, this information should be stored in the metadata for this directory instead !!!
+			numV4Entries := binary.BigEndian.Uint64(blocks[BytesRcvdColIdx][:8])
+			blocks[BytesRcvdColIdx] = blocks[BytesRcvdColIdx][8:]
+
 			numEntries := bitpack.Len(blocks[BytesRcvdColIdx])
 			for _, colIdx := range query.columnIndices {
 				l := len(blocks[colIdx])
@@ -289,15 +310,23 @@ func (w *DBWorkManager) readBlocksAndEvaluate(ctx context.Context, workload DBWo
 						break
 					}
 				} else {
-					if l/columnSizeofs[colIdx] != numEntries {
-						blockBroken = true
-						w.logger.Warnf("[Bl %d] Incorrect number of entries in file [%s.gpf]. Expected %d, found %d", b, columnFileNames[colIdx], numEntries, l/columnSizeofs[colIdx])
-						break
-					}
-					if l%columnSizeofs[colIdx] != 0 {
-						blockBroken = true
-						w.logger.Warnf("[Bl %d] Entry size does not evenly divide block size in file [%s.gpf]", b, columnFileNames[colIdx])
-						break
+					if columnSizeofs[colIdx] == ipSizeOf {
+						if l != (numEntries-int(numV4Entries))*types.IPv6Width+int(numV4Entries)*types.IPv4Width {
+							blockBroken = true
+							w.logger.Warnf("[Bl %d] Incorrect number of entries in variable block size file [%s.gpf]. Expected file length %d, have %d", b, columnFileNames[colIdx], (numEntries-int(numV4Entries))*types.IPv6Width+int(numV4Entries)*types.IPv4Width, l)
+							break
+						}
+					} else {
+						if l/columnSizeofs[colIdx] != numEntries {
+							blockBroken = true
+							w.logger.Warnf("[Bl %d] Incorrect number of entries in file [%s.gpf]. Expected %d, found %d", b, columnFileNames[colIdx], numEntries, l/columnSizeofs[colIdx])
+							break
+						}
+						if l%columnSizeofs[colIdx] != 0 {
+							blockBroken = true
+							w.logger.Warnf("[Bl %d] Entry size does not evenly divide block size in file [%s.gpf]", b, columnFileNames[colIdx])
+							break
+						}
 					}
 				}
 			}
@@ -312,10 +341,18 @@ func (w *DBWorkManager) readBlocksAndEvaluate(ctx context.Context, workload DBWo
 			byteWidthBytesSent := bitpack.ByteWidth(blocks[BytesSentColIdx])
 			byteWidthPktsRcvd := bitpack.ByteWidth(blocks[PacketsRcvdColIdx])
 			byteWidthPktsSent := bitpack.ByteWidth(blocks[PacketsSentColIdx])
+
+			key, comparisonValue := v4Key, v4ComparisonValue
 			for i := 0; i < numEntries; i++ {
+
+				// When reaching the v4/v6 mark, we switch to the IPv6 key
+				if i == int(numV4Entries) {
+					key, comparisonValue = v6Key, v6ComparisonValue
+				}
+
 				// Populate key for current entry
 				for _, colIdx := range query.queryAttributeIndices {
-					copyToKeyFns[colIdx](i, &key, blocks[colIdx])
+					copyToKeyFns[colIdx](i, int(numV4Entries), key, blocks[colIdx])
 				}
 
 				// Check whether conditional is satisfied for current entry
@@ -325,10 +362,10 @@ func (w *DBWorkManager) readBlocksAndEvaluate(ctx context.Context, workload DBWo
 				} else {
 					// Populate comparison value for current entry
 					for _, colIdx := range query.conditionalAttributeIndices {
-						copyToKeyFns[colIdx](i, &comparisonValue, blocks[colIdx])
+						copyToKeyFns[colIdx](i, int(numV4Entries), comparisonValue, blocks[colIdx])
 					}
 
-					conditionalSatisfied = query.Conditional.evaluate(&comparisonValue)
+					conditionalSatisfied = query.Conditional.evaluate(comparisonValue.Key())
 				}
 
 				if conditionalSatisfied {
@@ -341,14 +378,14 @@ func (w *DBWorkManager) readBlocksAndEvaluate(ctx context.Context, workload DBWo
 					delta.NPktsRcvd = bitpack.Uint64At(blocks[PacketsRcvdColIdx], i, byteWidthPktsRcvd)
 					delta.NPktsSent = bitpack.Uint64At(blocks[PacketsSentColIdx], i, byteWidthPktsSent)
 
-					if val, exists := resultMap[key]; exists {
+					if val, exists := resultMap[string(key)]; exists {
 						val.NBytesRcvd += delta.NBytesRcvd
 						val.NBytesSent += delta.NBytesSent
 						val.NPktsRcvd += delta.NPktsRcvd
 						val.NPktsSent += delta.NPktsSent
-						resultMap[key] = val
+						resultMap[string(key)] = val
 					} else {
-						resultMap[key] = delta
+						resultMap[string(key)] = delta
 					}
 				}
 			}

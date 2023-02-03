@@ -23,7 +23,7 @@ import (
 
 // StringKeyParser is used for mapping a string to it's goDB key
 type StringKeyParser interface {
-	ParseKey(element string, key *ExtraKey) error
+	ParseKey(element string, key ExtendedKey) error
 }
 
 // StringValParser is used for mapping a string to it's goDB value
@@ -107,7 +107,7 @@ type PacketsRecStringParser struct{}
 type PacketsSentStringParser struct{}
 
 // ParseKey is a no-op
-func (n *NOPStringParser) ParseKey(element string, key *ExtraKey) error {
+func (n *NOPStringParser) ParseKey(element string, key ExtendedKey) error {
 	return nil
 }
 
@@ -117,37 +117,37 @@ func (n *NOPStringParser) ParseVal(element string, val *Val) error {
 }
 
 // ParseKey parses a source IP string and writes it to the source IP key slice
-func (s *SipStringParser) ParseKey(element string, key *ExtraKey) error {
+func (s *SipStringParser) ParseKey(element string, key ExtendedKey) error {
 	ipBytes, err := IPStringToBytes(element)
 	if err != nil {
 		return errors.New("Could not parse 'sip' attribute: " + err.Error())
 	}
-	copy(key.Sip[:], ipBytes[:])
+	key.Key().PutSip(ipBytes)
 	return nil
 }
 
 // ParseKey parses a destination IP string and writes it to the desintation IP key slice
-func (d *DipStringParser) ParseKey(element string, key *ExtraKey) error {
+func (d *DipStringParser) ParseKey(element string, key ExtendedKey) error {
 	ipBytes, err := IPStringToBytes(element)
 	if err != nil {
 		return errors.New("Could not parse 'dip' attribute: " + err.Error())
 	}
-	copy(key.Dip[:], ipBytes[:])
+	key.Key().PutDip(ipBytes)
 	return nil
 }
 
 // ParseKey parses a destination port string and writes it to the desintation port key slice
-func (d *DportStringParser) ParseKey(element string, key *ExtraKey) error {
+func (d *DportStringParser) ParseKey(element string, key ExtendedKey) error {
 	num, err := strconv.ParseUint(element, 10, 16)
 	if err != nil {
 		return errors.New("Could not parse 'dport' attribute: " + err.Error())
 	}
-	copy(key.Dport[:], []byte{uint8(num >> 8), uint8(num & 0xff)})
+	key.Key().PutDport([]byte{uint8(num >> 8), uint8(num & 0xff)})
 	return nil
 }
 
 // ParseKey parses an IP protocol  string and writes it to the protocol key slice
-func (p *ProtoStringParser) ParseKey(element string, key *ExtraKey) error {
+func (p *ProtoStringParser) ParseKey(element string, key ExtendedKey) error {
 	var (
 		num  uint64
 		err  error
@@ -162,24 +162,34 @@ func (p *ProtoStringParser) ParseKey(element string, key *ExtraKey) error {
 		}
 	}
 
-	key.Protocol = byte(num & 0xff)
+	key.Key().PutProto(byte(num & 0xff))
 	return nil
 }
 
 // ParseKey parses a time string and writes it to the Time key
-func (t *TimeStringParser) ParseKey(element string, key *ExtraKey) error {
+func (t *TimeStringParser) ParseKey(element string, key ExtendedKey) error {
 	// parse into number
-	num, err := strconv.ParseUint(element, 10, 64)
+	num, err := strconv.ParseInt(element, 10, 64)
 	if err != nil {
 		return err
 	}
-	key.Time = int64(num)
+
+	attrIface, hasIface := key.AttrIface()
+	if hasIface {
+		key = key.Key().Extend(num, attrIface)
+	}
+
 	return nil
 }
 
-// ParseKey writes element to the Iface key
-func (i *IfaceStringParser) ParseKey(element string, key *ExtraKey) error {
-	key.Iface = element
+// // ParseKey writes element to the Iface key
+func (i *IfaceStringParser) ParseKey(element string, key ExtendedKey) error {
+
+	attrTime, hasTime := key.AttrTime()
+	if hasTime {
+		key = key.Key().Extend(attrTime.Unix(), element)
+	}
+
 	return nil
 }
 
