@@ -212,27 +212,29 @@ func (w *DBWorkManager) ExecuteWorkerReadJobs(ctx context.Context, mapChan chan 
 
 // Array of functions to extract a specific entry from a block (represented as a byteslice)
 // to a field in the Key struct.
-var copyToKeyFns = [ColIdxAttributeCount]func(int, int, ExtendedKey, []byte){
-	func(i, numV4 int, key ExtendedKey, bytes []byte) {
-		if key.IsIPv4() {
-			key.Key().PutSip(bytes[i*4 : i*4+4])
-		} else {
-			key.Key().PutSip(bytes[numV4*4+(i-numV4)*16 : numV4*4+(i-numV4)*16+16])
-		}
-	},
-	func(i, numV4 int, key ExtendedKey, bytes []byte) {
-		if key.IsIPv4() {
-			key.Key().PutDip(bytes[i*4 : i*4+4])
-		} else {
-			key.Key().PutDip(bytes[numV4*4+(i-numV4)*16 : numV4*4+(i-numV4)*16+16])
-		}
-	},
-	func(i, numV4 int, key ExtendedKey, bytes []byte) {
-		key.Key().PutProto(bytes[i])
-	},
-	func(i, numV4 int, key ExtendedKey, bytes []byte) {
-		key.Key().PutDport(bytes[i*DportSizeof : i*DportSizeof+DportSizeof])
-	},
+func genCopyToKeyFns(numV4 int) [ColIdxAttributeCount]func(int, ExtendedKey, []byte) {
+	return [ColIdxAttributeCount]func(int, ExtendedKey, []byte){
+		func(i int, key ExtendedKey, bytes []byte) {
+			if key.IsIPv4() {
+				key.Key().PutSip(bytes[i*4 : i*4+4])
+			} else {
+				key.Key().PutSip(bytes[numV4*4+(i-numV4)*16 : numV4*4+(i-numV4)*16+16])
+			}
+		},
+		func(i int, key ExtendedKey, bytes []byte) {
+			if key.IsIPv4() {
+				key.Key().PutDip(bytes[i*4 : i*4+4])
+			} else {
+				key.Key().PutDip(bytes[numV4*4+(i-numV4)*16 : numV4*4+(i-numV4)*16+16])
+			}
+		},
+		func(i int, key ExtendedKey, bytes []byte) {
+			key.Key().PutProto(bytes[i])
+		},
+		func(i int, key ExtendedKey, bytes []byte) {
+			key.Key().PutDport(bytes[i*DportSizeof : i*DportSizeof+DportSizeof])
+		},
+	}
 }
 
 // Block evaluation and aggregation -----------------------------------------------------
@@ -343,6 +345,7 @@ func (w *DBWorkManager) readBlocksAndEvaluate(ctx context.Context, workload DBWo
 			byteWidthPktsSent := bitpack.ByteWidth(blocks[PacketsSentColIdx])
 
 			key, comparisonValue := v4Key, v4ComparisonValue
+			attrFns := genCopyToKeyFns(int(numV4Entries))
 			for i := 0; i < numEntries; i++ {
 
 				// When reaching the v4/v6 mark, we switch to the IPv6 key
@@ -352,7 +355,7 @@ func (w *DBWorkManager) readBlocksAndEvaluate(ctx context.Context, workload DBWo
 
 				// Populate key for current entry
 				for _, colIdx := range query.queryAttributeIndices {
-					copyToKeyFns[colIdx](i, int(numV4Entries), key, blocks[colIdx])
+					attrFns[colIdx](i, key, blocks[colIdx])
 				}
 
 				// Check whether conditional is satisfied for current entry
@@ -362,7 +365,7 @@ func (w *DBWorkManager) readBlocksAndEvaluate(ctx context.Context, workload DBWo
 				} else {
 					// Populate comparison value for current entry
 					for _, colIdx := range query.conditionalAttributeIndices {
-						copyToKeyFns[colIdx](i, int(numV4Entries), comparisonValue, blocks[colIdx])
+						attrFns[colIdx](i, comparisonValue, blocks[colIdx])
 					}
 
 					conditionalSatisfied = query.Conditional.evaluate(comparisonValue.Key())
