@@ -1,3 +1,6 @@
+//go:build force_pfring
+// +build force_pfring
+
 package capture
 
 import (
