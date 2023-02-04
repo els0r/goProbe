@@ -62,11 +62,11 @@ func (e *Encoder) Type() encoders.Type {
 }
 
 // Compress compresses the input data and writes it to dst
-func (e *Encoder) Compress(data []byte, dst io.Writer) (n int, err error) {
+func (e *Encoder) Compress(data, buf []byte, dst io.Writer) (n int, err error) {
 
 	// LZ4 states that non-compressible data can be expanded to up to 0.4%.
 	// This length bound is the conservative version of the bound specified in the LZ4 source
-	var buf = make([]byte, int((1.004*float64(len(data)))+16))
+	buf = make([]byte, int((1.004*float64(len(data)))+16))
 	var compLen = int(C.cCompressCust(C.int(len(data)), (*C.char)(unsafe.Pointer(&data[0])), (*C.char)(unsafe.Pointer(&buf[0])), C.int(e.level)))
 
 	// sanity check whether the computed worst case has been exceeded in C call

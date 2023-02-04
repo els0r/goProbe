@@ -144,18 +144,21 @@ func (e *Encoder) Type() encoders.Type {
 }
 
 // Compress compresses the input data and writes it to dst
-func (e *Encoder) Compress(data []byte, dst io.Writer) (n int, err error) {
+func (e *Encoder) Compress(data, buf []byte, dst io.Writer) (n int, err error) {
 	dstCapacity := int(C.lz4GetCompressBound(
 		C.size_t(len(data)),
 		C.int(e.level),
 	))
 
-	var dstBuf = make([]byte, dstCapacity)
+	if cap(buf) < dstCapacity {
+		buf = make([]byte, 0, 2*dstCapacity)
+	}
+	buf = buf[:dstCapacity]
 
 	var compLen = int(C.lz4Compress(
 		unsafe.Pointer(&data[0]),
 		C.size_t(len(data)),
-		unsafe.Pointer(&dstBuf[0]),
+		unsafe.Pointer(&buf[0]),
 		C.size_t(dstCapacity),
 		C.int(e.level)),
 	)
@@ -167,11 +170,11 @@ func (e *Encoder) Compress(data []byte, dst io.Writer) (n int, err error) {
 	}
 
 	// sanity check whether the computed worst case has been exceeded in C call
-	if len(dstBuf) < compLen {
+	if len(buf) < compLen {
 		return n, errors.New("lz4: buffer size mismatch for compressed data")
 	}
 
-	if n, err = dst.Write(dstBuf[:compLen]); err != nil {
+	if n, err = dst.Write(buf[:compLen]); err != nil {
 		return n, err
 	}
 

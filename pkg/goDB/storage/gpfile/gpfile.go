@@ -61,6 +61,9 @@ type GPFile struct {
 	// accessMode denotes if the file is opened for read or write operations (to avoid
 	// race conditions and unpredictable behavior, only one mode is possible at a time)
 	accessMode int
+
+	// Reusable buffers for compression / decompression
+	uncompData, blockData []byte
 }
 
 func isHighEntropyColumn(filename string) bool {
@@ -119,13 +122,13 @@ func (g *GPFile) ReadBlock(timestamp int64) ([]byte, error) {
 
 	// Check that the file has been opened in the correct mode
 	if g.accessMode != ModeRead {
-		return nil, fmt.Errorf("Cannot read from GPFile in write mode")
+		return nil, fmt.Errorf("cannot read from GPFile in write mode")
 	}
 
 	// Check if the requested block exists
 	block, found := g.header.Blocks[timestamp]
 	if !found {
-		return nil, fmt.Errorf("Block for timestamp %v not found", timestamp)
+		return nil, fmt.Errorf("block for timestamp %v not found", timestamp)
 	}
 
 	// If there is no data to be expected, return
@@ -144,7 +147,7 @@ func (g *GPFile) ReadBlock(timestamp int64) ([]byte, error) {
 	if block.EncoderType != g.defaultEncoder.Type() {
 		decoder, err := encoder.New(block.EncoderType)
 		if err != nil {
-			return nil, fmt.Errorf("Failed to decode block %d based on detected encoder type %v: %s", block, block.EncoderType, err)
+			return nil, fmt.Errorf("failed to decode block %d based on detected encoder type %v: %w", block, block.EncoderType, err)
 		}
 		g.defaultEncoder = decoder
 	}
@@ -162,16 +165,21 @@ func (g *GPFile) ReadBlock(timestamp int64) ([]byte, error) {
 
 	// Perform decompression of data and store in output slice
 	var nRead int
-
-	uncompData := make([]byte, block.RawLen)
+	if cap(g.uncompData) < block.RawLen {
+		g.uncompData = make([]byte, 0, 2*block.RawLen)
+	}
+	g.uncompData = g.uncompData[:block.RawLen]
 	if block.EncoderType != encoders.EncoderTypeNull {
-		blockData := make([]byte, block.Len)
-		nRead, err = g.defaultEncoder.Decompress(blockData, uncompData, g.file)
+		if cap(g.blockData) < block.Len {
+			g.blockData = make([]byte, 0, 2*block.Len)
+		}
+		g.blockData = g.blockData[:block.Len]
+		nRead, err = g.defaultEncoder.Decompress(g.blockData, g.uncompData, g.file)
 	} else {
 		// micro-optimization that saves the allocation of blockData for decompression
 		// in the Null decompression case, since it is essentially just a byte read
 		// and the src bytes aren't used
-		nRead, err = g.defaultEncoder.Decompress(nil, uncompData, g.file)
+		nRead, err = g.defaultEncoder.Decompress(nil, g.uncompData, g.file)
 	}
 	if err != nil {
 		return nil, err
@@ -181,7 +189,7 @@ func (g *GPFile) ReadBlock(timestamp int64) ([]byte, error) {
 	}
 	g.lastSeekPos += int64(block.Len)
 
-	return uncompData, nil
+	return g.uncompData, nil
 }
 
 // WriteBlock writes data for a given timestamp to the file
@@ -213,7 +221,7 @@ func (g *GPFile) WriteBlock(timestamp int64, blockData []byte) error {
 	}
 
 	// Compress + write block data to file (append)
-	nWritten, err := g.defaultEncoder.Compress(blockData, g.fileBuffer)
+	nWritten, err := g.defaultEncoder.Compress(blockData, g.blockData, g.fileBuffer)
 	if err != nil {
 		return err
 	}
@@ -229,7 +237,7 @@ func (g *GPFile) WriteBlock(timestamp int64, blockData []byte) error {
 			return fmt.Errorf("failed to select %s encoder for optimal compression ratio: %w", encType, err)
 		}
 		g.fileBuffer.Reset(g.file)
-		nWritten, err = enc.Compress(blockData, g.fileBuffer)
+		nWritten, err = enc.Compress(blockData, g.blockData, g.fileBuffer)
 		if err != nil {
 			return fmt.Errorf("failed to re-encode with %s encoder: %w", encType, err)
 		}
@@ -280,12 +288,14 @@ func (g *GPFile) DefaultEncoder() encoder.Encoder {
 
 func (g *GPFile) open(flags int) (err error) {
 	if g.file != nil {
-		return fmt.Errorf("File %s is already open", g.filename)
+		return fmt.Errorf("file %s is already open", g.filename)
 	}
 
 	// Open file for append, create if not exists
 	g.file, err = os.OpenFile(g.filename, flags, defaultPermissions)
-	g.fileBuffer = bufio.NewWriter(g.file)
+	if flags == ModeWrite {
+		g.fileBuffer = bufio.NewWriter(g.file)
+	}
 
 	return
 }
