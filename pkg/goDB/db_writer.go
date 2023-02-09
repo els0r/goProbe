@@ -21,6 +21,7 @@ import (
 	"github.com/els0r/goProbe/pkg/goDB/encoder/bitpack"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 	"github.com/els0r/goProbe/pkg/goDB/storage/gpfile"
+	"github.com/els0r/goProbe/pkg/types/hashmap"
 )
 
 const (
@@ -110,7 +111,7 @@ func (w *DBWriter) createQueryLog() error {
 }
 
 // Write takes an aggregated flow map and its metadata and writes it to disk for a given timestamp
-func (w *DBWriter) Write(flowmap AggFlowMap, meta BlockMetadata, timestamp int64) (InterfaceSummaryUpdate, error) {
+func (w *DBWriter) Write(flowmap *hashmap.AggFlowMap, meta BlockMetadata, timestamp int64) (InterfaceSummaryUpdate, error) {
 	var (
 		dbdata [ColIdxCount][]byte
 		update InterfaceSummaryUpdate
@@ -147,7 +148,7 @@ func (w *DBWriter) Write(flowmap AggFlowMap, meta BlockMetadata, timestamp int64
 	return update, err
 }
 
-func dbData(iface string, timestamp int64, aggFlowMap AggFlowMap) ([ColIdxCount][]byte, InterfaceSummaryUpdate) {
+func dbData(iface string, timestamp int64, aggFlowMap *hashmap.AggFlowMap) ([ColIdxCount][]byte, InterfaceSummaryUpdate) {
 	var dbData [ColIdxCount][]byte
 	summUpdate := new(InterfaceSummaryUpdate)
 

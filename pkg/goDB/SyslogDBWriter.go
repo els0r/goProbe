@@ -15,6 +15,8 @@ package goDB
 import (
 	"fmt"
 	"log/syslog"
+
+	"github.com/els0r/goProbe/pkg/types/hashmap"
 )
 
 // SyslogDBWriter can write goProbe's flow map to a syslog destination
@@ -34,14 +36,14 @@ func NewSyslogDBWriter() (*SyslogDBWriter, error) {
 }
 
 // Write writes the aggregated flows to the syslog writer
-func (s *SyslogDBWriter) Write(flowmap AggFlowMap, iface string, timestamp int64) {
-	for flowKey, flowVal := range flowmap {
+func (s *SyslogDBWriter) Write(flowmap *hashmap.AggFlowMap, iface string, timestamp int64) {
+	for i := flowmap.Iter(); i.Next(); {
 		s.logger.Info(
 			fmt.Sprintf("%d,%s,%s,%s",
 				timestamp,
 				iface,
-				flowKey,
-				flowVal.String(),
+				i.Key(),
+				i.Val().String(),
 			),
 		)
 	}

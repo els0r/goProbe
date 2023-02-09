@@ -16,7 +16,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/els0r/goProbe/pkg/goDB"
+	"github.com/els0r/goProbe/pkg/types/hashmap"
 	"github.com/els0r/log"
 )
 
@@ -35,7 +35,7 @@ const (
 // Used by Manager to return the results of
 // RotateAll() and Update().
 type TaggedAggFlowMap struct {
-	Map   goDB.AggFlowMap
+	Map   *hashmap.AggFlowMap
 	Stats Stats  `json:"stats,omitempty"`
 	Iface string `json:"iface"`
 }

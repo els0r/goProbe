@@ -13,6 +13,7 @@ import (
 	"github.com/els0r/goProbe/pkg/goDB"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 	"github.com/els0r/goProbe/pkg/goDB/storage/gpfile"
+	"github.com/els0r/goProbe/pkg/types/hashmap"
 	"github.com/sirupsen/logrus"
 )
 
@@ -97,12 +98,12 @@ func main() {
 type blockFlows struct {
 	ts    int64
 	iface string
-	data  goDB.AggFlowMap
+	data  *hashmap.Map
 }
 
 type fileSet interface {
 	GetTimestamps() ([]int64, error)
-	GetBlock(ts int64) (goDB.AggFlowMap, error)
+	GetBlock(ts int64) (*hashmap.Map, error)
 	Close() error
 }
 

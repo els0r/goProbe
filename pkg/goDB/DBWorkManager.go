@@ -27,6 +27,7 @@ import (
 	"github.com/els0r/goProbe/pkg/goDB/encoder/bitpack"
 	"github.com/els0r/goProbe/pkg/goDB/storage/gpfile"
 	"github.com/els0r/goProbe/pkg/types"
+	"github.com/els0r/goProbe/pkg/types/hashmap"
 	"github.com/els0r/log"
 )
 
@@ -48,6 +49,7 @@ type DBWorkload struct {
 	query   *Query
 	workDir string
 	load    []int64
+	memPool *gpfile.MemPool
 }
 
 // DBWorkManager schedules parallel processing of blocks relevant for a query
@@ -104,8 +106,12 @@ func (w *DBWorkManager) CreateWorkerJobs(tfirst int64, tlast int64, query *Query
 	// loop over directory list in order to create the timestamp pairs
 	var (
 		infoFile *gpfile.GPFile
+		memPool  *gpfile.MemPool
 		dirName  string
 	)
+	if !query.lowMem {
+		memPool = gpfile.NewMemPool()
+	}
 
 	// make sure to start with zero workloads as the number of assigned
 	// workloads depends on how many directories have to be read
@@ -120,7 +126,7 @@ func (w *DBWorkManager) CreateWorkerJobs(tfirst int64, tlast int64, query *Query
 				numDirs++
 
 				// create new workload for the directory
-				workload := DBWorkload{query: query, workDir: dirName, load: []int64{}}
+				workload := DBWorkload{query: query, workDir: dirName, load: []int64{}, memPool: memPool}
 
 				// retrieve all the relevant timestamps from one of the database files.
 				path := filepath.Join(w.dbIfaceDir, dirName, "bytes_rcvd.gpf")
@@ -156,13 +162,11 @@ func (w *DBWorkManager) CreateWorkerJobs(tfirst int64, tlast int64, query *Query
 }
 
 // main query processing
-func (w *DBWorkManager) grabAndProcessWorkload(ctx context.Context, wg *sync.WaitGroup, workloadChan <-chan DBWorkload, mapChan chan map[string]Val) {
+func (w *DBWorkManager) grabAndProcessWorkload(ctx context.Context, wg *sync.WaitGroup, workloadChan <-chan DBWorkload, mapChan chan hashmap.AggFlowMapWithMetadata) {
 	go func() {
 		defer wg.Done()
 
 		// parse conditions
-		var err error
-
 		var workload DBWorkload
 		for chanOpen := true; chanOpen; {
 			select {
@@ -172,12 +176,15 @@ func (w *DBWorkManager) grabAndProcessWorkload(ctx context.Context, wg *sync.Wai
 			case workload, chanOpen = <-workloadChan:
 				if chanOpen {
 					// create the map in which the workload will store the aggregations
-					resultMap := make(map[string]Val)
+					resultMap := hashmap.AggFlowMapWithMetadata{
+						Map: hashmap.New(),
+					}
 
 					// if there is an error during one of the read jobs, throw a syslog message and terminate
-					if err = w.readBlocksAndEvaluate(ctx, workload, resultMap); err != nil {
+					err := w.readBlocksAndEvaluate(ctx, workload, resultMap)
+					if err != nil {
 						w.logger.Error(err.Error())
-						mapChan <- nil
+						mapChan <- hashmap.AggFlowMapWithMetadata{Map: nil}
 						return
 					}
 
@@ -190,7 +197,7 @@ func (w *DBWorkManager) grabAndProcessWorkload(ctx context.Context, wg *sync.Wai
 }
 
 // ExecuteWorkerReadJobs runs the query concurrently with multiple sprocessing units
-func (w *DBWorkManager) ExecuteWorkerReadJobs(ctx context.Context, mapChan chan map[string]Val) {
+func (w *DBWorkManager) ExecuteWorkerReadJobs(ctx context.Context, mapChan chan hashmap.AggFlowMapWithMetadata) {
 	workloadChan := make(chan DBWorkload, len(w.workloads))
 
 	var wg = new(sync.WaitGroup)
@@ -210,52 +217,31 @@ func (w *DBWorkManager) ExecuteWorkerReadJobs(ctx context.Context, mapChan chan 
 	wg.Wait()
 }
 
-// Array of functions to extract a specific entry from a block (represented as a byteslice)
-// to a field in the Key struct.
-func genCopyToKeyFns(numV4 int) [ColIdxAttributeCount]func(int, ExtendedKey, []byte) {
-	return [ColIdxAttributeCount]func(int, ExtendedKey, []byte){
-		func(i int, key ExtendedKey, bytes []byte) {
-			if key.IsIPv4() {
-				key.Key().PutSip(bytes[i*4 : i*4+4])
-			} else {
-				key.Key().PutSip(bytes[numV4*4+(i-numV4)*16 : numV4*4+(i-numV4)*16+16])
-			}
-		},
-		func(i int, key ExtendedKey, bytes []byte) {
-			if key.IsIPv4() {
-				key.Key().PutDip(bytes[i*4 : i*4+4])
-			} else {
-				key.Key().PutDip(bytes[numV4*4+(i-numV4)*16 : numV4*4+(i-numV4)*16+16])
-			}
-		},
-		func(i int, key ExtendedKey, bytes []byte) {
-			key.Key().PutProto(bytes[i])
-		},
-		func(i int, key ExtendedKey, bytes []byte) {
-			key.Key().PutDport(bytes[i*DportSizeof : i*DportSizeof+DportSizeof])
-		},
-	}
-}
-
 // Block evaluation and aggregation -----------------------------------------------------
 // this is where the actual reading and aggregation magic happens
-func (w *DBWorkManager) readBlocksAndEvaluate(ctx context.Context, workload DBWorkload, resultMap map[string]Val) error {
+func (w *DBWorkManager) readBlocksAndEvaluate(ctx context.Context, workload DBWorkload, resultMap hashmap.AggFlowMapWithMetadata) error {
 	var err error
 
 	var (
 		query = workload.query
 		dir   = workload.workDir
+
+		gpFileOptions []gpfile.Option
 	)
+	if workload.memPool != nil {
+		gpFileOptions = append(gpFileOptions, gpfile.WithReadAll(workload.memPool))
+	}
 
 	var (
-		v4Key, v4ComparisonValue ExtendedKey
-		v6Key, v6ComparisonValue ExtendedKey
+		v4Key, v4ComparisonValue                                         = types.NewEmptyV4Key().ExtendEmpty(), types.NewEmptyV4Key().ExtendEmpty()
+		v6Key, v6ComparisonValue                                         = types.NewEmptyV6Key().ExtendEmpty(), types.NewEmptyV6Key().ExtendEmpty()
+		bytesRcvdValues, bytesSentValues, pktsRcvdValues, pktsSentValues []uint64
 	)
 
 	// Load the GPFiles corresponding to the columns we need for the query. Each file is loaded at most once.
 	var columnFiles [ColIdxCount]*gpfile.GPFile
 	for _, colIdx := range query.columnIndices {
-		if columnFiles[colIdx], err = gpfile.New(filepath.Join(w.dbIfaceDir, dir, columnFileNames[colIdx]+".gpf"), gpfile.ModeRead); err == nil {
+		if columnFiles[colIdx], err = gpfile.New(filepath.Join(w.dbIfaceDir, dir, columnFileNames[colIdx]+".gpf"), gpfile.ModeRead, gpFileOptions...); err == nil {
 			defer columnFiles[colIdx].Close()
 		} else {
 			return err
@@ -277,6 +263,7 @@ func (w *DBWorkManager) readBlocksAndEvaluate(ctx context.Context, workload DBWo
 				iface       string
 			)
 
+			// Read the blocks from their files
 			for _, colIdx := range query.columnIndices {
 
 				// Read the block from the file
@@ -287,19 +274,9 @@ func (w *DBWorkManager) readBlocksAndEvaluate(ctx context.Context, workload DBWo
 				}
 			}
 
-			// Initialize any (static) key extensions potentially present in the query
-			if query.hasAttrTime {
-				ts = tstamp
-			}
-			if query.hasAttrIface {
-				iface = w.iface
-			}
-			v4Key = NewEmptyV4Key().Extend(ts, iface)
-			v6Key = NewEmptyV6Key().Extend(ts, iface)
-
 			// Check whether all blocks have matching number of entries
 			// TODO: Quick-shot, this information should be stored in the metadata for this directory instead !!!
-			numV4Entries := binary.BigEndian.Uint64(blocks[BytesRcvdColIdx][:8])
+			numV4Entries := int(binary.BigEndian.Uint64(blocks[BytesRcvdColIdx][:8]))
 			blocks[BytesRcvdColIdx] = blocks[BytesRcvdColIdx][8:]
 
 			numEntries := bitpack.Len(blocks[BytesRcvdColIdx])
@@ -338,24 +315,62 @@ func (w *DBWorkManager) readBlocksAndEvaluate(ctx context.Context, workload DBWo
 				continue
 			}
 
-			// Iterate over block entries
-			byteWidthBytesRcvd := bitpack.ByteWidth(blocks[BytesRcvdColIdx])
-			byteWidthBytesSent := bitpack.ByteWidth(blocks[BytesSentColIdx])
-			byteWidthPktsRcvd := bitpack.ByteWidth(blocks[PacketsRcvdColIdx])
-			byteWidthPktsSent := bitpack.ByteWidth(blocks[PacketsSentColIdx])
+			// Initialize any (static) key extensions potentially present in the query
+			if query.hasAttrTime || query.hasAttrIface {
+				if query.hasAttrTime {
+					ts = tstamp
+				}
+				if query.hasAttrIface {
+					iface = w.iface
+				}
+				v4Key = types.NewEmptyV4Key().Extend(ts, iface)
+				v6Key = types.NewEmptyV6Key().Extend(ts, iface)
+				if query.Conditional == nil {
+					v4ComparisonValue = types.NewEmptyV4Key().Extend(ts, iface)
+					v6ComparisonValue = types.NewEmptyV6Key().Extend(ts, iface)
+				}
+			}
+
+			bytesRcvdValues = bitpack.UnpackInto(blocks[BytesRcvdColIdx], bytesRcvdValues)
+			bytesSentValues = bitpack.UnpackInto(blocks[BytesSentColIdx], bytesSentValues)
+			pktsRcvdValues = bitpack.UnpackInto(blocks[PacketsRcvdColIdx], pktsRcvdValues)
+			pktsSentValues = bitpack.UnpackInto(blocks[PacketsSentColIdx], pktsSentValues)
+
+			sipBlocks := blocks[SipColIdx]
+			dipBlocks := blocks[DipColIdx]
+			dportBlocks := blocks[DportColIdx]
+			protoBlocks := blocks[ProtoColIdx]
 
 			key, comparisonValue := v4Key, v4ComparisonValue
-			attrFns := genCopyToKeyFns(int(numV4Entries))
+			isIPv4 := true
 			for i := 0; i < numEntries; i++ {
 
 				// When reaching the v4/v6 mark, we switch to the IPv6 key
 				if i == int(numV4Entries) {
 					key, comparisonValue = v6Key, v6ComparisonValue
+					isIPv4 = false
 				}
 
 				// Populate key for current entry
-				for _, colIdx := range query.queryAttributeIndices {
-					attrFns[colIdx](i, key, blocks[colIdx])
+				if query.hasAttrSip {
+					if isIPv4 {
+						key.PutSipV4(sipBlocks[i*4 : i*4+4])
+					} else {
+						key.PutSipV6(sipBlocks[numV4Entries*4+(i-numV4Entries)*16 : numV4Entries*4+(i-numV4Entries)*16+16])
+					}
+				}
+				if query.hasAttrDip {
+					if isIPv4 {
+						key.PutDipV4(dipBlocks[i*4 : i*4+4])
+					} else {
+						key.PutDipV6(dipBlocks[numV4Entries*4+(i-numV4Entries)*16 : numV4Entries*4+(i-numV4Entries)*16+16])
+					}
+				}
+				if query.hasAttrProto {
+					key.PutProto(protoBlocks[i])
+				}
+				if query.hasAttrDport {
+					key.PutDport(dportBlocks[i*DportSizeof : i*DportSizeof+DportSizeof])
 				}
 
 				// Check whether conditional is satisfied for current entry
@@ -363,33 +378,39 @@ func (w *DBWorkManager) readBlocksAndEvaluate(ctx context.Context, workload DBWo
 				if query.Conditional == nil {
 					conditionalSatisfied = true
 				} else {
+
 					// Populate comparison value for current entry
-					for _, colIdx := range query.conditionalAttributeIndices {
-						attrFns[colIdx](i, comparisonValue, blocks[colIdx])
+					if query.hasCondSip {
+						if isIPv4 {
+							comparisonValue.PutSipV4(sipBlocks[i*4 : i*4+4])
+						} else {
+							comparisonValue.PutSipV6(sipBlocks[numV4Entries*4+(i-numV4Entries)*16 : numV4Entries*4+(i-numV4Entries)*16+16])
+						}
+					}
+					if query.hasCondDip {
+						if isIPv4 {
+							comparisonValue.PutDipV4(dipBlocks[i*4 : i*4+4])
+						} else {
+							comparisonValue.PutDipV6(dipBlocks[numV4Entries*4+(i-numV4Entries)*16 : numV4Entries*4+(i-numV4Entries)*16+16])
+						}
+					}
+					if query.hasCondProto {
+						comparisonValue.PutProto(protoBlocks[i])
+					}
+					if query.hasCondDport {
+						comparisonValue.PutDport(dportBlocks[i*DportSizeof : i*DportSizeof+DportSizeof])
 					}
 
 					conditionalSatisfied = query.Conditional.evaluate(comparisonValue.Key())
 				}
 
 				if conditionalSatisfied {
-					// Update aggregates
-					var delta Val
-
-					// Unpack counters using bit packing
-					delta.NBytesRcvd = bitpack.Uint64At(blocks[BytesRcvdColIdx], i, byteWidthBytesRcvd)
-					delta.NBytesSent = bitpack.Uint64At(blocks[BytesSentColIdx], i, byteWidthBytesSent)
-					delta.NPktsRcvd = bitpack.Uint64At(blocks[PacketsRcvdColIdx], i, byteWidthPktsRcvd)
-					delta.NPktsSent = bitpack.Uint64At(blocks[PacketsSentColIdx], i, byteWidthPktsSent)
-
-					if val, exists := resultMap[string(key)]; exists {
-						val.NBytesRcvd += delta.NBytesRcvd
-						val.NBytesSent += delta.NBytesSent
-						val.NPktsRcvd += delta.NPktsRcvd
-						val.NPktsSent += delta.NPktsSent
-						resultMap[string(key)] = val
-					} else {
-						resultMap[string(key)] = delta
-					}
+					resultMap.SetOrUpdate(key,
+						bytesRcvdValues[i],
+						bytesSentValues[i],
+						pktsRcvdValues[i],
+						pktsSentValues[i],
+					)
 				}
 			}
 		}

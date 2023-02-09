@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/els0r/goProbe/pkg/goDB"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/bitpack"
 	"github.com/els0r/goProbe/pkg/goDB/storage/gpfile"
+	"github.com/els0r/goProbe/pkg/types"
+	"github.com/els0r/goProbe/pkg/types/hashmap"
 	"github.com/sirupsen/logrus"
 )
 
@@ -121,8 +122,8 @@ func (l ModernFileSet) getBlock(f *gpfile.GPFile, ts int64) ([]byte, error) {
 	return block, nil
 }
 
-func (l ModernFileSet) GetBlock(ts int64) (goDB.AggFlowMap, error) {
-	data := make(goDB.AggFlowMap)
+func (l ModernFileSet) GetBlock(ts int64) (*hashmap.Map, error) {
+	data := hashmap.New()
 
 	sipBlock, err := l.getBlock(l.sipFile, ts)
 	if err != nil {
@@ -181,17 +182,17 @@ func (l ModernFileSet) GetBlock(ts int64) (goDB.AggFlowMap, error) {
 
 		sip := rawIPToAddr(sipBlock[i*16 : i*16+16])
 		dip := rawIPToAddr(dipBlock[i*16 : i*16+16])
-		if sip.Is4() != dip.Is4() {
+		if sip.Is4() != dip.Is4() && !sip.IsUnspecified() {
 			logrus.StandardLogger().Warnf("source / destination IP v4 / v6 mismatch: %s / %s, will convert to IPv6\n", sip, dip)
 		}
 
-		var K goDB.Key
-		var V goDB.Val
+		var K types.Key
+		var V types.Val
 
 		if sip.Is4() && dip.Is4() {
-			K = goDB.NewV4KeyStatic(sip.As4(), dip.As4(), dportBlock[i*2:i*2+2], protoBlock[i])
+			K = types.NewV4KeyStatic(sip.As4(), dip.As4(), dportBlock[i*2:i*2+2], protoBlock[i])
 		} else {
-			K = goDB.NewV6KeyStatic(sip.As16(), dip.As16(), dportBlock[i*2:i*2+2], protoBlock[i])
+			K = types.NewV6KeyStatic(sip.As16(), dip.As16(), dportBlock[i*2:i*2+2], protoBlock[i])
 		}
 
 		// Unpack counters using bit packing if enabled, otherwise just copy them using fixed bit width
@@ -207,16 +208,7 @@ func (l ModernFileSet) GetBlock(ts int64) (goDB.AggFlowMap, error) {
 			V.NPktsSent = binary.BigEndian.Uint64(pktsSentBlock[i*8 : i*8+8])
 		}
 
-		entry, exists := data[string(K)]
-		if exists {
-			entry.NBytesRcvd += V.NBytesRcvd
-			entry.NBytesSent += V.NBytesSent
-			entry.NPktsRcvd += V.NPktsRcvd
-			entry.NPktsSent += V.NPktsSent
-			data[string(K)] = entry
-		} else {
-			data[string(K)] = &V
-		}
+		data.SetOrUpdate(K, V.NBytesRcvd, V.NBytesSent, V.NPktsRcvd, V.NPktsSent)
 	}
 
 	return data, nil

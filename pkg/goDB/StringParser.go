@@ -19,16 +19,19 @@ import (
 	"strings"
 
 	"github.com/els0r/goProbe/pkg/goDB/protocols"
+	"github.com/els0r/goProbe/pkg/types"
 )
+
+var ErrIPVersionMismatch error
 
 // StringKeyParser is used for mapping a string to it's goDB key
 type StringKeyParser interface {
-	ParseKey(element string, key ExtendedKey) error
+	ParseKey(element string, key *types.ExtendedKey) error
 }
 
 // StringValParser is used for mapping a string to it's goDB value
 type StringValParser interface {
-	ParseVal(element string, val *Val) error
+	ParseVal(element string, val *types.Val) error
 }
 
 // NewStringKeyParser selects a string parser based on the attribute
@@ -107,37 +110,45 @@ type PacketsRecStringParser struct{}
 type PacketsSentStringParser struct{}
 
 // ParseKey is a no-op
-func (n *NOPStringParser) ParseKey(element string, key ExtendedKey) error {
+func (n *NOPStringParser) ParseKey(element string, key *types.ExtendedKey) error {
 	return nil
 }
 
 // ParseVal is a no-op
-func (n *NOPStringParser) ParseVal(element string, val *Val) error {
+func (n *NOPStringParser) ParseVal(element string, val *types.Val) error {
 	return nil
 }
 
 // ParseKey parses a source IP string and writes it to the source IP key slice
-func (s *SipStringParser) ParseKey(element string, key ExtendedKey) error {
+func (s *SipStringParser) ParseKey(element string, key *types.ExtendedKey) error {
 	ipBytes, err := IPStringToBytes(element)
 	if err != nil {
 		return errors.New("Could not parse 'sip' attribute: " + err.Error())
 	}
+	if (len(ipBytes) == 4) != key.Key().IsIPv4() {
+		return ErrIPVersionMismatch
+	}
+
 	key.Key().PutSip(ipBytes)
 	return nil
 }
 
 // ParseKey parses a destination IP string and writes it to the desintation IP key slice
-func (d *DipStringParser) ParseKey(element string, key ExtendedKey) error {
+func (d *DipStringParser) ParseKey(element string, key *types.ExtendedKey) error {
 	ipBytes, err := IPStringToBytes(element)
 	if err != nil {
 		return errors.New("Could not parse 'dip' attribute: " + err.Error())
 	}
+	if (len(ipBytes) == 4) != key.Key().IsIPv4() {
+		return ErrIPVersionMismatch
+	}
+
 	key.Key().PutDip(ipBytes)
 	return nil
 }
 
 // ParseKey parses a destination port string and writes it to the desintation port key slice
-func (d *DportStringParser) ParseKey(element string, key ExtendedKey) error {
+func (d *DportStringParser) ParseKey(element string, key *types.ExtendedKey) error {
 	num, err := strconv.ParseUint(element, 10, 16)
 	if err != nil {
 		return errors.New("Could not parse 'dport' attribute: " + err.Error())
@@ -147,7 +158,7 @@ func (d *DportStringParser) ParseKey(element string, key ExtendedKey) error {
 }
 
 // ParseKey parses an IP protocol  string and writes it to the protocol key slice
-func (p *ProtoStringParser) ParseKey(element string, key ExtendedKey) error {
+func (p *ProtoStringParser) ParseKey(element string, key *types.ExtendedKey) error {
 	var (
 		num  uint64
 		err  error
@@ -167,7 +178,7 @@ func (p *ProtoStringParser) ParseKey(element string, key ExtendedKey) error {
 }
 
 // ParseKey parses a time string and writes it to the Time key
-func (t *TimeStringParser) ParseKey(element string, key ExtendedKey) error {
+func (t *TimeStringParser) ParseKey(element string, key *types.ExtendedKey) error {
 	// parse into number
 	num, err := strconv.ParseInt(element, 10, 64)
 	if err != nil {
@@ -176,25 +187,29 @@ func (t *TimeStringParser) ParseKey(element string, key ExtendedKey) error {
 
 	attrIface, hasIface := key.AttrIface()
 	if hasIface {
-		key = key.Key().Extend(num, attrIface)
+		*key = key.Key().Extend(num, attrIface)
+	} else {
+		*key = key.Key().Extend(num, "")
 	}
 
 	return nil
 }
 
 // // ParseKey writes element to the Iface key
-func (i *IfaceStringParser) ParseKey(element string, key ExtendedKey) error {
+func (i *IfaceStringParser) ParseKey(element string, key *types.ExtendedKey) error {
 
 	attrTime, hasTime := key.AttrTime()
 	if hasTime {
-		key = key.Key().Extend(attrTime.Unix(), element)
+		*key = key.Key().Extend(attrTime, element)
+	} else {
+		*key = key.Key().Extend(0, element)
 	}
 
 	return nil
 }
 
 // ParseVal parses a number from a string and writes it to the "Byts Recevied" counter in val
-func (b *BytesRecStringParser) ParseVal(element string, val *Val) error {
+func (b *BytesRecStringParser) ParseVal(element string, val *types.Val) error {
 	// parse into number
 	num, err := strconv.ParseUint(element, 10, 64)
 	if err != nil {
@@ -206,7 +221,7 @@ func (b *BytesRecStringParser) ParseVal(element string, val *Val) error {
 }
 
 // ParseVal parses a number from a string and writes it to the "Byts Sent" counter in val
-func (b *BytesSentStringParser) ParseVal(element string, val *Val) error {
+func (b *BytesSentStringParser) ParseVal(element string, val *types.Val) error {
 	// parse into number
 	num, err := strconv.ParseUint(element, 10, 64)
 	if err != nil {
@@ -218,7 +233,7 @@ func (b *BytesSentStringParser) ParseVal(element string, val *Val) error {
 }
 
 // ParseVal parses a number from a string and writes it to the "Packets Received" counter in val
-func (p *PacketsRecStringParser) ParseVal(element string, val *Val) error {
+func (p *PacketsRecStringParser) ParseVal(element string, val *types.Val) error {
 	// parse into number
 	num, err := strconv.ParseUint(element, 10, 64)
 	if err != nil {
@@ -230,7 +245,7 @@ func (p *PacketsRecStringParser) ParseVal(element string, val *Val) error {
 }
 
 // ParseVal parses a number from a string and writes it to the "Packets Sent" counter in val
-func (p *PacketsSentStringParser) ParseVal(element string, val *Val) error {
+func (p *PacketsSentStringParser) ParseVal(element string, val *types.Val) error {
 	// parse into number
 	num, err := strconv.ParseUint(element, 10, 64)
 	if err != nil {

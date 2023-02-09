@@ -67,8 +67,11 @@ func TestAllByteWidths(t *testing.T) {
 			// Test unpacking / round-trip
 			orig := Unpack(buf)
 			assert.Equal(t, input, orig)
-
 			assert.Equal(t, Len(buf), len(input))
+
+			var res []uint64
+			res = UnpackInto(buf, res)
+			assert.Equal(t, input, res)
 		})
 	}
 }
@@ -164,6 +167,63 @@ func BenchmarkDecodeAsBlock(b *testing.B) {
 
 			for i := 0; i < b.N; i++ {
 				Unpack(buf)
+			}
+		})
+	}
+
+	b.Run("mixed", func(b *testing.B) {
+		var input []uint64
+		for i := 1; i <= 64; i++ {
+			input = append(input, intPow(2, 7))
+			input = append(input, intPow(2, 15))
+			input = append(input, intPow(2, 23))
+			input = append(input, intPow(2, 31))
+			input = append(input, intPow(2, 39))
+			input = append(input, intPow(2, 47))
+			input = append(input, intPow(2, 55))
+			input = append(input, intPow(2, 63))
+		}
+
+		buf := Pack(input)
+
+		b.ReportAllocs()
+		b.SetBytes(int64(len(input) * 8))
+
+		//Warmup
+		for i := 0; i < 1000000; i++ {
+			Unpack(buf)
+		}
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			Unpack(buf)
+		}
+	})
+}
+
+func BenchmarkDecodeAsBlockInto(b *testing.B) {
+
+	for nBytes := 1; nBytes <= 8; nBytes++ {
+		b.Run(fmt.Sprintf("%d bytes", nBytes), func(b *testing.B) {
+			var input []uint64
+			for i := 1; i < 512; i++ {
+				input = append(input, intPow(2, uint64(8*nBytes-1)))
+			}
+
+			buf := Pack(input)
+			var res []uint64
+
+			b.ReportAllocs()
+			b.SetBytes(int64(len(input) * 8))
+
+			//Warmup
+			for i := 0; i < 1000000; i++ {
+				UnpackInto(buf, res)
+			}
+			b.ResetTimer()
+
+			for i := 0; i < b.N; i++ {
+				UnpackInto(buf, res)
 			}
 		})
 	}

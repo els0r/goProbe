@@ -16,6 +16,7 @@ import (
 	"github.com/els0r/goProbe/pkg/query/dns"
 	"github.com/els0r/goProbe/pkg/results"
 	"github.com/els0r/goProbe/pkg/types"
+	"github.com/els0r/goProbe/pkg/types/hashmap"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -174,7 +175,7 @@ func (s *Statement) Execute(ctx context.Context) (result *results.Result, err er
 	defer cancelQuery()
 
 	// Channel for handling of returned maps
-	mapChan := make(chan map[string]goDB.Val, 1024)
+	mapChan := make(chan hashmap.AggFlowMapWithMetadata, 1024)
 	aggregateChan := aggregate(mapChan)
 
 	go func() {
@@ -291,19 +292,24 @@ func (s *Statement) Execute(ctx context.Context) (result *results.Result, err er
 		}
 	}
 
-	var rs = make(results.Rows, len(agg.aggregatedMap))
+	var rs = make(results.Rows, agg.aggregatedMap.Len())
 	count := 0
 
-	for keyStr, val := range agg.aggregatedMap {
+	for i := agg.aggregatedMap.Iter(); i.Next(); {
 
-		key := goDB.ExtendedKey(keyStr)
+		key := types.ExtendedKey(i.Key())
+		val := i.Val()
 
 		if ts, hasTS := key.AttrTime(); hasTS {
-			rs[count].Labels.Timestamp = &ts
+			rs[count].Labels.Timestamp = time.Unix(ts, 0)
 		}
 		rs[count].Labels.Iface, _ = key.AttrIface()
-		rs[count].Labels.HostID = val.HostID
-		rs[count].Labels.Hostname = val.Hostname
+
+		// TODO: We need a nice solution for these special attributes - It's too expensive / complex
+		// to carry them around in the ExtendedKey struct across the board
+
+		// rs[count].Labels.HostID = key.AttrHostID()
+		// rs[count].Labels.Hostname = key.AttrHost()
 		if sip != nil {
 			rs[count].Attributes.SrcIP = types.RawIPToAddr(key.Key().GetSip())
 		}
@@ -329,7 +335,6 @@ func (s *Statement) Execute(ctx context.Context) (result *results.Result, err er
 	// Now is a good time to release memory one last time for the final processing step
 	agg.aggregatedMap = nil
 	runtime.GC()
-	debug.FreeOSMemory()
 
 	result.Summary.Totals = agg.totals
 

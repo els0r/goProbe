@@ -24,6 +24,7 @@ import (
 	"strings"
 
 	"github.com/els0r/goProbe/pkg/goDB/protocols"
+	"github.com/els0r/goProbe/pkg/types"
 )
 
 // Returns an identical version of the receiver instrumented
@@ -59,12 +60,12 @@ func generateCompareValue(condition *conditionNode) error {
 	case "sip":
 		switch condition.comparator {
 		case "=":
-			condition.compareValue = func(currentValue Key) bool {
+			condition.compareValue = func(currentValue types.Key) bool {
 				return bytes.Compare(currentValue.GetSip(), value) == 0
 			}
 			return nil
 		case "!=":
-			condition.compareValue = func(currentValue Key) bool {
+			condition.compareValue = func(currentValue types.Key) bool {
 				return bytes.Compare(currentValue.GetSip(), value) != 0
 			}
 			return nil
@@ -74,12 +75,12 @@ func generateCompareValue(condition *conditionNode) error {
 	case "dip":
 		switch condition.comparator {
 		case "=":
-			condition.compareValue = func(currentValue Key) bool {
+			condition.compareValue = func(currentValue types.Key) bool {
 				return bytes.Compare(currentValue.GetDip(), value) == 0
 			}
 			return nil
 		case "!=":
-			condition.compareValue = func(currentValue Key) bool {
+			condition.compareValue = func(currentValue types.Key) bool {
 				return bytes.Compare(currentValue.GetDip(), value) != 0
 			}
 			return nil
@@ -104,7 +105,7 @@ func generateCompareValue(condition *conditionNode) error {
 			// NOT EQUALS TO makes sense
 			switch condition.comparator {
 			case "=":
-				condition.compareValue = func(currentValue Key) bool {
+				condition.compareValue = func(currentValue types.Key) bool {
 					ip := currentValue
 					// apply the netmask on the relevant byte in order to obtain
 					// the network address
@@ -114,7 +115,7 @@ func generateCompareValue(condition *conditionNode) error {
 				}
 				return nil
 			case "!=":
-				condition.compareValue = func(currentValue Key) bool {
+				condition.compareValue = func(currentValue types.Key) bool {
 					ip := currentValue
 					// apply the netmask on the relevant byte in order to obtain
 					// the network address
@@ -131,12 +132,12 @@ func generateCompareValue(condition *conditionNode) error {
 			// comparison
 			switch condition.comparator {
 			case "=":
-				condition.compareValue = func(currentValue Key) bool {
+				condition.compareValue = func(currentValue types.Key) bool {
 					return bytes.Compare(currentValue.GetSip()[:index], value[:index]) == 0
 				}
 				return nil
 			case "!=":
-				condition.compareValue = func(currentValue Key) bool {
+				condition.compareValue = func(currentValue types.Key) bool {
 					return bytes.Compare(currentValue.GetSip()[:index], value[:index]) != 0
 				}
 				return nil
@@ -162,7 +163,7 @@ func generateCompareValue(condition *conditionNode) error {
 			// NOT EQUALS TO makes sense
 			switch condition.comparator {
 			case "=":
-				condition.compareValue = func(currentValue Key) bool {
+				condition.compareValue = func(currentValue types.Key) bool {
 					ip := currentValue
 					// apply the netmask on the relevant byte in order to obtain
 					// the network address
@@ -172,7 +173,7 @@ func generateCompareValue(condition *conditionNode) error {
 				}
 				return nil
 			case "!=":
-				condition.compareValue = func(currentValue Key) bool {
+				condition.compareValue = func(currentValue types.Key) bool {
 					ip := currentValue
 					// apply the netmask on the relevant byte in order to obtain
 					// the network address
@@ -189,12 +190,12 @@ func generateCompareValue(condition *conditionNode) error {
 			// comparison
 			switch condition.comparator {
 			case "=":
-				condition.compareValue = func(currentValue Key) bool {
+				condition.compareValue = func(currentValue types.Key) bool {
 					return bytes.Compare(currentValue.GetDip()[:index], value[:index]) == 0
 				}
 				return nil
 			case "!=":
-				condition.compareValue = func(currentValue Key) bool {
+				condition.compareValue = func(currentValue types.Key) bool {
 					return bytes.Compare(currentValue.GetDip()[:index], value[:index]) != 0
 				}
 				return nil
@@ -205,32 +206,32 @@ func generateCompareValue(condition *conditionNode) error {
 	case "dport":
 		switch condition.comparator {
 		case "=":
-			condition.compareValue = func(currentValue Key) bool {
+			condition.compareValue = func(currentValue types.Key) bool {
 				return bytes.Compare(currentValue.GetDport(), value[:DportSizeof]) == 0
 			}
 			return nil
 		case "!=":
-			condition.compareValue = func(currentValue Key) bool {
+			condition.compareValue = func(currentValue types.Key) bool {
 				return bytes.Compare(currentValue.GetDport(), value[:DportSizeof]) != 0
 			}
 			return nil
 		case "<":
-			condition.compareValue = func(currentValue Key) bool {
+			condition.compareValue = func(currentValue types.Key) bool {
 				return bytes.Compare(currentValue.GetDport(), value[:DportSizeof]) < 0
 			}
 			return nil
 		case ">":
-			condition.compareValue = func(currentValue Key) bool {
+			condition.compareValue = func(currentValue types.Key) bool {
 				return bytes.Compare(currentValue.GetDport(), value[:DportSizeof]) > 0
 			}
 			return nil
 		case "<=":
-			condition.compareValue = func(currentValue Key) bool {
+			condition.compareValue = func(currentValue types.Key) bool {
 				return bytes.Compare(currentValue.GetDport(), value[:DportSizeof]) <= 0
 			}
 			return nil
 		case ">=":
-			condition.compareValue = func(currentValue Key) bool {
+			condition.compareValue = func(currentValue types.Key) bool {
 				return bytes.Compare(currentValue.GetDport(), value[:DportSizeof]) >= 0
 			}
 			return nil
@@ -240,32 +241,32 @@ func generateCompareValue(condition *conditionNode) error {
 	case "proto":
 		switch condition.comparator {
 		case "=":
-			condition.compareValue = func(currentValue Key) bool {
+			condition.compareValue = func(currentValue types.Key) bool {
 				return currentValue.GetProto() == value[0]
 			}
 			return nil
 		case "!=":
-			condition.compareValue = func(currentValue Key) bool {
+			condition.compareValue = func(currentValue types.Key) bool {
 				return currentValue.GetProto() != value[0]
 			}
 			return nil
 		case "<":
-			condition.compareValue = func(currentValue Key) bool {
+			condition.compareValue = func(currentValue types.Key) bool {
 				return currentValue.GetProto() < value[0]
 			}
 			return nil
 		case ">":
-			condition.compareValue = func(currentValue Key) bool {
+			condition.compareValue = func(currentValue types.Key) bool {
 				return currentValue.GetProto() > value[0]
 			}
 			return nil
 		case "<=":
-			condition.compareValue = func(currentValue Key) bool {
+			condition.compareValue = func(currentValue types.Key) bool {
 				return currentValue.GetProto() <= value[0]
 			}
 			return nil
 		case ">=":
-			condition.compareValue = func(currentValue Key) bool {
+			condition.compareValue = func(currentValue types.Key) bool {
 				return currentValue.GetProto() >= value[0]
 			}
 			return nil

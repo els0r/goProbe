@@ -36,6 +36,38 @@ func Pack(data []uint64) []byte {
 	return b
 }
 
+func UnpackInto(b []byte, res []uint64) []uint64 {
+	neededBytes := int(b[0])
+	nElements := (len(b) - 1) / neededBytes
+
+	if cap(res) < nElements {
+		res = make([]uint64, nElements, nElements)
+	}
+	res = res[:nElements]
+
+	b2 := b[1:]
+	switch neededBytes {
+	case 1:
+		unpackAll1(b2, res, nElements)
+	case 2:
+		unpackAll2(b2, res, nElements)
+	case 3:
+		unpackAll3(b2, res, nElements)
+	case 4:
+		unpackAll4(b2, res, nElements)
+	case 5:
+		unpackAll5(b2, res, nElements)
+	case 6:
+		unpackAll6(b2, res, nElements)
+	case 7:
+		unpackAll7(b2, res, nElements)
+	default:
+		unpackAll8(b2, res, nElements)
+	}
+
+	return res
+}
+
 // Unpack decompresses a previously compressed data slice into the original slice of
 // uint64 values
 func Unpack(b []byte) []uint64 {

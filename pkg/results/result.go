@@ -77,10 +77,10 @@ type Row struct {
 
 // Labels hold labels by which the goDB database is partitioned
 type Labels struct {
-	Timestamp *time.Time `json:"timestamp,omitempty"`
-	Iface     string     `json:"iface,omitempty"`
-	Hostname  string     `json:"host,omitempty"`
-	HostID    uint       `json:"host_id,omitempty"`
+	Timestamp time.Time `json:"timestamp,omitempty"`
+	Iface     string    `json:"iface,omitempty"`
+	Hostname  string    `json:"host,omitempty"`
+	HostID    uint      `json:"host_id,omitempty"`
 }
 
 // Attributes are traffic attributes by which the goDB can be aggregated

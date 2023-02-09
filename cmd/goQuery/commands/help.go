@@ -308,6 +308,9 @@ different when the packets were captured.
 	"MaxMemPct": `Maximum amount of memory that can be used for the query
 (in % of available memory)
 `,
+	"LowMem": `Enable low-memory mode (reduces overall memory use at the expense of higher CPU
+and I/O load)
+`,
 	"ResolveRows": `Maximum number of output rows to perform DNS resolution against. Before
 setting this to some high value (e.g. 1000), consider that this may incur
 a high load on the DNS resolver and network!

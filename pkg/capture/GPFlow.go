@@ -13,7 +13,7 @@
 package capture
 
 import (
-	"github.com/els0r/goProbe/pkg/goDB"
+	"github.com/els0r/goProbe/pkg/types"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -31,11 +31,11 @@ type GPFlow struct {
 }
 
 // Key returns a goDB compliant key from the current flow
-func (f *GPFlow) Key() (key goDB.Key) {
+func (f *GPFlow) Key() (key types.Key) {
 	if f.isIPv4 {
-		key = goDB.NewV4Key(f.epHash[0:4], f.epHash[16:20], f.epHash[32:34], f.epHash[36])
+		key = types.NewV4Key(f.epHash[0:4], f.epHash[16:20], f.epHash[32:34], f.epHash[36])
 	} else {
-		key = goDB.NewV6Key(f.epHash[0:16], f.epHash[16:32], f.epHash[32:34], f.epHash[36])
+		key = types.NewV6Key(f.epHash[0:16], f.epHash[16:32], f.epHash[32:34], f.epHash[36])
 	}
 	return
 }
@@ -75,7 +75,7 @@ func updateDirection(packet *GPPacket) bool {
 // NewGPFlow creates a new flow based on the packet
 func NewGPFlow(packet *GPPacket) *GPFlow {
 	res := GPFlow{
-		epHash:          make(EPHash, len(packet.epHash)),
+		epHash:          packet.epHash,
 		pktDirectionSet: updateDirection(packet), // try to get the packet direction
 		isIPv4:          packet.isIPv4,
 	}
@@ -88,9 +88,6 @@ func NewGPFlow(packet *GPPacket) *GPFlow {
 		res.nBytesSent = uint64(packet.numBytes)
 		res.nPktsSent = 1
 	}
-
-	// Populate hash (copy required to allow for re-use of packet)
-	copy(res.epHash, packet.epHash)
 
 	return &res
 }

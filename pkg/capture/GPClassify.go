@@ -64,6 +64,7 @@ func IsSpecialPort(port uint16) bool {
 //	1: if packet direction is "request"
 //	2: if packet direction is "response"
 func ClassifyPacketDirection(packet *GPPacket) uint8 {
+
 	sport := uint16(packet.epHash[34])<<8 | uint16(packet.epHash[35])
 	dport := uint16(packet.epHash[32])<<8 | uint16(packet.epHash[33])
 

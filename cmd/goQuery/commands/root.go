@@ -37,7 +37,7 @@ func Execute() {
 	if err != nil {
 		os.Exit(1)
 	}
-	os.Exit(0)
+	return
 }
 
 // globally accessible variable for other packages
@@ -85,6 +85,7 @@ func init() {
 	rootCmd.Flags().IntVarP(&cmdLineParams.ResolveRows, "resolve-rows", "", query.DefaultResolveRows, helpMap["ResolveRows"])
 	rootCmd.Flags().IntVarP(&cmdLineParams.ResolveTimeout, "resolve-timeout", "", query.DefaultResolveTimeout, helpMap["ResolveTimeout"])
 	rootCmd.Flags().IntVarP(&cmdLineParams.MaxMemPct, "max-mem", "", query.DefaultMaxMemPct, helpMap["MaxMemPct"])
+	rootCmd.Flags().BoolVarP(&cmdLineParams.LowMem, "low-mem", "", false, helpMap["LowMem"])
 
 	// Duration
 	rootCmd.Flags().DurationVarP(&cmdLineParams.QueryTimeout, "timeout", "", query.DefaultQueryTimeout, helpMap["QueryTimeout"])

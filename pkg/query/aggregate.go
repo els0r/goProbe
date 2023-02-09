@@ -1,12 +1,12 @@
 package query
 
 import (
-	"github.com/els0r/goProbe/pkg/goDB"
 	"github.com/els0r/goProbe/pkg/results"
+	"github.com/els0r/goProbe/pkg/types/hashmap"
 )
 
 type aggregateResult struct {
-	aggregatedMap map[string]goDB.Val
+	aggregatedMap *hashmap.Map
 	totals        results.Counters
 	err           error
 }
@@ -15,7 +15,7 @@ type aggregateResult struct {
 // Then send aggregation result over resultChan.
 // If an error occurs, aggregate may return prematurely.
 // Closes resultChan on termination.
-func aggregate(mapChan <-chan map[string]goDB.Val) chan aggregateResult {
+func aggregate(mapChan <-chan hashmap.AggFlowMapWithMetadata) chan aggregateResult {
 
 	// create channel that returns the final aggregate result
 	resultChan := make(chan aggregateResult, 1)
@@ -23,41 +23,38 @@ func aggregate(mapChan <-chan map[string]goDB.Val) chan aggregateResult {
 	go func() {
 		defer close(resultChan)
 
-		var finalMap = make(map[string]goDB.Val)
+		// Since we know that the source maps retrieved over the channel are not
+		// changed anymore we can re-use the memory allocated for the keys in them by
+		// using them for the aggregate map
+		var finalMap = hashmap.New().ZeroCopy()
 		var totals results.Counters
 
-		// Temporary goDB.Val because map values cannot be updated in-place
-		var tempVal goDB.Val
-		var exists bool
-
 		for item := range mapChan {
-			if item == nil {
+			if item.Map == nil {
 				resultChan <- aggregateResult{err: errorInternalProcessing}
 				return
 			}
 
-			for k, v := range item {
-				totals.BytesReceived += v.NBytesRcvd
-				totals.BytesSent += v.NBytesSent
-				totals.PacketsReceived += v.NPktsRcvd
-				totals.PacketsSent += v.NPktsSent
+			for i := item.Iter(); i.Next(); {
+				val := i.Val()
+				totals.BytesReceived += val.NBytesRcvd
+				totals.BytesSent += val.NBytesSent
+				totals.PacketsReceived += val.NPktsRcvd
+				totals.PacketsSent += val.NPktsSent
 
-				if tempVal, exists = finalMap[k]; exists {
-					tempVal.NBytesRcvd += v.NBytesRcvd
-					tempVal.NBytesSent += v.NBytesSent
-					tempVal.NPktsRcvd += v.NPktsRcvd
-					tempVal.NPktsSent += v.NPktsSent
-
-					finalMap[k] = tempVal
-				} else {
-					finalMap[k] = v
-				}
+				finalMap.SetOrUpdate(i.Key(),
+					val.NBytesRcvd,
+					val.NBytesSent,
+					val.NPktsRcvd,
+					val.NPktsSent,
+				)
 			}
-			item = nil
+
+			item.Map = nil
 		}
 
 		// push the final result
-		if len(finalMap) == 0 {
+		if finalMap.Len() == 0 {
 			resultChan <- aggregateResult{}
 			return
 		}

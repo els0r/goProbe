@@ -33,7 +33,7 @@ const (
 )
 
 // EPHash is a typedef that allows us to replace the type of hash
-type EPHash []byte
+type EPHash [37]byte
 
 // GPPacket stores all relevant packet details for a flow
 type GPPacket struct {
@@ -188,10 +188,7 @@ func (p *GPPacket) Populate(srcPacket gopacket.Packet, inbound bool) error {
 func (p *GPPacket) reset() {
 	p.numBytes = uint16(0)
 	p.tcpFlags = 0
-	if len(p.epHash) != 37 || len(p.epHashReverse) != 37 {
-		p.epHash, p.epHashReverse = make(EPHash, 37), make(EPHash, 37)
-	}
-	copy(p.epHash, byteArray37Zeros[:])
-	copy(p.epHashReverse, byteArray37Zeros[:])
+	p.epHash = byteArray37Zeros
+	p.epHashReverse = byteArray37Zeros
 	p.dirInbound = false
 }

@@ -1,6 +1,8 @@
 package types
 
-import "net/netip"
+import (
+	"net/netip"
+)
 
 type Status string
 

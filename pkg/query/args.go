@@ -82,6 +82,7 @@ type Args struct {
 	// file system
 	DBPath    string
 	MaxMemPct int
+	LowMem    bool
 
 	// stores who produced these args (caller)
 	Caller string
@@ -276,7 +277,7 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 		s.Output = io.MultiWriter(writers...)
 	}
 
-	s.Query = goDB.NewQuery(queryAttributes, queryConditional, s.HasAttrTime, s.HasAttrIface)
+	s.Query = goDB.NewQuery(queryAttributes, queryConditional, s.HasAttrTime, s.HasAttrIface).LowMem(a.LowMem)
 	return s, nil
 }
 

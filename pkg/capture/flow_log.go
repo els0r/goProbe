@@ -17,9 +17,9 @@ import (
 	"fmt"
 	"text/tabwriter"
 
-	"github.com/els0r/goProbe/pkg/goDB"
 	"github.com/els0r/goProbe/pkg/goDB/protocols"
 	"github.com/els0r/goProbe/pkg/types"
+	"github.com/els0r/goProbe/pkg/types/hashmap"
 	"github.com/els0r/log"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -97,12 +97,12 @@ func (f *FlowLog) TablePrint(w *tabwriter.Writer) error {
 // a new flow will be created.
 func (f *FlowLog) Add(packet *GPPacket) {
 	// update or assign the flow
-	if flowToUpdate, existsHash := f.flowMap[string(packet.epHash)]; existsHash {
+	if flowToUpdate, existsHash := f.flowMap[string(packet.epHash[:])]; existsHash {
 		flowToUpdate.UpdateFlow(packet)
-	} else if flowToUpdate, existsReverseHash := f.flowMap[string(packet.epHashReverse)]; existsReverseHash {
+	} else if flowToUpdate, existsReverseHash := f.flowMap[string(packet.epHashReverse[:])]; existsReverseHash {
 		flowToUpdate.UpdateFlow(packet)
 	} else {
-		f.flowMap[string(packet.epHash)] = NewGPFlow(packet)
+		f.flowMap[string(packet.epHash[:])] = NewGPFlow(packet)
 	}
 }
 
@@ -111,7 +111,7 @@ func (f *FlowLog) Add(packet *GPPacket) {
 // are discarded.
 //
 // Returns an AggFlowMap containing all flows since the last call to Rotate.
-func (f *FlowLog) Rotate() (agg goDB.AggFlowMap) {
+func (f *FlowLog) Rotate() (agg *hashmap.Map) {
 	if len(f.flowMap) == 0 {
 		f.logger.Debug("There are currently no flow records available")
 	}
@@ -121,9 +121,9 @@ func (f *FlowLog) Rotate() (agg goDB.AggFlowMap) {
 	return
 }
 
-func (f *FlowLog) transferAndAggregate() (newFlowMap map[string]*GPFlow, agg goDB.AggFlowMap) {
+func (f *FlowLog) transferAndAggregate() (newFlowMap map[string]*GPFlow, agg *hashmap.Map) {
 	newFlowMap = make(map[string]*GPFlow)
-	agg = make(goDB.AggFlowMap)
+	agg = hashmap.New()
 
 	for k, v := range f.flowMap {
 
@@ -131,19 +131,7 @@ func (f *FlowLog) transferAndAggregate() (newFlowMap map[string]*GPFlow, agg goD
 
 		// check if the flow actually has any interesting information for us
 		if !v.HasBeenIdle() {
-			if toUpdate, exists := agg[string(goDBKey)]; exists {
-				toUpdate.NBytesRcvd += v.nBytesRcvd
-				toUpdate.NBytesSent += v.nBytesSent
-				toUpdate.NPktsRcvd += v.nPktsRcvd
-				toUpdate.NPktsSent += v.nPktsSent
-			} else {
-				agg[string(goDBKey)] = &goDB.Val{
-					NBytesRcvd: v.nBytesRcvd,
-					NBytesSent: v.nBytesSent,
-					NPktsRcvd:  v.nPktsRcvd,
-					NPktsSent:  v.nPktsSent,
-				}
-			}
+			agg.SetOrUpdate(goDBKey, v.nBytesRcvd, v.nBytesSent, v.nPktsRcvd, v.nPktsSent)
 
 			// check whether the flow should be retained for the next interval
 			// or thrown away

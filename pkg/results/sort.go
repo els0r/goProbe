@@ -157,11 +157,11 @@ func By(sort SortOrder, direction types.Direction, ascending bool) by {
 	case SortTime:
 		if ascending {
 			return func(e1, e2 *Row) bool {
-				return e1.Labels.Timestamp.Before(*e2.Labels.Timestamp)
+				return e1.Labels.Timestamp.Before(e2.Labels.Timestamp)
 			}
 		}
 		return func(e1, e2 *Row) bool {
-			return e1.Labels.Timestamp.After(*e2.Labels.Timestamp)
+			return e1.Labels.Timestamp.After(e2.Labels.Timestamp)
 		}
 	}
 

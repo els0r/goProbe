@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/els0r/goProbe/pkg/goDB/encoder"
@@ -23,8 +22,7 @@ const (
 	defaultPermissions = 0644
 
 	// defaultEncoderType denotes the default encoder / compressor
-	defaultEncoderType            = encoders.EncoderTypeLZ4
-	defaultHighEntropyEncoderType = encoders.EncoderTypeLZ4
+	defaultEncoderType = encoders.EncoderTypeLZ4
 
 	// headerVersion denotes the current header version
 	headerVersion = 1
@@ -43,8 +41,8 @@ type GPFile struct {
 	filename string
 
 	// file denotes the pointer to the data file
-	file       *os.File
-	fileBuffer *bufio.Writer
+	file            readWriteSeekCloser
+	fileWriteBuffer *bufio.Writer
 
 	// header denotes the block header (list of blocks) contained in this file
 	header storage.BlockHeader
@@ -54,9 +52,9 @@ type GPFile struct {
 	lastSeekPos int64
 
 	// defaultEncoderType governs how data blocks are (de-)compressed by default
-	defaultEncoderType            encoders.Type
-	defaultHighEntropyEncoderType encoders.Type
-	defaultEncoder                encoder.Encoder
+	defaultEncoderType encoders.Type
+	defaultEncoder     encoder.Encoder
+	nullEncoder        encoder.Encoder
 
 	// accessMode denotes if the file is opened for read or write operations (to avoid
 	// race conditions and unpredictable behavior, only one mode is possible at a time)
@@ -64,26 +62,17 @@ type GPFile struct {
 
 	// Reusable buffers for compression / decompression
 	uncompData, blockData []byte
-}
 
-func isHighEntropyColumn(filename string) bool {
-	// crude, for now, since the prefix has to coincide with the `columnFileNames` in
-	// pkg/goDB/Query.go
-	for _, prefix := range []string{"bytes_", "pkts_"} {
-		if strings.HasPrefix(filename, prefix) {
-			return true
-		}
-	}
-	return false
+	// Memory pool (optional)
+	memPool *MemPool
 }
 
 // New returns a new GPFile object to read and write goProbe flow data
 func New(filename string, accessMode int, options ...Option) (*GPFile, error) {
 	g := &GPFile{
-		filename:                      filename,
-		accessMode:                    accessMode,
-		defaultEncoderType:            defaultEncoderType,
-		defaultHighEntropyEncoderType: defaultHighEntropyEncoderType,
+		filename:           filename,
+		accessMode:         accessMode,
+		defaultEncoderType: defaultEncoderType,
 	}
 
 	// apply functional options
@@ -91,16 +80,14 @@ func New(filename string, accessMode int, options ...Option) (*GPFile, error) {
 		opt(g)
 	}
 
-	fileBaseName := strings.ToLower(strings.TrimSpace(filepath.Base(filename)))
-
 	// Initialize default encoder based on requested encoder type. If the colunn has
 	// a high-cardinality, the default encoder is overwritten with the high cardinality
 	// encoder
 	var err error
-	if isHighEntropyColumn(fileBaseName) {
-		g.defaultEncoderType = g.defaultHighEntropyEncoderType
-	}
 	if g.defaultEncoder, err = encoder.New(g.defaultEncoderType); err != nil {
+		return nil, err
+	}
+	if g.nullEncoder, err = encoder.New(encoders.EncoderTypeNull); err != nil {
 		return nil, err
 	}
 
@@ -143,15 +130,6 @@ func (g *GPFile) ReadBlock(timestamp int64) ([]byte, error) {
 		}
 	}
 
-	// Instantiate decoder / decompressor
-	if block.EncoderType != g.defaultEncoder.Type() {
-		decoder, err := encoder.New(block.EncoderType)
-		if err != nil {
-			return nil, fmt.Errorf("failed to decode block %d based on detected encoder type %v: %w", block, block.EncoderType, err)
-		}
-		g.defaultEncoder = decoder
-	}
-
 	// if the file is read continuously, do not seek
 	var (
 		seekPos = block.Offset
@@ -170,6 +148,16 @@ func (g *GPFile) ReadBlock(timestamp int64) ([]byte, error) {
 	}
 	g.uncompData = g.uncompData[:block.RawLen]
 	if block.EncoderType != encoders.EncoderTypeNull {
+
+		// Instantiate decoder / decompressor (if required)
+		if block.EncoderType != g.defaultEncoder.Type() {
+			decoder, err := encoder.New(block.EncoderType)
+			if err != nil {
+				return nil, fmt.Errorf("failed to decode block %d based on detected encoder type %v: %w", block, block.EncoderType, err)
+			}
+			g.defaultEncoder = decoder
+		}
+
 		if cap(g.blockData) < block.Len {
 			g.blockData = make([]byte, 0, 2*block.Len)
 		}
@@ -179,13 +167,13 @@ func (g *GPFile) ReadBlock(timestamp int64) ([]byte, error) {
 		// micro-optimization that saves the allocation of blockData for decompression
 		// in the Null decompression case, since it is essentially just a byte read
 		// and the src bytes aren't used
-		nRead, err = g.defaultEncoder.Decompress(nil, g.uncompData, g.file)
+		nRead, err = g.nullEncoder.Decompress(nil, g.uncompData, g.file)
 	}
 	if err != nil {
 		return nil, err
 	}
 	if nRead != block.RawLen {
-		return nil, fmt.Errorf("Unexpected amount of bytes after decompression, want %d, have %d", block.RawLen, nRead)
+		return nil, fmt.Errorf("unexpected amount of bytes after decompression, want %d, have %d", block.RawLen, nRead)
 	}
 	g.lastSeekPos += int64(block.Len)
 
@@ -201,7 +189,7 @@ func (g *GPFile) WriteBlock(timestamp int64, blockData []byte) error {
 
 	// Check that the file has been opened in the correct mode
 	if g.accessMode != ModeWrite {
-		return fmt.Errorf("Cannot write to GPFile in read mode")
+		return fmt.Errorf("cannot write to GPFile in read mode")
 	}
 
 	// If block data is empty, do nothing except updating the header
@@ -221,7 +209,7 @@ func (g *GPFile) WriteBlock(timestamp int64, blockData []byte) error {
 	}
 
 	// Compress + write block data to file (append)
-	nWritten, err := g.defaultEncoder.Compress(blockData, g.blockData, g.fileBuffer)
+	nWritten, err := g.defaultEncoder.Compress(blockData, g.blockData, g.fileWriteBuffer)
 	if err != nil {
 		return err
 	}
@@ -231,18 +219,13 @@ func (g *GPFile) WriteBlock(timestamp int64, blockData []byte) error {
 	// with NullCompression to optimize storage and increase read speed
 	if nWritten > len(blockData) {
 		encType = encoders.EncoderTypeNull
-
-		enc, err := encoder.New(encType)
-		if err != nil {
-			return fmt.Errorf("failed to select %s encoder for optimal compression ratio: %w", encType, err)
-		}
-		g.fileBuffer.Reset(g.file)
-		nWritten, err = enc.Compress(blockData, g.blockData, g.fileBuffer)
+		g.fileWriteBuffer.Reset(g.file)
+		nWritten, err = g.nullEncoder.Compress(blockData, g.blockData, g.fileWriteBuffer)
 		if err != nil {
 			return fmt.Errorf("failed to re-encode with %s encoder: %w", encType, err)
 		}
 	}
-	if err = g.fileBuffer.Flush(); err != nil {
+	if err = g.fileWriteBuffer.Flush(); err != nil {
 		return err
 	}
 
@@ -294,7 +277,18 @@ func (g *GPFile) open(flags int) (err error) {
 	// Open file for append, create if not exists
 	g.file, err = os.OpenFile(g.filename, flags, defaultPermissions)
 	if flags == ModeWrite {
-		g.fileBuffer = bufio.NewWriter(g.file)
+		g.fileWriteBuffer = bufio.NewWriter(g.file)
+	}
+	if flags == ModeRead && g.memPool != nil {
+
+		// TODO: The file size should be part of the next version metadata to save this Stat() call
+		stat, err := os.Stat(g.filename)
+		if err != nil {
+			return err
+		}
+		if g.file, err = NewMemFile(g.file, int(stat.Size()), g.memPool); err != nil {
+			return err
+		}
 	}
 
 	return
@@ -375,7 +369,13 @@ func (g *GPFile) writeHeader() error {
 	if err != nil {
 		return err
 	}
-	defer gpfHeader.Close()
+	defer func() {
+		if cerr := gpfHeader.Close(); cerr != nil {
+			err = cerr
+			return
+		}
+	}()
+
 	buffer := bufio.NewWriter(gpfHeader)
 
 	// Write the global header information and all individual blocks
