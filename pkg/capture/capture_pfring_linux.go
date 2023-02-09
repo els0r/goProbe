@@ -1,5 +1,5 @@
-//go:build linux && force_pfring
-// +build linux,force_pfring
+//go:build force_pfring
+// +build force_pfring
 
 package capture
 
