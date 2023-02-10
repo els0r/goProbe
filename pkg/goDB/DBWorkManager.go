@@ -342,8 +342,8 @@ func (w *DBWorkManager) readBlocksAndEvaluate(ctx context.Context, workload DBWo
 			protoBlocks := blocks[ProtoColIdx]
 
 			key, comparisonValue := v4Key, v4ComparisonValue
-			isIPv4 := true
-			for i := 0; i < numEntries; i++ {
+			startEntry, isIPv4 := 0, true // TODO: Support traversal of IPv4 / IPv6 only if there's a matching condition
+			for i := startEntry; i < numEntries; i++ {
 
 				// When reaching the v4/v6 mark, we switch to the IPv6 key
 				if i == int(numV4Entries) {
