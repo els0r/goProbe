@@ -31,7 +31,7 @@ type StringKeyParser interface {
 
 // StringValParser is used for mapping a string to it's goDB value
 type StringValParser interface {
-	ParseVal(element string, val *types.Val) error
+	ParseVal(element string, val *types.Counters) error
 }
 
 // NewStringKeyParser selects a string parser based on the attribute
@@ -115,7 +115,7 @@ func (n *NOPStringParser) ParseKey(element string, key *types.ExtendedKey) error
 }
 
 // ParseVal is a no-op
-func (n *NOPStringParser) ParseVal(element string, val *types.Val) error {
+func (n *NOPStringParser) ParseVal(element string, val *types.Counters) error {
 	return nil
 }
 
@@ -209,7 +209,7 @@ func (i *IfaceStringParser) ParseKey(element string, key *types.ExtendedKey) err
 }
 
 // ParseVal parses a number from a string and writes it to the "Byts Recevied" counter in val
-func (b *BytesRecStringParser) ParseVal(element string, val *types.Val) error {
+func (b *BytesRecStringParser) ParseVal(element string, val *types.Counters) error {
 	// parse into number
 	num, err := strconv.ParseUint(element, 10, 64)
 	if err != nil {
@@ -221,7 +221,7 @@ func (b *BytesRecStringParser) ParseVal(element string, val *types.Val) error {
 }
 
 // ParseVal parses a number from a string and writes it to the "Byts Sent" counter in val
-func (b *BytesSentStringParser) ParseVal(element string, val *types.Val) error {
+func (b *BytesSentStringParser) ParseVal(element string, val *types.Counters) error {
 	// parse into number
 	num, err := strconv.ParseUint(element, 10, 64)
 	if err != nil {
@@ -233,7 +233,7 @@ func (b *BytesSentStringParser) ParseVal(element string, val *types.Val) error {
 }
 
 // ParseVal parses a number from a string and writes it to the "Packets Received" counter in val
-func (p *PacketsRecStringParser) ParseVal(element string, val *types.Val) error {
+func (p *PacketsRecStringParser) ParseVal(element string, val *types.Counters) error {
 	// parse into number
 	num, err := strconv.ParseUint(element, 10, 64)
 	if err != nil {
@@ -245,7 +245,7 @@ func (p *PacketsRecStringParser) ParseVal(element string, val *types.Val) error 
 }
 
 // ParseVal parses a number from a string and writes it to the "Packets Sent" counter in val
-func (p *PacketsSentStringParser) ParseVal(element string, val *types.Val) error {
+func (p *PacketsSentStringParser) ParseVal(element string, val *types.Counters) error {
 	// parse into number
 	num, err := strconv.ParseUint(element, 10, 64)
 	if err != nil {

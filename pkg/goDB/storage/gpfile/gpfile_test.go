@@ -184,7 +184,7 @@ func testRoundtrip(t *testing.T, enc encoders.Type) {
 func (g *GPFile) validateBlocks(nExpected int) error {
 	blocks, err := g.Blocks()
 	if err != nil {
-		return fmt.Errorf("Failed to get blocks: %s", err)
+		return fmt.Errorf("Failed to get blocks: %w", err)
 	}
 	if len(blocks.Blocks) != nExpected {
 		return fmt.Errorf("Unexpected number of blocks, want %d, have %d", nExpected, len(blocks.Blocks))

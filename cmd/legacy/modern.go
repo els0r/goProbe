@@ -187,7 +187,7 @@ func (l ModernFileSet) GetBlock(ts int64) (*hashmap.Map, error) {
 		}
 
 		var K types.Key
-		var V types.Val
+		var V types.Counters
 
 		if sip.Is4() && dip.Is4() {
 			K = types.NewV4KeyStatic(sip.As4(), dip.As4(), dportBlock[i*2:i*2+2], protoBlock[i])

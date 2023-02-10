@@ -170,41 +170,26 @@ func dbData(iface string, timestamp int64, aggFlowMap *hashmap.AggFlowMap) ([Col
 	// loop through the v4 & v6 flow maps to extract the relevant
 	// values into database blocks.
 	var bytesRcvd, bytesSent, pktsRcvd, pktsSent []uint64
-	for _, flow := range v4List {
+	for _, list := range []hashmap.List{v4List, v6List} {
+		for _, flow := range list {
 
-		summUpdate.FlowCount++
-		summUpdate.Traffic += flow.NBytesRcvd
-		summUpdate.Traffic += flow.NBytesSent
+			// global counters
+			summUpdate.FlowCount++
+			summUpdate.Traffic += flow.NBytesRcvd
+			summUpdate.Traffic += flow.NBytesSent
 
-		// counters
-		bytesRcvd = append(bytesRcvd, flow.NBytesRcvd)
-		bytesSent = append(bytesSent, flow.NBytesSent)
-		pktsRcvd = append(pktsRcvd, flow.NPktsRcvd)
-		pktsSent = append(pktsSent, flow.NPktsSent)
+			// counters
+			bytesRcvd = append(bytesRcvd, flow.NBytesRcvd)
+			bytesSent = append(bytesSent, flow.NBytesSent)
+			pktsRcvd = append(pktsRcvd, flow.NPktsRcvd)
+			pktsSent = append(pktsSent, flow.NPktsSent)
 
-		// attributes
-		dbData[DportColIdx] = append(dbData[DportColIdx], flow.GetDport()...)
-		dbData[ProtoColIdx] = append(dbData[ProtoColIdx], flow.GetProto())
-		dbData[SipColIdx] = append(dbData[SipColIdx], flow.GetSip()...)
-		dbData[DipColIdx] = append(dbData[DipColIdx], flow.GetDip()...)
-	}
-	for _, flow := range v6List {
-
-		summUpdate.FlowCount++
-		summUpdate.Traffic += flow.NBytesRcvd
-		summUpdate.Traffic += flow.NBytesSent
-
-		// counters
-		bytesRcvd = append(bytesRcvd, flow.NBytesRcvd)
-		bytesSent = append(bytesSent, flow.NBytesSent)
-		pktsRcvd = append(pktsRcvd, flow.NPktsRcvd)
-		pktsSent = append(pktsSent, flow.NPktsSent)
-
-		// attributes
-		dbData[DportColIdx] = append(dbData[DportColIdx], flow.GetDport()...)
-		dbData[ProtoColIdx] = append(dbData[ProtoColIdx], flow.GetProto())
-		dbData[SipColIdx] = append(dbData[SipColIdx], flow.GetSip()...)
-		dbData[DipColIdx] = append(dbData[DipColIdx], flow.GetDip()...)
+			// attributes
+			dbData[DportColIdx] = append(dbData[DportColIdx], flow.GetDport()...)
+			dbData[ProtoColIdx] = append(dbData[ProtoColIdx], flow.GetProto())
+			dbData[SipColIdx] = append(dbData[SipColIdx], flow.GetSip()...)
+			dbData[DipColIdx] = append(dbData[DipColIdx], flow.GetDip()...)
+		}
 	}
 
 	// Perform bit packing on the counter columns

@@ -79,6 +79,7 @@ const (
 	errorNoResults internalError = iota + 1
 	errorMemoryBreach
 	errorInternalProcessing
+	errorMismatchingHosts
 )
 
 // Error implements the error interface for query processing errors
@@ -192,7 +193,7 @@ func (s *Statement) Execute(ctx context.Context) (result *results.Result, err er
 			agg := <-aggregateChan
 
 			// call the garbage collector
-			agg.aggregatedMap = nil
+			agg.aggregatedMap.Map = nil
 			runtime.GC()
 			debug.FreeOSMemory()
 
@@ -304,12 +305,8 @@ func (s *Statement) Execute(ctx context.Context) (result *results.Result, err er
 			rs[count].Labels.Timestamp = time.Unix(ts, 0)
 		}
 		rs[count].Labels.Iface, _ = key.AttrIface()
-
-		// TODO: We need a nice solution for these special attributes - It's too expensive / complex
-		// to carry them around in the ExtendedKey struct across the board
-
-		// rs[count].Labels.HostID = key.AttrHostID()
-		// rs[count].Labels.Hostname = key.AttrHost()
+		rs[count].Labels.HostID = agg.aggregatedMap.HostID
+		rs[count].Labels.Hostname = agg.aggregatedMap.Hostname
 		if sip != nil {
 			rs[count].Attributes.SrcIP = types.RawIPToAddr(key.Key().GetSip())
 		}
@@ -323,17 +320,13 @@ func (s *Statement) Execute(ctx context.Context) (result *results.Result, err er
 			rs[count].Attributes.DstPort = types.PortToUint16(key.Key().GetDport())
 		}
 
-		// assign counters
-		rs[count].Counters.BytesReceived = val.NBytesRcvd
-		rs[count].Counters.PacketsReceived = val.NPktsRcvd
-		rs[count].Counters.BytesSent = val.NBytesSent
-		rs[count].Counters.PacketsSent = val.NPktsSent
-
+		// assign / update counters
+		rs[count].Counters = rs[count].Counters.Add(val)
 		count++
 	}
 
 	// Now is a good time to release memory one last time for the final processing step
-	agg.aggregatedMap = nil
+	agg.aggregatedMap.Map = nil
 	runtime.GC()
 
 	result.Summary.Totals = agg.totals

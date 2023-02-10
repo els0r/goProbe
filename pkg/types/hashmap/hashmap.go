@@ -14,7 +14,7 @@ type (
 	Key = []byte
 
 	// E defines the value / valent type of the map
-	Val = types.Val
+	Val = types.Counters
 )
 
 const (
@@ -133,6 +133,7 @@ type AggFlowMap = Map
 type AggFlowMapWithMetadata struct {
 	*Map
 
+	// Iface    string `json:"iface"`
 	HostID   uint   `json:"host_id"`
 	Hostname string `json:"host"`
 }

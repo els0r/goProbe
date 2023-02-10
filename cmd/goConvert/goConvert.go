@@ -367,7 +367,7 @@ func main() {
 
 		// fully parse the current line and load it into key and value objects
 		rowKey := &rowKeyV4
-		rowVal := types.Val{}
+		rowVal := types.Counters{}
 		fields := strings.Split(scanner.Text(), ",")
 		if len(fields) < len(csvconv.KeyParsers)+len(csvconv.ValParsers) {
 			fmt.Printf("Skipping incomplete data row: %s\n", scanner.Text())
@@ -410,7 +410,7 @@ func main() {
 		// fill the summary update for this flow record and update the summary
 		rowSummary.Interface = iface
 		rowSummary.FlowCount = 1
-		rowSummary.Traffic = rowVal.NBytesRcvd + rowVal.NBytesSent
+		rowSummary.Traffic = rowVal.SumBytes()
 		rowSummary.Timestamp = time.Unix(ts, 0)
 
 		summary.Update(rowSummary)

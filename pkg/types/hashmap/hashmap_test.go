@@ -12,15 +12,15 @@ import (
 func TestSimpleHashMapOperations(t *testing.T) {
 
 	testMap := New()
-	testMap.Set([]byte("a"), types.Val{NBytesRcvd: 0, NBytesSent: 1, NPktsRcvd: 0, NPktsSent: 0})
+	testMap.Set([]byte("a"), types.Counters{NBytesRcvd: 0, NBytesSent: 1, NPktsRcvd: 0, NPktsSent: 0})
 
 	val, exists := testMap.Get([]byte("a"))
 	require.True(t, exists)
-	require.Equal(t, types.Val{NBytesRcvd: 0, NBytesSent: 1, NPktsRcvd: 0, NPktsSent: 0}, val)
+	require.Equal(t, types.Counters{NBytesRcvd: 0, NBytesSent: 1, NPktsRcvd: 0, NPktsSent: 0}, val)
 
 	val, exists = testMap.Get([]byte("b"))
 	require.False(t, exists)
-	require.Equal(t, types.Val{NBytesRcvd: 0, NBytesSent: 0, NPktsRcvd: 0, NPktsSent: 0}, val)
+	require.Equal(t, types.Counters{NBytesRcvd: 0, NBytesSent: 0, NPktsRcvd: 0, NPktsSent: 0}, val)
 
 	for i := testMap.Iter(); i.Next(); {
 		t.Log(i.Key(), i.Val())
@@ -30,17 +30,17 @@ func TestSimpleHashMapOperations(t *testing.T) {
 func TestHashMapSetOrUpdate(t *testing.T) {
 
 	testMap := New()
-	testMap.Set([]byte("a"), types.Val{NBytesRcvd: 0, NBytesSent: 1, NPktsRcvd: 0, NPktsSent: 0})
+	testMap.Set([]byte("a"), types.Counters{NBytesRcvd: 0, NBytesSent: 1, NPktsRcvd: 0, NPktsSent: 0})
 
 	val, exists := testMap.Get([]byte("a"))
 	require.True(t, exists)
-	require.Equal(t, types.Val{NBytesRcvd: 0, NBytesSent: 1, NPktsRcvd: 0, NPktsSent: 0}, val)
+	require.Equal(t, types.Counters{NBytesRcvd: 0, NBytesSent: 1, NPktsRcvd: 0, NPktsSent: 0}, val)
 
 	testMap.SetOrUpdate([]byte("a"), 0, 2, 0, 1)
 
 	val, exists = testMap.Get([]byte("a"))
 	require.True(t, exists)
-	require.Equal(t, types.Val{NBytesRcvd: 0, NBytesSent: 3, NPktsRcvd: 0, NPktsSent: 1}, val)
+	require.Equal(t, types.Counters{NBytesRcvd: 0, NBytesSent: 3, NPktsRcvd: 0, NPktsSent: 1}, val)
 
 	for i := testMap.Iter(); i.Next(); {
 		t.Log(i.Key(), i.Val())
@@ -54,7 +54,7 @@ func TestLinearHashMapOperations(t *testing.T) {
 	for i := 0; i < 100000; i++ {
 		temp := make([]byte, 8)
 		binary.BigEndian.PutUint64(temp, uint64(i))
-		testMap.Set(temp, types.Val{NBytesRcvd: uint64(i), NBytesSent: 0, NPktsRcvd: 0, NPktsSent: 0})
+		testMap.Set(temp, types.Counters{NBytesRcvd: uint64(i), NBytesSent: 0, NPktsRcvd: 0, NPktsSent: 0})
 	}
 
 	require.Equal(t, 100000, int(testMap.Len()))
@@ -64,7 +64,7 @@ func TestLinearHashMapOperations(t *testing.T) {
 		binary.BigEndian.PutUint64(temp, uint64(i))
 		val, exists := testMap.Get(temp)
 		require.True(t, exists)
-		require.Equal(t, types.Val{NBytesRcvd: uint64(i), NBytesSent: 0, NPktsRcvd: 0, NPktsSent: 0}, val)
+		require.Equal(t, types.Counters{NBytesRcvd: uint64(i), NBytesSent: 0, NPktsRcvd: 0, NPktsSent: 0}, val)
 
 	}
 }
@@ -73,8 +73,8 @@ func TestJSONMarshalAggFlowMap(t *testing.T) {
 
 	var ip [16]byte
 	m := New()
-	m.Set(types.NewKey(ip[:], ip[:], []byte{0, 0}, 0x11), types.Val{NBytesRcvd: 1, NBytesSent: 1, NPktsRcvd: 0, NPktsSent: 0})
-	m.Set(types.NewKey(ip[:], ip[:], []byte{0, 0}, 0x06), types.Val{NBytesRcvd: 2, NBytesSent: 2, NPktsRcvd: 0, NPktsSent: 0})
+	m.Set(types.NewKey(ip[:], ip[:], []byte{0, 0}, 0x11), types.Counters{NBytesRcvd: 1, NBytesSent: 1, NPktsRcvd: 0, NPktsSent: 0})
+	m.Set(types.NewKey(ip[:], ip[:], []byte{0, 0}, 0x06), types.Counters{NBytesRcvd: 2, NBytesSent: 2, NPktsRcvd: 0, NPktsSent: 0})
 
 	b, err := jsoniter.MarshalIndent(m, "", "  ")
 	if err != nil {
@@ -90,7 +90,7 @@ func BenchmarkNativeMapAccess(b *testing.B) {
 		var ip [16]byte
 		binary.BigEndian.PutUint64(ip[:], uint64(i))
 
-		testMap.Set(types.NewKey(ip[:], ip[:], []byte{0, 0}, 0), types.Val{
+		testMap.Set(types.NewKey(ip[:], ip[:], []byte{0, 0}, 0), types.Counters{
 			NBytesRcvd: uint64(i),
 			NBytesSent: uint64(i),
 			NPktsRcvd:  uint64(i),
@@ -112,13 +112,13 @@ type flatByteArrayKey [35]byte
 
 func BenchmarkByteArrayMapAccess(b *testing.B) {
 
-	testMap := make(map[flatByteArrayKey]*types.Val)
+	testMap := make(map[flatByteArrayKey]*types.Counters)
 	for i := 0; i < 1000000; i++ {
 		var key flatByteArrayKey
 		binary.BigEndian.PutUint64(key[:8], uint64(i))
 		binary.BigEndian.PutUint64(key[8:16], uint64(i))
 
-		testMap[key] = &types.Val{
+		testMap[key] = &types.Counters{
 			NBytesRcvd: uint64(i),
 			NBytesSent: uint64(i),
 			NPktsRcvd:  uint64(i),
@@ -138,13 +138,13 @@ func BenchmarkByteArrayMapAccess(b *testing.B) {
 
 func BenchmarkStringedByteArrayMapAccess(b *testing.B) {
 
-	testMap := make(map[string]*types.Val)
+	testMap := make(map[string]*types.Counters)
 	for i := 0; i < 1000000; i++ {
 		var key flatByteArrayKey
 		binary.BigEndian.PutUint64(key[:8], uint64(i))
 		binary.BigEndian.PutUint64(key[8:16], uint64(i))
 
-		testMap[string(key[:])] = &types.Val{
+		testMap[string(key[:])] = &types.Counters{
 			NBytesRcvd: uint64(i),
 			NBytesSent: uint64(i),
 			NPktsRcvd:  uint64(i),
@@ -164,13 +164,13 @@ func BenchmarkStringedByteArrayMapAccess(b *testing.B) {
 
 func BenchmarkStringedByteSliceMapAccess(b *testing.B) {
 
-	testMap := make(map[string]*types.Val)
+	testMap := make(map[string]*types.Counters)
 	for i := 0; i < 1000000; i++ {
 		var key = make([]byte, 35)
 		binary.BigEndian.PutUint64(key[:8], uint64(i))
 		binary.BigEndian.PutUint64(key[8:16], uint64(i))
 
-		testMap[string(key)] = &types.Val{
+		testMap[string(key)] = &types.Counters{
 			NBytesRcvd: uint64(i),
 			NBytesSent: uint64(i),
 			NPktsRcvd:  uint64(i),
@@ -194,10 +194,10 @@ func BenchmarkHashMapAccesses(b *testing.B) {
 	for i := 0; i < 100000; i++ {
 		temp := make([]byte, 8)
 		binary.BigEndian.PutUint64(temp, uint64(i))
-		testMap.Set(temp, types.Val{NBytesRcvd: uint64(i), NBytesSent: 0, NPktsRcvd: 0, NPktsSent: 0})
+		testMap.Set(temp, types.Counters{NBytesRcvd: uint64(i), NBytesSent: 0, NPktsRcvd: 0, NPktsSent: 0})
 	}
 
-	var res types.Val
+	var res types.Counters
 	var ex bool
 	testKey := make([]byte, 8)
 	binary.BigEndian.PutUint64(testKey, 42)
@@ -219,10 +219,10 @@ func BenchmarkHashMapMisses(b *testing.B) {
 	for i := 0; i < 100000; i++ {
 		temp := make([]byte, 8)
 		binary.BigEndian.PutUint64(temp, uint64(i))
-		testMap.Set(temp, types.Val{NBytesRcvd: uint64(i), NBytesSent: 0, NPktsRcvd: 0, NPktsSent: 0})
+		testMap.Set(temp, types.Counters{NBytesRcvd: uint64(i), NBytesSent: 0, NPktsRcvd: 0, NPktsSent: 0})
 	}
 
-	var res types.Val
+	var res types.Counters
 	var ex bool
 	testKey := make([]byte, 8)
 	binary.BigEndian.PutUint64(testKey, 1000000)
@@ -241,16 +241,16 @@ func BenchmarkHashMapMisses(b *testing.B) {
 
 func BenchmarkHashMapNativeAccesses(b *testing.B) {
 
-	testMap := make(map[string]types.Val)
+	testMap := make(map[string]types.Counters)
 	for i := 0; i < 100000; i++ {
 		temp := make([]byte, 8)
 		binary.BigEndian.PutUint64(temp, uint64(i))
-		testMap[string(temp)] = types.Val{NBytesRcvd: uint64(i), NBytesSent: 0, NPktsRcvd: 0, NPktsSent: 0}
+		testMap[string(temp)] = types.Counters{NBytesRcvd: uint64(i), NBytesSent: 0, NPktsRcvd: 0, NPktsSent: 0}
 	}
 
 	testKey := make([]byte, 8)
 	binary.BigEndian.PutUint64(testKey, 42)
-	var res types.Val
+	var res types.Counters
 	var ex bool
 
 	b.ReportAllocs()
@@ -266,16 +266,16 @@ func BenchmarkHashMapNativeAccesses(b *testing.B) {
 
 func BenchmarkHashMapNativeMisses(b *testing.B) {
 
-	testMap := make(map[string]types.Val)
+	testMap := make(map[string]types.Counters)
 	for i := 0; i < 100000; i++ {
 		temp := make([]byte, 8)
 		binary.BigEndian.PutUint64(temp, uint64(i))
-		testMap[string(temp)] = types.Val{NBytesRcvd: uint64(i), NBytesSent: 0, NPktsRcvd: 0, NPktsSent: 0}
+		testMap[string(temp)] = types.Counters{NBytesRcvd: uint64(i), NBytesSent: 0, NPktsRcvd: 0, NPktsSent: 0}
 	}
 
 	testKey := make([]byte, 8)
 	binary.BigEndian.PutUint64(testKey, 1000000)
-	var res types.Val
+	var res types.Counters
 	var ex bool
 
 	b.ReportAllocs()

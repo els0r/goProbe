@@ -30,22 +30,22 @@ var parserTests = []struct {
 	schema string
 	input  string
 	outKey types.ExtendedKey
-	outVal types.Val
+	outVal types.Counters
 }{
 	{sipDipSchema,
 		"1460362502,eth2,213.156.236.211,213.156.236.255,2,0,0.00,525,0,0.00",
 		types.NewV4KeyStatic([4]byte{213, 156, 236, 211}, [4]byte{213, 156, 236, 255}, []byte{0, 0}, 0).Extend(int64(1460362502), "eth2"),
-		types.Val{NBytesRcvd: uint64(525), NBytesSent: uint64(0), NPktsRcvd: uint64(2), NPktsSent: uint64(0)},
+		types.Counters{NBytesRcvd: uint64(525), NBytesSent: uint64(0), NPktsRcvd: uint64(2), NPktsSent: uint64(0)},
 	},
 	{sipDipProtoSchema,
 		"1460362502,eth2,213.156.236.211,213.156.236.255,8080,TCP,2,0,0.00,525,0,0.00",
 		types.NewV4KeyStatic([4]byte{213, 156, 236, 211}, [4]byte{213, 156, 236, 255}, []byte{0x1f, 0x90}, 6).Extend(int64(1460362502), "eth2"),
-		types.Val{NBytesRcvd: uint64(525), NBytesSent: uint64(0), NPktsRcvd: uint64(2), NPktsSent: uint64(0)},
+		types.Counters{NBytesRcvd: uint64(525), NBytesSent: uint64(0), NPktsRcvd: uint64(2), NPktsSent: uint64(0)},
 	},
 	{rawSchema,
 		"1460362502,eth2,213.156.236.211,213.156.236.255,8080,TCP,2,0,0.00,525,0,0.00",
 		types.NewV4KeyStatic([4]byte{213, 156, 236, 211}, [4]byte{213, 156, 236, 255}, []byte{0x1f, 0x90}, 6).Extend(int64(1460362502), "eth2"),
-		types.Val{NBytesRcvd: uint64(525), NBytesSent: uint64(0), NPktsRcvd: uint64(2), NPktsSent: uint64(0)},
+		types.Counters{NBytesRcvd: uint64(525), NBytesSent: uint64(0), NPktsRcvd: uint64(2), NPktsSent: uint64(0)},
 	},
 }
 
@@ -257,7 +257,7 @@ func TestParsers(t *testing.T) {
 		err      error
 		rowKeyV4 types.ExtendedKey = types.NewEmptyV4Key().ExtendEmpty()
 		rowKeyV6 types.ExtendedKey = types.NewEmptyV6Key().ExtendEmpty()
-		rowVal   types.Val
+		rowVal   types.Counters
 	)
 	rowKey := &rowKeyV4
 

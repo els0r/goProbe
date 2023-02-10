@@ -61,12 +61,12 @@ func generateCompareValue(condition *conditionNode) error {
 		switch condition.comparator {
 		case "=":
 			condition.compareValue = func(currentValue types.Key) bool {
-				return bytes.Compare(currentValue.GetSip(), value) == 0
+				return bytes.Equal(currentValue.GetSip(), value)
 			}
 			return nil
 		case "!=":
 			condition.compareValue = func(currentValue types.Key) bool {
-				return bytes.Compare(currentValue.GetSip(), value) != 0
+				return !bytes.Equal(currentValue.GetSip(), value)
 			}
 			return nil
 		default:
@@ -76,12 +76,12 @@ func generateCompareValue(condition *conditionNode) error {
 		switch condition.comparator {
 		case "=":
 			condition.compareValue = func(currentValue types.Key) bool {
-				return bytes.Compare(currentValue.GetDip(), value) == 0
+				return bytes.Equal(currentValue.GetDip(), value)
 			}
 			return nil
 		case "!=":
 			condition.compareValue = func(currentValue types.Key) bool {
-				return bytes.Compare(currentValue.GetDip(), value) != 0
+				return !bytes.Equal(currentValue.GetDip(), value)
 			}
 			return nil
 		default:
@@ -111,7 +111,7 @@ func generateCompareValue(condition *conditionNode) error {
 					// the network address
 					ip[index] = ip[index] & netmaskByte
 
-					return bytes.Compare(ip.GetSip()[:lenBytes], value[:lenBytes]) == 0
+					return bytes.Equal(ip.GetSip()[:lenBytes], value[:lenBytes])
 				}
 				return nil
 			case "!=":
@@ -121,7 +121,7 @@ func generateCompareValue(condition *conditionNode) error {
 					// the network address
 					ip[index] = ip[index] & netmaskByte
 
-					return !(bytes.Compare(ip.GetSip()[:lenBytes], value[:lenBytes]) == 0)
+					return !bytes.Equal(ip.GetSip()[:lenBytes], value[:lenBytes])
 				}
 				return nil
 			default:
@@ -133,12 +133,12 @@ func generateCompareValue(condition *conditionNode) error {
 			switch condition.comparator {
 			case "=":
 				condition.compareValue = func(currentValue types.Key) bool {
-					return bytes.Compare(currentValue.GetSip()[:index], value[:index]) == 0
+					return bytes.Equal(currentValue.GetSip()[:index], value[:index])
 				}
 				return nil
 			case "!=":
 				condition.compareValue = func(currentValue types.Key) bool {
-					return bytes.Compare(currentValue.GetSip()[:index], value[:index]) != 0
+					return !bytes.Equal(currentValue.GetSip()[:index], value[:index])
 				}
 				return nil
 			default:
@@ -169,7 +169,7 @@ func generateCompareValue(condition *conditionNode) error {
 					// the network address
 					ip[index] = ip[index] & netmaskByte
 
-					return bytes.Compare(ip.GetDip()[:lenBytes], value[:lenBytes]) == 0
+					return bytes.Equal(ip.GetDip()[:lenBytes], value[:lenBytes])
 				}
 				return nil
 			case "!=":
@@ -179,7 +179,7 @@ func generateCompareValue(condition *conditionNode) error {
 					// the network address
 					ip[index] = ip[index] & netmaskByte
 
-					return !(bytes.Compare(ip.GetDip()[:lenBytes], value[:lenBytes]) == 0)
+					return !bytes.Equal(ip.GetDip()[:lenBytes], value[:lenBytes])
 				}
 				return nil
 			default:
@@ -191,12 +191,12 @@ func generateCompareValue(condition *conditionNode) error {
 			switch condition.comparator {
 			case "=":
 				condition.compareValue = func(currentValue types.Key) bool {
-					return bytes.Compare(currentValue.GetDip()[:index], value[:index]) == 0
+					return bytes.Equal(currentValue.GetDip()[:index], value[:index])
 				}
 				return nil
 			case "!=":
 				condition.compareValue = func(currentValue types.Key) bool {
-					return bytes.Compare(currentValue.GetDip()[:index], value[:index]) != 0
+					return !bytes.Equal(currentValue.GetDip()[:index], value[:index])
 				}
 				return nil
 			default:
@@ -207,12 +207,12 @@ func generateCompareValue(condition *conditionNode) error {
 		switch condition.comparator {
 		case "=":
 			condition.compareValue = func(currentValue types.Key) bool {
-				return bytes.Compare(currentValue.GetDport(), value[:DportSizeof]) == 0
+				return bytes.Equal(currentValue.GetDport(), value[:DportSizeof])
 			}
 			return nil
 		case "!=":
 			condition.compareValue = func(currentValue types.Key) bool {
-				return bytes.Compare(currentValue.GetDport(), value[:DportSizeof]) != 0
+				return !bytes.Equal(currentValue.GetDport(), value[:DportSizeof])
 			}
 			return nil
 		case "<":

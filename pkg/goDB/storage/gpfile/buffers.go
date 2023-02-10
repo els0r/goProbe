@@ -54,15 +54,15 @@ type MemFile struct {
 }
 
 // NewMemFile instantiates a new in-memory file buffer
-func NewMemFile(r io.ReadCloser, l int, pool *MemPool) (*MemFile, error) {
+func NewMemFile(r io.ReadCloser, length int, pool *MemPool) (*MemFile, error) {
 	obj := MemFile{
 		data: pool.Get(),
 		pool: pool,
 	}
-	if len(obj.data) < l {
-		obj.data = make([]byte, l)
+	if len(obj.data) < length {
+		obj.data = make([]byte, length)
 	}
-	obj.data = obj.data[:l]
+	obj.data = obj.data[:length]
 	if _, err := io.ReadFull(r, obj.data); err != nil {
 		return nil, err
 	}

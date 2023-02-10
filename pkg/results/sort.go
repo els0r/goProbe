@@ -99,29 +99,29 @@ func By(sort SortOrder, direction types.Direction, ascending bool) by {
 		case types.DirectionBoth, types.DirectionSum:
 			if ascending {
 				return func(e1, e2 *Row) bool {
-					return e1.Counters.PacketsSent+e1.Counters.PacketsReceived < e2.Counters.PacketsSent+e2.Counters.PacketsReceived
+					return e1.Counters.NPktsSent+e1.Counters.NPktsRcvd < e2.Counters.NPktsSent+e2.Counters.NPktsRcvd
 				}
 			}
 			return func(e1, e2 *Row) bool {
-				return e1.Counters.PacketsSent+e1.Counters.PacketsReceived > e2.Counters.PacketsSent+e2.Counters.PacketsReceived
+				return e1.Counters.NPktsSent+e1.Counters.NPktsRcvd > e2.Counters.NPktsSent+e2.Counters.NPktsRcvd
 			}
 		case types.DirectionIn:
 			if ascending {
 				return func(e1, e2 *Row) bool {
-					return e1.Counters.PacketsReceived < e2.Counters.PacketsReceived
+					return e1.Counters.NPktsRcvd < e2.Counters.NPktsRcvd
 				}
 			}
 			return func(e1, e2 *Row) bool {
-				return e1.Counters.PacketsReceived > e2.Counters.PacketsReceived
+				return e1.Counters.NPktsRcvd > e2.Counters.NPktsRcvd
 			}
 		case types.DirectionOut:
 			if ascending {
 				return func(e1, e2 *Row) bool {
-					return e1.Counters.PacketsSent < e2.Counters.PacketsSent
+					return e1.Counters.NPktsSent < e2.Counters.NPktsSent
 				}
 			}
 			return func(e1, e2 *Row) bool {
-				return e1.Counters.PacketsSent > e2.Counters.PacketsSent
+				return e1.Counters.NPktsSent > e2.Counters.NPktsSent
 			}
 		}
 	case SortTraffic:
@@ -129,29 +129,29 @@ func By(sort SortOrder, direction types.Direction, ascending bool) by {
 		case types.DirectionBoth, types.DirectionSum:
 			if ascending {
 				return func(e1, e2 *Row) bool {
-					return e1.Counters.BytesSent+e1.Counters.BytesReceived < e2.Counters.BytesSent+e2.Counters.BytesReceived
+					return e1.Counters.NBytesSent+e1.Counters.NBytesRcvd < e2.Counters.NBytesSent+e2.Counters.NBytesRcvd
 				}
 			}
 			return func(e1, e2 *Row) bool {
-				return e1.Counters.BytesSent+e1.Counters.BytesReceived > e2.Counters.BytesSent+e2.Counters.BytesReceived
+				return e1.Counters.NBytesSent+e1.Counters.NBytesRcvd > e2.Counters.NBytesSent+e2.Counters.NBytesRcvd
 			}
 		case types.DirectionIn:
 			if ascending {
 				return func(e1, e2 *Row) bool {
-					return e1.Counters.BytesReceived < e2.Counters.BytesReceived
+					return e1.Counters.NBytesRcvd < e2.Counters.NBytesRcvd
 				}
 			}
 			return func(e1, e2 *Row) bool {
-				return e1.Counters.BytesReceived > e2.Counters.BytesReceived
+				return e1.Counters.NBytesRcvd > e2.Counters.NBytesRcvd
 			}
 		case types.DirectionOut:
 			if ascending {
 				return func(e1, e2 *Row) bool {
-					return e1.Counters.BytesSent < e2.Counters.BytesSent
+					return e1.Counters.NBytesSent < e2.Counters.NBytesSent
 				}
 			}
 			return func(e1, e2 *Row) bool {
-				return e1.Counters.BytesSent > e2.Counters.BytesSent
+				return e1.Counters.NBytesSent > e2.Counters.NBytesSent
 			}
 		}
 	case SortTime:

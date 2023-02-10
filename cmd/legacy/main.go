@@ -27,8 +27,9 @@ type converter struct {
 	pipe  chan work
 }
 
+var logger = logrus.StandardLogger()
+
 func main() {
-	logger := logrus.StandardLogger()
 
 	var (
 		inPath, outPath string
@@ -164,7 +165,8 @@ func (c converter) convertDir(w work, dryRun bool) error {
 
 		flows, err := fs.GetBlock(ts)
 		if err != nil {
-			return fmt.Errorf("failed to get block from file set: %w", err)
+			logger.Errorf("failed to get block from file set: %s", err)
+			continue
 		}
 
 		allBlocks = append(allBlocks, blockFlows{
