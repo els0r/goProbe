@@ -53,7 +53,7 @@ const (
 	OutcolBothPktsSent
 	OutcolBothPktsPercent
 	OutcolBothBytesRcvd
-	OutcolBothNBytesSent
+	OutcolBothBytesSent
 	OutcolBothBytesPercent
 	CountOutcol
 )
@@ -102,7 +102,7 @@ func columns(hasAttrTime, hasAttrIface bool, attributes []types.Attribute, d typ
 			OutcolBothPktsSent,
 			OutcolBothPktsPercent,
 			OutcolBothBytesRcvd,
-			OutcolBothNBytesSent,
+			OutcolBothBytesSent,
 			OutcolBothBytesPercent)
 	case types.DirectionSum:
 		cols = append(cols,
@@ -164,23 +164,23 @@ func extract(format Formatter, ips2domains map[string]string, totals types.Count
 		return format.String(protocols.GetIPProto(int(row.Attributes.IPProto)))
 
 	case OutcolInBytes, OutcolBothBytesRcvd:
-		return format.Size(row.Counters.NBytesRcvd)
+		return format.Size(row.Counters.BytesRcvd)
 	case OutcolInBytesPercent:
-		return format.Float(float64(100*row.Counters.NBytesRcvd) / float64(nz(totals.NBytesRcvd)))
+		return format.Float(float64(100*row.Counters.BytesRcvd) / float64(nz(totals.BytesRcvd)))
 	case OutcolInPkts, OutcolBothPktsRcvd:
-		return format.Count(row.Counters.NPktsRcvd)
+		return format.Count(row.Counters.PacketsRcvd)
 	case OutcolInPktsPercent:
-		return format.Float(float64(100*row.Counters.NPktsRcvd) / float64(nz(totals.NPktsRcvd)))
-	case OutcolOutBytes, OutcolBothNBytesSent:
-		return format.Size(row.Counters.NBytesSent)
+		return format.Float(float64(100*row.Counters.PacketsRcvd) / float64(nz(totals.PacketsRcvd)))
+	case OutcolOutBytes, OutcolBothBytesSent:
+		return format.Size(row.Counters.BytesSent)
 	case OutcolOutBytesPercent:
-		return format.Float(float64(100*row.Counters.NBytesSent) / float64(nz(totals.NBytesSent)))
+		return format.Float(float64(100*row.Counters.BytesSent) / float64(nz(totals.BytesSent)))
 	case OutcolOutPkts, OutcolBothPktsSent:
-		return format.Count(row.Counters.NPktsSent)
+		return format.Count(row.Counters.PacketsSent)
 	case OutcolOutPktsPercent:
-		return format.Float(float64(100*row.Counters.NPktsSent) / float64(nz(totals.NPktsSent)))
+		return format.Float(float64(100*row.Counters.PacketsSent) / float64(nz(totals.PacketsSent)))
 	case OutcolSumBytes:
-		return format.Size(row.Counters.NBytesRcvd + row.Counters.NBytesSent)
+		return format.Size(row.Counters.BytesRcvd + row.Counters.BytesSent)
 	case OutcolSumBytesPercent, OutcolBothBytesPercent:
 		return format.Float(float64(100*(row.Counters.SumBytes())) / float64(nz(totals.SumBytes())))
 	case OutcolSumPkts:
@@ -197,13 +197,13 @@ func extract(format Formatter, ips2domains map[string]string, totals types.Count
 func extractTotal(format Formatter, totals types.Counters, col OutputColumn) string {
 	switch col {
 	case OutcolInBytes, OutcolBothBytesRcvd:
-		return format.Size(totals.NBytesRcvd)
+		return format.Size(totals.BytesRcvd)
 	case OutcolInPkts, OutcolBothPktsRcvd:
-		return format.Count(totals.NPktsRcvd)
-	case OutcolOutBytes, OutcolBothNBytesSent:
-		return format.Size(totals.NBytesSent)
+		return format.Count(totals.PacketsRcvd)
+	case OutcolOutBytes, OutcolBothBytesSent:
+		return format.Size(totals.BytesSent)
 	case OutcolOutPkts, OutcolBothPktsSent:
-		return format.Count(totals.NPktsSent)
+		return format.Count(totals.PacketsSent)
 	case OutcolSumBytes:
 		return format.Size(totals.SumBytes())
 	case OutcolSumPkts:
@@ -414,7 +414,7 @@ func (c *CSVTablePrinter) Footer(result *Result) {
 	summaryEntries[OutcolBothPktsRcvd] = "Received packets"
 	summaryEntries[OutcolBothPktsSent] = "Sent packets"
 	summaryEntries[OutcolBothBytesRcvd] = "Received data volume (bytes)"
-	summaryEntries[OutcolBothNBytesSent] = "Sent data volume (bytes)"
+	summaryEntries[OutcolBothBytesSent] = "Sent data volume (bytes)"
 	for _, col := range c.cols {
 		if summaryEntries[col] != "" {
 			c.writer.Write([]string{summaryEntries[col], extractTotal(CSVFormatter{}, c.totals, col)})
@@ -539,7 +539,7 @@ func NewTextTablePrinter(b basePrinter, numFlows int, resolveTimeout time.Durati
 	header1[OutcolBothPktsRcvd] = "packets"
 	header1[OutcolBothPktsSent] = "packets"
 	header1[OutcolBothBytesRcvd] = "bytes"
-	header1[OutcolBothNBytesSent] = "bytes"
+	header1[OutcolBothBytesSent] = "bytes"
 
 	var header2 = [CountOutcol]string{
 		"time",
@@ -608,7 +608,7 @@ func (t *TextTablePrinter) Footer(result *Result) {
 	isTotal[OutcolBothPktsRcvd] = true
 	isTotal[OutcolBothPktsSent] = true
 	isTotal[OutcolBothBytesRcvd] = true
-	isTotal[OutcolBothNBytesSent] = true
+	isTotal[OutcolBothBytesSent] = true
 
 	// line with ... in the right places to separate totals
 	for _, col := range t.cols {
@@ -639,7 +639,7 @@ func (t *TextTablePrinter) Footer(result *Result) {
 			if col == OutcolBothPktsSent {
 				fmt.Fprint(t.writer, TextFormatter{}.Count(t.totals.SumPackets()))
 			}
-			if col == OutcolBothNBytesSent {
+			if col == OutcolBothBytesSent {
 				fmt.Fprint(t.writer, TextFormatter{}.Size(t.totals.SumBytes()))
 			}
 			fmt.Fprint(t.writer, "\t")

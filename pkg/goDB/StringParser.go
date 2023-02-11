@@ -216,7 +216,7 @@ func (b *BytesRecStringParser) ParseVal(element string, val *types.Counters) err
 		return err
 	}
 
-	val.NBytesRcvd = num
+	val.BytesRcvd = num
 	return nil
 }
 
@@ -228,7 +228,7 @@ func (b *BytesSentStringParser) ParseVal(element string, val *types.Counters) er
 		return err
 	}
 
-	val.NBytesSent = num
+	val.BytesSent = num
 	return nil
 }
 
@@ -240,7 +240,7 @@ func (p *PacketsRecStringParser) ParseVal(element string, val *types.Counters) e
 		return err
 	}
 
-	val.NPktsRcvd = num
+	val.PacketsRcvd = num
 	return nil
 }
 
@@ -252,6 +252,6 @@ func (p *PacketsSentStringParser) ParseVal(element string, val *types.Counters) 
 		return err
 	}
 
-	val.NPktsSent = num
+	val.PacketsSent = num
 	return nil
 }

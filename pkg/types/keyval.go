@@ -296,37 +296,37 @@ func (k Key) String() string {
 
 // Counters stores the goProbe flow counters (and, where required, some extensions)
 type Counters struct {
-	NBytesRcvd uint64 `json:"br,omitempty"`
-	NBytesSent uint64 `json:"bs,omitempty"`
-	NPktsRcvd  uint64 `json:"pr,omitempty"`
-	NPktsSent  uint64 `json:"ps,omitempty"`
+	BytesRcvd   uint64 `json:"br,omitempty"`
+	BytesSent   uint64 `json:"bs,omitempty"`
+	PacketsRcvd uint64 `json:"pr,omitempty"`
+	PacketsSent uint64 `json:"ps,omitempty"`
 }
 
 // String prints the flow counters
 func (c Counters) String() string {
 	return fmt.Sprintf("bytes: received=%d sent=%d; packets: received=%d sent=%d",
-		c.NBytesRcvd,
-		c.NBytesSent,
-		c.NPktsRcvd,
-		c.NPktsSent,
+		c.BytesRcvd,
+		c.BytesSent,
+		c.PacketsRcvd,
+		c.PacketsSent,
 	)
 }
 
 // SumPackets sums the packet received and sent directions
 func (c Counters) SumPackets() uint64 {
-	return c.NPktsRcvd + c.NPktsSent
+	return c.PacketsRcvd + c.PacketsSent
 }
 
 // SumBytes sums the bytes received and sent directions
 func (c Counters) SumBytes() uint64 {
-	return c.NBytesRcvd + c.NBytesSent
+	return c.BytesRcvd + c.BytesSent
 }
 
 // Add adds the values from a different counter and returns the result
 func (c Counters) Add(c2 Counters) Counters {
-	c.NBytesRcvd += c2.NBytesRcvd
-	c.NBytesSent += c2.NBytesSent
-	c.NPktsRcvd += c2.NPktsRcvd
-	c.NPktsSent += c2.NPktsSent
+	c.BytesRcvd += c2.BytesRcvd
+	c.BytesSent += c2.BytesSent
+	c.PacketsRcvd += c2.PacketsRcvd
+	c.PacketsSent += c2.PacketsSent
 	return c
 }

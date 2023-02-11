@@ -334,10 +334,10 @@ bucketloop:
 				continue
 			}
 
-			b.vals[i].NBytesRcvd += eA
-			b.vals[i].NBytesSent += eB
-			b.vals[i].NPktsRcvd += eC
-			b.vals[i].NPktsSent += eD
+			b.vals[i].BytesRcvd += eA
+			b.vals[i].BytesSent += eB
+			b.vals[i].PacketsRcvd += eC
+			b.vals[i].PacketsSent += eD
 			goto done
 		}
 		ovf := b.overflow
@@ -371,10 +371,10 @@ bucketloop:
 		copy(*insertK, key)
 	}
 	*insertV = Val{
-		NBytesRcvd: eA,
-		NBytesSent: eB,
-		NPktsRcvd:  eC,
-		NPktsSent:  eD,
+		BytesRcvd:   eA,
+		BytesSent:   eB,
+		PacketsRcvd: eC,
+		PacketsSent: eD,
 	}
 	*insertI = top
 	m.count++

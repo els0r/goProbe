@@ -87,7 +87,7 @@ func (f *FlowLog) TablePrint(w *tabwriter.Writer) error {
 			types.RawIPToString(g.epHash[16:32]),
 			types.PortToUint16(g.epHash[32:34]),
 			protocols.GetIPProto(int(g.epHash[36])),
-			g.nBytesRcvd, g.nBytesSent, g.nPktsRcvd, g.nPktsSent)
+			g.bytesRcvd, g.bytesSent, g.packetsRcvd, g.packetsSent)
 	}
 	return w.Flush()
 }
@@ -131,7 +131,7 @@ func (f *FlowLog) transferAndAggregate() (newFlowMap map[string]*GPFlow, agg *ha
 
 		// check if the flow actually has any interesting information for us
 		if !v.HasBeenIdle() {
-			agg.SetOrUpdate(goDBKey, v.nBytesRcvd, v.nBytesSent, v.nPktsRcvd, v.nPktsSent)
+			agg.SetOrUpdate(goDBKey, v.bytesRcvd, v.bytesSent, v.packetsRcvd, v.packetsSent)
 
 			// check whether the flow should be retained for the next interval
 			// or thrown away

@@ -173,12 +173,12 @@ func (l LegacyFileSet) GetBlock(ts int64) (*hashmap.Map, error) {
 			K = types.NewV6KeyStatic(sip.As16(), dip.As16(), dportBlock[i*2:i*2+2], protoBlock[i])
 		}
 
-		V.NBytesRcvd = binary.BigEndian.Uint64(bytesRcvdBlock[i*8 : i*8+8])
-		V.NBytesSent = binary.BigEndian.Uint64(bytesSentBlock[i*8 : i*8+8])
-		V.NPktsRcvd = binary.BigEndian.Uint64(pktsRcvdBlock[i*8 : i*8+8])
-		V.NPktsSent = binary.BigEndian.Uint64(pktsSentBlock[i*8 : i*8+8])
+		V.BytesRcvd = binary.BigEndian.Uint64(bytesRcvdBlock[i*8 : i*8+8])
+		V.BytesSent = binary.BigEndian.Uint64(bytesSentBlock[i*8 : i*8+8])
+		V.PacketsRcvd = binary.BigEndian.Uint64(pktsRcvdBlock[i*8 : i*8+8])
+		V.PacketsSent = binary.BigEndian.Uint64(pktsSentBlock[i*8 : i*8+8])
 
-		data.SetOrUpdate(K, V.NBytesRcvd, V.NBytesSent, V.NPktsRcvd, V.NPktsSent)
+		data.SetOrUpdate(K, V.BytesRcvd, V.BytesSent, V.PacketsRcvd, V.PacketsSent)
 	}
 
 	return data, nil

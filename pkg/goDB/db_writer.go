@@ -175,14 +175,14 @@ func dbData(iface string, timestamp int64, aggFlowMap *hashmap.AggFlowMap) ([Col
 
 			// global counters
 			summUpdate.FlowCount++
-			summUpdate.Traffic += flow.NBytesRcvd
-			summUpdate.Traffic += flow.NBytesSent
+			summUpdate.Traffic += flow.BytesRcvd
+			summUpdate.Traffic += flow.BytesSent
 
 			// counters
-			bytesRcvd = append(bytesRcvd, flow.NBytesRcvd)
-			bytesSent = append(bytesSent, flow.NBytesSent)
-			pktsRcvd = append(pktsRcvd, flow.NPktsRcvd)
-			pktsSent = append(pktsSent, flow.NPktsSent)
+			bytesRcvd = append(bytesRcvd, flow.BytesRcvd)
+			bytesSent = append(bytesSent, flow.BytesSent)
+			pktsRcvd = append(pktsRcvd, flow.PacketsRcvd)
+			pktsSent = append(pktsSent, flow.PacketsSent)
 
 			// attributes
 			dbData[DportColIdx] = append(dbData[DportColIdx], flow.GetDport()...)

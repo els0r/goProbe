@@ -22,10 +22,10 @@ type GPFlow struct {
 	epHash EPHash
 
 	// Hash Map Value variables
-	nBytesRcvd      uint64
-	nBytesSent      uint64
-	nPktsRcvd       uint64
-	nPktsSent       uint64
+	bytesRcvd       uint64
+	bytesSent       uint64
+	packetsRcvd     uint64
+	packetsSent     uint64
 	pktDirectionSet bool
 	isIPv4          bool
 }
@@ -47,13 +47,13 @@ func (f *GPFlow) MarshalJSON() ([]byte, error) {
 			Hash EPHash `json:"hash"`
 
 			// Hash Map Value variables
-			NBytesRcvd uint64 `json:"bytesRcvd"`
-			NBytesSent uint64 `json:"bytesSent"`
-			NPktsRcvd  uint64 `json:"packetsRcvd"`
-			NPktsSent  uint64 `json:"packetsSent"`
+			BytesRcvd   uint64 `json:"bytesRcvd"`
+			BytesSent   uint64 `json:"bytesSent"`
+			PacketsRcvd uint64 `json:"packetsRcvd"`
+			PacketsSent uint64 `json:"packetsSent"`
 		}{
 			f.epHash,
-			f.nBytesRcvd, f.nBytesSent, f.nPktsRcvd, f.nPktsSent},
+			f.bytesRcvd, f.bytesSent, f.packetsRcvd, f.packetsSent},
 	)
 }
 
@@ -82,11 +82,11 @@ func NewGPFlow(packet *GPPacket) *GPFlow {
 
 	// set packet and byte counters with respect to its interface direction
 	if packet.dirInbound {
-		res.nBytesRcvd = uint64(packet.numBytes)
-		res.nPktsRcvd = 1
+		res.bytesRcvd = uint64(packet.numBytes)
+		res.packetsRcvd = 1
 	} else {
-		res.nBytesSent = uint64(packet.numBytes)
-		res.nPktsSent = 1
+		res.bytesSent = uint64(packet.numBytes)
+		res.packetsSent = 1
 	}
 
 	return &res
@@ -97,11 +97,11 @@ func (f *GPFlow) UpdateFlow(packet *GPPacket) {
 
 	// increment packet and byte counters with respect to its interface direction
 	if packet.dirInbound {
-		f.nBytesRcvd += uint64(packet.numBytes)
-		f.nPktsRcvd++
+		f.bytesRcvd += uint64(packet.numBytes)
+		f.packetsRcvd++
 	} else {
-		f.nBytesSent += uint64(packet.numBytes)
-		f.nPktsSent++
+		f.bytesSent += uint64(packet.numBytes)
+		f.packetsSent++
 	}
 
 	// try to update direction if necessary
@@ -130,10 +130,10 @@ func (f *GPFlow) IsWorthKeeping() bool {
 
 // Reset resets all flow counters
 func (f *GPFlow) Reset() {
-	f.nBytesRcvd = 0
-	f.nBytesSent = 0
-	f.nPktsRcvd = 0
-	f.nPktsSent = 0
+	f.bytesRcvd = 0
+	f.bytesSent = 0
+	f.packetsRcvd = 0
+	f.packetsSent = 0
 }
 
 func (f *GPFlow) hasIdentifiedDirection() bool {
@@ -145,5 +145,5 @@ func (f *GPFlow) hasIdentifiedDirection() bool {
 //
 //	New -> Update -> Reset -> Idle -> Delete
 func (f *GPFlow) HasBeenIdle() bool {
-	return (f.nPktsRcvd == 0) && (f.nPktsSent == 0)
+	return (f.packetsRcvd == 0) && (f.packetsSent == 0)
 }

@@ -197,18 +197,18 @@ func (l ModernFileSet) GetBlock(ts int64) (*hashmap.Map, error) {
 
 		// Unpack counters using bit packing if enabled, otherwise just copy them using fixed bit width
 		if useBitPacking {
-			V.NBytesRcvd = bitpack.Uint64At(bytesRcvdBlock, i, byteWidthBytesRcvd)
-			V.NBytesSent = bitpack.Uint64At(bytesSentBlock, i, byteWidthBytesSent)
-			V.NPktsRcvd = bitpack.Uint64At(pktsRcvdBlock, i, byteWidthPktsRcvd)
-			V.NPktsSent = bitpack.Uint64At(pktsSentBlock, i, byteWidthPktsSent)
+			V.BytesRcvd = bitpack.Uint64At(bytesRcvdBlock, i, byteWidthBytesRcvd)
+			V.BytesSent = bitpack.Uint64At(bytesSentBlock, i, byteWidthBytesSent)
+			V.PacketsRcvd = bitpack.Uint64At(pktsRcvdBlock, i, byteWidthPktsRcvd)
+			V.PacketsSent = bitpack.Uint64At(pktsSentBlock, i, byteWidthPktsSent)
 		} else {
-			V.NBytesRcvd = binary.BigEndian.Uint64(bytesRcvdBlock[i*8 : i*8+8])
-			V.NBytesSent = binary.BigEndian.Uint64(bytesSentBlock[i*8 : i*8+8])
-			V.NPktsRcvd = binary.BigEndian.Uint64(pktsRcvdBlock[i*8 : i*8+8])
-			V.NPktsSent = binary.BigEndian.Uint64(pktsSentBlock[i*8 : i*8+8])
+			V.BytesRcvd = binary.BigEndian.Uint64(bytesRcvdBlock[i*8 : i*8+8])
+			V.BytesSent = binary.BigEndian.Uint64(bytesSentBlock[i*8 : i*8+8])
+			V.PacketsRcvd = binary.BigEndian.Uint64(pktsRcvdBlock[i*8 : i*8+8])
+			V.PacketsSent = binary.BigEndian.Uint64(pktsSentBlock[i*8 : i*8+8])
 		}
 
-		data.SetOrUpdate(K, V.NBytesRcvd, V.NBytesSent, V.NPktsRcvd, V.NPktsSent)
+		data.SetOrUpdate(K, V.BytesRcvd, V.BytesSent, V.PacketsRcvd, V.PacketsSent)
 	}
 
 	return data, nil

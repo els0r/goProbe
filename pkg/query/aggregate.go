@@ -61,10 +61,10 @@ func aggregate(mapChan <-chan hashmap.AggFlowMapWithMetadata) chan aggregateResu
 				totals = totals.Add(val)
 
 				finalMap.SetOrUpdate(i.Key(),
-					val.NBytesRcvd,
-					val.NBytesSent,
-					val.NPktsRcvd,
-					val.NPktsSent,
+					val.BytesRcvd,
+					val.BytesSent,
+					val.PacketsRcvd,
+					val.PacketsSent,
 				)
 			}
 
