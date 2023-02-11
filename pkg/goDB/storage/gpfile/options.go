@@ -9,16 +9,15 @@ type Option func(*GPFile)
 func WithEncoder(e encoders.Type) Option {
 	return func(g *GPFile) {
 		g.defaultEncoderType = e
-		return
 	}
 }
 
-// WithHighCardinalityEncoder allows to set the compression implementation for
-// high cardinality columns. What constitutes high cardinality is determined
-// internally
-func WithHighCardinalityEncoder(e encoders.Type) Option {
+// WithReadAll triggers a full read of the underlying file from disk
+// upon first read access to minimize I/O load.
+// Seeking is handled by replacing the underlying file with a seekable
+// in-memory structure (c.f. readWriteSeekCloser interface)
+func WithReadAll(pool *MemPool) Option {
 	return func(g *GPFile) {
-		g.defaultHighEntropyEncoderType = e
-		return
+		g.memPool = pool
 	}
 }

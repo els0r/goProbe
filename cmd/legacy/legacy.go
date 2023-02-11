@@ -3,9 +3,12 @@ package main
 import (
 	"encoding/binary"
 	"fmt"
+	"net/netip"
 	"path/filepath"
 
-	"github.com/els0r/goProbe/pkg/goDB"
+	"github.com/els0r/goProbe/pkg/types"
+	"github.com/els0r/goProbe/pkg/types/hashmap"
+	"github.com/sirupsen/logrus"
 )
 
 type LegacyFileSet struct {
@@ -111,8 +114,8 @@ func (l LegacyFileSet) getBlock(f *LegacyGPFile, ts int64) ([]byte, error) {
 	return block, nil
 }
 
-func (l LegacyFileSet) GetBlock(ts int64) (goDB.AggFlowMap, error) {
-	data := make(goDB.AggFlowMap)
+func (l LegacyFileSet) GetBlock(ts int64) (*hashmap.Map, error) {
+	data := hashmap.New()
 
 	sipBlock, err := l.getBlock(l.sipFile, ts)
 	if err != nil {
@@ -155,31 +158,55 @@ func (l LegacyFileSet) GetBlock(ts int64) (goDB.AggFlowMap, error) {
 	}
 
 	for i := 0; i < len(protoBlock); i++ {
-
-		var K goDB.Key
-		var V goDB.Val
-
-		copy(K.Sip[:], sipBlock[i*16:i*16+16])
-		copy(K.Dip[:], dipBlock[i*16:i*16+16])
-		copy(K.Dport[:], dportBlock[i*2:i*2+2])
-		K.Protocol = protoBlock[i]
-
-		V.NBytesRcvd = binary.BigEndian.Uint64(bytesRcvdBlock[i*8 : i*8+8])
-		V.NBytesSent = binary.BigEndian.Uint64(bytesSentBlock[i*8 : i*8+8])
-		V.NPktsRcvd = binary.BigEndian.Uint64(pktsRcvdBlock[i*8 : i*8+8])
-		V.NPktsSent = binary.BigEndian.Uint64(pktsSentBlock[i*8 : i*8+8])
-
-		entry, exists := data[K]
-		if exists {
-			entry.NBytesRcvd += V.NBytesRcvd
-			entry.NBytesSent += V.NBytesSent
-			entry.NPktsRcvd += V.NPktsRcvd
-			entry.NPktsSent += V.NPktsSent
-			data[K] = entry
-		} else {
-			data[K] = &V
+		sip := rawIPToAddr(sipBlock[i*16 : i*16+16])
+		dip := rawIPToAddr(dipBlock[i*16 : i*16+16])
+		if sip.Is4() != dip.Is4() && !sip.IsUnspecified() {
+			logrus.StandardLogger().Warnf("source / destination IP v4 / v6 mismatch: %s / %s, will convert to IPv6\n", sip, dip)
 		}
+
+		var K types.Key
+		var V types.Counters
+
+		if sip.Is4() && dip.Is4() {
+			K = types.NewV4KeyStatic(sip.As4(), dip.As4(), dportBlock[i*2:i*2+2], protoBlock[i])
+		} else {
+			K = types.NewV6KeyStatic(sip.As16(), dip.As16(), dportBlock[i*2:i*2+2], protoBlock[i])
+		}
+
+		V.BytesRcvd = binary.BigEndian.Uint64(bytesRcvdBlock[i*8 : i*8+8])
+		V.BytesSent = binary.BigEndian.Uint64(bytesSentBlock[i*8 : i*8+8])
+		V.PacketsRcvd = binary.BigEndian.Uint64(pktsRcvdBlock[i*8 : i*8+8])
+		V.PacketsSent = binary.BigEndian.Uint64(pktsSentBlock[i*8 : i*8+8])
+
+		data.SetOrUpdate(K, V.BytesRcvd, V.BytesSent, V.PacketsRcvd, V.PacketsSent)
 	}
 
 	return data, nil
+}
+
+func rawIPToAddr(ip []byte) netip.Addr {
+	zeros := numZeros(ip)
+	ind := len(ip)
+	if zeros == 12 {
+		// only read first 4 bytes (IPv4)
+		ind = 4
+	}
+	netIP, ok := netip.AddrFromSlice(ip[:ind])
+	if !ok {
+		return netip.Addr{}
+	}
+	return netIP
+}
+
+func numZeros(ip []byte) uint8 {
+	var numZeros uint8
+
+	// count zeros in order to determine whether the address
+	// is IPv4 or IPv6
+	for i := 4; i < len(ip); i++ {
+		if (ip[i] & 0xFF) == 0x00 {
+			numZeros++
+		}
+	}
+	return numZeros
 }

@@ -13,6 +13,7 @@ import (
 	"github.com/els0r/goProbe/pkg/goDB"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 	"github.com/els0r/goProbe/pkg/goDB/storage/gpfile"
+	"github.com/els0r/goProbe/pkg/types/hashmap"
 	"github.com/sirupsen/logrus"
 )
 
@@ -26,8 +27,9 @@ type converter struct {
 	pipe  chan work
 }
 
+var logger = logrus.StandardLogger()
+
 func main() {
-	logger := logrus.StandardLogger()
 
 	var (
 		inPath, outPath string
@@ -97,12 +99,12 @@ func main() {
 type blockFlows struct {
 	ts    int64
 	iface string
-	data  goDB.AggFlowMap
+	data  *hashmap.Map
 }
 
 type fileSet interface {
 	GetTimestamps() ([]int64, error)
-	GetBlock(ts int64) (goDB.AggFlowMap, error)
+	GetBlock(ts int64) (*hashmap.Map, error)
 	Close() error
 }
 
@@ -163,7 +165,8 @@ func (c converter) convertDir(w work, dryRun bool) error {
 
 		flows, err := fs.GetBlock(ts)
 		if err != nil {
-			return fmt.Errorf("failed to get block from file set: %w", err)
+			logger.Errorf("failed to get block from file set: %s", err)
+			continue
 		}
 
 		allBlocks = append(allBlocks, blockFlows{

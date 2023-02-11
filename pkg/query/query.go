@@ -16,6 +16,7 @@ import (
 	"github.com/els0r/goProbe/pkg/query/dns"
 	"github.com/els0r/goProbe/pkg/results"
 	"github.com/els0r/goProbe/pkg/types"
+	"github.com/els0r/goProbe/pkg/types/hashmap"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -78,6 +79,7 @@ const (
 	errorNoResults internalError = iota + 1
 	errorMemoryBreach
 	errorInternalProcessing
+	errorMismatchingHosts
 )
 
 // Error implements the error interface for query processing errors
@@ -174,7 +176,7 @@ func (s *Statement) Execute(ctx context.Context) (result *results.Result, err er
 	defer cancelQuery()
 
 	// Channel for handling of returned maps
-	mapChan := make(chan map[goDB.ExtraKey]goDB.Val, 1024)
+	mapChan := make(chan hashmap.AggFlowMapWithMetadata, 1024)
 	aggregateChan := aggregate(mapChan)
 
 	go func() {
@@ -191,7 +193,7 @@ func (s *Statement) Execute(ctx context.Context) (result *results.Result, err er
 			agg := <-aggregateChan
 
 			// call the garbage collector
-			agg.aggregatedMap = nil
+			agg.aggregatedMap.Map = nil
 			runtime.GC()
 			debug.FreeOSMemory()
 
@@ -291,44 +293,41 @@ func (s *Statement) Execute(ctx context.Context) (result *results.Result, err er
 		}
 	}
 
-	var rs = make(results.Rows, len(agg.aggregatedMap))
+	var rs = make(results.Rows, agg.aggregatedMap.Len())
 	count := 0
 
-	for key, val := range agg.aggregatedMap {
+	for i := agg.aggregatedMap.Iter(); i.Next(); {
 
-		if key.Time != 0 {
-			ts := time.Unix(key.Time, 0)
-			rs[count].Labels.Timestamp = &ts
+		key := types.ExtendedKey(i.Key())
+		val := i.Val()
+
+		if ts, hasTS := key.AttrTime(); hasTS {
+			rs[count].Labels.Timestamp = time.Unix(ts, 0)
 		}
-		rs[count].Labels.Iface = key.Iface
-		rs[count].Labels.HostID = key.HostID
-		rs[count].Labels.Hostname = key.Hostname
+		rs[count].Labels.Iface, _ = key.AttrIface()
+		rs[count].Labels.HostID = agg.aggregatedMap.HostID
+		rs[count].Labels.Hostname = agg.aggregatedMap.Hostname
 		if sip != nil {
-			rs[count].Attributes.SrcIP = types.RawIPToAddr(key.Sip[:])
+			rs[count].Attributes.SrcIP = types.RawIPToAddr(key.Key().GetSip())
 		}
 		if dip != nil {
-			rs[count].Attributes.DstIP = types.RawIPToAddr(key.Dip[:])
+			rs[count].Attributes.DstIP = types.RawIPToAddr(key.Key().GetDip())
 		}
 		if proto != nil {
-			rs[count].Attributes.IPProto = key.Protocol
+			rs[count].Attributes.IPProto = key.Key().GetProto()
 		}
 		if dport != nil {
-			rs[count].Attributes.DstPort = types.PortToUint16(key.Dport)
+			rs[count].Attributes.DstPort = types.PortToUint16(key.Key().GetDport())
 		}
 
-		// assign counters
-		rs[count].Counters.BytesReceived = val.NBytesRcvd
-		rs[count].Counters.PacketsReceived = val.NPktsRcvd
-		rs[count].Counters.BytesSent = val.NBytesSent
-		rs[count].Counters.PacketsSent = val.NPktsSent
-
+		// assign / update counters
+		rs[count].Counters = rs[count].Counters.Add(val)
 		count++
 	}
 
 	// Now is a good time to release memory one last time for the final processing step
-	agg.aggregatedMap = nil
+	agg.aggregatedMap.Map = nil
 	runtime.GC()
-	debug.FreeOSMemory()
 
 	result.Summary.Totals = agg.totals
 

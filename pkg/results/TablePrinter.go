@@ -140,7 +140,7 @@ func tryLookup(ips2domains map[string]string, ip string) string {
 // The format argument is used to format the string appropriatly for the desired
 // output format. ips2domains is needed for reverse DNS lookups. totals is needed
 // for percentage calculations. e contains the actual data that is extracted.
-func extract(format Formatter, ips2domains map[string]string, totals Counters, row Row, col OutputColumn) string {
+func extract(format Formatter, ips2domains map[string]string, totals types.Counters, row Row, col OutputColumn) string {
 	nz := func(u uint64) uint64 {
 		if u == 0 {
 			u = (1 << 64) - 1
@@ -164,13 +164,13 @@ func extract(format Formatter, ips2domains map[string]string, totals Counters, r
 		return format.String(protocols.GetIPProto(int(row.Attributes.IPProto)))
 
 	case OutcolInBytes, OutcolBothBytesRcvd:
-		return format.Size(row.Counters.BytesReceived)
+		return format.Size(row.Counters.BytesRcvd)
 	case OutcolInBytesPercent:
-		return format.Float(float64(100*row.Counters.BytesReceived) / float64(nz(totals.BytesReceived)))
+		return format.Float(float64(100*row.Counters.BytesRcvd) / float64(nz(totals.BytesRcvd)))
 	case OutcolInPkts, OutcolBothPktsRcvd:
-		return format.Count(row.Counters.PacketsReceived)
+		return format.Count(row.Counters.PacketsRcvd)
 	case OutcolInPktsPercent:
-		return format.Float(float64(100*row.Counters.PacketsReceived) / float64(nz(totals.PacketsReceived)))
+		return format.Float(float64(100*row.Counters.PacketsRcvd) / float64(nz(totals.PacketsRcvd)))
 	case OutcolOutBytes, OutcolBothBytesSent:
 		return format.Size(row.Counters.BytesSent)
 	case OutcolOutBytesPercent:
@@ -180,7 +180,7 @@ func extract(format Formatter, ips2domains map[string]string, totals Counters, r
 	case OutcolOutPktsPercent:
 		return format.Float(float64(100*row.Counters.PacketsSent) / float64(nz(totals.PacketsSent)))
 	case OutcolSumBytes:
-		return format.Size(row.Counters.BytesReceived + row.Counters.BytesSent)
+		return format.Size(row.Counters.BytesRcvd + row.Counters.BytesSent)
 	case OutcolSumBytesPercent, OutcolBothBytesPercent:
 		return format.Float(float64(100*(row.Counters.SumBytes())) / float64(nz(totals.SumBytes())))
 	case OutcolSumPkts:
@@ -194,12 +194,12 @@ func extract(format Formatter, ips2domains map[string]string, totals Counters, r
 
 // extractTotal is similar to extract but extracts a total from totals rather
 // than an element of an Entry.
-func extractTotal(format Formatter, totals Counters, col OutputColumn) string {
+func extractTotal(format Formatter, totals types.Counters, col OutputColumn) string {
 	switch col {
 	case OutcolInBytes, OutcolBothBytesRcvd:
-		return format.Size(totals.BytesReceived)
+		return format.Size(totals.BytesRcvd)
 	case OutcolInPkts, OutcolBothPktsRcvd:
-		return format.Count(totals.PacketsReceived)
+		return format.Count(totals.PacketsRcvd)
 	case OutcolOutBytes, OutcolBothBytesSent:
 		return format.Size(totals.BytesSent)
 	case OutcolOutPkts, OutcolBothPktsSent:
@@ -270,7 +270,7 @@ type basePrinter struct {
 	ips2domains map[string]string
 
 	// needed for computing percentages
-	totals Counters
+	totals types.Counters
 
 	ifaces string
 
@@ -285,7 +285,7 @@ func newBasePrinter(
 	direction types.Direction,
 	attributes []types.Attribute,
 	ips2domains map[string]string,
-	totals Counters,
+	totals types.Counters,
 	ifaces string,
 ) basePrinter {
 	result := basePrinter{output, sort, hasAttrTime, hasAttrIface, direction, attributes, ips2domains, totals, ifaces,
@@ -301,7 +301,7 @@ func NewTablePrinter(output io.Writer, format string,
 	direction types.Direction,
 	attributes []types.Attribute,
 	ips2domains map[string]string,
-	totals Counters,
+	totals types.Counters,
 	numFlows int,
 	resolveTimeout time.Duration,
 	queryType string,

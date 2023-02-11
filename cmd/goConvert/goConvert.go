@@ -14,10 +14,12 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"os"
 	"os/exec"
 	"runtime"
 	"runtime/debug"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -28,6 +30,8 @@ import (
 
 	"github.com/els0r/goProbe/pkg/goDB"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
+	"github.com/els0r/goProbe/pkg/types"
+	"github.com/els0r/goProbe/pkg/types/hashmap"
 	log "github.com/els0r/log"
 
 	"flag"
@@ -52,13 +56,18 @@ const (
 type writeJob struct {
 	iface  string
 	tstamp int64
-	data   goDB.AggFlowMap
+	data   *hashmap.AggFlowMap
+}
+
+type keyIndParserItem struct {
+	ind    int
+	parser goDB.StringKeyParser
 }
 
 // CSVConverter can read CSV files containing goProbe flow information
 type CSVConverter struct {
 	// map field index to how it should be parsed
-	KeyParsers map[int]goDB.StringKeyParser
+	KeyParsers []keyIndParserItem
 	ValParsers map[int]goDB.StringValParser
 
 	// logging
@@ -79,7 +88,7 @@ func WithLogger(l log.Logger) Option {
 func NewCSVConverter(opts ...Option) *CSVConverter {
 
 	c := &CSVConverter{
-		KeyParsers: make(map[int]goDB.StringKeyParser),
+		KeyParsers: make([]keyIndParserItem, 0),
 		ValParsers: make(map[int]goDB.StringValParser),
 	}
 
@@ -115,10 +124,17 @@ func (c *CSVConverter) readSchema(schema string) error {
 				canParse = append(canParse, field)
 			}
 		} else {
-			c.KeyParsers[ind] = parser
+			c.KeyParsers = append(c.KeyParsers, keyIndParserItem{ind, parser})
 			canParse = append(canParse, field)
 		}
 	}
+
+	// Ensure that IP parsers are executed first (if present) to ensure correct parsing
+	sort.Slice(c.KeyParsers, func(i, j int) bool {
+		_, isSipParser := c.KeyParsers[i].parser.(*goDB.SipStringParser)
+		_, isDipParser := c.KeyParsers[i].parser.(*goDB.DipStringParser)
+		return isSipParser || isDipParser
+	})
 
 	// if only NOP parsers were created, it means that the
 	// schema is fully unreadable
@@ -135,7 +151,7 @@ func (c *CSVConverter) readSchema(schema string) error {
 
 func (c *CSVConverter) parsesIface() bool {
 	for _, p := range c.KeyParsers {
-		if _, ok := p.(*goDB.IfaceStringParser); ok {
+		if _, ok := p.parser.(*goDB.IfaceStringParser); ok {
 			return true
 		}
 	}
@@ -223,8 +239,9 @@ func main() {
 		// interface
 		//
 		// interface -> timestamp -> AggFlowMap
-		flowMaps   = make(map[string]map[int64]goDB.AggFlowMap)
-		rowKey     = goDB.ExtraKey{}
+		rowKeyV4   = types.NewEmptyV4Key().ExtendEmpty()
+		rowKeyV6   = types.NewEmptyV6Key().ExtendEmpty()
+		flowMaps   = make(map[string]map[int64]*hashmap.AggFlowMap)
 		rowSummary goDB.InterfaceSummaryUpdate
 	)
 
@@ -285,7 +302,15 @@ func main() {
 						os.Exit(1)
 					}
 
-					rowKey.Iface = config.Iface
+					p := &goDB.IfaceStringParser{}
+					if err := p.ParseKey(config.Iface, &rowKeyV4); err != nil {
+						fmt.Printf("Failed to parse interface from config: %s\n", err.Error())
+						os.Exit(1)
+					}
+					if err := p.ParseKey(config.Iface, &rowKeyV6); err != nil {
+						fmt.Printf("Failed to parse interface from config: %s\n", err.Error())
+						os.Exit(1)
+					}
 				}
 
 				linesRead++
@@ -341,16 +366,26 @@ func main() {
 		prevPerc = percDone
 
 		// fully parse the current line and load it into key and value objects
-		var rowVal = goDB.Val{}
+		rowKey := &rowKeyV4
+		rowVal := types.Counters{}
 		fields := strings.Split(scanner.Text(), ",")
 		if len(fields) < len(csvconv.KeyParsers)+len(csvconv.ValParsers) {
 			fmt.Printf("Skipping incomplete data row: %s\n", scanner.Text())
 			continue
 		}
-		for ind, parser := range csvconv.KeyParsers {
-			if err := parser.ParseKey(fields[ind], &rowKey); err != nil {
-				fmt.Println(err)
+		for _, parser := range csvconv.KeyParsers {
+			if err := parser.parser.ParseKey(fields[parser.ind], rowKey); err != nil {
+				if errors.Is(err, goDB.ErrIPVersionMismatch) {
+					rowKey = &rowKeyV6
+					if err := parser.parser.ParseKey(fields[parser.ind], rowKey); err != nil {
+						fmt.Println(err)
+					}
+					continue
+				} else {
+					fmt.Println(err)
+				}
 			}
+			rowKey = &rowKeyV4
 		}
 		for ind, parser := range csvconv.ValParsers {
 			if err := parser.ParseVal(fields[ind], &rowVal); err != nil {
@@ -360,26 +395,23 @@ func main() {
 
 		// check if a new submap has to be created (e.g. if there's new data
 		// from another interface
-		if _, exists := flowMaps[rowKey.Iface]; !exists {
-			flowMaps[rowKey.Iface] = make(map[int64]goDB.AggFlowMap)
+		iface, _ := rowKey.AttrIface()
+		ts, _ := rowKey.AttrTime()
+		if _, exists := flowMaps[iface]; !exists {
+			flowMaps[iface] = make(map[int64]*hashmap.AggFlowMap)
 		}
-		if _, exists := flowMaps[rowKey.Iface][rowKey.Time]; !exists {
-			flowMaps[rowKey.Iface][rowKey.Time] = make(goDB.AggFlowMap)
+		if _, exists := flowMaps[iface][ts]; !exists {
+			flowMaps[iface][ts] = hashmap.New()
 		}
 
 		// insert the key-value pair into the correct flow map
-		flowMaps[rowKey.Iface][rowKey.Time][goDB.Key{
-			Sip:      rowKey.Sip,
-			Dip:      rowKey.Dip,
-			Dport:    rowKey.Dport,
-			Protocol: rowKey.Protocol,
-		}] = &rowVal
+		flowMaps[iface][ts].Set(rowKey.Key(), rowVal)
 
 		// fill the summary update for this flow record and update the summary
-		rowSummary.Interface = rowKey.Iface
+		rowSummary.Interface = iface
 		rowSummary.FlowCount = 1
-		rowSummary.Traffic = rowVal.NBytesRcvd + rowVal.NBytesSent
-		rowSummary.Timestamp = time.Unix(rowKey.Time, 0)
+		rowSummary.Traffic = rowVal.SumBytes()
+		rowSummary.Timestamp = time.Unix(ts, 0)
 
 		summary.Update(rowSummary)
 
@@ -420,7 +452,7 @@ func main() {
 	os.Exit(0)
 }
 
-func incompleteFlowMap(m map[int64]goDB.AggFlowMap) int64 {
+func incompleteFlowMap(m map[int64]*hashmap.AggFlowMap) int64 {
 	var recent int64
 	for k := range m {
 		if k > recent {

@@ -11,6 +11,7 @@
 package goDB
 
 import (
+	"encoding/binary"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -20,6 +21,7 @@ import (
 	"github.com/els0r/goProbe/pkg/goDB/encoder/bitpack"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 	"github.com/els0r/goProbe/pkg/goDB/storage/gpfile"
+	"github.com/els0r/goProbe/pkg/types/hashmap"
 )
 
 const (
@@ -109,7 +111,7 @@ func (w *DBWriter) createQueryLog() error {
 }
 
 // Write takes an aggregated flow map and its metadata and writes it to disk for a given timestamp
-func (w *DBWriter) Write(flowmap AggFlowMap, meta BlockMetadata, timestamp int64) (InterfaceSummaryUpdate, error) {
+func (w *DBWriter) Write(flowmap *hashmap.AggFlowMap, meta BlockMetadata, timestamp int64) (InterfaceSummaryUpdate, error) {
 	var (
 		dbdata [ColIdxCount][]byte
 		update InterfaceSummaryUpdate
@@ -146,38 +148,48 @@ func (w *DBWriter) Write(flowmap AggFlowMap, meta BlockMetadata, timestamp int64
 	return update, err
 }
 
-func dbData(iface string, timestamp int64, aggFlowMap AggFlowMap) ([ColIdxCount][]byte, InterfaceSummaryUpdate) {
+func dbData(iface string, timestamp int64, aggFlowMap *hashmap.AggFlowMap) ([ColIdxCount][]byte, InterfaceSummaryUpdate) {
 	var dbData [ColIdxCount][]byte
 	summUpdate := new(InterfaceSummaryUpdate)
 
-	list := aggFlowMap.Flatten().Sort()
+	v4List, v6List := aggFlowMap.Flatten()
+	v4List = v4List.Sort()
+	v6List = v6List.Sort()
 	for i := columnIndex(0); i < ColIdxAttributeCount; i++ {
-		dbData[i] = make([]byte, 0, columnSizeofs[i]*len(list))
+		columnSizeof := columnSizeofs[i]
+		if columnSizeof == ipSizeOf {
+			dbData[i] = make([]byte, 0, 4*len(v4List)+16*len(v6List))
+		} else {
+			dbData[i] = make([]byte, 0, columnSizeofs[i]*(len(v4List)+len(v6List)))
+		}
 	}
 
 	summUpdate.Timestamp = time.Unix(timestamp, 0)
 	summUpdate.Interface = iface
 
-	// loop through the flow map to extract the relevant
+	// loop through the v4 & v6 flow maps to extract the relevant
 	// values into database blocks.
 	var bytesRcvd, bytesSent, pktsRcvd, pktsSent []uint64
-	for _, flow := range list {
+	for _, list := range []hashmap.List{v4List, v6List} {
+		for _, flow := range list {
 
-		summUpdate.FlowCount++
-		summUpdate.Traffic += flow.NBytesRcvd
-		summUpdate.Traffic += flow.NBytesSent
+			// global counters
+			summUpdate.FlowCount++
+			summUpdate.Traffic += flow.BytesRcvd
+			summUpdate.Traffic += flow.BytesSent
 
-		// counters
-		bytesRcvd = append(bytesRcvd, flow.NBytesRcvd)
-		bytesSent = append(bytesSent, flow.NBytesSent)
-		pktsRcvd = append(pktsRcvd, flow.NPktsRcvd)
-		pktsSent = append(pktsSent, flow.NPktsSent)
+			// counters
+			bytesRcvd = append(bytesRcvd, flow.BytesRcvd)
+			bytesSent = append(bytesSent, flow.BytesSent)
+			pktsRcvd = append(pktsRcvd, flow.PacketsRcvd)
+			pktsSent = append(pktsSent, flow.PacketsSent)
 
-		// attributes
-		dbData[DipColIdx] = append(dbData[DipColIdx], flow.Dip[:]...)
-		dbData[SipColIdx] = append(dbData[SipColIdx], flow.Sip[:]...)
-		dbData[DportColIdx] = append(dbData[DportColIdx], flow.Dport[:]...)
-		dbData[ProtoColIdx] = append(dbData[ProtoColIdx], flow.Protocol)
+			// attributes
+			dbData[DportColIdx] = append(dbData[DportColIdx], flow.GetDport()...)
+			dbData[ProtoColIdx] = append(dbData[ProtoColIdx], flow.GetProto())
+			dbData[SipColIdx] = append(dbData[SipColIdx], flow.GetSip()...)
+			dbData[DipColIdx] = append(dbData[DipColIdx], flow.GetDip()...)
+		}
 	}
 
 	// Perform bit packing on the counter columns
@@ -185,6 +197,11 @@ func dbData(iface string, timestamp int64, aggFlowMap AggFlowMap) ([ColIdxCount]
 	dbData[BytesSentColIdx] = bitpack.Pack(bytesSent)
 	dbData[PacketsRcvdColIdx] = bitpack.Pack(pktsRcvd)
 	dbData[PacketsSentColIdx] = bitpack.Pack(pktsSent)
+
+	// TODO: Quick-shot, this information should be stored in the metadata for this directory instead !!!
+	v4Len := make([]byte, 8)
+	binary.BigEndian.PutUint64(v4Len, uint64(len(v4List)))
+	dbData[BytesRcvdColIdx] = append(v4Len, dbData[BytesRcvdColIdx]...)
 
 	return dbData, *summUpdate
 }

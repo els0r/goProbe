@@ -64,7 +64,7 @@ func TestCompressionDecompression(t *testing.T) {
 			}
 
 			buf := bytes.NewBuffer(nil)
-			nCompressed, err := enc.Compress(encodingCorpus, buf)
+			nCompressed, err := enc.Compress(encodingCorpus, nil, buf)
 			if err != nil {
 				t.Fatalf("Failed to compress data for encoder of type %s: %s", encType, err)
 			}
@@ -105,7 +105,7 @@ func BenchmarkEncodersCompress(b *testing.B) {
 			buf := bytes.NewBuffer(nil)
 
 			for i := 0; i < b.N; i++ {
-				enc.Compress(encodingCorpus, buf)
+				enc.Compress(encodingCorpus, nil, buf)
 			}
 
 			_ = buf
@@ -123,7 +123,7 @@ func BenchmarkEncodersDecompress(b *testing.B) {
 				b.Fatalf("Failed to instantiate encoder of type %s: %s", encType, err)
 			}
 			buf := bytes.NewBuffer(nil)
-			nWritten, err := enc.Compress(encodingCorpus, buf)
+			nWritten, err := enc.Compress(encodingCorpus, nil, buf)
 			if err != nil {
 				b.Fatalf("Failed to encode test data for encoder type %s: %s", encType, err)
 			}
@@ -158,7 +158,7 @@ func BenchmarkLZ4LevelsCompress(b *testing.B) {
 			buf := bytes.NewBuffer(nil)
 
 			for i := 0; i < b.N; i++ {
-				enc.Compress(encodingCorpus, buf)
+				enc.Compress(encodingCorpus, nil, buf)
 			}
 
 			_ = buf

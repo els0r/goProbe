@@ -18,7 +18,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/els0r/goProbe/pkg/goDB"
+	"github.com/els0r/goProbe/pkg/types/hashmap"
 	"github.com/els0r/log"
 	"github.com/google/gopacket/pcap"
 )
@@ -207,7 +207,7 @@ func (cmd captureCommandUpdate) execute(c *Capture) {
 // helper struct to bundle up the multiple return values
 // of Rotate
 type rotateResult struct {
-	agg   goDB.AggFlowMap
+	agg   *hashmap.Map
 	stats Stats
 }
 
@@ -750,7 +750,7 @@ func (c *Capture) Disable() {
 //
 // Note: stats.Pcap may be null if there was an error fetching the
 // stats of the underlying pcap handle.
-func (c *Capture) Rotate() (agg goDB.AggFlowMap, stats Stats) {
+func (c *Capture) Rotate() (agg *hashmap.AggFlowMap, stats Stats) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 

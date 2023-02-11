@@ -19,6 +19,8 @@ import "github.com/els0r/goProbe/pkg/types"
 
 type columnIndex int
 
+const ipSizeOf = -1
+
 // Indices for all column types
 const (
 	// First the attribute columns...
@@ -37,8 +39,8 @@ const (
 
 // Sizeof (entry) for all column types
 const (
-	SipSizeof   int = 16
-	DipSizeof   int = 16
+	SipSizeof   int = ipSizeOf
+	DipSizeof   int = ipSizeOf
 	ProtoSizeof int = 1
 	DportSizeof int = 2
 )
@@ -64,7 +66,11 @@ type Query struct {
 	Attributes  []types.Attribute
 	Conditional Node
 
-	hasAttrTime, hasAttrIface bool
+	// Explicity attribute flags that allow granular processing logic
+	// without having to rely on array loops
+	hasAttrTime, hasAttrIface                          bool
+	hasAttrSip, hasAttrDip, hasAttrDport, hasAttrProto bool
+	hasCondSip, hasCondDip, hasCondDport, hasCondProto bool
 
 	// Each of the following slices represents a set in the sense that each column index can occur at most once in each slice.
 	// They are populated during the call to NewQuery
@@ -80,6 +86,9 @@ type Query struct {
 	// {BytesSentColIdx, PacketsRcvdColIdx, PacketsSentColIdx, ColIdxCount}.
 	// The latter four elements are needed for every query since they contain the variables we aggregate.
 	columnIndices []columnIndex
+
+	// Enables memory-saving mode
+	lowMem bool
 }
 
 // Computes a columnIndex from a column name. In principle we could merge
@@ -114,6 +123,20 @@ func conditionalAttributeNameToColumnIndex(name string) (colIdx columnIndex) {
 	return
 }
 
+var queryAttributeColumnFlagSetters = [ColIdxAttributeCount]func(q *Query){
+	func(q *Query) { q.hasAttrSip = true },
+	func(q *Query) { q.hasAttrDip = true },
+	func(q *Query) { q.hasAttrProto = true },
+	func(q *Query) { q.hasAttrDport = true },
+}
+
+var queryConditionalColumnFlagSetters = [ColIdxAttributeCount]func(q *Query){
+	func(q *Query) { q.hasCondSip = true },
+	func(q *Query) { q.hasCondDip = true },
+	func(q *Query) { q.hasCondProto = true },
+	func(q *Query) { q.hasCondDport = true },
+}
+
 // NewQuery creates a new Query object based on the parsed command line parameters
 func NewQuery(attributes []types.Attribute, conditional Node, hasAttrTime, hasAttrIface bool) *Query {
 	q := &Query{
@@ -130,6 +153,7 @@ func NewQuery(attributes []types.Attribute, conditional Node, hasAttrTime, hasAt
 		colIdx := queryAttributeNameToColumnIndex(attrib.Name())
 		q.queryAttributeIndices = append(q.queryAttributeIndices, colIdx)
 		isAttributeIndex[colIdx] = true
+		queryAttributeColumnFlagSetters[colIdx](q)
 	}
 
 	if q.Conditional != nil {
@@ -137,6 +161,7 @@ func NewQuery(attributes []types.Attribute, conditional Node, hasAttrTime, hasAt
 			colIdx := conditionalAttributeNameToColumnIndex(attribName)
 			q.conditionalAttributeIndices = append(q.conditionalAttributeIndices, colIdx)
 			isAttributeIndex[colIdx] = true
+			queryConditionalColumnFlagSetters[colIdx](q)
 		}
 	}
 	for colIdx := columnIndex(0); colIdx < ColIdxAttributeCount; colIdx++ {
@@ -147,6 +172,12 @@ func NewQuery(attributes []types.Attribute, conditional Node, hasAttrTime, hasAt
 	q.columnIndices = append(q.columnIndices,
 		BytesRcvdColIdx, BytesSentColIdx, PacketsRcvdColIdx, PacketsSentColIdx)
 
+	return q
+}
+
+// LowMem enables memory-saving mode
+func (q *Query) LowMem(enable bool) *Query {
+	q.lowMem = enable
 	return q
 }
 

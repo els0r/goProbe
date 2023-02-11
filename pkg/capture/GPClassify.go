@@ -59,12 +59,14 @@ func IsSpecialPort(port uint16) bool {
 //   - dissecting ICMP traffic
 //
 // Return value: according to above enumeration
-//    0: if no classification possible
-//    1: if packet direction is "request"
-//    2: if packet direction is "response"
+//
+//	0: if no classification possible
+//	1: if packet direction is "request"
+//	2: if packet direction is "response"
 func ClassifyPacketDirection(packet *GPPacket) uint8 {
-	sport := uint16(packet.sport[0])<<8 | uint16(packet.sport[1])
-	dport := uint16(packet.dport[0])<<8 | uint16(packet.dport[1])
+
+	sport := uint16(packet.epHash[34])<<8 | uint16(packet.epHash[35])
+	dport := uint16(packet.epHash[32])<<8 | uint16(packet.epHash[33])
 
 	// first, check the TCP flags availability
 	TCPflags := packet.tcpFlags
@@ -83,17 +85,17 @@ func ClassifyPacketDirection(packet *GPPacket) uint8 {
 	}
 
 	// handle multicast addresses
-	if (packet.dip[0] == 224 && packet.dip[1] == 0) && (packet.dip[2] == 0 || packet.dip[2] == 1) {
+	if (packet.epHash[16] == 224 && packet.epHash[17] == 0) && (packet.epHash[18] == 0 || packet.epHash[18] == 1) {
 		return DirectionRemains
 	}
 
 	// handle broadcast address
-	if packet.dip[0] == 255 && packet.dip[1] == 255 && packet.dip[2] == 255 && packet.dip[3] == 255 {
+	if packet.epHash[16] == 255 && packet.epHash[17] == 255 && packet.epHash[18] == 255 && packet.epHash[19] == 255 {
 		return DirectionRemains
 	}
 
 	// handle TCP and UDP
-	if packet.protocol == 6 || packet.protocol == 17 {
+	if packet.epHash[36] == 6 || packet.epHash[36] == 17 {
 		// non-TCP-handshake packet encountered, but port information available
 
 		// check for DHCP messages

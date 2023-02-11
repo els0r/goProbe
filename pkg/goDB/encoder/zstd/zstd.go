@@ -42,9 +42,9 @@ func (e *Encoder) Type() encoders.Type {
 }
 
 // Compress compresses the input data and writes it to dst
-func (e *Encoder) Compress(data []byte, dst io.Writer) (n int, err error) {
+func (e *Encoder) Compress(data, buf []byte, dst io.Writer) (n int, err error) {
 
-	compData := gozstd.CompressLevel(nil, data, e.level)
+	compData := gozstd.CompressLevel(buf, data, e.level)
 
 	if n, err = dst.Write(compData); err != nil {
 		return n, err

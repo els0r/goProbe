@@ -35,7 +35,7 @@ type BlockAtTime struct {
 
 // OrderedList returns an ordered list of timestamps / blocks
 func (b BlockHeader) OrderedList() []BlockAtTime {
-	result := []BlockAtTime{}
+	result := make([]BlockAtTime, 0, len(b.Blocks))
 
 	for k, v := range b.Blocks {
 		result = append(result, BlockAtTime{

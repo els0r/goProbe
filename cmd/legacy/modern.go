@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/els0r/goProbe/pkg/goDB"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/bitpack"
 	"github.com/els0r/goProbe/pkg/goDB/storage/gpfile"
+	"github.com/els0r/goProbe/pkg/types"
+	"github.com/els0r/goProbe/pkg/types/hashmap"
+	"github.com/sirupsen/logrus"
 )
 
 type ModernFileSet struct {
@@ -120,8 +122,8 @@ func (l ModernFileSet) getBlock(f *gpfile.GPFile, ts int64) ([]byte, error) {
 	return block, nil
 }
 
-func (l ModernFileSet) GetBlock(ts int64) (goDB.AggFlowMap, error) {
-	data := make(goDB.AggFlowMap)
+func (l ModernFileSet) GetBlock(ts int64) (*hashmap.Map, error) {
+	data := hashmap.New()
 
 	sipBlock, err := l.getBlock(l.sipFile, ts)
 	if err != nil {
@@ -178,37 +180,35 @@ func (l ModernFileSet) GetBlock(ts int64) (goDB.AggFlowMap, error) {
 
 	for i := 0; i < len(protoBlock); i++ {
 
-		var K goDB.Key
-		var V goDB.Val
+		sip := rawIPToAddr(sipBlock[i*16 : i*16+16])
+		dip := rawIPToAddr(dipBlock[i*16 : i*16+16])
+		if sip.Is4() != dip.Is4() && !sip.IsUnspecified() {
+			logrus.StandardLogger().Warnf("source / destination IP v4 / v6 mismatch: %s / %s, will convert to IPv6\n", sip, dip)
+		}
 
-		copy(K.Sip[:], sipBlock[i*16:i*16+16])
-		copy(K.Dip[:], dipBlock[i*16:i*16+16])
-		copy(K.Dport[:], dportBlock[i*2:i*2+2])
-		K.Protocol = protoBlock[i]
+		var K types.Key
+		var V types.Counters
+
+		if sip.Is4() && dip.Is4() {
+			K = types.NewV4KeyStatic(sip.As4(), dip.As4(), dportBlock[i*2:i*2+2], protoBlock[i])
+		} else {
+			K = types.NewV6KeyStatic(sip.As16(), dip.As16(), dportBlock[i*2:i*2+2], protoBlock[i])
+		}
 
 		// Unpack counters using bit packing if enabled, otherwise just copy them using fixed bit width
 		if useBitPacking {
-			V.NBytesRcvd = bitpack.Uint64At(bytesRcvdBlock, i, byteWidthBytesRcvd)
-			V.NBytesSent = bitpack.Uint64At(bytesSentBlock, i, byteWidthBytesSent)
-			V.NPktsRcvd = bitpack.Uint64At(pktsRcvdBlock, i, byteWidthPktsRcvd)
-			V.NPktsSent = bitpack.Uint64At(pktsSentBlock, i, byteWidthPktsSent)
+			V.BytesRcvd = bitpack.Uint64At(bytesRcvdBlock, i, byteWidthBytesRcvd)
+			V.BytesSent = bitpack.Uint64At(bytesSentBlock, i, byteWidthBytesSent)
+			V.PacketsRcvd = bitpack.Uint64At(pktsRcvdBlock, i, byteWidthPktsRcvd)
+			V.PacketsSent = bitpack.Uint64At(pktsSentBlock, i, byteWidthPktsSent)
 		} else {
-			V.NBytesRcvd = binary.BigEndian.Uint64(bytesRcvdBlock[i*8 : i*8+8])
-			V.NBytesSent = binary.BigEndian.Uint64(bytesSentBlock[i*8 : i*8+8])
-			V.NPktsRcvd = binary.BigEndian.Uint64(pktsRcvdBlock[i*8 : i*8+8])
-			V.NPktsSent = binary.BigEndian.Uint64(pktsSentBlock[i*8 : i*8+8])
+			V.BytesRcvd = binary.BigEndian.Uint64(bytesRcvdBlock[i*8 : i*8+8])
+			V.BytesSent = binary.BigEndian.Uint64(bytesSentBlock[i*8 : i*8+8])
+			V.PacketsRcvd = binary.BigEndian.Uint64(pktsRcvdBlock[i*8 : i*8+8])
+			V.PacketsSent = binary.BigEndian.Uint64(pktsSentBlock[i*8 : i*8+8])
 		}
 
-		entry, exists := data[K]
-		if exists {
-			entry.NBytesRcvd += V.NBytesRcvd
-			entry.NBytesSent += V.NBytesSent
-			entry.NPktsRcvd += V.NPktsRcvd
-			entry.NPktsSent += V.NPktsSent
-			data[K] = entry
-		} else {
-			data[K] = &V
-		}
+		data.SetOrUpdate(K, V.BytesRcvd, V.BytesSent, V.PacketsRcvd, V.PacketsSent)
 	}
 
 	return data, nil

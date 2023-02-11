@@ -22,7 +22,7 @@ func (e *Encoder) Type() encoders.Type {
 }
 
 // Compress directly writes "data" to "dst" without any further manipulation
-func (e *Encoder) Compress(data []byte, dst io.Writer) (n int, err error) {
+func (e *Encoder) Compress(data, buf []byte, dst io.Writer) (n int, err error) {
 	return dst.Write(data)
 }
 
@@ -34,7 +34,7 @@ func (e *Encoder) Decompress(_, out []byte, src io.Reader) (n int, err error) {
 		return 0, err
 	}
 	if n != len(out) {
-		return 0, errors.New("Incorrect number of bytes read from data source")
+		return 0, errors.New("incorrect number of bytes read from data source")
 	}
 
 	return n, nil

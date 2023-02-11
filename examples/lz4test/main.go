@@ -90,7 +90,7 @@ Made weak by time and fate, but strong in will
 To strive, to seek, to find, and not to yield.
 	`)
 
-	n, err := lz4enc.Compress(data, dst)
+	n, err := lz4enc.Compress(data, nil, dst)
 	if err != nil {
 		log.Fatalf("failed to compress: %v", err)
 	}

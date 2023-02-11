@@ -13,50 +13,47 @@
 package capture
 
 import (
-	"github.com/els0r/goProbe/pkg/goDB/protocols"
 	"github.com/els0r/goProbe/pkg/types"
 	jsoniter "github.com/json-iterator/go"
 )
 
 // GPFlow stores a goProbe flow
 type GPFlow struct {
-	// Hash Map Key variables
-	sip      [16]byte
-	dip      [16]byte
-	sport    [2]byte
-	dport    [2]byte
-	protocol byte
+	epHash EPHash
 
 	// Hash Map Value variables
-	nBytesRcvd      uint64
-	nBytesSent      uint64
-	nPktsRcvd       uint64
-	nPktsSent       uint64
+	bytesRcvd       uint64
+	bytesSent       uint64
+	packetsRcvd     uint64
+	packetsSent     uint64
 	pktDirectionSet bool
+	isIPv4          bool
+}
+
+// Key returns a goDB compliant key from the current flow
+func (f *GPFlow) Key() (key types.Key) {
+	if f.isIPv4 {
+		key = types.NewV4Key(f.epHash[0:4], f.epHash[16:20], f.epHash[32:34], f.epHash[36])
+	} else {
+		key = types.NewV6Key(f.epHash[0:16], f.epHash[16:32], f.epHash[32:34], f.epHash[36])
+	}
+	return
 }
 
 // MarshalJSON implements the Marshaler interface for a flow
 func (f *GPFlow) MarshalJSON() ([]byte, error) {
 	return jsoniter.Marshal(
 		struct {
-			Sip      string `json:"sip"`
-			Dip      string `json:"dip"`
-			Sport    uint16 `json:"sport"`
-			Dport    uint16 `json:"dport"`
-			Protocol string `json:"ip_protocol"`
+			Hash EPHash `json:"hash"`
 
 			// Hash Map Value variables
-			NBytesRcvd uint64 `json:"bytesRcvd"`
-			NBytesSent uint64 `json:"bytesSent"`
-			NPktsRcvd  uint64 `json:"packetsRcvd"`
-			NPktsSent  uint64 `json:"packetsSent"`
+			BytesRcvd   uint64 `json:"bytesRcvd"`
+			BytesSent   uint64 `json:"bytesSent"`
+			PacketsRcvd uint64 `json:"packetsRcvd"`
+			PacketsSent uint64 `json:"packetsSent"`
 		}{
-			types.RawIPToString(f.sip[:]),
-			types.RawIPToString(f.dip[:]),
-			types.PortToUint16(f.sport),
-			types.PortToUint16(f.dport),
-			protocols.GetIPProto(int(f.protocol)),
-			f.nBytesRcvd, f.nBytesSent, f.nPktsRcvd, f.nPktsSent},
+			f.epHash,
+			f.bytesRcvd, f.bytesSent, f.packetsRcvd, f.packetsSent},
 	)
 }
 
@@ -68,8 +65,7 @@ func updateDirection(packet *GPPacket) bool {
 		// switch fields if direction was opposite to the default direction
 		// "DirectionRemains"
 		if direction == DirectionReverts {
-			packet.sip, packet.dip = packet.dip, packet.sip
-			packet.sport, packet.dport = packet.dport, packet.sport
+			packet.epHash, packet.epHashReverse = packet.epHashReverse, packet.epHash
 		}
 	}
 
@@ -78,23 +74,22 @@ func updateDirection(packet *GPPacket) bool {
 
 // NewGPFlow creates a new flow based on the packet
 func NewGPFlow(packet *GPPacket) *GPFlow {
-	var (
-		bytesSent, bytesRcvd, pktsSent, pktsRcvd uint64
-	)
+	res := GPFlow{
+		epHash:          packet.epHash,
+		pktDirectionSet: updateDirection(packet), // try to get the packet direction
+		isIPv4:          packet.isIPv4,
+	}
 
 	// set packet and byte counters with respect to its interface direction
 	if packet.dirInbound {
-		bytesRcvd = uint64(packet.numBytes)
-		pktsRcvd = 1
+		res.bytesRcvd = uint64(packet.numBytes)
+		res.packetsRcvd = 1
 	} else {
-		bytesSent = uint64(packet.numBytes)
-		pktsSent = 1
+		res.bytesSent = uint64(packet.numBytes)
+		res.packetsSent = 1
 	}
 
-	// try to get the packet direction
-	directionSet := updateDirection(packet)
-
-	return &GPFlow{packet.sip, packet.dip, packet.sport, packet.dport, packet.protocol, bytesRcvd, bytesSent, pktsRcvd, pktsSent, directionSet}
+	return &res
 }
 
 // UpdateFlow increments flow counters if the packet belongs to an existing flow
@@ -102,11 +97,11 @@ func (f *GPFlow) UpdateFlow(packet *GPPacket) {
 
 	// increment packet and byte counters with respect to its interface direction
 	if packet.dirInbound {
-		f.nBytesRcvd += uint64(packet.numBytes)
-		f.nPktsRcvd++
+		f.bytesRcvd += uint64(packet.numBytes)
+		f.packetsRcvd++
 	} else {
-		f.nBytesSent += uint64(packet.numBytes)
-		f.nPktsSent++
+		f.bytesSent += uint64(packet.numBytes)
+		f.packetsSent++
 	}
 
 	// try to update direction if necessary
@@ -135,10 +130,10 @@ func (f *GPFlow) IsWorthKeeping() bool {
 
 // Reset resets all flow counters
 func (f *GPFlow) Reset() {
-	f.nBytesRcvd = 0
-	f.nBytesSent = 0
-	f.nPktsRcvd = 0
-	f.nPktsSent = 0
+	f.bytesRcvd = 0
+	f.bytesSent = 0
+	f.packetsRcvd = 0
+	f.packetsSent = 0
 }
 
 func (f *GPFlow) hasIdentifiedDirection() bool {
@@ -150,5 +145,5 @@ func (f *GPFlow) hasIdentifiedDirection() bool {
 //
 //	New -> Update -> Reset -> Idle -> Delete
 func (f *GPFlow) HasBeenIdle() bool {
-	return (f.nPktsRcvd == 0) && (f.nPktsSent == 0)
+	return (f.packetsRcvd == 0) && (f.packetsSent == 0)
 }

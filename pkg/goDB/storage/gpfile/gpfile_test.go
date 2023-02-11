@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -36,7 +35,7 @@ func TestFailedRead(t *testing.T) {
 
 func TestInvalidRead(t *testing.T) {
 
-	if err := ioutil.WriteFile(invalidFilePath, []byte{0, 1, 2, 3}, 0644); err != nil {
+	if err := os.WriteFile(invalidFilePath, []byte{0, 1, 2, 3}, 0600); err != nil {
 		t.Fatalf("Failed to write invalid file %s: %s", invalidFilePath, err)
 	}
 	defer os.Remove(invalidFilePath)
@@ -131,7 +130,7 @@ func testRoundtrip(t *testing.T, enc encoders.Type) {
 
 	// Read in random order
 	for ts, block := range blocks.Blocks {
-		if block.Len > 0 && block.EncoderType != enc {
+		if block.Len > 0 && block.EncoderType != enc && block.EncoderType != encoders.EncoderTypeNull {
 			t.Fatalf("Unexpected encoder at block %d: %v (want %v)", ts, block.EncoderType, enc)
 		}
 
@@ -155,7 +154,7 @@ func testRoundtrip(t *testing.T, enc encoders.Type) {
 		if block.Timestamp != int64(i) {
 			t.Fatalf("Unexpected timestamp at block %d: %d", i, block.Timestamp)
 		}
-		if block.Len > 0 && block.EncoderType != enc {
+		if block.Len > 0 && block.EncoderType != enc && block.EncoderType != encoders.EncoderTypeNull {
 			t.Fatalf("Unexpected encoder at block %d: %v", i, gpf.defaultEncoderType)
 		}
 
@@ -185,7 +184,7 @@ func testRoundtrip(t *testing.T, enc encoders.Type) {
 func (g *GPFile) validateBlocks(nExpected int) error {
 	blocks, err := g.Blocks()
 	if err != nil {
-		return fmt.Errorf("Failed to get blocks: %s", err)
+		return fmt.Errorf("Failed to get blocks: %w", err)
 	}
 	if len(blocks.Blocks) != nExpected {
 		return fmt.Errorf("Unexpected number of blocks, want %d, have %d", nExpected, len(blocks.Blocks))

@@ -17,9 +17,9 @@ import (
 	"fmt"
 	"text/tabwriter"
 
-	"github.com/els0r/goProbe/pkg/goDB"
 	"github.com/els0r/goProbe/pkg/goDB/protocols"
 	"github.com/els0r/goProbe/pkg/types"
+	"github.com/els0r/goProbe/pkg/types/hashmap"
 	"github.com/els0r/log"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -33,14 +33,13 @@ const (
 
 // FlowLog stores flows. It is NOT threadsafe.
 type FlowLog struct {
-	// TODO(lob): Consider making this map[EPHash]GPFlow to reduce GC load
-	flowMap map[EPHash]*GPFlow
+	flowMap map[string]*GPFlow
 	logger  log.Logger
 }
 
 // NewFlowLog creates a new flow log for storing flows.
 func NewFlowLog(logger log.Logger) *FlowLog {
-	return &FlowLog{make(map[EPHash]*GPFlow), logger}
+	return &FlowLog{make(map[string]*GPFlow), logger}
 }
 
 // MarshalJSON implements the jsoniter.Marshaler interface
@@ -58,7 +57,7 @@ func (f *FlowLog) Len() int {
 }
 
 // Flows provides an iterator for the internal flow map
-func (f *FlowLog) Flows() map[EPHash]*GPFlow {
+func (f *FlowLog) Flows() map[string]*GPFlow {
 	return f.flowMap
 }
 
@@ -83,12 +82,12 @@ func (f *FlowLog) TablePrint(w *tabwriter.Writer) error {
 
 		fmt.Fprintf(w, fmtStr,
 			prefix,
-			types.RawIPToString(g.sip[:]),
-			types.PortToUint16(g.sport),
-			types.RawIPToString(g.dip[:]),
-			types.PortToUint16(g.dport),
-			protocols.GetIPProto(int(g.protocol)),
-			g.nBytesRcvd, g.nBytesSent, g.nPktsRcvd, g.nPktsSent)
+			types.RawIPToString(g.epHash[0:16]),
+			types.PortToUint16(g.epHash[34:36]),
+			types.RawIPToString(g.epHash[16:32]),
+			types.PortToUint16(g.epHash[32:34]),
+			protocols.GetIPProto(int(g.epHash[36])),
+			g.bytesRcvd, g.bytesSent, g.packetsRcvd, g.packetsSent)
 	}
 	return w.Flush()
 }
@@ -98,12 +97,12 @@ func (f *FlowLog) TablePrint(w *tabwriter.Writer) error {
 // a new flow will be created.
 func (f *FlowLog) Add(packet *GPPacket) {
 	// update or assign the flow
-	if flowToUpdate, existsHash := f.flowMap[packet.epHash]; existsHash {
+	if flowToUpdate, existsHash := f.flowMap[string(packet.epHash[:])]; existsHash {
 		flowToUpdate.UpdateFlow(packet)
-	} else if flowToUpdate, existsReverseHash := f.flowMap[packet.epHashReverse]; existsReverseHash {
+	} else if flowToUpdate, existsReverseHash := f.flowMap[string(packet.epHashReverse[:])]; existsReverseHash {
 		flowToUpdate.UpdateFlow(packet)
 	} else {
-		f.flowMap[packet.epHash] = NewGPFlow(packet)
+		f.flowMap[string(packet.epHash[:])] = NewGPFlow(packet)
 	}
 }
 
@@ -112,7 +111,7 @@ func (f *FlowLog) Add(packet *GPPacket) {
 // are discarded.
 //
 // Returns an AggFlowMap containing all flows since the last call to Rotate.
-func (f *FlowLog) Rotate() (agg goDB.AggFlowMap) {
+func (f *FlowLog) Rotate() (agg *hashmap.Map) {
 	if len(f.flowMap) == 0 {
 		f.logger.Debug("There are currently no flow records available")
 	}
@@ -122,36 +121,17 @@ func (f *FlowLog) Rotate() (agg goDB.AggFlowMap) {
 	return
 }
 
-func (f *FlowLog) transferAndAggregate() (newFlowMap map[EPHash]*GPFlow, agg goDB.AggFlowMap) {
-	newFlowMap = make(map[EPHash]*GPFlow)
-	agg = make(goDB.AggFlowMap)
+func (f *FlowLog) transferAndAggregate() (newFlowMap map[string]*GPFlow, agg *hashmap.Map) {
+	newFlowMap = make(map[string]*GPFlow)
+	agg = hashmap.New()
 
 	for k, v := range f.flowMap {
 
+		goDBKey := v.Key()
+
 		// check if the flow actually has any interesting information for us
 		if !v.HasBeenIdle() {
-			var (
-				tsip, tdip [16]byte
-			)
-
-			copy(tsip[:], v.sip[:])
-			copy(tdip[:], v.dip[:])
-
-			var tempkey = goDB.Key{
-				tsip,
-				tdip,
-				[2]byte{v.dport[0], v.dport[1]},
-				v.protocol,
-			}
-
-			if toUpdate, exists := agg[tempkey]; exists {
-				toUpdate.NBytesRcvd += v.nBytesRcvd
-				toUpdate.NBytesSent += v.nBytesSent
-				toUpdate.NPktsRcvd += v.nPktsRcvd
-				toUpdate.NPktsSent += v.nPktsSent
-			} else {
-				agg[tempkey] = &goDB.Val{v.nBytesRcvd, v.nBytesSent, v.nPktsRcvd, v.nPktsSent}
-			}
+			agg.SetOrUpdate(goDBKey, v.bytesRcvd, v.bytesSent, v.packetsRcvd, v.packetsSent)
 
 			// check whether the flow should be retained for the next interval
 			// or thrown away

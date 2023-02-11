@@ -1,11 +1,13 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"testing"
 
 	"github.com/els0r/goProbe/pkg/goDB"
+	"github.com/els0r/goProbe/pkg/types"
 	log "github.com/els0r/log"
 
 	"bufio"
@@ -27,35 +29,23 @@ const (
 var parserTests = []struct {
 	schema string
 	input  string
-	outKey goDB.ExtraKey
-	outVal goDB.Val
+	outKey types.ExtendedKey
+	outVal types.Counters
 }{
 	{sipDipSchema,
 		"1460362502,eth2,213.156.236.211,213.156.236.255,2,0,0.00,525,0,0.00",
-		goDB.ExtraKey{
-			Time:  int64(1460362502),
-			Iface: "eth2",
-			Key:   goDB.Key{Sip: [16]byte{213, 156, 236, 211}, Dip: [16]byte{213, 156, 236, 255}},
-		},
-		goDB.Val{NBytesRcvd: uint64(525), NBytesSent: uint64(0), NPktsRcvd: uint64(2), NPktsSent: uint64(0)},
+		types.NewV4KeyStatic([4]byte{213, 156, 236, 211}, [4]byte{213, 156, 236, 255}, []byte{0, 0}, 0).Extend(int64(1460362502), "eth2"),
+		types.Counters{BytesRcvd: uint64(525), BytesSent: uint64(0), PacketsRcvd: uint64(2), PacketsSent: uint64(0)},
 	},
 	{sipDipProtoSchema,
 		"1460362502,eth2,213.156.236.211,213.156.236.255,8080,TCP,2,0,0.00,525,0,0.00",
-		goDB.ExtraKey{
-			Time:  int64(1460362502),
-			Iface: "eth2",
-			Key:   goDB.Key{Sip: [16]byte{213, 156, 236, 211}, Dip: [16]byte{213, 156, 236, 255}, Dport: [2]byte{0x1f, 0x90}, Protocol: byte(6)},
-		},
-		goDB.Val{NBytesRcvd: uint64(525), NBytesSent: uint64(0), NPktsRcvd: uint64(2), NPktsSent: uint64(0)},
+		types.NewV4KeyStatic([4]byte{213, 156, 236, 211}, [4]byte{213, 156, 236, 255}, []byte{0x1f, 0x90}, 6).Extend(int64(1460362502), "eth2"),
+		types.Counters{BytesRcvd: uint64(525), BytesSent: uint64(0), PacketsRcvd: uint64(2), PacketsSent: uint64(0)},
 	},
 	{rawSchema,
 		"1460362502,eth2,213.156.236.211,213.156.236.255,8080,TCP,2,0,0.00,525,0,0.00",
-		goDB.ExtraKey{
-			Time:  int64(1460362502),
-			Iface: "eth2",
-			Key:   goDB.Key{Sip: [16]byte{213, 156, 236, 211}, Dip: [16]byte{213, 156, 236, 255}, Dport: [2]byte{0x1f, 0x90}, Protocol: byte(6)},
-		},
-		goDB.Val{NBytesRcvd: uint64(525), NBytesSent: uint64(0), NPktsRcvd: uint64(2), NPktsSent: uint64(0)},
+		types.NewV4KeyStatic([4]byte{213, 156, 236, 211}, [4]byte{213, 156, 236, 255}, []byte{0x1f, 0x90}, 6).Extend(int64(1460362502), "eth2"),
+		types.Counters{BytesRcvd: uint64(525), BytesSent: uint64(0), PacketsRcvd: uint64(2), PacketsSent: uint64(0)},
 	},
 }
 
@@ -264,10 +254,12 @@ func TestCallMain(t *testing.T) {
 
 func TestParsers(t *testing.T) {
 	var (
-		err    error
-		rowKey goDB.ExtraKey
-		rowVal goDB.Val
+		err      error
+		rowKeyV4 types.ExtendedKey = types.NewEmptyV4Key().ExtendEmpty()
+		rowKeyV6 types.ExtendedKey = types.NewEmptyV6Key().ExtendEmpty()
+		rowVal   types.Counters
 	)
+	rowKey := &rowKeyV4
 
 	logger, _ := log.NewFromString("console", log.WithLevel(log.DEBUG))
 
@@ -279,10 +271,19 @@ func TestParsers(t *testing.T) {
 		}
 
 		fields := strings.Split(tt.input, ",")
-		for ind, parser := range conv.KeyParsers {
-			if err = parser.ParseKey(fields[ind], &rowKey); err != nil {
-				t.Fatalf("%s", err.Error())
+		for _, parser := range conv.KeyParsers {
+			if err = parser.parser.ParseKey(fields[parser.ind], rowKey); err != nil {
+				if errors.Is(err, goDB.ErrIPVersionMismatch) {
+					rowKey = &rowKeyV6
+					if err = parser.parser.ParseKey(fields[parser.ind], rowKey); err != nil {
+						t.Fatalf("%s", err.Error())
+					}
+					continue
+				} else {
+					t.Fatalf("%s", err.Error())
+				}
 			}
+			rowKey = &rowKeyV4
 		}
 		for ind, parser := range conv.ValParsers {
 			if err := parser.ParseVal(fields[ind], &rowVal); err != nil {
@@ -291,11 +292,11 @@ func TestParsers(t *testing.T) {
 		}
 
 		// check equality of keys and values
-		if !reflect.DeepEqual(rowKey, tt.outKey) {
-			t.Fatalf("Key: got: %s; expect: %s", fmt.Sprint(rowKey), fmt.Sprint(tt.outKey))
+		if !bytes.Equal(*rowKey, tt.outKey) {
+			t.Fatalf("Key (%s): got: %s; expect: %s", tt.input, fmt.Sprint(rowKey), fmt.Sprint(tt.outKey))
 		}
 		if !reflect.DeepEqual(rowVal, tt.outVal) {
-			t.Fatalf("Val: got: %s; expect: %s", fmt.Sprint(rowVal), fmt.Sprint(tt.outVal))
+			t.Fatalf("Val (%s): got: %s; expect: %s", tt.input, fmt.Sprint(rowVal), fmt.Sprint(tt.outVal))
 		}
 	}
 }

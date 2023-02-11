@@ -36,12 +36,12 @@ type Query struct {
 // Summary stores the total traffic volume and packets observed over the
 // queried range and the interfaces that were queried
 type Summary struct {
-	Interfaces []string  `json:"interfaces"`
-	TimeFirst  time.Time `json:"time_first"`
-	TimeLast   time.Time `json:"time_last"`
-	Totals     Counters  `json:"totals"`
-	Timings    Timings   `json:"timings"`
-	Hits       Hits      `json:"hits"`
+	Interfaces []string       `json:"interfaces"`
+	TimeFirst  time.Time      `json:"time_first"`
+	TimeLast   time.Time      `json:"time_last"`
+	Totals     types.Counters `json:"totals"`
+	Timings    Timings        `json:"timings"`
+	Hits       Hits           `json:"hits"`
 }
 
 // Timinigs summarizes query runtimes
@@ -72,15 +72,15 @@ type Row struct {
 	Attributes Attributes `json:"a"`
 
 	// Counters
-	Counters Counters `json:"c"`
+	Counters types.Counters `json:"c"`
 }
 
 // Labels hold labels by which the goDB database is partitioned
 type Labels struct {
-	Timestamp *time.Time `json:"timestamp,omitempty"`
-	Iface     string     `json:"iface,omitempty"`
-	Hostname  string     `json:"host,omitempty"`
-	HostID    uint       `json:"host_id,omitempty"`
+	Timestamp time.Time `json:"timestamp,omitempty"`
+	Iface     string    `json:"iface,omitempty"`
+	Hostname  string    `json:"host,omitempty"`
+	HostID    uint      `json:"host_id,omitempty"`
 }
 
 // Attributes are traffic attributes by which the goDB can be aggregated
@@ -89,24 +89,6 @@ type Attributes struct {
 	DstIP   netip.Addr `json:"dip,omitempty"`
 	IPProto uint8      `json:"proto,omitempty"`
 	DstPort uint16     `json:"dport,omitempty"`
-}
-
-// Counters are the traffic's byte and packet counters
-type Counters struct {
-	BytesReceived   uint64 `json:"br,omitempty"`
-	BytesSent       uint64 `json:"bs,omitempty"`
-	PacketsReceived uint64 `json:"pr,omitempty"`
-	PacketsSent     uint64 `json:"ps,omitempty"`
-}
-
-// SumPackets sums the packet received and sent directions
-func (c *Counters) SumPackets() uint64 {
-	return c.PacketsReceived + c.PacketsSent
-}
-
-// SumBytes sums the bytes received and sent directions
-func (c *Counters) SumBytes() uint64 {
-	return c.BytesReceived + c.BytesSent
 }
 
 // String prints a single result
@@ -134,16 +116,6 @@ func (a Attributes) String() string {
 	)
 }
 
-// String prints all result counters
-func (c Counters) String() string {
-	return fmt.Sprintf("bytes: sent=%d received=%d; packets: sent=%d received=%d",
-		c.BytesSent,
-		c.BytesReceived,
-		c.PacketsSent,
-		c.PacketsReceived,
-	)
-}
-
 // Rows is a list of results
 type Rows []Row
 
@@ -154,7 +126,7 @@ type MergeableAttributes struct {
 }
 
 // RowsMap is an aggregated representation of a Rows list
-type RowsMap map[MergeableAttributes]*Counters
+type RowsMap map[MergeableAttributes]*types.Counters
 
 // MergeRows aggregates Rows by use of the RowsMap rm, which is modified
 // in the process
@@ -162,10 +134,7 @@ func (rm RowsMap) MergeRows(r Rows) {
 	for _, res := range r {
 		counters, exists := rm[MergeableAttributes{res.Labels, res.Attributes}]
 		if exists {
-			counters.BytesReceived += res.Counters.BytesReceived
-			counters.BytesSent += res.Counters.BytesSent
-			counters.PacketsReceived += res.Counters.PacketsReceived
-			counters.PacketsSent += res.Counters.PacketsSent
+			*counters = counters.Add(res.Counters)
 		} else {
 			rm[MergeableAttributes{res.Labels, res.Attributes}] = &res.Counters
 		}
@@ -177,10 +146,7 @@ func (rm RowsMap) MergeRowsMap(om RowsMap) {
 	for oma, oc := range om {
 		counters, exists := rm[oma]
 		if exists {
-			counters.BytesReceived += oc.BytesReceived
-			counters.BytesSent += oc.BytesSent
-			counters.PacketsReceived += oc.PacketsReceived
-			counters.PacketsSent += oc.PacketsSent
+			*counters = counters.Add(*oc)
 		} else {
 			rm[oma] = oc
 		}
