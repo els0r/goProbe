@@ -114,8 +114,6 @@ func main() {
 		ifaces[i] = k
 		i++
 	}
-	capture.InitPacketLog(config.DBPath, ifaces)
-	defer capture.PacketLog.Close()
 
 	// None of the initialization steps failed.
 	logger.Info("Started goProbe")
