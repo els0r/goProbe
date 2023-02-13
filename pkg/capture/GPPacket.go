@@ -57,13 +57,10 @@ type GPPacket struct {
 }
 
 // Populate takes a raw packet and populates a GPPacket structure from it.
-func (p *GPPacket) Populate(srcPacket []byte, inbound bool) error {
+func (p *GPPacket) Populate(srcPacket []byte, inbound bool, ipLayerOffset int) error {
 
 	// first things first: reset packet from previous run
 	p.reset()
-
-	// process metadata
-	p.numBytes = binary.BigEndian.Uint16(srcPacket[2:4])
 
 	// read the direction from which the packet entered the interface
 	p.dirInbound = inbound
@@ -72,6 +69,7 @@ func (p *GPPacket) Populate(srcPacket []byte, inbound bool) error {
 	if int(srcPacket[0]>>4) == 4 {
 
 		p.isIPv4 = true
+		p.numBytes = binary.BigEndian.Uint16(srcPacket[2:4]) + uint16(ipLayerOffset)
 
 		// Parse IPv4 packet information
 		copy(p.epHash[0:4], srcPacket[12:16])
@@ -120,6 +118,7 @@ func (p *GPPacket) Populate(srcPacket []byte, inbound bool) error {
 	} else if int(srcPacket[0]>>4) == 6 {
 
 		p.isIPv4 = false
+		p.numBytes = binary.BigEndian.Uint16(srcPacket[4:6]) + uint16(ipLayerOffset)
 
 		// Parse IPv6 packet information
 		copy(p.epHash[0:16], srcPacket[8:24])

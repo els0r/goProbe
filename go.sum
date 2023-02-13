@@ -6,8 +6,8 @@ github.com/els0r/log v1.0.1-0.20190303012150-3e228cb82ff0 h1:m0723NA7hG5uP3VcbDi
 github.com/els0r/log v1.0.1-0.20190303012150-3e228cb82ff0/go.mod h1:HrfUpL4bgGa61adkHNxGk/t5SPVSS7Sra8bkJbxgiWo=
 github.com/els0r/status v1.0.0 h1:j2G+Iq4nZK8yNXfJqkRwBEHzHl/SReUBMg0z6SV6vqU=
 github.com/els0r/status v1.0.0/go.mod h1:O/aG4Ny1gNwOU82pIRTT1GQ1+upMDX+FA6QKwwgfSY4=
-github.com/fako1024/slimcap v0.0.0-20230213130323-046e94a612c9 h1:waugGkBgbhDrd0doM/Im1oU4AtSC3oIJgrk6YlEjlDw=
-github.com/fako1024/slimcap v0.0.0-20230213130323-046e94a612c9/go.mod h1:JVXmOrqpNHNJT7MmzryycXyyNOr26va0ePnLGm1ifpE=
+github.com/fako1024/slimcap v0.0.0-20230213144013-6a2812a39324 h1:L/9L2Aiw0bonEYhB6puoHqBLr8IoGgTaxxXXyR6X0rE=
+github.com/fako1024/slimcap v0.0.0-20230213144013-6a2812a39324/go.mod h1:JVXmOrqpNHNJT7MmzryycXyyNOr26va0ePnLGm1ifpE=
 github.com/fatih/color v1.13.0 h1:8LOYc1KYPPmyKMuN8QV2DNRWNbLo6LZ0iLs8+mlH53w=
 github.com/fatih/color v1.13.0/go.mod h1:kLAiJbzzSOZDVNGyDpeOxJ47H46qBXwg5ILebYFFOfk=
 github.com/go-chi/chi/v5 v5.0.1/go.mod h1:DslCQbL2OYiznFReuXYUmQ2hGd1aDpCnlMNITLSKoi8=
