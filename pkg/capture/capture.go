@@ -27,7 +27,7 @@ import (
 
 const (
 	// Snaplen sets the amount of bytes captured from a packet
-	Snaplen = 68
+	Snaplen = 128
 
 	// ErrorThreshold is the maximum amount of consecutive errors that can occur on an interface before capturing is halted.
 	ErrorThreshold = 10000
