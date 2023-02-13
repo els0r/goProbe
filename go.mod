@@ -3,10 +3,9 @@ module github.com/els0r/goProbe
 require (
 	github.com/els0r/log v1.0.1-0.20190303012150-3e228cb82ff0
 	github.com/els0r/status v1.0.0
-	github.com/fako1024/gopacket v1.1.20-0.20220816131758-4518db4bf798
+	github.com/fako1024/slimcap v0.0.0-20230213130323-046e94a612c9
 	github.com/go-chi/chi/v5 v5.0.7
 	github.com/go-chi/docgen v1.2.0
-	github.com/google/gopacket v1.1.19
 	github.com/json-iterator/go v1.1.12
 	github.com/sirupsen/logrus v1.9.0
 	github.com/spf13/cobra v1.5.0

@@ -20,12 +20,14 @@ import (
 
 	"github.com/els0r/goProbe/pkg/types/hashmap"
 	"github.com/els0r/log"
-	"github.com/google/gopacket/pcap"
+	"github.com/fako1024/slimcap/capture"
+	"github.com/fako1024/slimcap/capture/afpacket"
+	"github.com/fako1024/slimcap/link"
 )
 
 const (
 	// Snaplen sets the amount of bytes captured from a packet
-	Snaplen = 86
+	Snaplen = 68
 
 	// ErrorThreshold is the maximum amount of consecutive errors that can occur on an interface before capturing is halted.
 	ErrorThreshold = 10000
@@ -360,7 +362,7 @@ type Capture struct {
 	flowLog *FlowLog
 
 	// Generic handle / source for packet capture
-	captureHandle Source
+	captureHandle capture.Source
 
 	// error map for logging errors more properly
 	errMap ErrorMap
@@ -418,16 +420,16 @@ func (c *Capture) process() {
 			}
 		}()
 
-		packet, err := c.captureHandle.NextPacket()
+		payload, pktType, err := c.captureHandle.NextIPPacket()
 		if err != nil {
-			if errors.Is(err, errCaptureTimeout) { // CaptureTimeout expired
+			if errors.Is(err, capture.ErrCaptureStopped) { // Capture stopped gracefully
 				return nil
 			}
 			return fmt.Errorf("capture error: %s", err)
 		}
 
-		if err := gppacket.Populate(packet.packet, packet.inbound); err == nil {
-
+		// TODO: Use the zero-copy approach and compare
+		if err := gppacket.Populate(payload, pktType == 0); err == nil {
 			// fmt.Println("Packet captured:", goDB.RawIPToString(gppacket.sip[:]), "->", goDB.RawIPToString(gppacket.dip[:]),
 			// 	strconv.Itoa(int(uint16(gppacket.dport[0])<<8|uint16(gppacket.dport[1]))),
 			// 	gppacket.numBytes,
@@ -443,10 +445,9 @@ func (c *Capture) process() {
 			// collect the error. The errors value is the key here. Otherwise, the address
 			// of the error would be taken, which results in a non-minimal set of errors
 			if _, exists := c.errMap[err.Error()]; !exists {
-				// log the packet to the pcap error logs
-				if logerr := PacketLog.Log(c.iface, packet.packet, Snaplen); logerr != nil {
-					c.logger.Info("failed to log faulty packet: " + logerr.Error())
-				}
+				// TODO: Just logging for now - we might want to construct a new raw data logger that doesn't
+				// depend on gopacket (after all we could just dump the raw packet data for later analysis)
+				c.logger.Warnf("discovered faulty packet on `%s`: %v", c.iface, payload)
 			}
 
 			c.errMap[err.Error()]++
@@ -464,29 +465,24 @@ func (c *Capture) process() {
 		return nil
 	}
 
-	for {
-		if c.state == StateActive {
-			if err := capturePacket(); err != nil {
-				c.setState(StateError)
-				c.logger.Errorf("Interface '%s': %s", c.iface, err.Error())
-			}
-
-			select {
-			case cmd, ok := <-c.cmdChan:
-				if ok {
-					cmd.execute(c)
-				} else {
-					return
-				}
-			default:
-				// keep going
-			}
-		} else {
+	// Crude: Since capturePacket is blocking we have to continuously listen for
+	// commands, a select{} statement won't cut it
+	go func() {
+		for {
 			cmd, ok := <-c.cmdChan
 			if ok {
 				cmd.execute(c)
 			} else {
 				return
+			}
+		}
+	}()
+
+	for {
+		if c.state == StateActive {
+			if err := capturePacket(); err != nil {
+				c.setState(StateError)
+				c.logger.Errorf("Interface '%s': %s", c.iface, err.Error())
 			}
 		}
 	}
@@ -502,8 +498,19 @@ func (c *Capture) initialize() {
 		panic("Need state StateUninitialized")
 	}
 
-	c.captureHandle = newSource()
-	if err := c.captureHandle.Init(c.iface, c.config.BPFFilter, Snaplen, c.config.BufSize, c.config.Promisc); err != nil {
+	link, err := link.New(c.iface)
+	if err != nil {
+		fmt.Println("Error:", err)
+		c.logger.Error(err)
+		c.setState(StateError)
+	}
+
+	if c.captureHandle, err = afpacket.NewRingBufSource(
+		link,
+		afpacket.CaptureLength(Snaplen),
+		afpacket.BufferSize(c.config.BufSize),
+		afpacket.Promiscuous(c.config.Promisc),
+	); err != nil {
 		fmt.Println("Error:", err)
 		c.logger.Error(err)
 		c.setState(StateError)
@@ -528,7 +535,7 @@ func (c *Capture) activate() {
 		panic("Need state StateInitialized")
 	}
 	c.setState(StateActive)
-	c.logger.Debugf("Interface '%s': capture active. Link type: %s", c.iface, c.captureHandle.LinkType())
+	c.logger.Debugf("Interface '%s': capture active. Link type: %s", c.iface /*c.captureHandle.LinkType()*/)
 }
 
 // deactivate transitions from StateActive
@@ -580,7 +587,7 @@ func (c *Capture) needReinitialization(config Config) bool {
 
 func (c *Capture) tryGetPcapStats() *CaptureStats {
 	var (
-		pcapStats *CaptureStats
+		pcapStats capture.Stats
 		err       error
 	)
 	if c.captureHandle != nil {
@@ -589,7 +596,10 @@ func (c *Capture) tryGetPcapStats() *CaptureStats {
 			c.logger.Errorf("Interface '%s': error while requesting pcap stats: %s", err.Error())
 		}
 	}
-	return pcapStats
+	return &CaptureStats{
+		PacketsReceived: pcapStats.PacketsReceived,
+		PacketsDropped:  pcapStats.PacketsDropped,
+	}
 }
 
 // subPcapStats computes a - b (fieldwise) if both a and b
@@ -603,43 +613,6 @@ func subPcapStats(a, b *CaptureStats) *CaptureStats {
 		PacketsDropped:   a.PacketsDropped - b.PacketsDropped,
 		PacketsIfDropped: a.PacketsIfDropped - b.PacketsIfDropped,
 	}
-}
-
-// setupInactiveHandle sets up a pcap InactiveHandle with the given settings.
-func setupInactiveHandle(iface string, captureLen, bufSize int, promisc bool) (*pcap.InactiveHandle, error) {
-	// new inactive handle
-	inactive, err := pcap.NewInactiveHandle(iface)
-	if err != nil {
-		inactive.CleanUp()
-		return nil, err
-	}
-
-	// set up buffer size
-	if err := inactive.SetBufferSize(bufSize); err != nil {
-		inactive.CleanUp()
-		return nil, err
-	}
-
-	// set snaplength
-	if err := inactive.SetSnapLen(captureLen); err != nil {
-		inactive.CleanUp()
-		return nil, err
-	}
-
-	// set promisc mode
-	if err := inactive.SetPromisc(promisc); err != nil {
-		inactive.CleanUp()
-		return nil, err
-	}
-
-	// set timeout
-	if err := inactive.SetTimeout(CaptureTimeout); err != nil {
-		inactive.CleanUp()
-		return nil, err
-	}
-
-	// return the inactive handle for activation
-	return inactive, err
 }
 
 //////////////////////// public functions ////////////////////////
