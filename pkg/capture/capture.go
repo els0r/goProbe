@@ -369,8 +369,6 @@ type Capture struct {
 
 	// logging
 	logger log.Logger
-
-	ipLayerOffset int
 }
 
 // NewCapture creates a new Capture associated with the given iface.
@@ -411,6 +409,7 @@ func (c *Capture) setState(s State) {
 func (c *Capture) process() {
 	errcount := 0
 	gppacket := GPPacket{}
+	pkt := make(afpacket.Packet, Snaplen)
 
 	capturePacket := func() (err error) {
 		defer func() {
@@ -422,7 +421,8 @@ func (c *Capture) process() {
 			}
 		}()
 
-		payload, pktType, err := c.captureHandle.NextIPPacket()
+		// pkt, err := c.captureHandle.NextPacket()
+		err = c.captureHandle.NextPacketInto(&pkt)
 		if err != nil {
 			if errors.Is(err, capture.ErrCaptureStopped) { // Capture stopped gracefully
 				return nil
@@ -430,8 +430,7 @@ func (c *Capture) process() {
 			return fmt.Errorf("capture error: %s", err)
 		}
 
-		// TODO: Use the zero-copy approach and compare
-		if err := gppacket.Populate(payload, pktType == 0, c.ipLayerOffset); err == nil {
+		if err := gppacket.Populate(&pkt); err == nil {
 			// fmt.Println("Packet captured:", goDB.RawIPToString(gppacket.sip[:]), "->", goDB.RawIPToString(gppacket.dip[:]),
 			// 	strconv.Itoa(int(uint16(gppacket.dport[0])<<8|uint16(gppacket.dport[1]))),
 			// 	gppacket.numBytes,
@@ -449,7 +448,7 @@ func (c *Capture) process() {
 			if _, exists := c.errMap[err.Error()]; !exists {
 				// TODO: Just logging for now - we might want to construct a new raw data logger that doesn't
 				// depend on gopacket (after all we could just dump the raw packet data for later analysis)
-				c.logger.Warnf("discovered faulty packet on `%s`: %v", c.iface, payload)
+				c.logger.Warnf("discovered faulty packet on `%s`: %v", c.iface, pkt.Payload())
 			}
 
 			c.errMap[err.Error()]++
@@ -518,8 +517,6 @@ func (c *Capture) initialize() {
 		c.setState(StateError)
 		return
 	}
-
-	c.ipLayerOffset = c.captureHandle.Link().LinkType.IpHeaderOffset()
 
 	c.setState(StateInitialized)
 }
