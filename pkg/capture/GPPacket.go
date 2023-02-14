@@ -15,9 +15,9 @@
 package capture
 
 import (
-	"encoding/binary"
 	"fmt"
 
+	"github.com/fako1024/slimcap/capture"
 	"golang.org/x/net/ipv4"
 	"golang.org/x/net/ipv6"
 )
@@ -57,19 +57,20 @@ type GPPacket struct {
 }
 
 // Populate takes a raw packet and populates a GPPacket structure from it.
-func (p *GPPacket) Populate(srcPacket []byte, inbound bool, ipLayerOffset int) error {
+func (p *GPPacket) Populate(pkt capture.Packet) error {
 
 	// first things first: reset packet from previous run
 	p.reset()
+	srcPacket := pkt.IPLayer()
 
 	// read the direction from which the packet entered the interface
-	p.dirInbound = inbound
+	p.dirInbound = pkt.Type() == 0
+	p.numBytes = uint16(pkt.TotalLen())
 	var protocol byte = 0xFF
 
 	if int(srcPacket[0]>>4) == 4 {
 
 		p.isIPv4 = true
-		p.numBytes = binary.BigEndian.Uint16(srcPacket[2:4]) + uint16(ipLayerOffset)
 
 		// Parse IPv4 packet information
 		copy(p.epHash[0:4], srcPacket[12:16])
@@ -118,7 +119,6 @@ func (p *GPPacket) Populate(srcPacket []byte, inbound bool, ipLayerOffset int) e
 	} else if int(srcPacket[0]>>4) == 6 {
 
 		p.isIPv4 = false
-		p.numBytes = binary.BigEndian.Uint16(srcPacket[4:6]) + uint16(ipLayerOffset)
 
 		// Parse IPv6 packet information
 		copy(p.epHash[0:16], srcPacket[8:24])
