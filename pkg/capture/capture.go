@@ -502,7 +502,7 @@ func (c *Capture) initialize() {
 	if c.captureHandle, err = afpacket.NewRingBufSource(
 		link,
 		afpacket.CaptureLength(Snaplen),
-		afpacket.BufferSize(c.config.BufSize),
+		afpacket.BufferSize(c.config.BufSize/4, 4),
 		afpacket.Promiscuous(c.config.Promisc),
 	); err != nil {
 		fmt.Println("Error:", err)
