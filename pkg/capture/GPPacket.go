@@ -75,8 +75,8 @@ func (p *GPPacket) Populate(pkt capture.Packet) error {
 		// Parse IPv4 packet information
 		copy(p.epHash[0:4], srcPacket[12:16])
 		copy(p.epHash[16:20], srcPacket[16:20])
-		copy(p.epHashReverse[0:16], p.epHash[16:32])
-		copy(p.epHashReverse[16:32], p.epHash[0:16])
+		copy(p.epHashReverse[0:4], p.epHash[16:20])
+		copy(p.epHashReverse[16:20], p.epHash[0:4])
 
 		protocol = srcPacket[9]
 
