@@ -13,8 +13,6 @@ package capture
 import (
 	"errors"
 	"fmt"
-	"os"
-	"runtime/debug"
 	"sync"
 	"time"
 
@@ -409,20 +407,17 @@ func (c *Capture) setState(s State) {
 func (c *Capture) process() {
 	errcount := 0
 	gppacket := GPPacket{}
-	pkt := make(afpacket.Packet, Snaplen)
+	pkt := make(afpacket.Packet, Snaplen+6)
 
 	capturePacket := func() (err error) {
-		defer func() {
-			if r := recover(); r != nil {
-				trace := string(debug.Stack())
-				fmt.Fprintf(os.Stderr, "Interface '%s': panic returned %v. Stacktrace:\n%s\n", c.iface, r, trace)
-				err = fmt.Errorf("Panic during capture")
-				return
-			}
-		}()
 
-		// pkt, err := c.captureHandle.NextPacket()
-		err = c.captureHandle.NextPacketInto(&pkt)
+		// A bit crude, but this way there's virtually no overhead. Ideally, processing should only start once the handle has been created
+		if c.state != StateActive {
+			time.Sleep(time.Millisecond)
+			return
+		}
+
+		_, err = c.captureHandle.NextPacket(&pkt)
 		if err != nil {
 			if errors.Is(err, capture.ErrCaptureStopped) { // Capture stopped gracefully
 				return nil
@@ -448,7 +443,7 @@ func (c *Capture) process() {
 			if _, exists := c.errMap[err.Error()]; !exists {
 				// TODO: Just logging for now - we might want to construct a new raw data logger that doesn't
 				// depend on gopacket (after all we could just dump the raw packet data for later analysis)
-				c.logger.Warnf("discovered faulty packet on `%s`: %v", c.iface, pkt.Payload())
+				c.logger.Warnf("discovered faulty packet on `%s`: %s [%v]", c.iface, err, pkt.Payload())
 			}
 
 			c.errMap[err.Error()]++
@@ -480,11 +475,9 @@ func (c *Capture) process() {
 	}()
 
 	for {
-		if c.state == StateActive {
-			if err := capturePacket(); err != nil {
-				c.setState(StateError)
-				c.logger.Errorf("Interface '%s': %s", c.iface, err.Error())
-			}
+		if err := capturePacket(); err != nil {
+			c.setState(StateError)
+			c.logger.Errorf("Interface '%s': %s", c.iface, err.Error())
 		}
 	}
 }
