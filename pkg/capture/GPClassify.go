@@ -26,28 +26,21 @@ const broadcastIPv4      [4]byte = [4]byte{255, 255, 255, 255}
 const ssdpAddressIPv4    [4]byte = [4]byte{239, 255, 255, 250}
 */
 
-// slice storing frequently used destination ports which fall outside of the service
+// Lookup table storing frequently used destination ports which fall outside of the service
 // port range 1-1023. These are explicit exceptions to the direction heuristic below
-var specialPorts = [...]uint16{
-	2049,  // NFS
-	5222,  // XMPP, iMessage
-	5353,  // DNS
-	8080,  // Proxy
-	8612,  // Canon BJNP
-	17500, // Dropbox LanSync
-	1352,  // Lotus Notes
+var specialPortsLoookupTable = [65536]bool{
+	1352:  true, // Lotus Notes
+	2049:  true, // NFS
+	5222:  true, // XMPP, iMessage
+	5353:  true, // DNS
+	8080:  true, // Proxy
+	8612:  true, // Canon BJNP
+	17500: true, // Dropbox LanSync
 }
 
 // IsSpecialPort checks whether port is a well-known high port
 func IsSpecialPort(port uint16) bool {
-	var special bool
-
-	// check if port matches any of the special ports
-	for _, p := range specialPorts {
-		special = special || (p == port)
-	}
-
-	return special
+	return specialPortsLoookupTable[port]
 }
 
 // ClassifyPacketDirection is responsible for running a variety of heuristics on the packet
