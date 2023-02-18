@@ -63,6 +63,6 @@ func (a *authenticator) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // AuthenticationHandler registers API authentication keys and returns a middleware that checks them
 func (s *Server) AuthenticationHandler(keys Keys) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
-		return &authenticator{h: next, keys: keys, logger: s.logger}
+		return &authenticator{h: next, keys: keys}
 	}
 }

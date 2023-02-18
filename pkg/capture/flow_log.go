@@ -20,7 +20,6 @@ import (
 	"github.com/els0r/goProbe/pkg/goDB/protocols"
 	"github.com/els0r/goProbe/pkg/types"
 	"github.com/els0r/goProbe/pkg/types/hashmap"
-	"github.com/els0r/log"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -34,12 +33,11 @@ const (
 // FlowLog stores flows. It is NOT threadsafe.
 type FlowLog struct {
 	flowMap map[string]*GPFlow
-	logger  log.Logger
 }
 
 // NewFlowLog creates a new flow log for storing flows.
-func NewFlowLog(logger log.Logger) *FlowLog {
-	return &FlowLog{make(map[string]*GPFlow), logger}
+func NewFlowLog() *FlowLog {
+	return &FlowLog{make(map[string]*GPFlow)}
 }
 
 // MarshalJSON implements the jsoniter.Marshaler interface
@@ -112,12 +110,7 @@ func (f *FlowLog) Add(packet *GPPacket) {
 //
 // Returns an AggFlowMap containing all flows since the last call to Rotate.
 func (f *FlowLog) Rotate() (agg *hashmap.Map) {
-	if len(f.flowMap) == 0 {
-		f.logger.Debug("There are currently no flow records available")
-	}
-
 	f.flowMap, agg = f.transferAndAggregate()
-
 	return
 }
 
@@ -142,6 +135,5 @@ func (f *FlowLog) transferAndAggregate() (newFlowMap map[string]*GPFlow, agg *ha
 			}
 		}
 	}
-
 	return
 }

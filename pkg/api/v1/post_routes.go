@@ -9,6 +9,7 @@ import (
 	"github.com/els0r/goProbe/cmd/goProbe/flags"
 	"github.com/els0r/goProbe/pkg/capture"
 	"github.com/els0r/goProbe/pkg/discovery"
+	"github.com/els0r/goProbe/pkg/logging"
 	"github.com/els0r/status"
 	"github.com/go-chi/chi/v5"
 )
@@ -20,6 +21,8 @@ func (a *API) postRequestRoutes(r chi.Router) {
 }
 
 func (a *API) handleReload(w http.ResponseWriter, r *http.Request) {
+	logger := logging.WithContext(r.Context())
+
 	pp := printPretty(r)
 
 	if pp {
@@ -31,9 +34,7 @@ func (a *API) handleReload(w http.ResponseWriter, r *http.Request) {
 
 	config, err := reloadConfig()
 	if err != nil {
-		if a.logger != nil {
-			a.logger.Error(err.Error())
-		}
+		logger.Error(err)
 		if pp {
 			status.Fail(err.Error())
 		} else {
@@ -77,7 +78,7 @@ func reloadConfig() (*capconfig.Config, error) {
 		return nil, fmt.Errorf("cannot monitor more than %d interfaces", capture.MaxIfaces)
 	}
 
-	if capconfig.RuntimeDBPath() != c.DBPath {
+	if capconfig.RuntimeDBPath() != c.DB.Path {
 		return nil, fmt.Errorf("failed to reload config file: Cannot change database path while running")
 	}
 	return c, nil

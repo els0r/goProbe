@@ -5,7 +5,6 @@ require (
 	github.com/els0r/status v1.0.0
 	github.com/fako1024/slimcap v0.0.0-20230217141948-dd176935150a
 	github.com/go-chi/chi/v5 v5.0.7
-	github.com/go-chi/docgen v1.2.0
 	github.com/json-iterator/go v1.1.12
 	github.com/sirupsen/logrus v1.9.0
 	github.com/spf13/cobra v1.5.0
@@ -13,6 +12,7 @@ require (
 	github.com/throttled/throttled v2.2.5+incompatible
 	github.com/valyala/gozstd v1.17.0
 	github.com/zeebo/xxh3 v1.0.2
+	go.uber.org/zap v1.24.0
 	golang.org/x/net v0.7.0
 )
 
@@ -29,6 +29,8 @@ require (
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
+	go.uber.org/atomic v1.7.0 // indirect
+	go.uber.org/multierr v1.6.0 // indirect
 	golang.org/x/sys v0.5.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

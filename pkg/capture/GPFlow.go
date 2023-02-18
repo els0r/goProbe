@@ -115,17 +115,7 @@ func (f *GPFlow) UpdateFlow(packet *GPPacket) {
 // the flow was essentially idle in the last time interval and that it can be safely
 // discarded.
 func (f *GPFlow) IsWorthKeeping() bool {
-
-	// first check if the flow stores and identified the layer 7 protocol or if the
-	// flow stores direction information
-	if f.hasIdentifiedDirection() {
-
-		// check if any entries have been updated lately
-		if !(f.HasBeenIdle()) {
-			return true
-		}
-	}
-	return false
+	return f.hasIdentifiedDirection() && !f.HasBeenIdle()
 }
 
 // Reset resets all flow counters

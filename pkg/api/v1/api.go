@@ -8,8 +8,6 @@ import (
 	"github.com/els0r/goProbe/pkg/capture"
 	"github.com/els0r/goProbe/pkg/discovery"
 	"github.com/go-chi/chi/v5"
-
-	log "github.com/els0r/log"
 )
 
 // Option can enable/disable API features upon instantiation
@@ -19,13 +17,6 @@ type Option func(*API)
 func WithErrorHandler(handler errors.Handler) Option {
 	return func(a *API) {
 		a.errorHandler = handler
-	}
-}
-
-// WithLogger adds a logger to the API
-func WithLogger(logger log.Logger) Option {
-	return func(a *API) {
-		a.logger = logger
 	}
 }
 
@@ -40,7 +31,6 @@ func WithDiscoveryConfigUpdate(update chan *discovery.Config) Option {
 type API struct {
 	c                     *capture.Manager
 	discoveryConfigUpdate chan *discovery.Config
-	logger                log.Logger
 	errorHandler          errors.Handler
 }
 
@@ -48,7 +38,7 @@ type API struct {
 func New(manager *capture.Manager, opts ...Option) *API {
 	a := &API{
 		c:            manager,
-		errorHandler: errors.NewStandardHandler(nil), // a bare error handler is necessary
+		errorHandler: errors.NewStandardHandler(), // a bare error handler is necessary
 	}
 
 	// apply options

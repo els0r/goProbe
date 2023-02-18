@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 
+	"github.com/els0r/goProbe/pkg/logging"
 	"github.com/throttled/throttled"
 	"github.com/throttled/throttled/store/memstore"
 )
@@ -16,11 +17,12 @@ const (
 
 // RateLimiter returns a middleware that rate limits access to the API paths
 func (s *Server) RateLimiter(perMinLimit, burstLimit int) func(http.Handler) http.Handler {
+	logger := logging.Logger()
 
 	// store rate limiter in memory
 	store, err := memstore.New(65536)
 	if err != nil {
-		s.logger.Errorf("failed to create in-memory rate limiter store: %s", err)
+		logger.Errorf("failed to create in-memory rate limiter store: %s", err)
 
 		// failure to set up the rate limiter shouldn't block the entire API
 		return func(next http.Handler) http.Handler {
@@ -33,7 +35,7 @@ func (s *Server) RateLimiter(perMinLimit, burstLimit int) func(http.Handler) htt
 
 	rateLimiter, err := throttled.NewGCRARateLimiter(store, quota)
 	if err != nil {
-		s.logger.Errorf("failed to create rate limiter: %s", err)
+		logger.Errorf("failed to create rate limiter: %s", err)
 
 		// failure to set up the rate limiter shouldn't block the entire API
 		return func(next http.Handler) http.Handler {
