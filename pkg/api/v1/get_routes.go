@@ -96,29 +96,29 @@ func (a *API) getPacketStats(w http.ResponseWriter, r *http.Request) {
 
 	// get info for each interface
 	var AggregatedStats = struct {
-		LoggedRcvd   uint64                    `json:"logged_rcvd"`
-		PcapRcvd     uint64                    `json:"pcap_rcvd"`
-		PcapDrop     uint64                    `json:"pcap_drop"`
-		PcapIfDrop   uint64                    `json:"pcap_ifdrop"`
-		NumActive    int                       `json:"iface_active"`
-		TotalIfaces  int                       `json:"iface_total"`
-		LastWriteout float64                   `json:"last_writeout"`
-		Ifaces       map[string]capture.Status `json:"ifaces,omitempty"`
+		LoggedReceived uint64 `json:"logged_recieved"`
+		Handle         struct {
+			Received uint64 `json:"received"`
+			Dropped  uint64 `json:"dropped"`
+		} `json:"handle"`
+		NumIfacesActive int                       `json:"ifaces_active"`
+		TotalIfaces     int                       `json:"ifaces_total"`
+		LastWriteout    time.Duration             `json:"last_writeout"`
+		Ifaces          map[string]capture.Status `json:"ifaces,omitempty"`
 	}{}
 
 	AggregatedStats.TotalIfaces = len(stats)
 	for _, stat := range stats {
-		if stat.Stats.Pcap != nil {
-			AggregatedStats.LoggedRcvd += uint64(stat.Stats.PacketsLogged)
-			AggregatedStats.PcapRcvd += uint64(stat.Stats.Pcap.PacketsReceived)
-			AggregatedStats.PcapDrop += uint64(stat.Stats.Pcap.PacketsDropped)
-			AggregatedStats.PcapIfDrop += uint64(stat.Stats.Pcap.PacketsIfDropped)
+		if stat.Stats.CaptureStats != nil {
+			AggregatedStats.LoggedReceived += uint64(stat.Stats.PacketsLogged)
+			AggregatedStats.Handle.Received += uint64(stat.Stats.CaptureStats.PacketsReceived)
+			AggregatedStats.Handle.Dropped += uint64(stat.Stats.CaptureStats.PacketsDropped)
 		}
-		if stat.State == capture.StateActive {
-			AggregatedStats.NumActive++
+		if stat.State == capture.StateCapturing {
+			AggregatedStats.NumIfacesActive++
 		}
 	}
-	AggregatedStats.LastWriteout = time.Now().Sub(a.c.LastRotation).Seconds()
+	AggregatedStats.LastWriteout = time.Since(a.c.LastRotation).Round(time.Millisecond)
 
 	// check if debug info should be printed
 	dbg := r.FormValue("debug")
@@ -150,36 +150,33 @@ func (a *API) getPacketStats(w http.ResponseWriter, r *http.Request) {
    last writeout: %.0fs ago
   packets logged: %d
 
-   pcap received: %d
-         dropped: %d
-   iface dropped: %d`,
+  handle
+        received: %d
+         dropped: %d`,
 			AggregatedStats.LastWriteout,
-			AggregatedStats.LoggedRcvd,
-			AggregatedStats.PcapRcvd,
-			AggregatedStats.PcapDrop,
-			AggregatedStats.PcapIfDrop,
+			AggregatedStats.LoggedReceived,
+			AggregatedStats.Handle.Received,
+			AggregatedStats.Handle.Dropped,
 		))
 
 		// check if debug info should be printed
 		if dbg == "1" {
-			writeLn(fmt.Sprintf("\n%s   RCVD     DROP   IFDROP", strings.Repeat(" ", status.StatusLineIndent+8+4)))
+			writeLn(fmt.Sprintf("\n%s   RCVD     DROP", strings.Repeat(" ", status.StatusLineIndent+8+4)))
 
 			for iface, stat := range AggregatedStats.Ifaces {
 				var pcapInfoStr string
-				if stat.Stats.Pcap != nil {
+				if stat.Stats.CaptureStats != nil {
 					pcapInfoStr = fmt.Sprintf("%8d %8d %8d",
-						stat.Stats.Pcap.PacketsReceived,
-						stat.Stats.Pcap.PacketsDropped,
-						stat.Stats.Pcap.PacketsIfDropped)
+						stat.Stats.CaptureStats.PacketsReceived,
+						stat.Stats.CaptureStats.PacketsDropped,
+					)
 				}
 
 				status.Line(iface)
 				switch stat.State {
-				case capture.StateUninitialized:
-					status.Warn("unitialized")
-				case capture.StateInitialized:
-					status.Warn("initialized")
-				case capture.StateActive:
+				case capture.StateInitializing:
+					status.Warn("initializing")
+				case capture.StateCapturing:
 					status.Ok(pcapInfoStr)
 				case capture.StateError:
 					status.Fail("error")
@@ -192,9 +189,9 @@ func (a *API) getPacketStats(w http.ResponseWriter, r *http.Request) {
 		writeLn("")
 		status.Line("Total")
 
-		activeStr := fmt.Sprintf("%d/%d interfaces active", AggregatedStats.NumActive, AggregatedStats.TotalIfaces)
-		if AggregatedStats.NumActive != AggregatedStats.TotalIfaces {
-			if AggregatedStats.NumActive == 0 {
+		activeStr := fmt.Sprintf("%d/%d interfaces active", AggregatedStats.NumIfacesActive, AggregatedStats.TotalIfaces)
+		if AggregatedStats.NumIfacesActive != AggregatedStats.TotalIfaces {
+			if AggregatedStats.NumIfacesActive == 0 {
 				status.Fail(activeStr)
 			} else {
 				status.Warn(activeStr)

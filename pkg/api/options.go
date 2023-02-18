@@ -4,7 +4,6 @@ import (
 	"time"
 
 	"github.com/els0r/goProbe/pkg/discovery"
-	log "github.com/els0r/log"
 )
 
 // Option allows to set optional parameters in the server
@@ -19,10 +18,10 @@ func WithKeys(keys []string) Option {
 	}
 }
 
-// WithLogger provides the api with access to the program level logger. It is recommended to use this option
-func WithLogger(l log.Logger) Option {
+// WithRequestLogging turns on request logging
+func WithRequestLogging(b bool) Option {
 	return func(s *Server) {
-		s.logger = l
+		s.logRequests = b
 	}
 }
 

@@ -18,15 +18,14 @@ import (
 	"os"
 	"sync"
 
-	"github.com/els0r/goProbe/pkg/capture"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 )
 
 // demoKeys stores the API keys that should, under no circumstance, be used in production.
 // They coincide with the keys shown in the README file of goProbe
 var demoKeys = map[string]struct{}{
-	"da53ae3fb482db63d9606a9324a694bf51f7ad47623c04ab7b97a811f2a78e05": struct{}{},
-	"9e3b84ae1437a73154ac5c48a37d5085a3f6e68621b56b626f81620de271a2f6": struct{}{},
+	"da53ae3fb482db63d9606a9324a694bf51f7ad47623c04ab7b97a811f2a78e05": {},
+	"9e3b84ae1437a73154ac5c48a37d5085a3f6e68621b56b626f81620de271a2f6": {},
 }
 
 // the validator interface is a contract to show if a concrete type is
@@ -38,21 +37,46 @@ type validator interface {
 // Config stores goProbe's configuration
 type Config struct {
 	sync.Mutex
-	DBPath      string    `json:"db_path"`
+	DB          DBConfig  `json:"db"`
 	Interfaces  Ifaces    `json:"interfaces"`
 	SyslogFlows bool      `json:"syslog_flows"`
 	Logging     LogConfig `json:"logging"`
 	API         APIConfig `json:"api"`
-	EncoderType string    `json:"encoder_type"`
 }
 
+type DBConfig struct {
+	Path        string `json:"path"`
+	EncoderType string `json:"encoder_type"`
+}
+
+type CaptureConfig struct {
+	BufferSize int  `json:"buf_size"`
+	Promisc    bool `json:"promisc"`
+
+	// used by the ring buffer
+	// BlockSize specifies the size of a block, which defines, how many packets
+	// can be held within a block
+	BlockSize int `json:"block_size"`
+	// RingBufferSize guides how many blocks are part of the ring buffer
+	RingBufferSize int `json:"ring_buffer_size"`
+}
+
+const (
+	DefaultBlockSize      int = 1 * 1024 * 1024 // 1 MB
+	DefaultRingBufferSize int = 4
+)
+
 // Ifaces stores the per-interface configuration
-type Ifaces map[string]capture.Config
+type Ifaces map[string]CaptureConfig
 
 // LogConfig stores the logging configuration
 type LogConfig struct {
 	Destination string `json:"destination"`
 	Level       string `json:"level"`
+	Encoding    string `json:"encoding"`
+
+	DevelopmentMode bool `json:"developmentMode,omitempty"`
+	StackTraces     bool `json:"stackTraces,omitempty"`
 }
 
 // APIConfig stores goProbe's API configuration
@@ -77,18 +101,20 @@ type DiscoveryConfig struct {
 // New creates a new configuration struct with default settings
 func New() *Config {
 	return &Config{
+		DB: DBConfig{
+			EncoderType: "lz4",
+		},
 		Interfaces: make(Ifaces),
 		// default config is syslog
 		Logging: LogConfig{
-			Destination: "syslog",
-			Level:       "info",
+			Encoding: "console",
+			Level:    "info",
 		},
 		// default API config
 		API: APIConfig{
 			Host: "localhost",
 			Port: "6060",
 		},
-		EncoderType: "lz4",
 	}
 }
 
@@ -131,13 +157,20 @@ func (d DiscoveryConfig) validate() error {
 	return nil
 }
 
+func (c CaptureConfig) validate() error {
+	if c.BufferSize <= 0 {
+		return fmt.Errorf("Buffer size must be a postive number")
+	}
+	return nil
+}
+
 func (i Ifaces) validate() error {
 	if len(i) == 0 {
 		return fmt.Errorf("No interfaces were specified")
 	}
 
 	for iface, cc := range i {
-		err := cc.Validate()
+		err := cc.validate()
 		if err != nil {
 			return fmt.Errorf("Interface '%s' has invalid configuration: %s", iface, err)
 		}
@@ -145,11 +178,11 @@ func (i Ifaces) validate() error {
 	return nil
 }
 
-func (c *Config) validate() error {
-	if c.DBPath == "" {
+func (d DBConfig) validate() error {
+	if d.Path == "" {
 		return fmt.Errorf("Database path must not be empty")
 	}
-	_, err := encoders.GetTypeByString(c.EncoderType)
+	_, err := encoders.GetTypeByString(d.EncoderType)
 	if err != nil {
 		return err
 	}
@@ -160,7 +193,7 @@ func (c *Config) validate() error {
 func (c *Config) Validate() error {
 	// run all config subsection validators
 	for _, section := range []validator{
-		c,
+		c.DB,
 		c.Interfaces,
 		c.Logging,
 		c.API,
@@ -199,7 +232,7 @@ func Parse(src io.Reader) (*Config, error) {
 
 	// set the runtime DB path
 	if !runtimeDBPath.set {
-		runtimeDBPath.path = config.DBPath
+		runtimeDBPath.path = config.DB.Path
 		runtimeDBPath.set = true
 	}
 

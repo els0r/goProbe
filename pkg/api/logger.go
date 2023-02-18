@@ -1,17 +1,16 @@
 package api
 
 import (
-	log "github.com/els0r/log"
+	"github.com/els0r/goProbe/pkg/logging"
 	"github.com/go-chi/chi/v5/middleware"
 )
 
-type requestLogger struct {
-	l log.Logger
-}
+type requestLogger struct{}
 
 // Print outputs messages with priority "info" by default
 func (r *requestLogger) Print(v ...interface{}) {
-	r.l.Info(v...)
+	logger := logging.Logger()
+	logger.Info(v...)
 }
 
-var reqLogger = middleware.RequestLogger(&middleware.DefaultLogFormatter{Logger: &requestLogger{log.NewTextLogger(log.WithTextPlainOutput())}, NoColor: false})
+var reqLogger = middleware.RequestLogger(&middleware.DefaultLogFormatter{Logger: &requestLogger{}, NoColor: false})
