@@ -171,6 +171,8 @@ func (d *GPDir) Deserialize(r ReadWriteSeekCloser) error {
 	var block storage.BlockAtTime
 	for i := 0; i < int(types.ColIdxCount); i++ {
 		d.BlockMetadata[i].CurrentOffset = int64(binary.BigEndian.Uint64(data[pos : pos+8]))
+		d.BlockMetadata[i].BlockList = make([]storage.BlockAtTime, nBlocks)
+		d.BlockMetadata[i].Blocks = make(map[int64]storage.Block, nBlocks)
 		pos += 8
 		for j := 0; j < nBlocks; j++ {
 			block.EncoderType = encoders.Type(data[pos])
@@ -178,7 +180,7 @@ func (d *GPDir) Deserialize(r ReadWriteSeekCloser) error {
 			block.Len = int(binary.BigEndian.Uint64(data[pos+9 : pos+17]))
 			block.RawLen = int(binary.BigEndian.Uint64(data[pos+17 : pos+25]))
 			block.Timestamp = int64(binary.BigEndian.Uint64(data[pos+25 : pos+33]))
-			d.BlockMetadata[i].BlockList = append(d.BlockMetadata[i].BlockList, block)
+			d.BlockMetadata[i].BlockList[j] = block
 			d.BlockMetadata[i].Blocks[block.Timestamp] = block.Block
 			pos += 33
 		}
