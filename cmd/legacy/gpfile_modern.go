@@ -1,18 +1,24 @@
-package gpfile
+package main
 
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"os"
+	"strings"
 
 	"github.com/els0r/goProbe/pkg/goDB/encoder"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 	"github.com/els0r/goProbe/pkg/goDB/storage"
+	"github.com/els0r/goProbe/pkg/goDB/storage/gpfile"
 )
 
 const (
 	// FileSuffix denotes the suffix used for the raw data stored
 	FileSuffix = ".gpf"
+
+	// HeaderFileSuffix denotes the suffix used for the header data
+	HeaderFileSuffix = ".meta"
 
 	// defaultPermissions denotes the permissions used for file creation
 	defaultPermissions = 0644
@@ -30,6 +36,13 @@ const (
 	ModeWrite = os.O_APPEND | os.O_CREATE | os.O_WRONLY
 )
 
+type readWriteSeekCloser interface {
+	io.Reader
+	io.Writer
+	io.Seeker
+	io.Closer
+}
+
 // GPFile implements the binary data file used to store goProbe's flows
 type GPFile struct {
 
@@ -41,7 +54,7 @@ type GPFile struct {
 	fileWriteBuffer *bufio.Writer
 
 	// header denotes the block header (list of blocks) contained in this file
-	header *storage.BlockHeader
+	header storage.BlockHeader
 
 	// Current / last seek position in file for read operation, used for optimized
 	// sequential read
@@ -60,20 +73,35 @@ type GPFile struct {
 	uncompData, blockData []byte
 
 	// Memory pool (optional)
-	memPool *MemPool
+	memPool *gpfile.MemPool
+}
+
+// Option defines optional arguments to gpfile
+type Option func(*GPFile)
+
+// WithEncoder allows to set the compression implementation
+func WithEncoder(e encoders.Type) Option {
+	return func(g *GPFile) {
+		g.defaultEncoderType = e
+	}
+}
+
+// WithReadAll triggers a full read of the underlying file from disk
+// upon first read access to minimize I/O load.
+// Seeking is handled by replacing the underlying file with a seekable
+// in-memory structure (c.f. readWriteSeekCloser interface)
+func WithReadAll(pool *gpfile.MemPool) Option {
+	return func(g *GPFile) {
+		g.memPool = pool
+	}
 }
 
 // New returns a new GPFile object to read and write goProbe flow data
-func New(filename string, header *storage.BlockHeader, accessMode int, options ...Option) (*GPFile, error) {
+func New(filename string, accessMode int, options ...Option) (*GPFile, error) {
 	g := &GPFile{
 		filename:           filename,
-		header:             header,
 		accessMode:         accessMode,
 		defaultEncoderType: defaultEncoderType,
-	}
-
-	if header == nil {
-		return nil, fmt.Errorf("header information missing when trying to access `%s`", filename)
 	}
 
 	// apply functional options
@@ -92,11 +120,16 @@ func New(filename string, header *storage.BlockHeader, accessMode int, options .
 		return nil, err
 	}
 
+	// Read header if present
+	if err = g.readHeader(); err != nil {
+		return nil, err
+	}
+
 	return g, nil
 }
 
 // Blocks return the list of available blocks (and its metadata)
-func (g *GPFile) Blocks() (*storage.BlockHeader, error) {
+func (g *GPFile) Blocks() (storage.BlockHeader, error) {
 	return g.header, nil
 }
 
@@ -190,16 +223,11 @@ func (g *GPFile) WriteBlock(timestamp int64, blockData []byte) error {
 
 	// If block data is empty, do nothing except updating the header
 	if len(blockData) == 0 {
-		block := storage.Block{
+		g.header.Blocks[timestamp] = storage.Block{
 			Offset:      g.header.CurrentOffset,
 			EncoderType: encoders.EncoderTypeNull,
 		}
-		g.header.BlockList = append(g.header.BlockList, storage.BlockAtTime{
-			Timestamp: timestamp,
-			Block:     block,
-		})
-		g.header.Blocks[timestamp] = block
-		return nil
+		return g.writeHeader()
 	}
 
 	// If the data file is not yet available, open it
@@ -231,20 +259,15 @@ func (g *GPFile) WriteBlock(timestamp int64, blockData []byte) error {
 	}
 
 	// Update and write header data
-	block := storage.Block{
+	g.header.Blocks[timestamp] = storage.Block{
 		Offset:      g.header.CurrentOffset,
 		Len:         nWritten,
 		RawLen:      len(blockData),
 		EncoderType: encType,
 	}
-	g.header.Blocks[timestamp] = block
-	g.header.BlockList = append(g.header.BlockList, storage.BlockAtTime{
-		Timestamp: timestamp,
-		Block:     block,
-	})
 	g.header.CurrentOffset += int64(nWritten)
 
-	return nil
+	return g.writeHeader()
 }
 
 // Close closes the file
@@ -257,7 +280,10 @@ func (g *GPFile) Close() error {
 
 // Delete removes the file and its metadata
 func (g *GPFile) Delete() error {
-	return os.Remove(g.filename)
+	if err := os.Remove(g.filename); err != nil {
+		return err
+	}
+	return os.Remove(g.filename + HeaderFileSuffix)
 }
 
 // Filename exposes the location of the GPF file
@@ -289,10 +315,116 @@ func (g *GPFile) open(flags int) (err error) {
 		if err != nil {
 			return err
 		}
-		if g.file, err = NewMemFile(g.file, int(stat.Size()), g.memPool); err != nil {
+		if g.file, err = gpfile.NewMemFile(g.file, int(stat.Size()), g.memPool); err != nil {
 			return err
 		}
 	}
 
 	return
+}
+
+func (g *GPFile) readHeader() error {
+
+	// Check if a header file exists for this file and open the file for buffered
+	// reading
+	gpfHeaderFile := g.filename + HeaderFileSuffix
+	gpfHeader, err := os.OpenFile(gpfHeaderFile, os.O_RDONLY, defaultPermissions)
+	if err == nil {
+
+		g.header = storage.BlockHeader{
+			Blocks: make(map[int64]storage.Block),
+		}
+		buffer := bufio.NewReader(gpfHeader)
+		scanner := bufio.NewScanner(buffer)
+
+		// Read the global header information and all individual blocks
+		var (
+			ts          int64
+			curOffset   int
+			block       storage.Block
+			encoderType encoders.Type
+		)
+		scanner.Scan()
+		_, err := fmt.Sscanf(scanner.Text(), "v%d,%d,%d", &g.header.Version, &g.header.CurrentOffset, &encoderType)
+		if err != nil {
+			return err
+		}
+		for scanner.Scan() {
+			line := scanner.Text()
+			if strings.Count(line, ",") == 2 {
+				if _, err := fmt.Sscanf(scanner.Text(), "%d,%d,%d", &ts, &block.Len, &block.RawLen); err != nil {
+					return err
+				}
+				block.EncoderType = encoderType
+			} else {
+				if _, err := fmt.Sscanf(scanner.Text(), "%d,%d,%d,%d", &ts, &block.Len, &block.RawLen, &block.EncoderType); err != nil {
+					return err
+				}
+			}
+
+			block.Offset = int64(curOffset)
+			curOffset += block.Len
+			g.header.Blocks[ts] = block
+		}
+
+		return scanner.Err()
+	}
+
+	// If the file doesn't exist, do nothing, otherwise throw the encountered error
+	if !os.IsNotExist(err) {
+		return err
+	}
+
+	// If the file has been opened in read mode, the header file MUST exist, otherwise
+	// the file is invalid (e.g. from a legacy DB format)
+	if g.accessMode == ModeRead {
+		return fmt.Errorf("GPFile invalid: Missing header file %s", gpfHeaderFile)
+	}
+
+	// Initialize a new header
+	g.header = storage.BlockHeader{
+		Blocks:  make(map[int64]storage.Block),
+		Version: headerVersion,
+	}
+
+	return nil
+}
+
+func (g *GPFile) writeHeader() error {
+
+	// Open the header file for buffered writing
+	gpfHeaderFile := g.filename + HeaderFileSuffix
+	gpfHeader, err := os.OpenFile(gpfHeaderFile, os.O_CREATE|os.O_WRONLY, defaultPermissions)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if cerr := gpfHeader.Close(); cerr != nil {
+			err = cerr
+			return
+		}
+	}()
+
+	buffer := bufio.NewWriter(gpfHeader)
+
+	// Write the global header information and all individual blocks
+	var curOffset int
+	if _, err := fmt.Fprintf(buffer, "v%d,%d,%d\n", g.header.Version, g.header.CurrentOffset, g.defaultEncoderType); err != nil {
+		return err
+	}
+	for _, block := range g.header.OrderedList() {
+		if block.EncoderType != g.defaultEncoderType {
+			if _, err := fmt.Fprintf(buffer, "%d,%d,%d,%d\n", block.Timestamp, block.Len, block.RawLen, block.EncoderType); err != nil {
+				return err
+			}
+		} else {
+			if _, err := fmt.Fprintf(buffer, "%d,%d,%d\n", block.Timestamp, block.Len, block.RawLen); err != nil {
+				return err
+			}
+		}
+		curOffset += block.Len
+	}
+
+	// Flush the buffer
+	return buffer.Flush()
 }

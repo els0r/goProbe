@@ -17,48 +17,6 @@ package goDB
 
 import "github.com/els0r/goProbe/pkg/types"
 
-type columnIndex int
-
-const ipSizeOf = -1
-
-// Indices for all column types
-const (
-	// First the attribute columns...
-	SipColIdx, _ columnIndex = iota, iota
-	DipColIdx, _
-	ProtoColIdx, _
-	DportColIdx, _
-
-	// ... and then the columns we aggregate
-	BytesRcvdColIdx, ColIdxAttributeCount
-	BytesSentColIdx, _
-	PacketsRcvdColIdx, _
-	PacketsSentColIdx, _
-	ColIdxCount, _
-)
-
-// Sizeof (entry) for all column types
-const (
-	SipSizeof   int = ipSizeOf
-	DipSizeof   int = ipSizeOf
-	ProtoSizeof int = 1
-	DportSizeof int = 2
-)
-
-// IsCounterCol returns if a column is a counter (and hence does
-// not use fixed-width encoding)
-func (c columnIndex) IsCounterCol() bool {
-	return c >= ColIdxAttributeCount && c <= PacketsSentColIdx
-}
-
-var columnSizeofs = [ColIdxCount]int{
-	SipSizeof, DipSizeof, ProtoSizeof, DportSizeof,
-}
-
-var columnFileNames = [ColIdxCount]string{
-	"sip", "dip", "proto", "dport",
-	"bytes_rcvd", "bytes_sent", "pkts_rcvd", "pkts_sent"}
-
 // Query stores all relevant parameters for data selection
 type Query struct {
 	// list of attributes that will be compared, e.g. "dip" "sip"
@@ -77,15 +35,15 @@ type Query struct {
 
 	// Set of indices of all attributes used in the query, except for the special "time" attribute.
 	// Example: For query type talk_conv, queryAttributeIndices would contain SipColIdx and DipColIdx
-	queryAttributeIndices []columnIndex
+	queryAttributeIndices []types.ColumnIndex
 	// Set of indices of all attributes used in the conditional.
 	// Example: For the conditional "dport = 80 & dnet = 0.0.0.0/0" conditionalAttributeIndices
 	// would contain DipColIdx and DportColIdx
-	conditionalAttributeIndices []columnIndex
+	conditionalAttributeIndices []types.ColumnIndex
 	// Set containing the union of queryAttributeIndices, conditionalAttributeIndices, and
 	// {BytesSentColIdx, PacketsRcvdColIdx, PacketsSentColIdx, ColIdxCount}.
 	// The latter four elements are needed for every query since they contain the variables we aggregate.
-	columnIndices []columnIndex
+	columnIndices []types.ColumnIndex
 
 	// Enables memory-saving mode
 	lowMem bool
@@ -95,12 +53,12 @@ type Query struct {
 // this function with conditionalAttributeNameToColumnIndex; however, then
 // we wouldn't "fail early" if an snet or dnet entry somehow made it into
 // the condition attributes.
-func queryAttributeNameToColumnIndex(name string) (colIdx columnIndex) {
-	colIdx, ok := map[string]columnIndex{
-		"sip":   SipColIdx,
-		"dip":   DipColIdx,
-		"proto": ProtoColIdx,
-		"dport": DportColIdx}[name]
+func queryAttributeNameToColumnIndex(name string) (colIdx types.ColumnIndex) {
+	colIdx, ok := map[string]types.ColumnIndex{
+		"sip":   types.SipColIdx,
+		"dip":   types.DipColIdx,
+		"proto": types.ProtoColIdx,
+		"dport": types.DportColIdx}[name]
 	if !ok {
 		panic("Unknown query attribute " + name)
 	}
@@ -109,28 +67,28 @@ func queryAttributeNameToColumnIndex(name string) (colIdx columnIndex) {
 
 // Computes a columnIndex from a column name. Different from queryAttributeNameToColumnIndex
 // because snet and dnet are only allowed in conditionals.
-func conditionalAttributeNameToColumnIndex(name string) (colIdx columnIndex) {
-	colIdx, ok := map[string]columnIndex{
-		"sip":   SipColIdx,
-		"snet":  SipColIdx,
-		"dip":   DipColIdx,
-		"dnet":  DipColIdx,
-		"proto": ProtoColIdx,
-		"dport": DportColIdx}[name]
+func conditionalAttributeNameToColumnIndex(name string) (colIdx types.ColumnIndex) {
+	colIdx, ok := map[string]types.ColumnIndex{
+		"sip":   types.SipColIdx,
+		"snet":  types.SipColIdx,
+		"dip":   types.DipColIdx,
+		"dnet":  types.DipColIdx,
+		"proto": types.ProtoColIdx,
+		"dport": types.DportColIdx}[name]
 	if !ok {
 		panic("Unknown conditional attribute " + name)
 	}
 	return
 }
 
-var queryAttributeColumnFlagSetters = [ColIdxAttributeCount]func(q *Query){
+var queryAttributeColumnFlagSetters = [types.ColIdxAttributeCount]func(q *Query){
 	func(q *Query) { q.hasAttrSip = true },
 	func(q *Query) { q.hasAttrDip = true },
 	func(q *Query) { q.hasAttrProto = true },
 	func(q *Query) { q.hasAttrDport = true },
 }
 
-var queryConditionalColumnFlagSetters = [ColIdxAttributeCount]func(q *Query){
+var queryConditionalColumnFlagSetters = [types.ColIdxAttributeCount]func(q *Query){
 	func(q *Query) { q.hasCondSip = true },
 	func(q *Query) { q.hasCondDip = true },
 	func(q *Query) { q.hasCondProto = true },
@@ -147,7 +105,7 @@ func NewQuery(attributes []types.Attribute, conditional Node, hasAttrTime, hasAt
 	}
 
 	// Compute index sets
-	var isAttributeIndex [ColIdxAttributeCount]bool // temporary variable for computing set union
+	var isAttributeIndex [types.ColIdxAttributeCount]bool // temporary variable for computing set union
 
 	for _, attrib := range q.Attributes {
 		colIdx := queryAttributeNameToColumnIndex(attrib.Name())
@@ -164,13 +122,13 @@ func NewQuery(attributes []types.Attribute, conditional Node, hasAttrTime, hasAt
 			queryConditionalColumnFlagSetters[colIdx](q)
 		}
 	}
-	for colIdx := columnIndex(0); colIdx < ColIdxAttributeCount; colIdx++ {
+	for colIdx := types.ColumnIndex(0); colIdx < types.ColIdxAttributeCount; colIdx++ {
 		if isAttributeIndex[colIdx] {
 			q.columnIndices = append(q.columnIndices, colIdx)
 		}
 	}
 	q.columnIndices = append(q.columnIndices,
-		BytesRcvdColIdx, BytesSentColIdx, PacketsRcvdColIdx, PacketsSentColIdx)
+		types.BytesRcvdColIdx, types.BytesSentColIdx, types.PacketsRcvdColIdx, types.PacketsSentColIdx)
 
 	return q
 }

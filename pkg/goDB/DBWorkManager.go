@@ -15,7 +15,6 @@ package goDB
 
 import (
 	"context"
-	"encoding/binary"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -33,23 +32,15 @@ import (
 
 const (
 
-	// EpochDay is one day in seconds
-	EpochDay int64 = 86400
-
 	// DBWriteInterval defines the periodic write out interval of goProbe
 	DBWriteInterval int64 = 300
-
-	// MetaInfoFileName exposes the name of the file from which timestamp information is
-	// obtained for the query plan
-	MetaInfoFileName = "bytes_rcvd.gpf"
 )
 
 // DBWorkload stores all relevant parameters to load a block and execute a query on it
 type DBWorkload struct {
 	query   *Query
-	workDir string
+	workDir *gpfile.GPDir
 	load    []int64
-	memPool *gpfile.MemPool
 }
 
 // DBWorkManager schedules parallel processing of blocks relevant for a query
@@ -105,12 +96,13 @@ func (w *DBWorkManager) CreateWorkerJobs(tfirst int64, tlast int64, query *Query
 
 	// loop over directory list in order to create the timestamp pairs
 	var (
-		infoFile *gpfile.GPFile
-		memPool  *gpfile.MemPool
-		dirName  string
+		memPool       *gpfile.MemPool
+		gpFileOptions []gpfile.Option
+		dirName       string
 	)
 	if !query.lowMem {
 		memPool = gpfile.NewMemPool()
+		gpFileOptions = append(gpFileOptions, gpfile.WithReadAll(memPool))
 	}
 
 	// make sure to start with zero workloads as the number of assigned
@@ -122,29 +114,21 @@ func (w *DBWorkManager) CreateWorkerJobs(tfirst int64, tlast int64, query *Query
 			tempdirTstamp, _ := strconv.ParseInt(dirName, 10, 64)
 
 			// check if the directory is within time frame of interest
-			if tfirst < tempdirTstamp+EpochDay && tempdirTstamp < tlast+DBWriteInterval {
+			if tfirst < tempdirTstamp+gpfile.EpochDay && tempdirTstamp < tlast+DBWriteInterval {
 				numDirs++
 
-				// create new workload for the directory
-				workload := DBWorkload{query: query, workDir: dirName, load: []int64{}, memPool: memPool}
-
-				// retrieve all the relevant timestamps from one of the database files.
-				path := filepath.Join(w.dbIfaceDir, dirName, "bytes_rcvd.gpf")
-				if infoFile, err = gpfile.New(path, gpfile.ModeRead); err != nil {
-					return false, fmt.Errorf("Could not read file: %s: %s", path, err)
-				}
-
-				// add the relevant timestamps to the workload's list
-				blockHeader, err := infoFile.Blocks()
+				dir, err := gpfile.NewDir(w.dbIfaceDir, tempdirTstamp, gpfile.ModeRead, gpFileOptions...)
 				if err != nil {
-					return false, fmt.Errorf("Could not get blocks from file: %s: %s", path, err)
+					return false, fmt.Errorf("Could not get block timestamps from directory: %s: %s", dir.Path(), err)
 				}
-				for _, block := range blockHeader.OrderedList() {
+
+				// create new workload for the directory
+				workload := DBWorkload{query: query, workDir: dir, load: []int64{}}
+				for _, block := range dir.Blocks() {
 					if tfirst < block.Timestamp && block.Timestamp < tlast+DBWriteInterval {
 						workload.load = append(workload.load, block.Timestamp)
 					}
 				}
-				infoFile.Close()
 
 				// Assume we have a directory with timestamp td.
 				// Assume that the first block in the directory has timestamp td + 10.
@@ -225,12 +209,7 @@ func (w *DBWorkManager) readBlocksAndEvaluate(ctx context.Context, workload DBWo
 	var (
 		query = workload.query
 		dir   = workload.workDir
-
-		gpFileOptions []gpfile.Option
 	)
-	if workload.memPool != nil {
-		gpFileOptions = append(gpFileOptions, gpfile.WithReadAll(workload.memPool))
-	}
 
 	var (
 		v4Key, v4ComparisonValue                                         = types.NewEmptyV4Key().ExtendEmpty(), types.NewEmptyV4Key().ExtendEmpty()
@@ -238,12 +217,12 @@ func (w *DBWorkManager) readBlocksAndEvaluate(ctx context.Context, workload DBWo
 		bytesRcvdValues, bytesSentValues, pktsRcvdValues, pktsSentValues []uint64
 	)
 
+	defer workload.workDir.Close()
+
 	// Load the GPFiles corresponding to the columns we need for the query. Each file is loaded at most once.
-	var columnFiles [ColIdxCount]*gpfile.GPFile
+	var columnFiles [types.ColIdxCount]*gpfile.GPFile
 	for _, colIdx := range query.columnIndices {
-		if columnFiles[colIdx], err = gpfile.New(filepath.Join(w.dbIfaceDir, dir, columnFileNames[colIdx]+".gpf"), gpfile.ModeRead, gpFileOptions...); err == nil {
-			defer columnFiles[colIdx].Close()
-		} else {
+		if columnFiles[colIdx], err = workload.workDir.Column(colIdx); err != nil {
 			return err
 		}
 	}
@@ -257,7 +236,7 @@ func (w *DBWorkManager) readBlocksAndEvaluate(ctx context.Context, workload DBWo
 			return nil
 		default:
 			var (
-				blocks      [ColIdxCount][]byte
+				blocks      [types.ColIdxCount][]byte
 				blockBroken bool
 				ts          int64
 				iface       string
@@ -267,43 +246,40 @@ func (w *DBWorkManager) readBlocksAndEvaluate(ctx context.Context, workload DBWo
 			for _, colIdx := range query.columnIndices {
 
 				// Read the block from the file
-				if blocks[colIdx], err = columnFiles[colIdx].ReadBlock(tstamp); err != nil {
+				if blocks[colIdx], err = dir.ReadBlock(colIdx, tstamp); err != nil {
 					blockBroken = true
-					w.logger.Warnf("[D %s; B %d] Failed to read %s.gpf: %s", dir, tstamp, columnFileNames[colIdx], err.Error())
+					w.logger.Warnf("[D %s; B %d] Failed to read column %s: %s", dir, tstamp, types.ColumnFileNames[colIdx], err.Error())
 					break
 				}
 			}
 
 			// Check whether all blocks have matching number of entries
-			// TODO: Quick-shot, this information should be stored in the metadata for this directory instead !!!
-			numV4Entries := int(binary.BigEndian.Uint64(blocks[BytesRcvdColIdx][:8]))
-			blocks[BytesRcvdColIdx] = blocks[BytesRcvdColIdx][8:]
-
-			numEntries := bitpack.Len(blocks[BytesRcvdColIdx])
+			numV4Entries := int(dir.GetNumIPv4Entries(tstamp))
+			numEntries := bitpack.Len(blocks[types.BytesRcvdColIdx])
 			for _, colIdx := range query.columnIndices {
 				l := len(blocks[colIdx])
 				if colIdx.IsCounterCol() {
 					if bitpack.Len(blocks[colIdx]) != numEntries {
 						blockBroken = true
-						w.logger.Warnf("[Bl %d] Incorrect number of entries in file [%s.gpf]. Expected %d, found %d", b, columnFileNames[colIdx], numEntries, bitpack.Len(blocks[colIdx]))
+						w.logger.Warnf("[Bl %d] Incorrect number of entries in file [%s.gpf]. Expected %d, found %d", b, types.ColumnFileNames[colIdx], numEntries, bitpack.Len(blocks[colIdx]))
 						break
 					}
 				} else {
-					if columnSizeofs[colIdx] == ipSizeOf {
+					if types.ColumnSizeofs[colIdx] == types.IPSizeOf {
 						if l != (numEntries-int(numV4Entries))*types.IPv6Width+int(numV4Entries)*types.IPv4Width {
 							blockBroken = true
-							w.logger.Warnf("[Bl %d] Incorrect number of entries in variable block size file [%s.gpf]. Expected file length %d, have %d", b, columnFileNames[colIdx], (numEntries-int(numV4Entries))*types.IPv6Width+int(numV4Entries)*types.IPv4Width, l)
+							w.logger.Warnf("[Bl %d] Incorrect number of entries in variable block size file [%s.gpf]. Expected file length %d, have %d", b, types.ColumnFileNames[colIdx], (numEntries-int(numV4Entries))*types.IPv6Width+int(numV4Entries)*types.IPv4Width, l)
 							break
 						}
 					} else {
-						if l/columnSizeofs[colIdx] != numEntries {
+						if l/types.ColumnSizeofs[colIdx] != numEntries {
 							blockBroken = true
-							w.logger.Warnf("[Bl %d] Incorrect number of entries in file [%s.gpf]. Expected %d, found %d", b, columnFileNames[colIdx], numEntries, l/columnSizeofs[colIdx])
+							w.logger.Warnf("[Bl %d] Incorrect number of entries in column [%s.gpf]. Expected %d, found %d", b, types.ColumnFileNames[colIdx], numEntries, l/types.ColumnSizeofs[colIdx])
 							break
 						}
-						if l%columnSizeofs[colIdx] != 0 {
+						if l%types.ColumnSizeofs[colIdx] != 0 {
 							blockBroken = true
-							w.logger.Warnf("[Bl %d] Entry size does not evenly divide block size in file [%s.gpf]", b, columnFileNames[colIdx])
+							w.logger.Warnf("[Bl %d] Entry size does not evenly divide block size in file [%s.gpf]", b, types.ColumnFileNames[colIdx])
 							break
 						}
 					}
@@ -331,15 +307,15 @@ func (w *DBWorkManager) readBlocksAndEvaluate(ctx context.Context, workload DBWo
 				}
 			}
 
-			bytesRcvdValues = bitpack.UnpackInto(blocks[BytesRcvdColIdx], bytesRcvdValues)
-			bytesSentValues = bitpack.UnpackInto(blocks[BytesSentColIdx], bytesSentValues)
-			pktsRcvdValues = bitpack.UnpackInto(blocks[PacketsRcvdColIdx], pktsRcvdValues)
-			pktsSentValues = bitpack.UnpackInto(blocks[PacketsSentColIdx], pktsSentValues)
+			bytesRcvdValues = bitpack.UnpackInto(blocks[types.BytesRcvdColIdx], bytesRcvdValues)
+			bytesSentValues = bitpack.UnpackInto(blocks[types.BytesSentColIdx], bytesSentValues)
+			pktsRcvdValues = bitpack.UnpackInto(blocks[types.PacketsRcvdColIdx], pktsRcvdValues)
+			pktsSentValues = bitpack.UnpackInto(blocks[types.PacketsSentColIdx], pktsSentValues)
 
-			sipBlocks := blocks[SipColIdx]
-			dipBlocks := blocks[DipColIdx]
-			dportBlocks := blocks[DportColIdx]
-			protoBlocks := blocks[ProtoColIdx]
+			sipBlocks := blocks[types.SipColIdx]
+			dipBlocks := blocks[types.DipColIdx]
+			dportBlocks := blocks[types.DportColIdx]
+			protoBlocks := blocks[types.ProtoColIdx]
 
 			key, comparisonValue := v4Key, v4ComparisonValue
 			startEntry, isIPv4 := 0, true // TODO: Support traversal of IPv4 / IPv6 only if there's a matching condition
@@ -370,7 +346,7 @@ func (w *DBWorkManager) readBlocksAndEvaluate(ctx context.Context, workload DBWo
 					key.PutProto(protoBlocks[i])
 				}
 				if query.hasAttrDport {
-					key.PutDport(dportBlocks[i*DportSizeof : i*DportSizeof+DportSizeof])
+					key.PutDport(dportBlocks[i*types.DportSizeof : i*types.DportSizeof+types.DportSizeof])
 				}
 
 				// Check whether conditional is satisfied for current entry
@@ -398,7 +374,7 @@ func (w *DBWorkManager) readBlocksAndEvaluate(ctx context.Context, workload DBWo
 						comparisonValue.PutProto(protoBlocks[i])
 					}
 					if query.hasCondDport {
-						comparisonValue.PutDport(dportBlocks[i*DportSizeof : i*DportSizeof+DportSizeof])
+						comparisonValue.PutDport(dportBlocks[i*types.DportSizeof : i*types.DportSizeof+types.DportSizeof])
 					}
 
 					conditionalSatisfied = query.Conditional.evaluate(comparisonValue.Key())

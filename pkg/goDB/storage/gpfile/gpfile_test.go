@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -27,27 +26,14 @@ var (
 )
 
 func TestFailedRead(t *testing.T) {
-	_, err := New(testFilePath, ModeRead)
+	_, err := New(testFilePath, nil, ModeRead)
 	if err == nil {
 		t.Fatalf("Expected an error trying to open a non-existing GPFile for reading, got none")
 	}
 }
 
-func TestInvalidRead(t *testing.T) {
-
-	if err := os.WriteFile(invalidFilePath, []byte{0, 1, 2, 3}, 0600); err != nil {
-		t.Fatalf("Failed to write invalid file %s: %s", invalidFilePath, err)
-	}
-	defer os.Remove(invalidFilePath)
-
-	_, err := New(invalidFilePath, ModeRead)
-	if err == nil {
-		t.Fatalf("Expected an error trying to open an invalid GPFile for reading, got none")
-	}
-}
-
 func TestCreateFile(t *testing.T) {
-	gpf, err := New(testFilePath, ModeWrite)
+	gpf, err := New(testFilePath, newMetadata().BlockMetadata[0], ModeWrite)
 	if err != nil {
 		t.Fatalf("Failed to create new GPFile: %s", err)
 	}
@@ -63,7 +49,7 @@ func TestCreateFile(t *testing.T) {
 }
 
 func TestWriteFile(t *testing.T) {
-	gpf, err := New(testFilePath, ModeWrite)
+	gpf, err := New(testFilePath, newMetadata().BlockMetadata[0], ModeWrite)
 	if err != nil {
 		t.Fatalf("Failed to create new GPFile: %s", err)
 	}
@@ -90,7 +76,10 @@ func TestRoundtrip(t *testing.T) {
 }
 
 func testRoundtrip(t *testing.T, enc encoders.Type) {
-	gpf, err := New(testFilePath, ModeWrite, WithEncoder(enc))
+
+	m := newMetadata()
+
+	gpf, err := New(testFilePath, m.BlockMetadata[0], ModeWrite, WithEncoder(enc))
 	if err != nil {
 		t.Fatalf("Failed to create new GPFile: %s", err)
 	}
@@ -116,7 +105,7 @@ func testRoundtrip(t *testing.T, enc encoders.Type) {
 		t.Fatalf("Failed to close test file: %s", err)
 	}
 
-	gpf, err = New(testFilePath, ModeRead)
+	gpf, err = New(testFilePath, m.BlockMetadata[0], ModeRead)
 	if err != nil {
 		t.Fatalf("Failed to read GPFile: %s", err)
 	}

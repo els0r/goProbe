@@ -42,7 +42,10 @@ type InterfaceSummaryUpdate struct {
 	// Number of flows
 	FlowCount uint64
 	// Traffic volume in bytes
-	Traffic   uint64
+	Traffic uint64
+	// Number of IPv4 entries
+	NumIPV4Entries uint64
+
 	Timestamp time.Time
 }
 
@@ -123,10 +126,10 @@ func WriteDBSummary(dbpath string, summ *DBSummary) error {
 // If no lock can be acquired after (roughly) timeout time, returns an error.
 //
 // modify is expected to obey the following contract:
-// * The input summary is nil if no summary file is present.
-// * modify returns the summary to be written (must be non-nil) and an error.
-// * Since the summary is locked while modify is
-//   running, modify shouldn't take longer than roughly half a second.
+//   - The input summary is nil if no summary file is present.
+//   - modify returns the summary to be written (must be non-nil) and an error.
+//   - Since the summary is locked while modify is
+//     running, modify shouldn't take longer than roughly half a second.
 func ModifyDBSummary(dbpath string, timeout time.Duration, modify func(*DBSummary) (*DBSummary, error)) (modErr error) {
 	// Back off exponentially in case of failure.
 	// Retry for at most timeout time.

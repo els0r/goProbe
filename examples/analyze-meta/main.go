@@ -6,12 +6,15 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"text/tabwriter"
 	"time"
 
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 	"github.com/els0r/goProbe/pkg/goDB/storage/gpfile"
+	"github.com/els0r/goProbe/pkg/types"
 	"github.com/sirupsen/logrus"
 )
 
@@ -22,28 +25,34 @@ var (
 func main() {
 	logger := logrus.StandardLogger()
 
-	metaSuffix := ".meta"
-
 	flag.StringVar(&pathMetaFile, "path", "", "Path to meta file")
 	flag.Parse()
 
-	pathMetaFile = strings.TrimSpace(pathMetaFile)
-
-	if !strings.HasSuffix(pathMetaFile, metaSuffix) {
-		logger.Fatalf("path %q is not a GPF meta file", metaSuffix)
-	}
-
-	gpfPath := strings.TrimSuffix(pathMetaFile, metaSuffix)
-
-	gpfFile, err := gpfile.New(gpfPath, gpfile.ModeRead)
+	pathMetaFile = filepath.Clean(pathMetaFile)
+	dirPath := filepath.Dir(pathMetaFile)
+	timestamp, err := strconv.ParseInt(filepath.Base(dirPath), 10, 64)
 	if err != nil {
-		logger.WithField("path", gpfPath).Fatalf("failed to open GPF file: %v", err)
+		logger.Fatalf("failed to extract timestamp: %s", err)
+	}
+	baseDirPath := filepath.Dir(dirPath)
+
+	gpDir, err := gpfile.NewDir(baseDirPath, timestamp, gpfile.ModeRead)
+	if err != nil {
+		logger.WithField("path", dirPath).Fatalf("failed to open GPF dir: %v", err)
 	}
 
-	err = PrintMetaTable(gpfFile, os.Stdout)
-	if err != nil {
-		logger.Fatalf("print meta tabe: %v", err)
+	for i := types.ColumnIndex(0); i < types.ColIdxCount; i++ {
+		gpfFile, err := gpDir.Column(i)
+		if err != nil {
+			logger.WithField("path", dirPath).Fatalf("failed to access GPF column file: %v", err)
+		}
+
+		err = PrintMetaTable(gpfFile, os.Stdout)
+		if err != nil {
+			logger.Fatalf("print meta table: %v", err)
+		}
 	}
+
 }
 
 func PrintMetaTable(gpf *gpfile.GPFile, w io.Writer) error {

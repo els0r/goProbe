@@ -11,7 +11,6 @@
 package goDB
 
 import (
-	"encoding/binary"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -21,6 +20,7 @@ import (
 	"github.com/els0r/goProbe/pkg/goDB/encoder/bitpack"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 	"github.com/els0r/goProbe/pkg/goDB/storage/gpfile"
+	"github.com/els0r/goProbe/pkg/types"
 	"github.com/els0r/goProbe/pkg/types/hashmap"
 )
 
@@ -30,11 +30,6 @@ const (
 	// MetadataFileName specifies the location of the daily column metadata file
 	MetadataFileName = "meta.json"
 )
-
-// DayTimestamp returns timestamp rounded down to the nearest day
-func DayTimestamp(timestamp int64) int64 {
-	return (timestamp / EpochDay) * EpochDay
-}
 
 // DBWriter writes goProbe flows to goDB database files
 type DBWriter struct {
@@ -53,15 +48,16 @@ func NewDBWriter(dbpath string, iface string, encoderType encoders.Type) (w *DBW
 }
 
 func (w *DBWriter) dailyDir(timestamp int64) (path string) {
-	dailyDir := strconv.FormatInt(DayTimestamp(timestamp), 10)
+	dailyDir := strconv.FormatInt(gpfile.DirTimestamp(timestamp), 10)
 	path = filepath.Join(w.dbpath, w.iface, dailyDir)
 	return
 }
 
+// TODO: Merge with GPDir metadata
 func (w *DBWriter) writeMetadata(timestamp int64, meta BlockMetadata) error {
-	if w.dayTimestamp != DayTimestamp(timestamp) {
+	if w.dayTimestamp != gpfile.DirTimestamp(timestamp) {
 		w.metadata = nil
-		w.dayTimestamp = DayTimestamp(timestamp)
+		w.dayTimestamp = gpfile.DirTimestamp(timestamp)
 	}
 
 	path := filepath.Join(w.dailyDir(timestamp), MetadataFileName)
@@ -75,20 +71,20 @@ func (w *DBWriter) writeMetadata(timestamp int64, meta BlockMetadata) error {
 	return WriteMetadata(path, w.metadata)
 }
 
-func (w *DBWriter) writeBlock(timestamp int64, column string, data []byte) error {
-	path := filepath.Join(w.dailyDir(timestamp), column+".gpf")
-	gpfile, err := gpfile.New(path, gpfile.ModeWrite, gpfile.WithEncoder(w.encoderType))
-	if err != nil {
-		return err
-	}
-	defer gpfile.Close()
+// func (w *DBWriter) writeBlock(timestamp int64, column string, data []byte) error {
+// 	path := filepath.Join(w.dailyDir(timestamp), column+".gpf")
+// 	gpfile, err := gpfile.New(path, gpfile.ModeWrite, gpfile.WithEncoder(w.encoderType))
+// 	if err != nil {
+// 		return err
+// 	}
+// 	defer gpfile.Close()
 
-	if err := gpfile.WriteBlock(timestamp, data); err != nil {
-		return err
-	}
+// 	if err := gpfile.WriteBlock(timestamp, data); err != nil {
+// 		return err
+// 	}
 
-	return nil
-}
+// 	return nil
+// }
 
 func (w *DBWriter) createQueryLog() error {
 	var (
@@ -113,16 +109,17 @@ func (w *DBWriter) createQueryLog() error {
 // Write takes an aggregated flow map and its metadata and writes it to disk for a given timestamp
 func (w *DBWriter) Write(flowmap *hashmap.AggFlowMap, meta BlockMetadata, timestamp int64) (InterfaceSummaryUpdate, error) {
 	var (
-		dbdata [ColIdxCount][]byte
+		data   [types.ColIdxCount][]byte
 		update InterfaceSummaryUpdate
 		err    error
 	)
 
-	err = os.MkdirAll(w.dailyDir(timestamp), 0755)
+	dir, err := gpfile.NewDir(filepath.Join(w.dbpath, w.iface), timestamp, gpfile.ModeWrite)
 	if err != nil {
-		err = fmt.Errorf("Could not create daily directory: %s", err.Error())
+		err = fmt.Errorf("Could not create / open daily directory: %w", err)
 		return update, err
 	}
+	defer dir.Close()
 
 	// check if the query log exists and create it if necessary
 	err = w.createQueryLog()
@@ -130,12 +127,9 @@ func (w *DBWriter) Write(flowmap *hashmap.AggFlowMap, meta BlockMetadata, timest
 		return update, err
 	}
 
-	dbdata, update = dbData(w.iface, timestamp, flowmap)
-
-	for i := columnIndex(0); i < ColIdxCount; i++ {
-		if err = w.writeBlock(timestamp, columnFileNames[i], dbdata[i]); err != nil {
-			return update, err
-		}
+	data, update = dbData(w.iface, timestamp, flowmap)
+	if err := dir.WriteBlocks(timestamp, update.NumIPV4Entries, data); err != nil {
+		return update, err
 	}
 
 	meta.FlowCount = update.FlowCount
@@ -148,19 +142,19 @@ func (w *DBWriter) Write(flowmap *hashmap.AggFlowMap, meta BlockMetadata, timest
 	return update, err
 }
 
-func dbData(iface string, timestamp int64, aggFlowMap *hashmap.AggFlowMap) ([ColIdxCount][]byte, InterfaceSummaryUpdate) {
-	var dbData [ColIdxCount][]byte
+func dbData(iface string, timestamp int64, aggFlowMap *hashmap.AggFlowMap) ([types.ColIdxCount][]byte, InterfaceSummaryUpdate) {
+	var dbData [types.ColIdxCount][]byte
 	summUpdate := new(InterfaceSummaryUpdate)
 
 	v4List, v6List := aggFlowMap.Flatten()
 	v4List = v4List.Sort()
 	v6List = v6List.Sort()
-	for i := columnIndex(0); i < ColIdxAttributeCount; i++ {
-		columnSizeof := columnSizeofs[i]
-		if columnSizeof == ipSizeOf {
+	for i := types.ColumnIndex(0); i < types.ColIdxAttributeCount; i++ {
+		columnSizeof := types.ColumnSizeofs[i]
+		if columnSizeof == types.IPSizeOf {
 			dbData[i] = make([]byte, 0, 4*len(v4List)+16*len(v6List))
 		} else {
-			dbData[i] = make([]byte, 0, columnSizeofs[i]*(len(v4List)+len(v6List)))
+			dbData[i] = make([]byte, 0, types.ColumnSizeofs[i]*(len(v4List)+len(v6List)))
 		}
 	}
 
@@ -185,23 +179,20 @@ func dbData(iface string, timestamp int64, aggFlowMap *hashmap.AggFlowMap) ([Col
 			pktsSent = append(pktsSent, flow.PacketsSent)
 
 			// attributes
-			dbData[DportColIdx] = append(dbData[DportColIdx], flow.GetDport()...)
-			dbData[ProtoColIdx] = append(dbData[ProtoColIdx], flow.GetProto())
-			dbData[SipColIdx] = append(dbData[SipColIdx], flow.GetSip()...)
-			dbData[DipColIdx] = append(dbData[DipColIdx], flow.GetDip()...)
+			dbData[types.DportColIdx] = append(dbData[types.DportColIdx], flow.GetDport()...)
+			dbData[types.ProtoColIdx] = append(dbData[types.ProtoColIdx], flow.GetProto())
+			dbData[types.SipColIdx] = append(dbData[types.SipColIdx], flow.GetSip()...)
+			dbData[types.DipColIdx] = append(dbData[types.DipColIdx], flow.GetDip()...)
 		}
 	}
 
 	// Perform bit packing on the counter columns
-	dbData[BytesRcvdColIdx] = bitpack.Pack(bytesRcvd)
-	dbData[BytesSentColIdx] = bitpack.Pack(bytesSent)
-	dbData[PacketsRcvdColIdx] = bitpack.Pack(pktsRcvd)
-	dbData[PacketsSentColIdx] = bitpack.Pack(pktsSent)
+	dbData[types.BytesRcvdColIdx] = bitpack.Pack(bytesRcvd)
+	dbData[types.BytesSentColIdx] = bitpack.Pack(bytesSent)
+	dbData[types.PacketsRcvdColIdx] = bitpack.Pack(pktsRcvd)
+	dbData[types.PacketsSentColIdx] = bitpack.Pack(pktsSent)
 
-	// TODO: Quick-shot, this information should be stored in the metadata for this directory instead !!!
-	v4Len := make([]byte, 8)
-	binary.BigEndian.PutUint64(v4Len, uint64(len(v4List)))
-	dbData[BytesRcvdColIdx] = append(v4Len, dbData[BytesRcvdColIdx]...)
+	summUpdate.NumIPV4Entries = uint64(len(v4List))
 
 	return dbData, *summUpdate
 }

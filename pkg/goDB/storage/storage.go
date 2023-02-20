@@ -1,7 +1,6 @@
 package storage
 
 import (
-	"sort"
 	"time"
 
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
@@ -22,6 +21,7 @@ func (b Block) IsEmpty() bool {
 
 // BlockHeader denotes a list of blocks pertaining to a storage backend
 type BlockHeader struct {
+	BlockList     []BlockAtTime   `json:"bl,omitempty"`
 	Blocks        map[int64]Block `json:"b,omitempty"`
 	CurrentOffset int64           `json:"p,omitempty"`
 	Version       int             `json:"v"`
@@ -35,20 +35,7 @@ type BlockAtTime struct {
 
 // OrderedList returns an ordered list of timestamps / blocks
 func (b BlockHeader) OrderedList() []BlockAtTime {
-	result := make([]BlockAtTime, 0, len(b.Blocks))
-
-	for k, v := range b.Blocks {
-		result = append(result, BlockAtTime{
-			Timestamp: k,
-			Block:     v,
-		})
-	}
-
-	sort.Slice(result, func(i int, j int) bool {
-		return result[i].Timestamp < result[j].Timestamp
-	})
-
-	return result
+	return b.BlockList
 }
 
 // Backend denotes a generic goDB storage backend

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/els0r/goProbe/pkg/goDB"
+	"github.com/els0r/goProbe/pkg/goDB/storage/gpfile"
 	"github.com/els0r/goProbe/pkg/query"
 	"github.com/els0r/status"
 	"github.com/spf13/cobra"
@@ -100,7 +101,7 @@ type cleanIfaceResult struct {
 
 func cleanIfaceDir(dbPath string, timestamp int64, iface string) (result cleanIfaceResult, err error) {
 
-	dayTimestamp := goDB.DayTimestamp(timestamp)
+	dayTimestamp := gpfile.DirTimestamp(timestamp)
 
 	status.Linef("cleaning DBs for %s", iface)
 

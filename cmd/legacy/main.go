@@ -108,6 +108,9 @@ type fileSet interface {
 	Close() error
 }
 
+// headerFileSuffix denotes the suffix used for the legcay header data
+const headerFileSuffix = ".meta"
+
 func isLegacyDir(path string) (bool, error) {
 	dirents, err := os.ReadDir(path)
 	if err != nil {
@@ -119,7 +122,7 @@ func isLegacyDir(path string) (bool, error) {
 		dname := strings.TrimSpace(strings.ToLower(dirent.Name()))
 		if strings.HasSuffix(dname, gpfile.FileSuffix) {
 			countGPFs++
-		} else if strings.HasSuffix(dname, gpfile.FileSuffix+gpfile.HeaderFileSuffix) {
+		} else if strings.HasSuffix(dname, gpfile.FileSuffix+headerFileSuffix) {
 			countMeta++
 		}
 	}
