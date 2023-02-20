@@ -3,8 +3,8 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"io"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/els0r/goProbe/pkg/goDB/encoder"
@@ -36,11 +36,29 @@ const (
 	ModeWrite = os.O_APPEND | os.O_CREATE | os.O_WRONLY
 )
 
-type readWriteSeekCloser interface {
-	io.Reader
-	io.Writer
-	io.Seeker
-	io.Closer
+// BlockHeader denotes a list of blocks pertaining to a storage backend
+type BlockHeader struct {
+	Blocks        map[int64]storage.Block `json:"b,omitempty"`
+	CurrentOffset int64                   `json:"p,omitempty"`
+	Version       int                     `json:"v"`
+}
+
+// OrderedList returns an ordered list of timestamps / blocks
+func (b BlockHeader) OrderedList() []storage.BlockAtTime {
+	result := make([]storage.BlockAtTime, 0, len(b.Blocks))
+
+	for k, v := range b.Blocks {
+		result = append(result, storage.BlockAtTime{
+			Timestamp: k,
+			Block:     v,
+		})
+	}
+
+	sort.Slice(result, func(i int, j int) bool {
+		return result[i].Timestamp < result[j].Timestamp
+	})
+
+	return result
 }
 
 // GPFile implements the binary data file used to store goProbe's flows
@@ -50,11 +68,11 @@ type GPFile struct {
 	filename string
 
 	// file denotes the pointer to the data file
-	file            readWriteSeekCloser
+	file            gpfile.ReadWriteSeekCloser
 	fileWriteBuffer *bufio.Writer
 
 	// header denotes the block header (list of blocks) contained in this file
-	header storage.BlockHeader
+	header BlockHeader
 
 	// Current / last seek position in file for read operation, used for optimized
 	// sequential read
@@ -129,7 +147,7 @@ func New(filename string, accessMode int, options ...Option) (*GPFile, error) {
 }
 
 // Blocks return the list of available blocks (and its metadata)
-func (g *GPFile) Blocks() (storage.BlockHeader, error) {
+func (g *GPFile) Blocks() (BlockHeader, error) {
 	return g.header, nil
 }
 
@@ -309,13 +327,7 @@ func (g *GPFile) open(flags int) (err error) {
 		g.fileWriteBuffer = bufio.NewWriter(g.file)
 	}
 	if flags == ModeRead && g.memPool != nil {
-
-		// TODO: The file size should be part of the next version metadata to save this Stat() call
-		stat, err := os.Stat(g.filename)
-		if err != nil {
-			return err
-		}
-		if g.file, err = gpfile.NewMemFile(g.file, int(stat.Size()), g.memPool); err != nil {
+		if g.file, err = gpfile.NewMemFile(g.file, g.memPool); err != nil {
 			return err
 		}
 	}
@@ -331,7 +343,7 @@ func (g *GPFile) readHeader() error {
 	gpfHeader, err := os.OpenFile(gpfHeaderFile, os.O_RDONLY, defaultPermissions)
 	if err == nil {
 
-		g.header = storage.BlockHeader{
+		g.header = BlockHeader{
 			Blocks: make(map[int64]storage.Block),
 		}
 		buffer := bufio.NewReader(gpfHeader)
@@ -382,7 +394,7 @@ func (g *GPFile) readHeader() error {
 	}
 
 	// Initialize a new header
-	g.header = storage.BlockHeader{
+	g.header = BlockHeader{
 		Blocks:  make(map[int64]storage.Block),
 		Version: headerVersion,
 	}

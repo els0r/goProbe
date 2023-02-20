@@ -181,9 +181,6 @@ func (g *GPFile) validateBlocks(nExpected int) error {
 	if len(blocks.OrderedList()) != nExpected {
 		return fmt.Errorf("Unexpected number of ordered block list, want %d, have %d", nExpected, len(blocks.OrderedList()))
 	}
-	if blocks.Version != headerVersion {
-		return fmt.Errorf("Unexpected header version, want %d, have %d", headerVersion, blocks.Version)
-	}
 
 	return nil
 }

@@ -24,7 +24,6 @@ type BlockHeader struct {
 	BlockList     []BlockAtTime   `json:"bl,omitempty"`
 	Blocks        map[int64]Block `json:"b,omitempty"`
 	CurrentOffset int64           `json:"p,omitempty"`
-	Version       int             `json:"v"`
 }
 
 // BlockAtTime denotes a block / timestamp pair for easier iteration

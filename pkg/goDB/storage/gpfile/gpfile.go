@@ -37,7 +37,7 @@ type GPFile struct {
 	filename string
 
 	// file denotes the pointer to the data file
-	file            readWriteSeekCloser
+	file            ReadWriteSeekCloser
 	fileWriteBuffer *bufio.Writer
 
 	// header denotes the block header (list of blocks) contained in this file
@@ -283,13 +283,7 @@ func (g *GPFile) open(flags int) (err error) {
 		g.fileWriteBuffer = bufio.NewWriter(g.file)
 	}
 	if flags == ModeRead && g.memPool != nil {
-
-		// TODO: The file size should be part of the next version metadata to save this Stat() call
-		stat, err := os.Stat(g.filename)
-		if err != nil {
-			return err
-		}
-		if g.file, err = NewMemFile(g.file, int(stat.Size()), g.memPool); err != nil {
+		if g.file, err = NewMemFile(g.file, g.memPool); err != nil {
 			return err
 		}
 	}

@@ -1,18 +1,19 @@
 package gpfile
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 
+	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 	"github.com/els0r/goProbe/pkg/goDB/storage"
 	"github.com/els0r/goProbe/pkg/types"
-	jsoniter "github.com/json-iterator/go"
 )
 
 const (
@@ -23,20 +24,28 @@ const (
 	metadataFileName = "blockmeta.json"
 )
 
+var metaDataPool = NewMemPool()
+
+type intPair struct {
+	timestamp int64
+	num       uint64
+}
+
 type Metadata struct {
 	BlockMetadata     [types.ColIdxCount]*storage.BlockHeader
 	BlockNumV4Entries map[int64]uint64
+	Version           int
 }
 
 func newMetadata() *Metadata {
 	m := Metadata{
 		BlockNumV4Entries: make(map[int64]uint64),
+		Version:           headerVersion,
 	}
 	for i := 0; i < int(types.ColIdxCount); i++ {
 		m.BlockMetadata[i] = &storage.BlockHeader{
 			Blocks:    make(map[int64]storage.Block),
 			BlockList: make([]storage.BlockAtTime, 0),
-			Version:   headerVersion,
 		}
 	}
 	return &m
@@ -140,13 +149,113 @@ func (d *GPDir) WriteBlocks(timestamp int64, numV4Entries uint64, dbData [types.
 }
 
 // TODO: Customize encoding (deduplicate map / slice info)
-func (d *GPDir) Deserialize(reader io.Reader) error {
-	return jsoniter.NewDecoder(reader).Decode(&d.Metadata)
+func (d *GPDir) Deserialize(r ReadWriteSeekCloser) error {
+
+	memFile, err := NewMemFile(r, metaDataPool)
+	if err != nil {
+		return fmt.Errorf("failed to read data for deserialization: %w", err)
+	}
+	defer memFile.Close()
+
+	data := memFile.Data()
+	d.Metadata = newMetadata()
+
+	// Get flat nummber of blocks
+	nBlocks := int(binary.BigEndian.Uint64(data[0:8]))
+
+	// Get header version
+	d.Metadata.Version = int(binary.BigEndian.Uint64(data[8:16]))
+	pos := 16
+
+	// Get block information
+	var block storage.BlockAtTime
+	for i := 0; i < int(types.ColIdxCount); i++ {
+		d.BlockMetadata[i].CurrentOffset = int64(binary.BigEndian.Uint64(data[pos : pos+8]))
+		pos += 8
+		for j := 0; j < nBlocks; j++ {
+			block.EncoderType = encoders.Type(data[pos])
+			block.Offset = int64(binary.BigEndian.Uint64(data[pos+1 : pos+9]))
+			block.Len = int(binary.BigEndian.Uint64(data[pos+9 : pos+17]))
+			block.RawLen = int(binary.BigEndian.Uint64(data[pos+17 : pos+25]))
+			block.Timestamp = int64(binary.BigEndian.Uint64(data[pos+25 : pos+33]))
+			d.BlockMetadata[i].BlockList = append(d.BlockMetadata[i].BlockList, block)
+			d.BlockMetadata[i].Blocks[block.Timestamp] = block.Block
+			pos += 33
+		}
+	}
+
+	// Get Metadata.NumIPV4Entries
+	for i := 0; i < nBlocks; i++ {
+		d.BlockNumV4Entries[d.BlockMetadata[0].BlockList[i].Timestamp] = binary.BigEndian.Uint64(data[pos : pos+8])
+		pos += 8
+	}
+
+	return nil
 }
 
 // TODO: Customize encoding (deduplicate map / slice info)
-func (d *GPDir) Serialize(writer io.Writer) error {
-	return jsoniter.NewEncoder(writer).Encode(d.Metadata)
+func (d *GPDir) Serialize(w ReadWriteSeekCloser) error {
+
+	nBlocks := len(d.BlockNumV4Entries)
+	size := 8 + // Overall number of blocks
+		int(types.ColIdxCount)*8 + // Metadata.BlockMetadata.Version
+		nBlocks*8 + // Metadata.NumIPV4Entries (8 bytes each)
+		int(types.ColIdxCount)*8 + // Metadata.BlockMetadata.CurrentOffset
+		nBlocks*int(types.ColIdxCount)*8 + // Metadata.BlockMetadata.BlockList.Timestamp
+		nBlocks*int(types.ColIdxCount) + // Metadata.BlockMetadata.BlockList.Block.EncoderType
+		nBlocks*int(types.ColIdxCount)*8 + // Metadata.BlockMetadata.BlockList.Offset
+		nBlocks*int(types.ColIdxCount)*8 + // Metadata.BlockMetadata.BlockList.Len
+		nBlocks*int(types.ColIdxCount)*8 // Metadata.BlockMetadata.BlockList.RawLen
+
+	data := metaDataPool.Get()
+	if cap(data) < size {
+		data = make([]byte, size)
+	}
+	defer metaDataPool.Put(data)
+
+	// Store flat nummber of blocks
+	binary.BigEndian.PutUint64(data[0:8], uint64(nBlocks))
+
+	// Store header version
+	binary.BigEndian.PutUint64(data[8:16], uint64(d.Metadata.Version))
+	pos := 16
+
+	// Store block information
+	for i := 0; i < int(types.ColIdxCount); i++ {
+		binary.BigEndian.PutUint64(data[pos:pos+8], uint64(d.BlockMetadata[i].CurrentOffset))
+		pos += 8
+		for _, block := range d.BlockMetadata[i].BlockList {
+			data[pos] = byte(block.EncoderType)
+			binary.BigEndian.PutUint64(data[pos+1:pos+9], uint64(block.Offset))
+			binary.BigEndian.PutUint64(data[pos+9:pos+17], uint64(block.Len))
+			binary.BigEndian.PutUint64(data[pos+17:pos+25], uint64(block.RawLen))
+			binary.BigEndian.PutUint64(data[pos+25:pos+33], uint64(block.Timestamp))
+			pos += 33
+		}
+	}
+
+	// Store Metadata.NumIPV4Entries
+	pairs := make([]intPair, 0, nBlocks)
+	for k, v := range d.BlockNumV4Entries {
+		pairs = append(pairs, intPair{k, v})
+	}
+	sort.Slice(pairs, func(i, j int) bool {
+		return pairs[i].timestamp < pairs[j].timestamp
+	})
+	for i := 0; i < len(d.BlockNumV4Entries); i++ {
+		binary.BigEndian.PutUint64(data[pos:pos+8], uint64(pairs[i].num))
+		pos += 8
+	}
+
+	n, err := w.Write(data)
+	if err != nil {
+		return err
+	}
+	if n != len(data) {
+		return fmt.Errorf("invalid number of bytes written, want %d, have %d", len(data), n)
+	}
+
+	return nil
 }
 
 func (d *GPDir) Path() string {
