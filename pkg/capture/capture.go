@@ -24,7 +24,6 @@ import (
 	"github.com/els0r/goProbe/pkg/types/hashmap"
 	"github.com/fako1024/slimcap/capture"
 	"github.com/fako1024/slimcap/capture/afpacket"
-	"github.com/fako1024/slimcap/link"
 )
 
 const (
@@ -324,14 +323,9 @@ func initializing(c *Capture) stateFn {
 	logger := logging.WithContext(c.ctx)
 	logger.Info("initializing capture")
 
-	link, err := link.New(c.iface)
-	if err != nil {
-		logger.Error("failed to create link: %v", err)
-		return inError
-	}
-
-	// set up the paacket source
-	c.captureHandle, err = afpacket.NewRingBufSource(link,
+	// set up the packet source
+	var err error
+	c.captureHandle, err = afpacket.NewRingBufSource(c.iface,
 		afpacket.CaptureLength(Snaplen),
 		afpacket.BufferSize(c.config.BufferSize/4, 4),
 		afpacket.Promiscuous(c.config.Promisc),
