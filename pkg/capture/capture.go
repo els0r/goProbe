@@ -471,7 +471,7 @@ func (c *Capture) process() {
 			if _, exists := c.errMap[err.Error()]; !exists {
 				// TODO: Just logging for now - we might want to construct a new raw data logger that doesn't
 				// depend on gopacket (after all we could just dump the raw packet data for later analysis)
-				logger.Warnf("discovered faulty packet: %s [%v]", err, pkt.Payload())
+				logger.Warnf("discovered faulty packet on %s: %s [%v]", c.iface, err, pkt.Payload())
 			}
 
 			c.errMap[err.Error()]++
