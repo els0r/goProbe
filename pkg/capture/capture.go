@@ -28,7 +28,21 @@ import (
 
 const (
 	// Snaplen sets the amount of bytes captured from a packet
-	Snaplen = 128
+	// Currently causes errors
+	//
+	//    panic: runtime error: slice bounds out of range [:164] with capacity 134
+	//    panic: runtime error: slice bounds out of range [:192] with capacity 178
+	//	  panic: runtime error: slice bounds out of range [:896] with capacity 198
+	//    panic: runtime error: slice bounds out of range [:1672] with capacity 902
+	//
+	// Has to do with
+	//
+	//   func (t tPacketHeader) snapLen() uint32 {
+	//   	return *(*uint32)(unsafe.Pointer(&t.data[t.ppos+12]))
+	//   }
+	//
+	// From https://github.com/fako1024/slimcap/blob/dc3d7a53878db0a20f81f3794b463ea5a4a1592b/capture/afpacket/tpacket.go#L134
+	Snaplen = 896
 
 	// ErrorThreshold is the maximum amount of consecutive errors that can occur on an interface before capturing is halted.
 	ErrorThreshold = 10000
@@ -102,22 +116,6 @@ func (e ErrorMap) String() string {
 }
 
 //////////////////////// capture commands ////////////////////////
-
-type command int
-
-const (
-	// runtime information
-	commandStatus command = iota + 1
-	commandErrors
-	commandFlows
-
-	// capture state modification
-	commandEnable
-	commandDisable
-	commandRotate
-	commandUpdate
-	commandClose
-)
 
 // captureCommand is an interface implemented by (you guessed it...)
 // all capture commands. A capture command is sent to the process() of
@@ -303,18 +301,20 @@ func (c *Capture) setState(s State) {
 	logger.Debugf("interface state transition")
 }
 
-// Run runs the capture state machine
+// Run spawns the capture state machine
 func (c *Capture) Run() {
-	logger := logging.WithContext(c.ctx)
+	go func() {
+		logger := logging.WithContext(c.ctx)
 
-	if c.closed {
-		logger.Errorf("unable to run closed capture")
-		return
-	}
+		if c.closed {
+			logger.Errorf("unable to run closed capture")
+			return
+		}
 
-	for state := initializing; state != nil; {
-		state = state(c)
-	}
+		for state := initializing; state != nil; {
+			state = state(c)
+		}
+	}()
 }
 
 func initializing(c *Capture) stateFn {
@@ -378,6 +378,14 @@ func inError(c *Capture) stateFn {
 		case <-c.ctx.Done():
 			return closing
 		case cmd := <-c.cmdChan:
+			switch cmd.(type) {
+			// don't handle status commands as it is not clear if the handle can
+			// handle them when in error
+			case captureCommandUpdate, captureCommandFlows, captureCommandErrors:
+			default:
+				continue
+			}
+
 			// commands that cause a state transition will provide it
 			nextState := cmd.execute(c)
 			if nextState != nil {
