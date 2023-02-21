@@ -114,20 +114,52 @@ func Logger() *zap.SugaredLogger {
 type loggerKeyType int
 
 const (
-	loggerKey loggerKeyType = iota
-	loggerFieldsKey
+	loggerFieldsKey loggerKeyType = iota
 )
 
-// NewContext returns a context that has a zap logger with extra fields added.
+type loggerFields map[string]interface{}
+
+// NewContext returns a context that has extra fields added.
+//
 // The method is meant to be used in conjunction with WithContext that selects
 // the context-enriched logger.
-// The strength of this approach is that labels set in parent context are accessible
 //
-// NewContext _does not work_ in conjuction with WithFastContext. Use WithContext instead.
+// The strength of this approach is that labels set in parent context are accessible
 func NewContext(ctx context.Context, fields ...interface{}) context.Context {
-	// TODO: this idiot will just append identical keys ....
-	// FIXME
-	return context.WithValue(ctx, loggerKey, WithContext(ctx).With(fields...))
+	var (
+		newFields loggerFields
+		logCtx    context.Context = ctx
+	)
+
+	if ctx == nil {
+		logCtx = context.Background()
+	}
+
+	// ignore malformed fields as the logging implementation wouldn't accept them anyhow
+	if !(len(fields) >= 2 && (len(fields)%2 == 0)) {
+		return logCtx
+	}
+
+	lf, ok := ctx.Value(loggerFieldsKey).(loggerFields)
+	if ok {
+		newFields = lf
+	} else {
+		newFields = make(loggerFields)
+	}
+
+	// de-duplicate fields and add any that aren't present in the fields map yet
+	for i := 1; i < len(fields); i = i + 2 {
+		keyStr, ok := fields[i-1].(string)
+
+		// skip fields that aren't a string key
+		if !ok {
+			continue
+		}
+
+		// either the key doesn't exist yet or it is overwritten
+		newFields[keyStr] = fields[i]
+	}
+	return context.WithValue(logCtx, loggerFieldsKey, newFields)
 }
 
 // WithContext returns a sugared zap logger which has as much context set as possible
@@ -135,9 +167,14 @@ func WithContext(ctx context.Context) *zap.SugaredLogger {
 	if ctx == nil {
 		return Logger()
 	}
-	ctxLogger, ok := ctx.Value(loggerKey).(*zap.SugaredLogger)
+	ctxLoggerFields, ok := ctx.Value(loggerFieldsKey).(loggerFields)
 	if ok {
-		return ctxLogger
+		// construct the logger
+		var fields []interface{}
+		for k, v := range ctxLoggerFields {
+			fields = append(fields, k, v)
+		}
+		return Logger().With(fields...)
 	}
 	return Logger()
 }
