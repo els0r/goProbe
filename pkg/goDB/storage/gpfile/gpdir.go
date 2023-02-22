@@ -24,8 +24,6 @@ const (
 	metadataFileName = ".blockmeta"
 )
 
-// var metaDataPool = NewMemPool(64)
-
 // Metadata denotes a serializable set of metadata (both globally and per-block)
 type Metadata struct {
 	BlockMetadata     [types.ColIdxCount]*storage.BlockHeader
@@ -183,14 +181,18 @@ func (d *GPDir) Unmarshal(r *os.File) error {
 	for i := 0; i < int(types.ColIdxCount); i++ {
 		d.BlockMetadata[i].CurrentOffset = int64(binary.BigEndian.Uint64(data[pos : pos+8]))
 		d.BlockMetadata[i].BlockList = make([]storage.BlockAtTime, nBlocks)
-		pos += 8
+		lastTimestamp := int64(binary.BigEndian.Uint64(data[pos+8 : pos+16]))
+		pos += 16
+		curOffset := 0
 		for j := 0; j < nBlocks; j++ {
-			d.BlockMetadata[i].BlockList[j].EncoderType = encoders.Type(data[pos])
-			d.BlockMetadata[i].BlockList[j].Offset = int64(binary.BigEndian.Uint64(data[pos+1 : pos+9]))
-			d.BlockMetadata[i].BlockList[j].Len = int(binary.BigEndian.Uint64(data[pos+9 : pos+17]))
-			d.BlockMetadata[i].BlockList[j].RawLen = int(binary.BigEndian.Uint64(data[pos+17 : pos+25]))
-			d.BlockMetadata[i].BlockList[j].Timestamp = int64(binary.BigEndian.Uint64(data[pos+25 : pos+33]))
-			pos += 33
+			d.BlockMetadata[i].BlockList[j].Offset = int64(curOffset)
+			d.BlockMetadata[i].BlockList[j].Len = int(binary.BigEndian.Uint32(data[pos : pos+4]))
+			d.BlockMetadata[i].BlockList[j].RawLen = int(binary.BigEndian.Uint32(data[pos+4 : pos+8]))
+			d.BlockMetadata[i].BlockList[j].Timestamp = lastTimestamp + int64(binary.BigEndian.Uint32(data[pos+8:pos+12]))
+			d.BlockMetadata[i].BlockList[j].EncoderType = encoders.Type(data[pos+12])
+			pos += 13
+			lastTimestamp = d.BlockMetadata[i].BlockList[j].Timestamp
+			curOffset += d.BlockMetadata[i].BlockList[j].Len
 		}
 	}
 
@@ -212,34 +214,38 @@ func (d *GPDir) Marshal(w *os.File) error {
 		8 + // Metadata.Version
 		nBlocks*8 + // Metadata.NumIPV4Entries (8 bytes each)
 		int(types.ColIdxCount)*8 + // Metadata.BlockMetadata.CurrentOffset
+		int(types.ColIdxCount)*8 + // Metadata.BlockMetadata (first timestampm)
 		nBlocks*int(types.ColIdxCount) + // Metadata.BlockMetadata.BlockList.Block.EncoderType
-		nBlocks*int(types.ColIdxCount)*8 + // Metadata.BlockMetadata.BlockList.Timestamp
-		nBlocks*int(types.ColIdxCount)*8 + // Metadata.BlockMetadata.BlockList.Offset
-		nBlocks*int(types.ColIdxCount)*8 + // Metadata.BlockMetadata.BlockList.Len
-		nBlocks*int(types.ColIdxCount)*8 // Metadata.BlockMetadata.BlockList.RawLen
+		nBlocks*int(types.ColIdxCount)*4 + // Metadata.BlockMetadata.BlockList.Timestamp (Delta)
+		nBlocks*int(types.ColIdxCount)*4 + // Metadata.BlockMetadata.BlockList.Len
+		nBlocks*int(types.ColIdxCount)*4 // Metadata.BlockMetadata.BlockList.RawLen
 
+	// Note: Lengths and timestamp deltas are encoded as uint32s, allowing for a maximum block (!) size of
+	// 4 GiB (uncompressed / compressed).
+	// If a single block is larger than that (or the time between consecutive block writes) is larger than that,
+	// something is _very_ wrong
+	// TODO: Add safety / bounds-check
+
+	// TODO: Minimize allocations, either by means of re-usable buffer or Mmaping
 	data := make([]byte, size)
-	// metaDataPool.Get(size)
-	// defer metaDataPool.Put(data)
 
-	// Store flat nummber of blocks
-	binary.BigEndian.PutUint64(data[0:8], uint64(nBlocks))
-
-	// Store header version
-	binary.BigEndian.PutUint64(data[8:16], uint64(d.Metadata.Version))
+	binary.BigEndian.PutUint64(data[0:8], uint64(nBlocks))             // Store flat nummber of blocks
+	binary.BigEndian.PutUint64(data[8:16], uint64(d.Metadata.Version)) // Store header version
 	pos := 16
 
 	// Store block information
 	for i := 0; i < int(types.ColIdxCount); i++ {
+		lastTimestamp := d.BlockMetadata[i].BlockList[0].Timestamp
 		binary.BigEndian.PutUint64(data[pos:pos+8], uint64(d.BlockMetadata[i].CurrentOffset))
-		pos += 8
+		binary.BigEndian.PutUint64(data[pos+8:pos+16], uint64(lastTimestamp))
+		pos += 16
 		for _, block := range d.BlockMetadata[i].BlockList {
-			data[pos] = byte(block.EncoderType)
-			binary.BigEndian.PutUint64(data[pos+1:pos+9], uint64(block.Offset))
-			binary.BigEndian.PutUint64(data[pos+9:pos+17], uint64(block.Len))
-			binary.BigEndian.PutUint64(data[pos+17:pos+25], uint64(block.RawLen))
-			binary.BigEndian.PutUint64(data[pos+25:pos+33], uint64(block.Timestamp))
-			pos += 33
+			binary.BigEndian.PutUint32(data[pos:pos+4], uint32(block.Len))
+			binary.BigEndian.PutUint32(data[pos+4:pos+8], uint32(block.RawLen))
+			binary.BigEndian.PutUint32(data[pos+8:pos+12], uint32(block.Timestamp-lastTimestamp))
+			data[pos+12] = byte(block.EncoderType)
+			lastTimestamp = block.Timestamp
+			pos += 13
 		}
 	}
 
@@ -248,18 +254,12 @@ func (d *GPDir) Marshal(w *os.File) error {
 		binary.BigEndian.PutUint64(data[pos:pos+8], uint64(d.BlockNumV4Entries[i]))
 		pos += 8
 	}
-	// if err := data.Flush(); err != nil {
-	// 	return err
-	// }
-	// if err := data.Unmap(); err != nil {
-	// 	return err
-	// }
 
 	n, err := w.Write(data)
 	if err != nil {
 		return err
 	}
-	if n != len(data) {
+	if n != len(data) || n != size {
 		return fmt.Errorf("invalid number of bytes written, want %d, have %d", len(data), n)
 	}
 	data = nil

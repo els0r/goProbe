@@ -191,20 +191,20 @@ func TestMetadataRoundTrip(t *testing.T) {
 	}
 
 	for i := 0; i < int(types.ColIdxCount); i++ {
-		testDir.BlockMetadata[i].AddBlock(1000, storage.Block{
+		testDir.BlockMetadata[i].AddBlock(1575244800, storage.Block{
 			Offset:      0,
-			Len:         10,
-			RawLen:      5,
+			Len:         10001,
+			RawLen:      100,
 			EncoderType: 0,
 		})
-		testDir.BlockMetadata[i].AddBlock(2000, storage.Block{
-			Offset:      10,
-			Len:         20,
-			RawLen:      5,
+		testDir.BlockMetadata[i].AddBlock(1575245000, storage.Block{
+			Offset:      10001,
+			Len:         100,
+			RawLen:      74,
 			EncoderType: 0,
 		})
-		testDir.BlockMetadata[i].AddBlock(2200, storage.Block{
-			Offset:      30,
+		testDir.BlockMetadata[i].AddBlock(1575245500, storage.Block{
+			Offset:      10101,
 			Len:         10,
 			RawLen:      5,
 			EncoderType: 0,
