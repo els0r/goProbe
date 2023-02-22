@@ -114,8 +114,8 @@ func (w *DBWriter) Write(flowmap *hashmap.AggFlowMap, meta BlockMetadata, timest
 		err    error
 	)
 
-	dir, err := gpfile.NewDir(filepath.Join(w.dbpath, w.iface), timestamp, gpfile.ModeWrite)
-	if err != nil {
+	dir := gpfile.NewDir(filepath.Join(w.dbpath, w.iface), timestamp, gpfile.ModeWrite)
+	if err = dir.Open(); err != nil {
 		err = fmt.Errorf("Could not create / open daily directory: %w", err)
 		return update, err
 	}
@@ -140,6 +140,50 @@ func (w *DBWriter) Write(flowmap *hashmap.AggFlowMap, meta BlockMetadata, timest
 	}
 
 	return update, err
+}
+
+type BulkWorkload struct {
+	FlowMap   *hashmap.AggFlowMap
+	Meta      BlockMetadata
+	Timestamp int64
+}
+
+// WriteBulk takes multiple aggregated flow maps and their metadata and writes it to disk for a given timestamp
+func (w *DBWriter) WriteBulk(workloads []BulkWorkload, dirTimestamp int64) (err error) {
+	var (
+		data   [types.ColIdxCount][]byte
+		update InterfaceSummaryUpdate
+	)
+
+	metaDataPath := filepath.Join(w.dailyDir(dirTimestamp), MetadataFileName)
+	if w.metadata == nil {
+		w.metadata = TryReadMetadata(metaDataPath)
+	}
+
+	dir := gpfile.NewDir(filepath.Join(w.dbpath, w.iface), dirTimestamp, gpfile.ModeWrite)
+	if err = dir.Open(); err != nil {
+		err = fmt.Errorf("Could not create / open daily directory: %w", err)
+		return err
+	}
+	defer dir.Close()
+
+	// check if the query log exists and create it if necessary
+	err = w.createQueryLog()
+	if err != nil {
+		return err
+	}
+
+	for _, workload := range workloads {
+		data, update = dbData(w.iface, workload.Timestamp, workload.FlowMap)
+		if err := dir.WriteBlocks(workload.Timestamp, update.NumIPV4Entries, data); err != nil {
+			return err
+		}
+		workload.Meta.FlowCount = update.FlowCount
+		workload.Meta.Traffic = update.Traffic
+		w.metadata.Blocks = append(w.metadata.Blocks, workload.Meta)
+	}
+
+	return WriteMetadata(metaDataPath, w.metadata)
 }
 
 func dbData(iface string, timestamp int64, aggFlowMap *hashmap.AggFlowMap) ([types.ColIdxCount][]byte, InterfaceSummaryUpdate) {

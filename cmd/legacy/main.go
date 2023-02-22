@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -150,6 +151,11 @@ func (c converter) convertDir(w work, dryRun bool) error {
 		}
 	}
 
+	dirTimestamp, err := strconv.ParseInt(filepath.Base(w.path), 10, 64)
+	if err != nil {
+		return fmt.Errorf("failed to get directory timestamp: %s", err)
+	}
+
 	defer func() {
 		if err := fs.Close(); err != nil {
 			panic(err)
@@ -190,16 +196,23 @@ func (c converter) convertDir(w work, dryRun bool) error {
 	}
 	writer := goDB.NewDBWriter(c.dbDir, w.iface, encoders.EncoderTypeLZ4)
 
+	var bulkWorkload []goDB.BulkWorkload
 	for _, block := range allBlocks {
 		blockMetadata, err := metadata.GetBlock(block.ts)
 		if err != nil {
 			return fmt.Errorf("failed to get block metdadata from file set: %w", err)
 		}
 
-		if !dryRun {
-			if _, err = writer.Write(block.data, blockMetadata, block.ts); err != nil {
-				return fmt.Errorf("failed to write flows: %w", err)
-			}
+		bulkWorkload = append(bulkWorkload, goDB.BulkWorkload{
+			FlowMap:   block.data,
+			Meta:      blockMetadata,
+			Timestamp: block.ts,
+		})
+	}
+
+	if !dryRun {
+		if err = writer.WriteBulk(bulkWorkload, dirTimestamp); err != nil {
+			return fmt.Errorf("failed to write flows: %w", err)
 		}
 	}
 

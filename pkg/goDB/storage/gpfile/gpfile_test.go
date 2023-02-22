@@ -4,11 +4,16 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
+	"github.com/els0r/goProbe/pkg/goDB/storage"
+	"github.com/els0r/goProbe/pkg/types"
+	jsoniter "github.com/json-iterator/go"
 )
 
 const (
@@ -117,29 +122,8 @@ func testRoundtrip(t *testing.T, enc encoders.Type) {
 		t.Fatalf("Failed to get blocks: %s", err)
 	}
 
-	// Read in random order
-	for ts, block := range blocks.Blocks {
-		if block.Len > 0 && block.EncoderType != enc && block.EncoderType != encoders.EncoderTypeNull {
-			t.Fatalf("Unexpected encoder at block %d: %v (want %v)", ts, block.EncoderType, enc)
-		}
-
-		blockData, err := gpf.ReadBlock(ts)
-		if err != nil {
-			t.Fatalf("Failed to read block %d: %s", ts, err)
-		}
-
-		expectedData := []byte{}
-		if ts != 1000 {
-			expectedData = make([]byte, 8)
-			binary.BigEndian.PutUint64(expectedData, uint64(ts))
-		}
-		if !bytes.Equal(blockData, expectedData) {
-			t.Fatalf("Unexpected data at block %d: %v, want %v", ts, blockData, expectedData)
-		}
-	}
-
 	// Read ordered
-	for i, block := range blocks.OrderedList() {
+	for i, block := range blocks.Blocks() {
 		if block.Timestamp != int64(i) {
 			t.Fatalf("Unexpected timestamp at block %d: %d", i, block.Timestamp)
 		}
@@ -161,6 +145,33 @@ func testRoundtrip(t *testing.T, enc encoders.Type) {
 			t.Fatalf("Unexpected data at block %d: %v", i, blockData)
 		}
 	}
+
+	// Read from loookup map
+	for _, blockItem := range blocks.Blocks() {
+		block, found := blocks.BlockAtTime(blockItem.Timestamp)
+		if !found {
+			t.Fatalf("Missing block for timestamp %d in lookup map", blockItem.Timestamp)
+		}
+
+		if block.Len > 0 && block.EncoderType != enc && block.EncoderType != encoders.EncoderTypeNull {
+			t.Fatalf("Unexpected encoder at block %d: %v (want %v)", blockItem.Timestamp, block.EncoderType, enc)
+		}
+
+		blockData, err := gpf.ReadBlock(blockItem.Timestamp)
+		if err != nil {
+			t.Fatalf("Failed to read block %d: %s", blockItem.Timestamp, err)
+		}
+
+		expectedData := []byte{}
+		if blockItem.Timestamp != 1000 {
+			expectedData = make([]byte, 8)
+			binary.BigEndian.PutUint64(expectedData, uint64(blockItem.Timestamp))
+		}
+		if !bytes.Equal(blockData, expectedData) {
+			t.Fatalf("Unexpected data at block %d: %v, want %v", blockItem.Timestamp, blockData, expectedData)
+		}
+	}
+
 	if err := gpf.open(ModeRead); err == nil {
 		t.Fatalf("Expected error trying to re-open already open file, got none")
 	}
@@ -170,16 +181,75 @@ func testRoundtrip(t *testing.T, enc encoders.Type) {
 	}
 }
 
+func TestMetadataRoundTrip(t *testing.T) {
+
+	os.RemoveAll("/tmp/test_db")
+
+	testDir := NewDir("/tmp/test_db", 1000, ModeWrite)
+	if err := testDir.Open(); err != nil {
+		t.Fatalf("Error opening test dir for writing: %s", err)
+	}
+
+	for i := 0; i < int(types.ColIdxCount); i++ {
+		testDir.BlockMetadata[i].AddBlock(1000, storage.Block{
+			Offset:      0,
+			Len:         10,
+			RawLen:      5,
+			EncoderType: 0,
+		})
+		testDir.BlockMetadata[i].AddBlock(2000, storage.Block{
+			Offset:      10,
+			Len:         20,
+			RawLen:      5,
+			EncoderType: 0,
+		})
+		testDir.BlockMetadata[i].AddBlock(2200, storage.Block{
+			Offset:      30,
+			Len:         10,
+			RawLen:      5,
+			EncoderType: 0,
+		})
+	}
+	testDir.BlockNumV4Entries = append(testDir.BlockNumV4Entries, 0)
+	testDir.BlockNumV4Entries = append(testDir.BlockNumV4Entries, 10)
+	testDir.BlockNumV4Entries = append(testDir.BlockNumV4Entries, 24)
+
+	// Need to jump through hoops here in order to create a real deep copy of the metadata
+	buf := bytes.NewBuffer(nil)
+	if err := jsoniter.NewEncoder(buf).Encode(testDir.Metadata); err != nil {
+		t.Fatalf("Error encoding reference data for later comparison")
+	}
+	var refMetadata Metadata
+	if err := jsoniter.NewDecoder(buf).Decode(&refMetadata); err != nil {
+		t.Fatalf("Error decoding reference data for later comparison")
+	}
+
+	if err := testDir.Close(); err != nil {
+		t.Fatalf("Error writing test dir: %s", err)
+	}
+
+	testDir = NewDir("/tmp/test_db", 1000, ModeRead)
+	if err := testDir.Open(); err != nil {
+		t.Fatalf("Error opening test dir for writing: %s", err)
+	}
+
+	if !reflect.DeepEqual(testDir.Metadata.BlockNumV4Entries, refMetadata.BlockNumV4Entries) {
+		t.Fatalf("Mismatched metadata: %#v vs %#v", testDir.Metadata.BlockNumV4Entries, refMetadata.BlockNumV4Entries)
+	}
+	for i := 0; i < int(types.ColIdxCount); i++ {
+		if !reflect.DeepEqual(testDir.Metadata.BlockMetadata[i], refMetadata.BlockMetadata[i]) {
+			t.Fatalf("Mismatched metadata: %#v vs %#v", testDir.Metadata.BlockMetadata[i], refMetadata.BlockMetadata[i])
+		}
+	}
+}
+
 func (g *GPFile) validateBlocks(nExpected int) error {
 	blocks, err := g.Blocks()
 	if err != nil {
 		return fmt.Errorf("Failed to get blocks: %w", err)
 	}
-	if len(blocks.Blocks) != nExpected {
-		return fmt.Errorf("Unexpected number of blocks, want %d, have %d", nExpected, len(blocks.Blocks))
-	}
-	if len(blocks.OrderedList()) != nExpected {
-		return fmt.Errorf("Unexpected number of ordered block list, want %d, have %d", nExpected, len(blocks.OrderedList()))
+	if len(blocks.Blocks()) != nExpected {
+		return fmt.Errorf("Unexpected number of blocks, want %d, have %d", nExpected, len(blocks.Blocks()))
 	}
 
 	return nil

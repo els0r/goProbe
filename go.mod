@@ -20,6 +20,7 @@ require (
 
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/edsrzf/mmap-go v1.1.0 // indirect
 	github.com/fatih/color v1.13.0 // indirect
 	github.com/gomodule/redigo v1.8.9 // indirect
 	github.com/hashicorp/golang-lru v0.5.4 // indirect

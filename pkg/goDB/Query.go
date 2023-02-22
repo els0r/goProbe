@@ -139,6 +139,11 @@ func (q *Query) LowMem(enable bool) *Query {
 	return q
 }
 
+// IsLowMem returns if the query was run in low-memory mode
+func (q *Query) IsLowMem() bool {
+	return q.lowMem
+}
+
 // AttributesToString is a convenience method for translating the query attributes
 // into a human-readable name
 func (q *Query) AttributesToString() []string {

@@ -36,44 +36,31 @@ func main() {
 	}
 	baseDirPath := filepath.Dir(dirPath)
 
-	gpDir, err := gpfile.NewDir(baseDirPath, timestamp, gpfile.ModeRead)
-	if err != nil {
+	gpDir := gpfile.NewDir(baseDirPath, timestamp, gpfile.ModeRead)
+	if err := gpDir.Open(); err != nil {
 		logger.WithField("path", dirPath).Fatalf("failed to open GPF dir: %v", err)
 	}
+	defer gpDir.Close()
 
 	for i := types.ColumnIndex(0); i < types.ColIdxCount; i++ {
-		gpfFile, err := gpDir.Column(i)
-		if err != nil {
-			logger.WithField("path", dirPath).Fatalf("failed to access GPF column file: %v", err)
-		}
-
-		err = PrintMetaTable(gpfFile, os.Stdout)
+		err = PrintMetaTable(gpDir, i, os.Stdout)
 		if err != nil {
 			logger.Fatalf("print meta table: %v", err)
 		}
 	}
-
 }
 
-func PrintMetaTable(gpf *gpfile.GPFile, w io.Writer) error {
-	file, err := os.OpenFile(gpf.Filename(), gpfile.ModeRead, 0644)
-	if err != nil {
-		return fmt.Errorf("failed to open GPF file for reading: %v", err)
-	}
-	defer file.Close()
+func PrintMetaTable(gpDir *gpfile.GPDir, column types.ColumnIndex, w io.Writer) error {
 
-	blocks, err := gpf.Blocks()
-	if err != nil {
-		return fmt.Errorf("failed to get blocks: %w", err)
-	}
+	blockMetadata := gpDir.BlockMetadata[column]
+	blocks := blockMetadata.Blocks()
 
 	fmt.Fprintf(w, `
-                File: %s
+              Column: %s
     Number of Blocks: %d
                 Size: %d bytes
-    Default Encoding: %s
 
-`, gpf.Filename(), len(blocks.Blocks) /*gpf.TypeWidth(),*/, blocks.CurrentOffset, gpf.DefaultEncoder().Type())
+`, types.ColumnFileNames[column], len(blocks) /*gpf.TypeWidth(),*/, blockMetadata.CurrentOffset)
 
 	tw := tabwriter.NewWriter(w, 0, 0, 4, ' ', tabwriter.AlignRight)
 
@@ -90,10 +77,29 @@ func PrintMetaTable(gpf *gpfile.GPFile, w io.Writer) error {
 	var curOffset int64
 	var b = make([]byte, 4)
 	attnMagicMismatch := " !"
-	for i, block := range blocks.OrderedList() {
-		n, err := file.ReadAt(b, curOffset)
+
+	colFile, err := gpDir.Column(column)
+	if err != nil {
+		return fmt.Errorf("failed to access underlying GPFile for column %s: %w", types.ColumnFileNames[column], err)
+	}
+	for i, block := range blocks {
+
+		// First, just attempt to read the block
+		if _, err := colFile.ReadBlock(block.Timestamp); err != nil {
+			return fmt.Errorf("column %d reading block %d failed: %w", column, i, err)
+		}
+	}
+
+	for i, block := range blocks {
+
+		// Access the raw data of the underlying file / buffer and validate its integrity
+		_, err := colFile.RawFile().Seek(curOffset, 0)
 		if err != nil {
-			return fmt.Errorf("file read at %d failed: %w", curOffset, err)
+			return fmt.Errorf("column %d seeking at block %d failed: %w", column, i, err)
+		}
+		n, err := colFile.RawFile().Read(b)
+		if err != nil {
+			return fmt.Errorf("column %d read at block %d failed: %w", column, i, err)
 		}
 		if n != 4 {
 			return fmt.Errorf("wrong number of bytes read: %d", n)

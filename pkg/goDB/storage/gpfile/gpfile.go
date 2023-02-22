@@ -103,16 +103,23 @@ func (g *GPFile) Blocks() (*storage.BlockHeader, error) {
 // ReadBlock searches if a block for a given timestamp exists and returns in its data
 func (g *GPFile) ReadBlock(timestamp int64) ([]byte, error) {
 
+	// Check if the requested block exists
+	blockIdx, found := g.header.BlockIndex(timestamp)
+	if !found {
+		return nil, fmt.Errorf("block for timestamp %v not found", timestamp)
+	}
+
+	return g.ReadBlockAtIndex(blockIdx)
+}
+
+// ReadBlockAtIndex returns the data of the indexed block
+func (g *GPFile) ReadBlockAtIndex(idx int) ([]byte, error) {
+
 	// Check that the file has been opened in the correct mode
 	if g.accessMode != ModeRead {
 		return nil, fmt.Errorf("cannot read from GPFile in write mode")
 	}
-
-	// Check if the requested block exists
-	block, found := g.header.Blocks[timestamp]
-	if !found {
-		return nil, fmt.Errorf("block for timestamp %v not found", timestamp)
-	}
+	block := g.header.BlockList[idx]
 
 	// If there is no data to be expected, return
 	if block.RawLen == 0 {
@@ -178,9 +185,9 @@ func (g *GPFile) ReadBlock(timestamp int64) ([]byte, error) {
 
 // WriteBlock writes data for a given timestamp to the file
 func (g *GPFile) WriteBlock(timestamp int64, blockData []byte) error {
-	bl, exists := g.header.Blocks[timestamp]
+	blockIdx, exists := g.header.BlockIndex(timestamp)
 	if exists {
-		return fmt.Errorf("timestamp %d already present: offset=%d", timestamp, bl.Offset)
+		return fmt.Errorf("timestamp %d already present: offset=%d", timestamp, g.header.BlockList[int64(blockIdx)].Offset)
 	}
 
 	// Check that the file has been opened in the correct mode
@@ -194,11 +201,7 @@ func (g *GPFile) WriteBlock(timestamp int64, blockData []byte) error {
 			Offset:      g.header.CurrentOffset,
 			EncoderType: encoders.EncoderTypeNull,
 		}
-		g.header.BlockList = append(g.header.BlockList, storage.BlockAtTime{
-			Timestamp: timestamp,
-			Block:     block,
-		})
-		g.header.Blocks[timestamp] = block
+		g.header.AddBlock(timestamp, block)
 		return nil
 	}
 
@@ -231,20 +234,19 @@ func (g *GPFile) WriteBlock(timestamp int64, blockData []byte) error {
 	}
 
 	// Update and write header data
-	block := storage.Block{
+	g.header.AddBlock(timestamp, storage.Block{
 		Offset:      g.header.CurrentOffset,
 		Len:         nWritten,
 		RawLen:      len(blockData),
 		EncoderType: encType,
-	}
-	g.header.Blocks[timestamp] = block
-	g.header.BlockList = append(g.header.BlockList, storage.BlockAtTime{
-		Timestamp: timestamp,
-		Block:     block,
 	})
 	g.header.CurrentOffset += int64(nWritten)
 
 	return nil
+}
+
+func (g *GPFile) RawFile() ReadWriteSeekCloser {
+	return g.file
 }
 
 // Close closes the file

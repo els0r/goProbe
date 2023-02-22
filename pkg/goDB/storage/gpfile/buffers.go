@@ -5,10 +5,11 @@ import (
 	"io"
 	"io/fs"
 	"os"
-	"sync"
 	"time"
 )
 
+// ReadWriteSeekCloser provides an interface to all the wrapped interfaces
+// in one instance
 type ReadWriteSeekCloser interface {
 	Stat() (fs.FileInfo, error)
 
@@ -18,35 +19,42 @@ type ReadWriteSeekCloser interface {
 	io.Closer
 }
 
-// MemPool wraps a standard sync.Pool
+// MemPool provides a channel-based memory buffer pool
 type MemPool struct {
-	sync.Pool
+	elements chan []byte
 }
 
 // NewMemPool instantiates a new memory pool that manages bytes slices
-// of a given capacity
-func NewMemPool() *MemPool {
-	return &MemPool{
-		Pool: sync.Pool{
-			New: func() any {
-				return make([]byte, 0)
-			},
-		},
+func NewMemPool(n int) *MemPool {
+	obj := MemPool{
+		elements: make(chan []byte, n),
 	}
+	for i := 0; i < n; i++ {
+		obj.elements <- make([]byte, 0)
+	}
+	return &obj
 }
 
 // Get retrieves a memory element (already performing the type assertion)
-func (p *MemPool) Get() []byte {
-	return p.Pool.Get().([]byte)
+func (p *MemPool) Get(size int) []byte {
+	elem := <-p.elements
+	if cap(elem) < size {
+		elem = make([]byte, size*2)
+	}
+	elem = elem[:size]
+	return elem
 }
 
 // Put returns a memory element to the pool, resetting its size to capacity
 // in the process
 func (p *MemPool) Put(elem []byte) {
 	elem = elem[:cap(elem)]
+	p.elements <- elem
+}
 
-	// nolint:staticcheck
-	p.Pool.Put(elem)
+// Clear releases all pool resources and makes them available for garbage collection
+func (p *MemPool) Clear() {
+	p.elements = nil
 }
 
 // MemFile denotes an in-memory abstraction of an underlying file, acting as
@@ -60,20 +68,20 @@ type MemFile struct {
 
 // NewMemFile instantiates a new in-memory file buffer
 func NewMemFile(r ReadWriteSeekCloser, pool *MemPool) (*MemFile, error) {
-	obj := MemFile{
-		data: pool.Get(),
-		pool: pool,
-	}
 	stat, err := r.Stat()
 	if err != nil {
 		return nil, err
 	}
-	if cap(obj.data) < int(stat.Size()) {
-		obj.data = make([]byte, stat.Size())
+	obj := MemFile{
+		data: pool.Get(int(stat.Size())),
+		pool: pool,
 	}
-	obj.data = obj.data[:stat.Size()]
-	if _, err := io.ReadFull(r, obj.data); err != nil {
+	n, err := io.ReadFull(r, obj.data)
+	if err != nil {
 		return nil, err
+	}
+	if n != int(stat.Size()) {
+		return nil, fmt.Errorf("unexpected number of bytes read (want %d, have %d)", stat.Size(), n)
 	}
 	return &obj, r.Close()
 }
