@@ -44,7 +44,7 @@ func (a *API) IfaceCtx(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ifaceName := chi.URLParam(r, "ifaceName")
 
-		flows, err := a.c.ActiveFlows(ifaceName)
+		flows, err := a.captureManager.ActiveFlows(ifaceName)
 		if err != nil {
 			http.Error(w, http.StatusText(404), 404)
 			return
@@ -92,7 +92,7 @@ func (a *API) getActiveFlows(w http.ResponseWriter, r *http.Request) {
 func (a *API) getPacketStats(w http.ResponseWriter, r *http.Request) {
 	var err error
 
-	stats := a.c.StatusAll()
+	stats := a.captureManager.StatusAll()
 
 	// get info for each interface
 	var AggregatedStats = struct {
@@ -118,7 +118,7 @@ func (a *API) getPacketStats(w http.ResponseWriter, r *http.Request) {
 			AggregatedStats.NumIfacesActive++
 		}
 	}
-	AggregatedStats.LastWriteout = time.Since(a.c.LastRotation).Round(time.Millisecond)
+	AggregatedStats.LastWriteout = time.Since(a.writeoutHandler.LastRotation).Round(time.Millisecond)
 
 	// check if debug info should be printed
 	dbg := r.FormValue("debug")
@@ -205,7 +205,7 @@ func (a *API) getPacketStats(w http.ResponseWriter, r *http.Request) {
 func (a *API) getErrors(w http.ResponseWriter, r *http.Request) {
 	var err error
 
-	errors := a.c.ErrorsAll()
+	errors := a.captureManager.ErrorsAll()
 
 	if !printPretty(r) {
 		err = json.Response(w, errors)

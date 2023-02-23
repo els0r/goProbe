@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"strings"
 
-	log "github.com/els0r/log"
+	"github.com/els0r/goProbe/pkg/logging"
 )
 
 func (k Keys) exists(key string) bool {
@@ -15,9 +15,8 @@ func (k Keys) exists(key string) bool {
 
 // authenticator implements the middleware http.Handler
 type authenticator struct {
-	h      http.Handler
-	keys   Keys
-	logger log.Logger
+	h    http.Handler
+	keys Keys
 }
 
 // ServeHTTP checks a request for valid authorization parameters and calls the next handler if successful
@@ -28,6 +27,8 @@ func (a *authenticator) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	)
 
 	ctx := r.Context()
+	logger := logging.WithContext(ctx)
+
 	select {
 	case <-ctx.Done():
 		http.Error(w, errContextCanceled, http.StatusServiceUnavailable)
@@ -36,7 +37,7 @@ func (a *authenticator) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// get the authorization header of the request
 		authHeader := strings.SplitN(r.Header.Get("Authorization"), " ", 2)
 		if len(authHeader) != 2 || authHeader[0] != "digest" {
-			a.logger.Infof("user key denied: invalid auth header")
+			logger.Infof("user key denied: invalid auth header")
 
 			ReturnStatus(w, http.StatusUnauthorized)
 			return
@@ -44,13 +45,13 @@ func (a *authenticator) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		userKey = authHeader[1]
 
 		if !a.keys.exists(userKey) {
-			a.logger.Debugf("user key '%s' denied: not registered")
+			logger.Debugf("user key '%s' denied: not registered")
 
 			ReturnStatus(w, http.StatusUnauthorized)
 			return
 		}
 
-		a.logger.Debugf("user successfully authenticated")
+		logger.Debugf("user successfully authenticated")
 
 		// set key in request context
 		authCtx = context.WithValue(r.Context(), apiKeyCtxKey, userKey)

@@ -10,6 +10,7 @@ import (
 	v1 "github.com/els0r/goProbe/pkg/api/v1"
 	"github.com/els0r/goProbe/pkg/capture"
 	"github.com/els0r/goProbe/pkg/discovery"
+	"github.com/els0r/goProbe/pkg/goprobe/writeout"
 	"github.com/els0r/goProbe/pkg/logging"
 	log "github.com/els0r/log"
 
@@ -90,7 +91,7 @@ func getMetrics(w http.ResponseWriter, r *http.Request) {
 }
 
 // New creates a base router for goProbe's APIs and provides the metrics export out of the box
-func New(port string, manager *capture.Manager, opts ...Option) (*Server, error) {
+func New(port string, manager *capture.Manager, handler *writeout.Handler, opts ...Option) (*Server, error) {
 
 	s := &Server{
 		root:                  "/",
@@ -127,7 +128,7 @@ func New(port string, manager *capture.Manager, opts ...Option) (*Server, error)
 	}
 
 	s.apis = append(s.apis,
-		v1.New(manager, v1Options...),
+		v1.New(manager, handler, v1Options...),
 	)
 
 	r := chi.NewRouter()

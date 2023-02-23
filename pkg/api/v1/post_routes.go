@@ -21,18 +21,17 @@ func (a *API) postRequestRoutes(r chi.Router) {
 }
 
 func (a *API) handleReload(w http.ResponseWriter, r *http.Request) {
-	logger := logging.WithContext(r.Context())
+	ctx := r.Context()
+	logger := logging.WithContext(ctx)
 
 	pp := printPretty(r)
 
 	if pp {
 		status.SetOutput(w)
-		status.Line("Reloading configuration")
+		status.Line("reloading configuration")
 	}
 
-	var writeoutsChan chan<- capture.Writeout = a.c.WriteoutHandler.WriteoutChan
-
-	config, err := reloadConfig()
+	cfg, err := reloadConfig()
 	if err != nil {
 		logger.Error(err)
 		if pp {
@@ -43,10 +42,7 @@ func (a *API) handleReload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	woChan := make(chan capture.TaggedAggFlowMap, capture.MaxIfaces)
-	writeoutsChan <- capture.Writeout{Chan: woChan, Timestamp: time.Now()}
-	a.c.Update(config.Interfaces, woChan)
-	close(woChan)
+	a.writeoutHandler.UpdateAndRotate(ctx, cfg.Interfaces, time.Now())
 
 	// return OK
 	if pp {
@@ -57,7 +53,7 @@ func (a *API) handleReload(w http.ResponseWriter, r *http.Request) {
 
 	// send discovery update
 	if a.discoveryConfigUpdate != nil {
-		a.discoveryConfigUpdate <- discovery.MakeConfig(config)
+		a.discoveryConfigUpdate <- discovery.MakeConfig(cfg)
 	}
 }
 

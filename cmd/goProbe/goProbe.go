@@ -27,6 +27,7 @@ import (
 	"github.com/els0r/goProbe/pkg/discovery"
 	"github.com/els0r/goProbe/pkg/goDB"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
+	"github.com/els0r/goProbe/pkg/goprobe/writeout"
 	"github.com/els0r/goProbe/pkg/logging"
 	"github.com/els0r/goProbe/pkg/version"
 
@@ -108,14 +109,12 @@ func main() {
 
 	// It doesn't make sense to monitor zero interfaces
 	if len(config.Interfaces) == 0 {
-		logger.Error("no interfaces have been specified in the configuration file")
-		os.Exit(1)
+		logger.Fatalf("no interfaces have been specified in the configuration file")
 	}
 
 	// Limit the number of interfaces
 	if len(config.Interfaces) > capture.MaxIfaces {
-		logger.Errorf("cannot monitor more than %d interfaces", capture.MaxIfaces)
-		os.Exit(1)
+		logger.Fatalf("cannot monitor more than %d interfaces", capture.MaxIfaces)
 	}
 
 	// We quit on encountering SIGTERM or SIGINT (see further down)
@@ -124,8 +123,12 @@ func main() {
 
 	// Create DB directory if it doesn't exist already.
 	if err := os.MkdirAll(capconfig.RuntimeDBPath(), 0755); err != nil {
-		logger.Errorf("failed to create database directory: %v", err)
-		os.Exit(1)
+		logger.Fatalf("failed to create database directory: %v", err)
+	}
+
+	encoderType, err := encoders.GetTypeByString(config.DB.EncoderType)
+	if err != nil {
+		logger.Fatalf("failed to get encoder type from %s: %v", config.DB.EncoderType, err)
 	}
 
 	// Initialize packet logger
@@ -144,7 +147,7 @@ func main() {
 	// no captures are being deleted here, so we can safely discard the channel we pass
 	logger.Debug("updating capture manager configuration")
 
-	captureManager.Update(config.Interfaces, make(chan capture.TaggedAggFlowMap))
+	captureManager.Update(config.Interfaces, nil)
 
 	// configure api server
 	var (
@@ -185,8 +188,18 @@ func main() {
 		apiOptions = append(apiOptions, api.WithDiscoveryConfigUpdate(discoveryConfigUpdate))
 	}
 
+	// start goroutine for writeouts
+	writeoutHandler := writeout.NewHandler(captureManager, encoderType).
+		WithSyslogWriting(config.SyslogFlows)
+
+	// start writeout handler
+	doneWriting := writeoutHandler.HandleWriteouts()
+
+	// start regular rotations
+	writeoutHandler.HandleRotations(ctx, time.Duration(goDB.DBWriteInterval)*time.Second)
+
 	// create server and start listening for requests
-	server, err = api.New(config.API.Port, captureManager, apiOptions...)
+	server, err = api.New(config.API.Port, captureManager, writeoutHandler, apiOptions...)
 	if err != nil {
 		logger.Errorf("failed to spawn API server: %s", err)
 	} else {
@@ -202,15 +215,6 @@ func main() {
 		discoveryConfigUpdate <- discoveryConfig
 	}
 
-	// start goroutine for writeouts
-	writeoutCtx, doneWriting := context.WithCancel(ctx)
-	captureManager.WriteoutHandler.DoneWriting = doneWriting
-
-	go handleWriteouts(captureManager.WriteoutHandler, config.SyslogFlows)
-
-	// start regular rotations
-	go handleRotations(ctx, captureManager)
-
 	// listen for the interrupt signal
 	<-ctx.Done()
 
@@ -223,18 +227,10 @@ func main() {
 	fallbackCtx, cancel := context.WithTimeout(context.Background(), shutdownGracePeriod)
 	defer cancel()
 
-	// we intentionally don't unlock the mutex hereafter,
-	// because the program exits anyways. This ensures that there
-	// can be no new Rotations/Updates/etc... while we're shutting down.
-	var writeoutsChan chan<- capture.Writeout = captureManager.WriteoutHandler.WriteoutChan
-
 	// one last writeout
-	woChan := make(chan capture.TaggedAggFlowMap, capture.MaxIfaces)
-	writeoutsChan <- capture.Writeout{Chan: woChan, Timestamp: time.Now()}
+	writeoutHandler.FullWriteout(fallbackCtx, time.Now())
+	writeoutHandler.Close()
 
-	captureManager.RotateAll(woChan)
-	close(woChan)
-	close(writeoutsChan)
 	if discoveryConfigUpdate != nil {
 		close(discoveryConfigUpdate)
 	}
@@ -242,180 +238,11 @@ func main() {
 	captureManager.CloseAll()
 
 	select {
-	case <-writeoutCtx.Done():
+	case <-doneWriting:
 		logger.Info("graceful shut down completed")
 	case <-fallbackCtx.Done():
 		logger.Error("forced shutdown")
 	}
 
 	return
-}
-
-func handleRotations(ctx context.Context, manager *capture.Manager) {
-	logger := logging.WithContext(ctx)
-
-	var writeoutsChan chan<- capture.Writeout = manager.WriteoutHandler.WriteoutChan
-
-	// one rotation every DBWriteInterval seconds...
-	rotateInterval := time.Second * time.Duration(goDB.DBWriteInterval)
-
-	// wait until the next 5 minute interval of the hour is reached before starting the ticker
-	tNow := time.Now()
-
-	sleepUntil := tNow.Truncate(rotateInterval).Add(rotateInterval).Sub(tNow)
-	logger.Infof("waiting for %s to start capture rotation", sleepUntil.Round(time.Second))
-
-	timer := time.NewTimer(sleepUntil)
-	select {
-	case <-timer.C:
-		break
-	case <-ctx.Done():
-		return
-	}
-
-	ticker := time.NewTicker(rotateInterval)
-
-	// immediately write out after the initial sleep has completed
-	t := time.Now()
-	for {
-		select {
-		case <-ctx.Done():
-			logger.Info("stopping rotation handler")
-			return
-		default:
-			logger.Debug("initiating flow data flush")
-
-			manager.LastRotation = t
-			woChan := make(chan capture.TaggedAggFlowMap, capture.MaxIfaces)
-			writeoutsChan <- capture.Writeout{Chan: woChan, Timestamp: captureManager.LastRotation}
-			manager.RotateAll(woChan)
-			close(woChan)
-
-			logger = logger.With("queue_length", len(writeoutsChan))
-
-			if len(writeoutsChan) > 2 {
-				if len(writeoutsChan) > capture.WriteoutsChanDepth {
-					logger.Error("writeouts are lagging behind too much")
-					os.Exit(1)
-				}
-				logger.Warn("writeouts are lagging behind")
-			}
-
-			logger.Debug("restarting any interfaces that have encountered errors")
-			manager.EnableAll()
-
-			// wait for the the next ticker to complete
-			t = <-ticker.C
-		}
-	}
-}
-
-func handleWriteouts(handler *capture.WriteoutHandler, logToSyslog bool) {
-	logger := logging.Logger()
-
-	var (
-		writeoutsChan  <-chan capture.Writeout = handler.WriteoutChan
-		writeoutsCount                         = 0
-		dbWriters                              = make(map[string]*goDB.DBWriter)
-		lastWrite                              = make(map[string]int)
-	)
-
-	var syslogWriter *goDB.SyslogDBWriter
-	if logToSyslog {
-		var err error
-		if syslogWriter, err = goDB.NewSyslogDBWriter(); err != nil {
-			// we are not failing here due to the fact that a DB write out should still be attempted.
-			logger.Error("failed to create syslog based flow writer: %v", err)
-		}
-	}
-
-	for writeout := range writeoutsChan {
-		t0 := time.Now()
-		var summaryUpdates []goDB.InterfaceSummaryUpdate
-		count := 0
-		for taggedMap := range writeout.Chan {
-			// Ensure that there is a DBWriter for the given interface
-			_, exists := dbWriters[taggedMap.Iface]
-			if !exists {
-				et, _ := encoders.GetTypeByString(config.DB.EncoderType)
-				w := goDB.NewDBWriter(capconfig.RuntimeDBPath(),
-					taggedMap.Iface,
-					et,
-				)
-				dbWriters[taggedMap.Iface] = w
-			}
-
-			// Prep metadata for current block
-			meta := goDB.BlockMetadata{
-				PcapPacketsReceived: -1,
-				PcapPacketsDropped:  -1,
-			}
-			if taggedMap.Stats.CaptureStats != nil {
-				meta.PcapPacketsReceived = taggedMap.Stats.CaptureStats.PacketsReceived
-				meta.PcapPacketsDropped = taggedMap.Stats.CaptureStats.PacketsDropped
-			}
-			meta.PacketsLogged = taggedMap.Stats.PacketsLogged
-			meta.Timestamp = writeout.Timestamp.Unix()
-
-			// Write to database, update summary
-			update, err := dbWriters[taggedMap.Iface].Write(taggedMap.Map, meta, writeout.Timestamp.Unix())
-			lastWrite[taggedMap.Iface] = writeoutsCount
-			if err != nil {
-				logger.Errorf("writeout failed: %v", err)
-			} else {
-				summaryUpdates = append(summaryUpdates, update)
-			}
-
-			// write out flows to syslog if necessary
-			if logToSyslog {
-				if syslogWriter != nil {
-					syslogWriter.Write(taggedMap.Map, taggedMap.Iface, writeout.Timestamp.Unix())
-				} else {
-					logger.Error("cannot write flows to <nil> syslog writer. Attempting reinitialization")
-
-					// try to reinitialize the writer
-					if syslogWriter, err = goDB.NewSyslogDBWriter(); err != nil {
-						logger.Error("failed to reinitialize syslog writer: %v", err)
-					}
-				}
-			}
-			count++
-		}
-
-		// We are done with the writeout, let's try to write the updated summary
-		err := goDB.ModifyDBSummary(capconfig.RuntimeDBPath(), 10*time.Second, func(summ *goDB.DBSummary) (*goDB.DBSummary, error) {
-			if summ == nil {
-				summ = goDB.NewDBSummary()
-			}
-			for _, update := range summaryUpdates {
-				summ.Update(update)
-			}
-			return summ, nil
-		})
-		if err != nil {
-			logger.Error("error updating summary: %v", err)
-		}
-
-		// Clean up dead writers. We say that a writer is dead
-		// if it hasn't been used in the last few writeouts.
-		var remove []string
-		for iface, last := range lastWrite {
-			if writeoutsCount-last >= 3 {
-				remove = append(remove, iface)
-			}
-		}
-		for _, iface := range remove {
-			delete(dbWriters, iface)
-			delete(lastWrite, iface)
-		}
-
-		writeoutsCount++
-
-		elapsed := time.Since(t0).Round(time.Millisecond)
-
-		logger.With("count", count, "elapsed", elapsed).Debug("completed writeout")
-	}
-
-	logger.Info("completed all writeouts")
-	handler.DoneWriting()
 }
