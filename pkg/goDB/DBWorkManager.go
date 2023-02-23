@@ -50,7 +50,7 @@ type DBWorkManager struct {
 
 	tFirstCovered, tLastCovered int64
 	nWorkloadsProcessed         int
-	memPool                     *gpfile.MemPool
+	memPool                     gpfile.MemPoolGCable
 
 	logger log.Logger
 }

@@ -91,7 +91,7 @@ type GPFile struct {
 	uncompData, blockData []byte
 
 	// Memory pool (optional)
-	memPool *gpfile.MemPool
+	memPool gpfile.MemPoolGCable
 }
 
 // Option defines optional arguments to gpfile
@@ -108,7 +108,7 @@ func WithEncoder(e encoders.Type) Option {
 // upon first read access to minimize I/O load.
 // Seeking is handled by replacing the underlying file with a seekable
 // in-memory structure (c.f. readWriteSeekCloser interface)
-func WithReadAll(pool *gpfile.MemPool) Option {
+func WithReadAll(pool gpfile.MemPoolGCable) Option {
 	return func(g *GPFile) {
 		g.memPool = pool
 	}

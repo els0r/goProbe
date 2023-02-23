@@ -10,7 +10,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/edsrzf/mmap-go"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 	"github.com/els0r/goProbe/pkg/goDB/storage"
 	"github.com/els0r/goProbe/pkg/types"
@@ -23,6 +22,9 @@ const (
 
 	metadataFileName = ".blockmeta"
 )
+
+// Global memory pool used to minimize allocations
+var metaDataMemPool = NewMemPoolNoLimit()
 
 // Metadata denotes a serializable set of metadata (both globally and per-block)
 type Metadata struct {
@@ -157,17 +159,18 @@ func (d *GPDir) TimeRange() (first int64, last int64) {
 // Unmarshal reads and unmarshals a serialized metadata set into the GPDir instance
 func (d *GPDir) Unmarshal(r *os.File) error {
 
-	// Memor-map the file for reading to avoid any allocation and maximize throughput
-	data, err := mmap.Map(r, mmap.RDONLY, 0)
+	// Read the file into a buffer to avoid any allocation and maximize throughput
+	memFile, err := NewMemFile(r, metaDataMemPool)
 	if err != nil {
 		return err
 	}
 	defer func() {
-		if uerr := data.Unmap(); uerr != nil && err == nil {
-			err = uerr
+		if cerr := memFile.Close(); cerr != nil && err == nil {
+			err = cerr
 		}
 	}()
 
+	data := memFile.Data()
 	d.Metadata = newMetadata()
 
 	// Get flat nummber of blocks
@@ -224,10 +227,12 @@ func (d *GPDir) Marshal(w *os.File) error {
 	// 4 GiB (uncompressed / compressed).
 	// If a single block is larger than that (or the time between consecutive block writes) is larger than that,
 	// something is _very_ wrong
+
 	// TODO: Add safety / bounds-check
 
-	// TODO: Minimize allocations, either by means of re-usable buffer or Mmaping
-	data := make([]byte, size)
+	// Fetch a buffer from the pool
+	data := metaDataMemPool.Get(size)
+	defer metaDataMemPool.Put(data)
 
 	binary.BigEndian.PutUint64(data[0:8], uint64(nBlocks))             // Store flat nummber of blocks
 	binary.BigEndian.PutUint64(data[8:16], uint64(d.Metadata.Version)) // Store header version

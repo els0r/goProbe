@@ -2,8 +2,6 @@ github.com/cpuguy83/go-md2man/v2 v2.0.2/go.mod h1:tgQtvFlXSQOSOSIRvRPT7W67SCa46t
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
-github.com/edsrzf/mmap-go v1.1.0 h1:6EUwBLQ/Mcr1EYLE4Tn1VdW1A4ckqCQWZBw8Hr0kjpQ=
-github.com/edsrzf/mmap-go v1.1.0/go.mod h1:19H/e8pUPLicwkyNgOykDXkJ9F0MHE+Z52B8EIth78Q=
 github.com/els0r/log v1.0.1-0.20190303012150-3e228cb82ff0 h1:m0723NA7hG5uP3VcbDizi0tHzwLZkr9peYXWxRcO/5E=
 github.com/els0r/log v1.0.1-0.20190303012150-3e228cb82ff0/go.mod h1:HrfUpL4bgGa61adkHNxGk/t5SPVSS7Sra8bkJbxgiWo=
 github.com/els0r/status v1.0.0 h1:j2G+Iq4nZK8yNXfJqkRwBEHzHl/SReUBMg0z6SV6vqU=

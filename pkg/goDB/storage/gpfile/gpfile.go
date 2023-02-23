@@ -60,7 +60,7 @@ type GPFile struct {
 	uncompData, blockData []byte
 
 	// Memory pool (optional)
-	memPool *MemPool
+	memPool MemPoolGCable
 }
 
 // New returns a new GPFile object to read and write goProbe flow data
