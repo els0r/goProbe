@@ -42,35 +42,12 @@ type TaggedAggFlowMap struct {
 	Iface string `json:"iface"`
 }
 
-// Writeout consists of a channel over which the individual
-// interfaces' TaggedAggFlowMaps are sent and is tagged with
-// the timestamp of when it was triggered.
-type Writeout struct {
-	Chan      <-chan TaggedAggFlowMap
-	Timestamp time.Time
-}
-
-// WriteoutHandler provides the writeout and completion channels for external callers
-type WriteoutHandler struct {
-	DoneWriting  context.CancelFunc
-	WriteoutChan chan Writeout
-}
-
-// NewWriteoutHandler prepares a new handler for initiating flow writeouts
-func NewWriteoutHandler() *WriteoutHandler {
-	return &WriteoutHandler{
-		WriteoutChan: make(chan Writeout, WriteoutsChanDepth),
-	}
-}
-
 // Manager manages a set of Capture instances.
 // Each interface can be associated with up to one Capture.
 type Manager struct {
 	sync.Mutex
-	captures        map[string]*ManagedCapture
-	LastRotation    time.Time
-	WriteoutHandler *WriteoutHandler
-	ctx             context.Context
+	captures map[string]*ManagedCapture
+	ctx      context.Context
 }
 
 type ManagedCapture struct {
@@ -81,10 +58,8 @@ type ManagedCapture struct {
 // NewManager creates a new Manager
 func NewManager(ctx context.Context) *Manager {
 	return &Manager{
-		captures:        make(map[string]*ManagedCapture),
-		LastRotation:    time.Now(),
-		WriteoutHandler: NewWriteoutHandler(),
-		ctx:             ctx,
+		captures: make(map[string]*ManagedCapture),
+		ctx:      ctx,
 	}
 }
 
@@ -110,7 +85,10 @@ func (cm *Manager) enable(ifaces map[string]config.CaptureConfig) {
 				mc.capture.Update(config)
 			})
 		} else {
-			capCtx, cancel := context.WithCancel(cm.ctx)
+			// it's important that the parent context is background, since cancellation
+			// of a parent context shouldn't propagate through and stop the capture, the
+			// capture manager solely decides when it should be stopped
+			capCtx, cancel := context.WithCancel(context.Background())
 
 			capture := NewCapture(capCtx, iface, config)
 
@@ -125,30 +103,21 @@ func (cm *Manager) enable(ifaces map[string]config.CaptureConfig) {
 	rg.Wait()
 }
 
-// EnableAll attempts to enable all managed Capture instances.
-//
-// Returns once all instances have been enabled.
-// Note that each attempt may fail, for example if the interface
-// that a Capture is supposed to monitor ceases to exist. Use
-// StateAll() to find out wheter the Capture instances encountered
-// an error.
+// EnableAll attempts to enable all exisiting managed Capture instances.
 func (cm *Manager) EnableAll() {
-	logger := logging.Logger()
-
-	t0 := time.Now()
-
 	var rg RunGroup
-	for _, mc := range cm.capturesCopy() {
+
+	cm.Lock()
+	for _, mc := range cm.captures {
 		mc := mc
 		rg.Run(func() {
-			mc.capture.Run()
+			mc.capture.Enable()
 		})
 	}
+	cm.Unlock()
+
 	rg.Wait()
-
-	elapsed := time.Since(t0).Round(time.Millisecond)
-
-	logger.With("elapsed", elapsed.String()).Debugf("completed interface capture check")
+	return
 }
 
 func (cm *Manager) getCapture(iface string) *ManagedCapture {
@@ -193,20 +162,22 @@ func (cm *Manager) capturesCopy() map[string]*ManagedCapture {
 
 // Update attempts to enable all Capture instances given by
 // ifaces. If an instance doesn't exist, it will be created.
+//
 // If an instance has encountered an error or an instance's configuration
 // differs from the one specified in ifaces, it will be re-enabled.
+//
 // Finally, if the Manager manages an instance for an iface that does
 // not occur in ifaces, the following actions are performed on the instance:
-// (1) the instance will be disabled,
-// (2) the instance will be rotated,
-// (3) the resulting flow data will be sent over returnChan,
+//
+// (1) the instance will be rotated,
+// (2) the resulting flow data will be sent over returnChan,
 // (tagged with the interface name and stats),
-// (4) the instance will be closed,
-// and (5) the instance will be completely removed from the Manager.
+// (3) the instance will be closed,
+// and (4) the instance will be completely removed from the Manager.
 //
 // Returns once all the above actions have been completed.
-func (cm *Manager) Update(ifaces map[string]config.CaptureConfig, returnChan chan TaggedAggFlowMap) {
-	logger := logging.Logger()
+func (cm *Manager) Update(ifaces config.Ifaces, returnChan chan TaggedAggFlowMap) {
+	logger := logging.WithContext(cm.ctx)
 
 	t0 := time.Now()
 
@@ -331,11 +302,13 @@ func (cm *Manager) ErrorsAll() map[string]ErrorMap {
 // The resulting TaggedAggFlowMaps will be sent over returnChan and
 // be tagged with the given timestamp.
 func (cm *Manager) RotateAll(returnChan chan TaggedAggFlowMap) {
-	logger := logging.Logger()
+	logger := logging.WithContext(cm.ctx)
 
 	t0 := time.Now()
 
 	var rg RunGroup
+
+	logger.Debug("rotating all captures")
 
 	for iface, mc := range cm.capturesCopy() {
 		iface, mc := iface, mc

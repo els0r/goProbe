@@ -27,6 +27,7 @@ import (
 	"github.com/els0r/goProbe/pkg/discovery"
 	"github.com/els0r/goProbe/pkg/goDB"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
+	"github.com/els0r/goProbe/pkg/goprobe/writeout"
 	"github.com/els0r/goProbe/pkg/logging"
 	"github.com/els0r/goProbe/pkg/version"
 
@@ -108,14 +109,12 @@ func main() {
 
 	// It doesn't make sense to monitor zero interfaces
 	if len(config.Interfaces) == 0 {
-		logger.Error("no interfaces have been specified in the configuration file")
-		os.Exit(1)
+		logger.Fatalf("no interfaces have been specified in the configuration file")
 	}
 
 	// Limit the number of interfaces
 	if len(config.Interfaces) > capture.MaxIfaces {
-		logger.Errorf("cannot monitor more than %d interfaces", capture.MaxIfaces)
-		os.Exit(1)
+		logger.Fatalf("cannot monitor more than %d interfaces", capture.MaxIfaces)
 	}
 
 	// We quit on encountering SIGTERM or SIGINT (see further down)
@@ -124,8 +123,12 @@ func main() {
 
 	// Create DB directory if it doesn't exist already.
 	if err := os.MkdirAll(capconfig.RuntimeDBPath(), 0755); err != nil {
-		logger.Errorf("failed to create database directory: %v", err)
-		os.Exit(1)
+		logger.Fatalf("failed to create database directory: %v", err)
+	}
+
+	encoderType, err := encoders.GetTypeByString(config.DB.EncoderType)
+	if err != nil {
+		logger.Fatalf("failed to get encoder type from %s: %v", config.DB.EncoderType, err)
 	}
 
 	// Initialize packet logger
@@ -144,7 +147,7 @@ func main() {
 	// no captures are being deleted here, so we can safely discard the channel we pass
 	logger.Debug("updating capture manager configuration")
 
-	captureManager.Update(config.Interfaces, make(chan capture.TaggedAggFlowMap))
+	captureManager.Update(config.Interfaces, nil)
 
 	// configure api server
 	var (
@@ -185,8 +188,18 @@ func main() {
 		apiOptions = append(apiOptions, api.WithDiscoveryConfigUpdate(discoveryConfigUpdate))
 	}
 
+	// start goroutine for writeouts
+	writeoutHandler := writeout.NewHandler(captureManager, encoderType).
+		WithSyslogWriting(config.SyslogFlows)
+
+	// start writeout handler
+	doneWriting := writeoutHandler.HandleWriteouts()
+
+	// start regular rotations
+	writeoutHandler.HandleRotations(ctx, time.Duration(goDB.DBWriteInterval)*time.Second)
+
 	// create server and start listening for requests
-	server, err = api.New(config.API.Port, captureManager, apiOptions...)
+	server, err = api.New(config.API.Port, captureManager, writeoutHandler, apiOptions...)
 	if err != nil {
 		logger.Errorf("failed to spawn API server: %s", err)
 	} else {
@@ -202,15 +215,6 @@ func main() {
 		discoveryConfigUpdate <- discoveryConfig
 	}
 
-	// start goroutine for writeouts
-	writeoutCtx, doneWriting := context.WithCancel(ctx)
-	captureManager.WriteoutHandler.DoneWriting = doneWriting
-
-	go handleWriteouts(captureManager.WriteoutHandler, config.SyslogFlows)
-
-	// start regular rotations
-	go handleRotations(ctx, captureManager)
-
 	// listen for the interrupt signal
 	<-ctx.Done()
 
@@ -223,18 +227,10 @@ func main() {
 	fallbackCtx, cancel := context.WithTimeout(context.Background(), shutdownGracePeriod)
 	defer cancel()
 
-	// we intentionally don't unlock the mutex hereafter,
-	// because the program exits anyways. This ensures that there
-	// can be no new Rotations/Updates/etc... while we're shutting down.
-	var writeoutsChan chan<- capture.Writeout = captureManager.WriteoutHandler.WriteoutChan
-
 	// one last writeout
-	woChan := make(chan capture.TaggedAggFlowMap, capture.MaxIfaces)
-	writeoutsChan <- capture.Writeout{Chan: woChan, Timestamp: time.Now()}
+	writeoutHandler.FullWriteout(fallbackCtx, time.Now())
+	writeoutHandler.Close()
 
-	captureManager.RotateAll(woChan)
-	close(woChan)
-	close(writeoutsChan)
 	if discoveryConfigUpdate != nil {
 		close(discoveryConfigUpdate)
 	}
@@ -242,7 +238,7 @@ func main() {
 	captureManager.CloseAll()
 
 	select {
-	case <-writeoutCtx.Done():
+	case <-doneWriting:
 		logger.Info("graceful shut down completed")
 	case <-fallbackCtx.Done():
 		logger.Error("forced shutdown")
@@ -250,6 +246,7 @@ func main() {
 
 	return
 }
+<<<<<<< HEAD
 
 func handleRotations(ctx context.Context, manager *capture.Manager) {
 	logger := logging.WithContext(ctx)
@@ -397,3 +394,5 @@ func handleWriteouts(handler *capture.WriteoutHandler, logToSyslog bool) {
 	logger.Info("completed all writeouts")
 	handler.DoneWriting()
 }
+=======
+>>>>>>> c23cef4 (Refactor of writeout handling and rotation locking)

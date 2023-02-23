@@ -28,21 +28,7 @@ import (
 
 const (
 	// Snaplen sets the amount of bytes captured from a packet
-	// Currently causes errors
-	//
-	//    panic: runtime error: slice bounds out of range [:164] with capacity 134
-	//    panic: runtime error: slice bounds out of range [:192] with capacity 178
-	//	  panic: runtime error: slice bounds out of range [:896] with capacity 198
-	//    panic: runtime error: slice bounds out of range [:1672] with capacity 902
-	//
-	// Has to do with
-	//
-	//   func (t tPacketHeader) snapLen() uint32 {
-	//   	return *(*uint32)(unsafe.Pointer(&t.data[t.ppos+12]))
-	//   }
-	//
-	// From https://github.com/fako1024/slimcap/blob/dc3d7a53878db0a20f81f3794b463ea5a4a1592b/capture/afpacket/tpacket.go#L134
-	Snaplen = 896
+	Snaplen = 128
 
 	// ErrorThreshold is the maximum amount of consecutive errors that can occur on an interface before capturing is halted.
 	ErrorThreshold = 10000
@@ -73,15 +59,15 @@ const (
 func (cs State) String() string {
 	switch cs {
 	case StateInitializing:
-		return "StateInitializing"
+		return "initializing"
 	case StateCapturing:
-		return "StateCapturing"
+		return "capturing"
 	case StateClosing:
-		return "StateClosing"
+		return "closing"
 	case StateError:
-		return "StateError"
+		return "inError"
 	default:
-		return "Unknown"
+		return "unknown"
 	}
 }
 
@@ -156,6 +142,12 @@ func (cmd captureCommandFlows) execute(c *Capture) stateFn {
 	return nil
 }
 
+type capturecommandEnable struct{}
+
+func (cmd capturecommandEnable) execute(c *Capture) stateFn {
+	return initializing
+}
+
 type captureCommandUpdate struct {
 	config config.CaptureConfig
 	done   context.CancelFunc
@@ -197,10 +189,19 @@ func (cmd captureCommandRotate) execute(c *Capture) stateFn {
 		logger.Debug("there are currently no flow records available")
 	}
 
+	logger.Debug("setting rotation lock")
+	c.inRotation <- struct{}{}
+
+	// map access needs to be synchronized
+	logger.Debug("running rotation")
 	result.agg = c.flowLog.Rotate()
 
+	logger.Debug("getting stats")
 	stats := c.tryGetCaptureStats()
 	lastRotationStats := *stats
+
+	logger.Debug("unsetting rotation lock")
+	c.rotationDone <- struct{}{}
 
 	sub(stats, c.lastRotationStats.CaptureStats)
 
@@ -248,6 +249,10 @@ type Capture struct {
 	// stats from the last rotation or reset (needed for Status)
 	lastRotationStats Stats
 
+	// rotation synchronization
+	inRotation   chan struct{}
+	rotationDone chan struct{}
+
 	// Counts the total number of logged packets (since the creation of the
 	// Capture)
 	packetsLogged int
@@ -281,9 +286,11 @@ func NewCapture(ctx context.Context, iface string, config config.CaptureConfig) 
 		lastRotationStats: Stats{
 			CaptureStats: &CaptureStats{},
 		},
-		flowLog: NewFlowLog(),
-		errMap:  make(map[string]int),
-		ctx:     capCtx,
+		inRotation:   make(chan struct{}),
+		rotationDone: make(chan struct{}),
+		flowLog:      NewFlowLog(),
+		errMap:       make(map[string]int),
+		ctx:          capCtx,
 	}
 }
 
@@ -347,22 +354,26 @@ func capturing(c *Capture) stateFn {
 	go c.process()
 
 	// blocking select to wait for tear down or commands
-	select {
-	case <-c.ctx.Done():
-		return closing
-	case cmd := <-c.cmdChan:
-		// commands that cause a state transition will provide it
-		nextState := cmd.execute(c)
-		if nextState != nil {
-			return nextState
+	for {
+		select {
+		case <-c.ctx.Done():
+			return closing
+		case cmd := <-c.cmdChan:
+			switch cmd.(type) {
+			// ignore enable commands
+			case capturecommandEnable:
+				continue
+			default:
+				nextState := cmd.execute(c)
+				if nextState != nil {
+					return nextState
+				}
+			}
+		case err := <-c.captureErrors:
+			logger.Error(err)
+			return inError
 		}
-	case err := <-c.captureErrors:
-		logger.Error(err)
-		return inError
 	}
-
-	// start processing packets
-	return nil
 }
 
 func inError(c *Capture) stateFn {
@@ -378,15 +389,6 @@ func inError(c *Capture) stateFn {
 		case <-c.ctx.Done():
 			return closing
 		case cmd := <-c.cmdChan:
-			switch cmd.(type) {
-			// don't handle status commands as it is not clear if the handle can
-			// handle them when in error
-			case captureCommandUpdate, captureCommandFlows, captureCommandErrors:
-			default:
-				continue
-			}
-
-			// commands that cause a state transition will provide it
 			nextState := cmd.execute(c)
 			if nextState != nil {
 				return nextState
@@ -490,13 +492,22 @@ func (c *Capture) process() {
 
 	// this is the main packet capture loop which an interface should be in most of the time
 	for {
-		err := capturePacket()
-		if err != nil {
-			if errors.Is(err, capture.ErrCaptureStopped) { // capture stopped gracefully
+		// map access needs to be synchronized. This will incur a performance hit, but less so
+		// than locking the data structure itself
+		select {
+		case <-c.inRotation:
+			logger.Debug("waiting for rotation to complete")
+			<-c.rotationDone
+			logger.Debug("rotation complete")
+		default:
+			err := capturePacket()
+			if err != nil {
+				if errors.Is(err, capture.ErrCaptureStopped) { // capture stopped gracefully
+					return
+				}
+				c.captureErrors <- err
 				return
 			}
-			c.captureErrors <- err
-			return
 		}
 	}
 }
@@ -529,6 +540,22 @@ func (c *Capture) tryGetCaptureStats() *CaptureStats {
 }
 
 //////////////////////// public functions ////////////////////////
+
+// Enable instructs the capture to initialize itself. This command
+// has no effect if the capture is already running
+func (c *Capture) Enable() {
+	logger := logging.WithContext(c.ctx)
+
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	if c.closed {
+		logger.Errorf("cannot enable closed capture")
+		return
+	}
+
+	c.cmdChan <- capturecommandEnable{}
+}
 
 // Status returns the current State as well as the statistics
 // collected since the last call to Rotate()

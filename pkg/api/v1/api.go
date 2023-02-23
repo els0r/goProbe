@@ -7,6 +7,7 @@ import (
 	"github.com/els0r/goProbe/pkg/api/errors"
 	"github.com/els0r/goProbe/pkg/capture"
 	"github.com/els0r/goProbe/pkg/discovery"
+	"github.com/els0r/goProbe/pkg/goprobe/writeout"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -29,16 +30,19 @@ func WithDiscoveryConfigUpdate(update chan *discovery.Config) Option {
 
 // API holds access to goProbe's internal capture routines
 type API struct {
-	c                     *capture.Manager
+	captureManager  *capture.Manager
+	writeoutHandler *writeout.Handler
+
 	discoveryConfigUpdate chan *discovery.Config
 	errorHandler          errors.Handler
 }
 
 // New creates a new API
-func New(manager *capture.Manager, opts ...Option) *API {
+func New(manager *capture.Manager, handler *writeout.Handler, opts ...Option) *API {
 	a := &API{
-		c:            manager,
-		errorHandler: errors.NewStandardHandler(), // a bare error handler is necessary
+		captureManager:  manager,
+		writeoutHandler: handler,
+		errorHandler:    errors.NewStandardHandler(), // a bare error handler is necessary
 	}
 
 	// apply options
