@@ -187,31 +187,31 @@ func (cmd captureCommandRotate) execute(c *Capture) stateFn {
 
 	if c.flowLog.Len() == 0 {
 		logger.Debug("there are currently no flow records available")
-	}
+	} else {
+		logger.Debug("setting rotation lock")
+		c.inRotation <- struct{}{}
 
-	logger.Debug("setting rotation lock")
-	c.inRotation <- struct{}{}
+		// map access needs to be synchronized
+		logger.Debug("running rotation")
+		result.agg = c.flowLog.Rotate()
 
-	// map access needs to be synchronized
-	logger.Debug("running rotation")
-	result.agg = c.flowLog.Rotate()
+		logger.Debug("unsetting rotation lock")
+		c.rotationDone <- struct{}{}
 
-	logger.Debug("getting stats")
-	stats := c.tryGetCaptureStats()
-	lastRotationStats := *stats
+		logger.Debug("getting stats")
+		stats := c.tryGetCaptureStats()
+		lastRotationStats := *stats
 
-	logger.Debug("unsetting rotation lock")
-	c.rotationDone <- struct{}{}
+		sub(stats, c.lastRotationStats.CaptureStats)
 
-	sub(stats, c.lastRotationStats.CaptureStats)
-
-	result.stats = Stats{
-		CaptureStats:  stats,
-		PacketsLogged: c.packetsLogged - c.lastRotationStats.PacketsLogged,
-	}
-	c.lastRotationStats = Stats{
-		CaptureStats:  &lastRotationStats,
-		PacketsLogged: c.packetsLogged,
+		result.stats = Stats{
+			CaptureStats:  stats,
+			PacketsLogged: c.packetsLogged - c.lastRotationStats.PacketsLogged,
+		}
+		c.lastRotationStats = Stats{
+			CaptureStats:  &lastRotationStats,
+			PacketsLogged: c.packetsLogged,
+		}
 	}
 
 	cmd.returnChan <- result
