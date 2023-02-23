@@ -14,8 +14,7 @@ require (
 	github.com/throttled/throttled v2.2.5+incompatible
 	github.com/valyala/gozstd v1.17.0
 	github.com/zeebo/xxh3 v1.0.2
-	golang.org/x/net v0.0.0-20220805013720-a33c5aa5df48
-	golang.org/x/sys v0.2.0
+	golang.org/x/net v0.7.0
 )
 
 require (
@@ -31,6 +30,7 @@ require (
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
+	golang.org/x/sys v0.5.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
