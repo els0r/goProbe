@@ -53,6 +53,8 @@ type GPDir struct {
 
 	options    []Option // Options (forwarded to all GPFiles)
 	basePath   string   // goDB base path (up to interface)
+	dirPath    string   // GPDir path (up to GPDir timestanp)
+	metaPath   string   // Full path to GPDir metadata
 	timestamp  int64    // Timestamp of GPDir
 	accessMode int      // Access mode (also forwarded to all GPFiles)
 
@@ -61,12 +63,16 @@ type GPDir struct {
 
 // NewDir instantiates a new directory (doesn't yet do anything)
 func NewDir(basePath string, timestamp int64, accessMode int, options ...Option) *GPDir {
-	return &GPDir{
-		basePath:   strings.TrimSuffix(basePath, "/"),
+	obj := GPDir{
+		basePath: strings.TrimSuffix(basePath, "/"),
+
 		timestamp:  DirTimestamp(timestamp),
 		accessMode: accessMode,
 		options:    options,
 	}
+	obj.dirPath = filepath.Join(basePath, strconv.Itoa(int(obj.timestamp)))
+	obj.metaPath = filepath.Join(obj.dirPath, metadataFileName)
+	return &obj
 }
 
 // Open accesses the metadata and prepares the GPDir for reading / writing
@@ -157,7 +163,7 @@ func (d *GPDir) TimeRange() (first int64, last int64) {
 }
 
 // Unmarshal reads and unmarshals a serialized metadata set into the GPDir instance
-func (d *GPDir) Unmarshal(r *os.File) error {
+func (d *GPDir) Unmarshal(r ReadWriteSeekCloser) error {
 
 	// Read the file into a buffer to avoid any allocation and maximize throughput
 	memFile, err := NewMemFile(r, metaDataMemPool)
@@ -210,7 +216,7 @@ func (d *GPDir) Unmarshal(r *os.File) error {
 }
 
 // Marshal marshals and writes the metadata of the GPDir instance into serialized metadata set
-func (d *GPDir) Marshal(w *os.File) error {
+func (d *GPDir) Marshal(w ReadWriteSeekCloser) error {
 
 	nBlocks := len(d.BlockNumV4Entries)
 	size := 8 + // Overall number of blocks
@@ -274,12 +280,12 @@ func (d *GPDir) Marshal(w *os.File) error {
 
 // Path returns the path of the GPDir (up to the timestamp)
 func (d *GPDir) Path() string {
-	return fmt.Sprintf("%s/%d", d.basePath, d.timestamp)
+	return d.dirPath
 }
 
 // MetadataPath returns the full path of the GPDir metadata file
 func (d *GPDir) MetadataPath() string {
-	return fmt.Sprintf("%s/%d/%s", d.basePath, d.timestamp, metadataFileName)
+	return d.metaPath
 }
 
 // NBlocks returns the number of blocks in this GPDir
@@ -331,7 +337,7 @@ func (d *GPDir) Close() error {
 func (d *GPDir) Column(colIdx types.ColumnIndex) (*GPFile, error) {
 	if d.gpFiles[colIdx] == nil {
 		var err error
-		if d.gpFiles[colIdx], err = New(filepath.Join(d.Path(), fmt.Sprintf("%s%s", types.ColumnFileNames[colIdx], FileSuffix)), d.BlockMetadata[colIdx], d.accessMode, d.options...); err != nil {
+		if d.gpFiles[colIdx], err = New(filepath.Join(d.Path(), types.ColumnFileNames[colIdx]+FileSuffix), d.BlockMetadata[colIdx], d.accessMode, d.options...); err != nil {
 			return nil, err
 		}
 	}
