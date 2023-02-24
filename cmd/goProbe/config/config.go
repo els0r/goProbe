@@ -50,7 +50,7 @@ type DBConfig struct {
 }
 
 type CaptureConfig struct {
-	BufferSize int  `json:"buf_size"`
+	BufferSize int  `json:"buffer_size"`
 	Promisc    bool `json:"promisc"`
 
 	// used by the ring buffer
