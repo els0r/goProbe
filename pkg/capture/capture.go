@@ -421,6 +421,13 @@ func (c *Capture) reset() {
 			// didn't work (which it really shouldn't)
 			logger.Error(err)
 		}
+
+		// TODO: Ideally this is called only _after_ the process() routine for this capture
+		// has returned (to ensure the ring buffer memory is not accessed anymore)
+		err = c.captureHandle.Free()
+		if err != nil {
+			logger.Error(err)
+		}
 	}
 
 	// We reset the Pcap part of the stats because we will create
