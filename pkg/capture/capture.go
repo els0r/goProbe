@@ -188,17 +188,13 @@ func (cmd captureCommandRotate) execute(c *Capture) stateFn {
 	if c.flowLog.Len() == 0 {
 		logger.Debug("there are currently no flow records available")
 	} else {
-		logger.Debug("setting rotation lock")
 		c.inRotation <- struct{}{}
 
 		// map access needs to be synchronized
-		logger.Debug("running rotation")
 		result.agg = c.flowLog.Rotate()
 
-		logger.Debug("unsetting rotation lock")
 		c.rotationDone <- struct{}{}
 
-		logger.Debug("getting stats")
 		stats := c.tryGetCaptureStats()
 		lastRotationStats := *stats
 
@@ -496,9 +492,13 @@ func (c *Capture) process() {
 		// than locking the data structure itself
 		select {
 		case <-c.inRotation:
-			logger.Debug("waiting for rotation to complete")
-			<-c.rotationDone
-			logger.Debug("rotation complete")
+			select {
+			case <-c.rotationDone:
+				continue
+			case <-c.ctx.Done():
+				logger.Debug("context cancelled during rotation. Exiting")
+				return
+			}
 		default:
 			err := capturePacket()
 			if err != nil {
