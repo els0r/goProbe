@@ -15,6 +15,7 @@ package capture
 
 import (
 	"fmt"
+	"sort"
 	"text/tabwriter"
 
 	"github.com/els0r/goProbe/pkg/goDB/protocols"
@@ -63,7 +64,18 @@ func (f *FlowLog) Flows() map[string]*GPFlow {
 func (f *FlowLog) TablePrint(w *tabwriter.Writer) error {
 	fmt.Fprintln(w, headerStrUpper)
 	fmt.Fprintln(w, headerStr)
+
+	var flows []*GPFlow
 	for _, g := range f.Flows() {
+		flows = append(flows, g)
+	}
+
+	// sort by traffic volume (descending)
+	sort.SliceStable(flows, func(i, j int) bool {
+		return (flows[i].bytesRcvd + flows[i].bytesSent) >= (flows[j].bytesRcvd + flows[j].bytesSent)
+	})
+
+	for _, g := range flows {
 		prefix := "["
 		var state string
 		if g.HasBeenIdle() {

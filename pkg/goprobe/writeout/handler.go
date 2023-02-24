@@ -136,13 +136,12 @@ func (h *Handler) HandleRotations(ctx context.Context, interval time.Duration) {
 			default:
 				h.FullWriteout(ctx, t)
 
-				logger = logger.With("queue_length", len(h.writeoutsChan))
-
 				if len(h.writeoutsChan) > 2 {
+					log := logger.With("queue_length", len(h.writeoutsChan))
 					if len(h.writeoutsChan) > capture.WriteoutsChanDepth {
-						logger.Fatalf("writeouts are lagging behind too much")
+						log.Fatalf("writeouts are lagging behind too much")
 					}
-					logger.Warn("writeouts are lagging behind")
+					log.Warn("writeouts are lagging behind")
 				}
 
 				logger.Debug("restarting any interfaces that have encountered errors")
@@ -260,7 +259,7 @@ func (h *Handler) HandleWriteouts() <-chan struct{} {
 
 			elapsed := time.Since(t0).Round(time.Millisecond)
 
-			logger.With("count", count, "elapsed", elapsed).Debug("completed writeout")
+			logger.With("count", count, "elapsed", elapsed.String()).Debug("completed writeout")
 		}
 
 		logger.Info("completed all writeouts")

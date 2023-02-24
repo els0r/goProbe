@@ -13,6 +13,7 @@
 package capture
 
 import (
+	"github.com/els0r/goProbe/pkg/goDB/protocols"
 	"github.com/els0r/goProbe/pkg/types"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -44,15 +45,23 @@ func (f *GPFlow) Key() (key types.Key) {
 func (f *GPFlow) MarshalJSON() ([]byte, error) {
 	return jsoniter.Marshal(
 		struct {
-			Hash EPHash `json:"hash"`
+			SIP   string `json:"sip"`
+			Sport uint16 `json:"sport"`
+			DIP   string `json:"dip"`
+			Dport uint16 `json:"dport"`
+			Proto string `json:"proto"`
 
 			// Hash Map Value variables
-			BytesRcvd   uint64 `json:"bytesRcvd"`
-			BytesSent   uint64 `json:"bytesSent"`
-			PacketsRcvd uint64 `json:"packetsRcvd"`
-			PacketsSent uint64 `json:"packetsSent"`
+			BytesRcvd   uint64 `json:"bytes_received"`
+			BytesSent   uint64 `json:"bytes_sent"`
+			PacketsRcvd uint64 `json:"packets_received"`
+			PacketsSent uint64 `json:"packets_sent"`
 		}{
-			f.epHash,
+			types.RawIPToString(f.epHash[0:16]),
+			types.PortToUint16(f.epHash[34:36]),
+			types.RawIPToString(f.epHash[16:32]),
+			types.PortToUint16(f.epHash[32:34]),
+			protocols.GetIPProto(int(f.epHash[36])),
 			f.bytesRcvd, f.bytesSent, f.packetsRcvd, f.packetsSent},
 	)
 }
