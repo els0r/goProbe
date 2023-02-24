@@ -227,7 +227,8 @@ func (cm *Manager) Update(ifaces config.Ifaces, returnChan chan TaggedAggFlowMap
 
 	elapsed := time.Since(t0).Round(time.Millisecond)
 
-	logger.With("elapsed", elapsed).Debug("updated interface list")
+	logger.With("elapsed", elapsed.String()).Debug("updated interface list")
+
 }
 
 // StatusAll returns the statuses of all managed Capture instances.
@@ -325,7 +326,7 @@ func (cm *Manager) RotateAll(returnChan chan TaggedAggFlowMap) {
 
 	elapsed := time.Since(t0).Round(time.Millisecond)
 
-	logger.With("elapsed", elapsed).Debug("completed rotation of all captures")
+	logger.With("elapsed", elapsed.String()).Debug("completed rotation of all captures")
 }
 
 // CloseAll closes and deletes all Capture instances managed by the
@@ -352,5 +353,5 @@ func (cm *Manager) CloseAll() {
 
 	elapsed := time.Since(t0).Round(time.Millisecond)
 
-	logger.With("elapsed", elapsed).Debug("closed all captures")
+	logger.With("elapsed", elapsed.String()).Debug("closed all captures")
 }
