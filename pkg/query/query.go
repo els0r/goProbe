@@ -334,6 +334,7 @@ func (s *Statement) Execute(ctx context.Context) (result *results.Result, err er
 	if s.Query.IsLowMem() {
 		agg.aggregatedMap.Map.Clear()
 	} else {
+		agg.aggregatedMap.Map.ClearFast()
 		agg.aggregatedMap.Map = nil
 	}
 	runtime.GC()

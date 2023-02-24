@@ -7,6 +7,15 @@ import (
 	"github.com/zeebo/xxh3"
 )
 
+// //go:linkname runtime_memhash runtime.memhash
+// // go:noescape
+// func runtime_memhash(p unsafe.Pointer, seed, s uintptr) uintptr
+
+func hash(in []byte) uint64 {
+	return xxh3.Hash(in)
+	// return uint64(runtime_memhash(*(*unsafe.Pointer)(unsafe.Pointer(&in)), 0, uintptr(len(in))))
+}
+
 // Type definitions for easy modification
 type (
 
@@ -63,8 +72,10 @@ type Map struct {
 
 	oldBuckets *[]bucket
 
+	keyData    []byte
+	keyDataPos int
+
 	nEvacuate int
-	zeroCopy  bool
 }
 
 type bucket struct {
@@ -116,15 +127,6 @@ func New(n ...int) *Map {
 	return m
 }
 
-// ZeroCopy enables zero-copy key mode - treat with care: in this mode
-// key values are taken as slices without copying them in order to reduce
-// the number of allocations. Keys must _not_ be modified elsewhere after
-// having been insertVd into the map
-func (m *Map) ZeroCopy() *Map {
-	m.zeroCopy = true
-	return m
-}
-
 // AggFlowMap stores all flows where the source port from the FlowLog has been aggregated
 // Just a convenient alias for the map type itself
 type AggFlowMap = Map
@@ -142,7 +144,7 @@ type AggFlowMapWithMetadata struct {
 // will be insertVd.
 func NewHint(hint int) *Map {
 	if hint <= 0 {
-		return &Map{}
+		return &Map{keyData: make([]byte, 65536)}
 	}
 	nBuckets := 1
 	for loadFactor(hint, nBuckets) {
@@ -150,7 +152,7 @@ func NewHint(hint int) *Map {
 	}
 	buckets := makeBucketArray(nBuckets)
 
-	return &Map{buckets: buckets, nextOverflow: len(buckets)}
+	return &Map{buckets: buckets, nextOverflow: len(buckets), keyData: make([]byte, 65536)}
 }
 
 // Len returns the number of valents in the map
@@ -176,7 +178,7 @@ func (m *Map) mapaccessK(key Key) (*Key, *Val) {
 		return nil, nil
 	}
 
-	hash := xxh3.Hash(key)
+	hash := hash(key)
 	mask := m.bucketMask()
 	b := &m.buckets[int(hash&mask)]
 	if c := m.oldBuckets; c != nil {
@@ -212,7 +214,7 @@ func (m *Map) Set(key Key, val Val) {
 	if m == nil {
 		panic("Set called on nil map")
 	}
-	hash := xxh3.Hash(key)
+	hash := hash(key)
 
 	if m.buckets == nil {
 		m.buckets = make([]bucket, 1)
@@ -245,8 +247,7 @@ bucketloop:
 				}
 				continue
 			}
-			k := b.keys[i]
-			if string(key) != string(k) {
+			if string(key) != string(b.keys[i]) {
 				continue
 			}
 			b.vals[i] = val
@@ -272,16 +273,13 @@ bucketloop:
 		insertV = &newB.vals[0]
 	}
 
-	if m.zeroCopy {
-		*insertK = key
-	} else {
-		if len(*insertK) < len(key) {
-			*insertK = make([]byte, len(key))
-		} else if len(*insertK) > len(key) {
-			*insertK = (*insertK)[0:len(key)]
-		}
-		copy(*insertK, key)
+	if m.keyDataPos+len(key) > len(m.keyData) {
+		m.keyData = append(m.keyData, make([]byte, len(m.keyData))...)
 	}
+	*insertK = m.keyData[m.keyDataPos : m.keyDataPos+len(key)]
+	m.keyDataPos += len(key)
+	copy(*insertK, key)
+
 	*insertV = val
 	*insertI = top
 	m.count++
@@ -296,7 +294,7 @@ func (m *Map) SetOrUpdate(key Key, eA, eB, eC, eD uint64) {
 	if m == nil {
 		panic("SetOrUpdate called on nil map")
 	}
-	hash := xxh3.Hash(key)
+	hash := hash(key)
 
 	if m.buckets == nil {
 		m.buckets = make([]bucket, 1)
@@ -360,16 +358,13 @@ bucketloop:
 		insertV = &newB.vals[0]
 	}
 
-	if m.zeroCopy {
-		*insertK = key
-	} else {
-		if len(*insertK) < len(key) {
-			*insertK = make([]byte, len(key))
-		} else if len(*insertK) > len(key) {
-			*insertK = (*insertK)[0:len(key)]
-		}
-		copy(*insertK, key)
+	if m.keyDataPos+len(key) > len(m.keyData) {
+		m.keyData = append(m.keyData, make([]byte, len(m.keyData))...)
 	}
+	*insertK = m.keyData[m.keyDataPos : m.keyDataPos+len(key)]
+	m.keyDataPos += len(key)
+	copy(*insertK, key)
+
 	*insertV = Val{
 		BytesRcvd:   eA,
 		BytesSent:   eB,
@@ -451,7 +446,7 @@ next:
 		}
 		k := b.keys[offi]
 		if checkBucket != noCheck && !m.sameSizeGrow() {
-			hash := xxh3.Hash(k)
+			hash := hash(k)
 			if int(hash&m.bucketMask()) != checkBucket {
 				continue
 			}
@@ -487,7 +482,6 @@ func (m *Map) Clear() {
 	}
 
 	m.flags &^= sameSizeGrow
-	m.oldBuckets = nil
 	m.nEvacuate = 0
 	m.nOverflow = 0
 	m.count = 0
@@ -496,6 +490,13 @@ func (m *Map) Clear() {
 	for i := range buckets {
 		buckets[i] = bucket{}
 	}
+
+	m.ClearFast()
+}
+
+func (m *Map) ClearFast() {
+	m.oldBuckets = nil
+	m.keyData = nil
 }
 
 func (m *Map) hashGrow() {
@@ -589,7 +590,7 @@ func (m *Map) evacuate(oldBucket int) {
 				}
 				var useY uint8
 				if !m.sameSizeGrow() {
-					hash := xxh3.Hash(b.keys[i])
+					hash := hash(b.keys[i])
 					if hash&uint64(newBit) != 0 {
 						useY = 1
 					}

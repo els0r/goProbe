@@ -27,7 +27,7 @@ func aggregate(mapChan <-chan hashmap.AggFlowMapWithMetadata, lowMem bool) chan 
 		// changed anymore we can re-use the memory allocated for the keys in them by
 		// using them for the aggregate map
 		var finalMap = hashmap.AggFlowMapWithMetadata{
-			Map: hashmap.New().ZeroCopy(),
+			Map: hashmap.New(),
 		}
 
 		var (
@@ -72,6 +72,7 @@ func aggregate(mapChan <-chan hashmap.AggFlowMapWithMetadata, lowMem bool) chan 
 			if lowMem {
 				item.Map.Clear() // Safe even in zero-copy mode (since the elements itself are not touched)
 			} else {
+				item.Map.ClearFast()
 				item.Map = nil
 			}
 		}
