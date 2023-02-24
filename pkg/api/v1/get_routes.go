@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -142,12 +143,12 @@ func (a *API) getPacketStats(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		writeLn("Interface and pcap statistics")
+		writeLn("Interface and capture handle statistics")
 
 		// print info for each interface
 		writeLn(fmt.Sprintf(
 			`
-   last writeout: %.0fs ago
+   last writeout: %s ago
   packets logged: %d
 
   handle
@@ -163,10 +164,22 @@ func (a *API) getPacketStats(w http.ResponseWriter, r *http.Request) {
 		if dbg == "1" {
 			writeLn(fmt.Sprintf("\n%s   RCVD     DROP", strings.Repeat(" ", status.StatusLineIndent+8+4)))
 
-			for iface, stat := range AggregatedStats.Ifaces {
+			var sortedIfaces = make([]string, len(AggregatedStats.Ifaces))
+
+			i := 0
+			for iface, _ := range AggregatedStats.Ifaces {
+				sortedIfaces[i] = iface
+				i++
+			}
+			sort.SliceStable(sortedIfaces, func(i, j int) bool {
+				return sortedIfaces[i] < sortedIfaces[j]
+			})
+
+			for _, iface := range sortedIfaces {
+				stat := AggregatedStats.Ifaces[iface]
 				var pcapInfoStr string
 				if stat.Stats.CaptureStats != nil {
-					pcapInfoStr = fmt.Sprintf("%8d %8d %8d",
+					pcapInfoStr = fmt.Sprintf("%8d %8d",
 						stat.Stats.CaptureStats.PacketsReceived,
 						stat.Stats.CaptureStats.PacketsDropped,
 					)
