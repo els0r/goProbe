@@ -181,6 +181,51 @@ func testRoundtrip(t *testing.T, enc encoders.Type) {
 	}
 }
 
+func TestInvalidMetadata(t *testing.T) {
+
+	os.RemoveAll("/tmp/test_db")
+	if err := os.MkdirAll("/tmp/test_db/0", 0755); err != nil {
+		t.Fatalf("Error creating test dir for reading: %s", err)
+	}
+	if err := os.WriteFile("/tmp/test_db/0/.blockmeta", []byte{0x1}, 0644); err != nil {
+		t.Fatalf("Error creating test metdadata for reading: %s", err)
+	}
+
+	testDir := NewDir("/tmp/test_db", 1000, ModeRead)
+	if err := testDir.Open(); err == nil || err.Error() != "error decoding metadata file `/tmp/test_db/0/.blockmeta`: input data too small to be a GPDir metadata header (len: 1)" {
+		t.Fatalf("Expected error `input data too small to be a GPDir metadata header (len: 1)` opening corrupt GPDir, got `%s`", err)
+	}
+}
+
+func TestEmptyMetadata(t *testing.T) {
+
+	os.RemoveAll("/tmp/test_db")
+
+	testDir := NewDir("/tmp/test_db", 1000, ModeWrite)
+	if err := testDir.Open(); err != nil {
+		t.Fatalf("Error opening test dir for writing: %s", err)
+	}
+
+	if err := testDir.Close(); err != nil {
+		t.Fatalf("Error writing test dir: %s", err)
+	}
+
+	testDir = NewDir("/tmp/test_db", 1000, ModeRead)
+	if err := testDir.Open(); err != nil {
+		t.Fatalf("Error opening test dir for writing: %s", err)
+	}
+
+	for i := 0; i < int(types.ColIdxCount); i++ {
+		if len(testDir.Metadata.BlockMetadata[i].BlockList) != 0 {
+			t.Fatalf("BlockList for column %d should be empty", i)
+		}
+	}
+
+	if len(testDir.Metadata.BlockNumV4Entries) != 0 {
+		t.Fatalf("BlockNumV4Entries should be empty")
+	}
+}
+
 func TestMetadataRoundTrip(t *testing.T) {
 
 	os.RemoveAll("/tmp/test_db")

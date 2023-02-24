@@ -177,6 +177,10 @@ func (d *GPDir) Unmarshal(r ReadWriteSeekCloser) error {
 	}()
 
 	data := memFile.Data()
+	if len(data) < 16 {
+		return fmt.Errorf("input data too small to be a GPDir metadata header (len: %d)", len(data))
+	}
+
 	d.Metadata = newMetadata()
 
 	// Get flat nummber of blocks
@@ -244,26 +248,29 @@ func (d *GPDir) Marshal(w ReadWriteSeekCloser) error {
 	binary.BigEndian.PutUint64(data[8:16], uint64(d.Metadata.Version)) // Store header version
 	pos := 16
 
-	// Store block information
-	for i := 0; i < int(types.ColIdxCount); i++ {
-		lastTimestamp := d.BlockMetadata[i].BlockList[0].Timestamp
-		binary.BigEndian.PutUint64(data[pos:pos+8], uint64(d.BlockMetadata[i].CurrentOffset))
-		binary.BigEndian.PutUint64(data[pos+8:pos+16], uint64(lastTimestamp))
-		pos += 16
-		for _, block := range d.BlockMetadata[i].BlockList {
-			binary.BigEndian.PutUint32(data[pos:pos+4], uint32(block.Len))
-			binary.BigEndian.PutUint32(data[pos+4:pos+8], uint32(block.RawLen))
-			binary.BigEndian.PutUint32(data[pos+8:pos+12], uint32(block.Timestamp-lastTimestamp))
-			data[pos+12] = byte(block.EncoderType)
-			lastTimestamp = block.Timestamp
-			pos += 13
-		}
-	}
+	if nBlocks > 0 {
 
-	// Store Metadata.NumIPV4Entries
-	for i := 0; i < len(d.BlockNumV4Entries); i++ {
-		binary.BigEndian.PutUint64(data[pos:pos+8], uint64(d.BlockNumV4Entries[i]))
-		pos += 8
+		// Store block information
+		for i := 0; i < int(types.ColIdxCount); i++ {
+			lastTimestamp := d.BlockMetadata[i].BlockList[0].Timestamp
+			binary.BigEndian.PutUint64(data[pos:pos+8], uint64(d.BlockMetadata[i].CurrentOffset))
+			binary.BigEndian.PutUint64(data[pos+8:pos+16], uint64(lastTimestamp))
+			pos += 16
+			for _, block := range d.BlockMetadata[i].BlockList {
+				binary.BigEndian.PutUint32(data[pos:pos+4], uint32(block.Len))
+				binary.BigEndian.PutUint32(data[pos+4:pos+8], uint32(block.RawLen))
+				binary.BigEndian.PutUint32(data[pos+8:pos+12], uint32(block.Timestamp-lastTimestamp))
+				data[pos+12] = byte(block.EncoderType)
+				lastTimestamp = block.Timestamp
+				pos += 13
+			}
+		}
+
+		// Store Metadata.NumIPV4Entries
+		for i := 0; i < len(d.BlockNumV4Entries); i++ {
+			binary.BigEndian.PutUint64(data[pos:pos+8], uint64(d.BlockNumV4Entries[i]))
+			pos += 8
+		}
 	}
 
 	n, err := w.Write(data)
