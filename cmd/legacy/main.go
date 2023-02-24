@@ -185,6 +185,11 @@ func (c converter) convertDir(w work, dryRun bool) error {
 		})
 	}
 
+	// If no blocks were read / remain (e.g. due to corruption), we can skip this directory
+	if len(allBlocks) == 0 {
+		return nil
+	}
+
 	// Sort by timestamp to cover potential out-of-order scenarios
 	sort.Slice(allBlocks, func(i, j int) bool {
 		return allBlocks[i].ts < allBlocks[j].ts
