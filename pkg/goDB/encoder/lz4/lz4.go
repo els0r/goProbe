@@ -15,8 +15,8 @@ size_t lz4Compress(const char *src, const size_t srcSize, char *dst, const size_
 	// taken from https://github.com/lz4/lz4/blob/dev/examples/frameCompress.c
 	const LZ4F_preferences_t prefs = {
 		{
-			LZ4F_default,
-			LZ4F_blockIndependent,
+			LZ4F_max64KB,
+			LZ4F_blockLinked,
 			LZ4F_noContentChecksum,
 			LZ4F_frame,
 			srcSize,
@@ -34,8 +34,8 @@ size_t lz4Compress(const char *src, const size_t srcSize, char *dst, const size_
 size_t lz4GetCompressBound(const size_t srcSize, const int level) {
 	const LZ4F_preferences_t prefs = {
 		{
-			LZ4F_default,
-			LZ4F_blockIndependent,
+			LZ4F_max64KB,
+			LZ4F_blockLinked,
 			LZ4F_noContentChecksum,
 			LZ4F_frame,
 			srcSize,
@@ -155,7 +155,7 @@ func (e *Encoder) Compress(data, buf []byte, dst io.Writer) (n int, err error) {
 	}
 	buf = buf[:dstCapacity]
 
-	var compLen = int(C.lz4Compress(
+	compLen := int(C.lz4Compress(
 		(*C.char)(unsafe.Pointer(&data[0])),
 		C.size_t(len(data)),
 		(*C.char)(unsafe.Pointer(&buf[0])),
@@ -197,15 +197,15 @@ func (e *Encoder) Decompress(in, out []byte, src io.Reader) (int, error) {
 	}
 
 	// decompress data
-	res := C.lz4Decompress(
+	decompLen := int(C.lz4Decompress(
 		(*C.char)(unsafe.Pointer(&in[0])),
 		C.size_t(len(in)),
 		(*C.char)(unsafe.Pointer(&out[0])),
-		C.size_t(len(out)))
-	if res < 0 {
-		errName := C.GoString(C.lz4GetErrorName(C.int(res)))
-		return 0, fmt.Errorf("lz4: decompression failed: %s (%d)", errName, res)
+		C.size_t(len(out))))
+	if decompLen < 0 {
+		errName := C.GoString(C.lz4GetErrorName(C.int(decompLen)))
+		return 0, fmt.Errorf("lz4: decompression failed: %s (%d)", errName, decompLen)
 	}
 
-	return int(res), nil
+	return decompLen, nil
 }

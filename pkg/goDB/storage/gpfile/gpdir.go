@@ -26,18 +26,53 @@ const (
 // Global memory pool used to minimize allocations
 var metaDataMemPool = NewMemPoolNoLimit()
 
+// TrafficMetadata denotes a serializable set of metadata information about traffic stats
+type TrafficMetadata struct {
+	NumV4Entries uint64
+	NumV6Entries uint64
+	NumDrops     int
+}
+
+type Stats struct {
+	Counts  types.Counters
+	Traffic TrafficMetadata
+}
+
+// NumFlows returns the total number of flows
+func (t TrafficMetadata) NumFlows() uint64 {
+	return t.NumV4Entries + t.NumV6Entries
+}
+
+// Add computes the sum of two sets of TrafficMetadata
+func (t TrafficMetadata) Add(t2 TrafficMetadata) TrafficMetadata {
+	t.NumDrops += t2.NumDrops
+	t.NumV4Entries += t2.NumV4Entries
+	t.NumV6Entries += t2.NumV6Entries
+	return t
+}
+
+// Sub computes the difference of two sets of TrafficMetadata
+func (t TrafficMetadata) Sub(t2 TrafficMetadata) TrafficMetadata {
+	t.NumDrops -= t2.NumDrops
+	t.NumV4Entries -= t2.NumV4Entries
+	t.NumV6Entries -= t2.NumV6Entries
+	return t
+}
+
 // Metadata denotes a serializable set of metadata (both globally and per-block)
 type Metadata struct {
-	BlockMetadata     [types.ColIdxCount]*storage.BlockHeader
-	BlockNumV4Entries []uint64
-	Version           int
+	BlockMetadata [types.ColIdxCount]*storage.BlockHeader
+	BlockTraffic  []TrafficMetadata
+
+	Stats
+	Version int
 }
 
 // newMetadata initializes a new Metadata set (internal / serialization use only)
 func newMetadata() *Metadata {
 	m := Metadata{
-		BlockNumV4Entries: make([]uint64, 0),
-		Version:           headerVersion,
+		BlockTraffic: make([]TrafficMetadata, 0),
+		Version:      headerVersion,
 	}
 	for i := 0; i < int(types.ColIdxCount); i++ {
 		m.BlockMetadata[i] = &storage.BlockHeader{
@@ -118,7 +153,7 @@ func (d *GPDir) Open() error {
 
 // NumIPv4EntriesAtIndex returns the number of IPv4 entries for a given block index
 func (d *GPDir) NumIPv4EntriesAtIndex(blockIdx int) uint64 {
-	return d.BlockNumV4Entries[blockIdx]
+	return d.BlockTraffic[blockIdx].NumV4Entries
 }
 
 // ReadBlockAtIndex returns the block for a specified block index from the underlying GPFile
@@ -135,7 +170,7 @@ func (d *GPDir) ReadBlockAtIndex(colIdx types.ColumnIndex, blockIdx int) ([]byte
 }
 
 // WriteBlocks writes a set of blocks to the underlying GPFiles and updates the metadata
-func (d *GPDir) WriteBlocks(timestamp int64, numV4Entries uint64, dbData [types.ColIdxCount][]byte) error {
+func (d *GPDir) WriteBlocks(timestamp int64, blockTraffic TrafficMetadata, counters types.Counters, dbData [types.ColIdxCount][]byte) error {
 	for colIdx := types.ColumnIndex(0); colIdx < types.ColIdxCount; colIdx++ {
 
 		// Load column if required
@@ -145,13 +180,15 @@ func (d *GPDir) WriteBlocks(timestamp int64, numV4Entries uint64, dbData [types.
 		}
 
 		// Write data to column file
-		if err := d.gpFiles[colIdx].WriteBlock(timestamp, dbData[colIdx]); err != nil {
+		if err := d.gpFiles[colIdx].writeBlock(timestamp, dbData[colIdx]); err != nil {
 			return err
 		}
 	}
 
-	// Update IPv4 entry counter
-	d.Metadata.BlockNumV4Entries = append(d.Metadata.BlockNumV4Entries, numV4Entries)
+	// Update global block info / counters
+	d.Metadata.BlockTraffic = append(d.Metadata.BlockTraffic, blockTraffic)
+	d.Metadata.Traffic = d.Metadata.Traffic.Add(blockTraffic)
+	d.Metadata.Counts = d.Metadata.Counts.Add(counters)
 
 	return nil
 }
@@ -183,37 +220,48 @@ func (d *GPDir) Unmarshal(r ReadWriteSeekCloser) error {
 
 	d.Metadata = newMetadata()
 
-	// Get flat nummber of blocks
-	nBlocks := int(binary.BigEndian.Uint64(data[0:8]))
-
-	// Get header version
-	d.Metadata.Version = int(binary.BigEndian.Uint64(data[8:16]))
-	pos := 16
+	d.Metadata.Version = int(binary.BigEndian.Uint64(data[0:8]))            // Get header version
+	nBlocks := int(binary.BigEndian.Uint64(data[8:16]))                     // Get flat nummber of blocks
+	d.Metadata.Traffic.NumV4Entries = binary.BigEndian.Uint64(data[16:24])  // Get global number of IPv4 flows
+	d.Metadata.Traffic.NumV6Entries = binary.BigEndian.Uint64(data[24:32])  // Get global number of IPv6 flows
+	d.Metadata.Traffic.NumDrops = int(binary.BigEndian.Uint64(data[32:40])) // Get global number of dropped packets
+	d.Metadata.Counts.BytesRcvd = binary.BigEndian.Uint64(data[40:48])      // Get global Counters (BytesRcvd)
+	d.Metadata.Counts.BytesSent = binary.BigEndian.Uint64(data[48:56])      // Get global Counters (BytesSent)
+	d.Metadata.Counts.PacketsRcvd = binary.BigEndian.Uint64(data[56:64])    // Get global Counters (PacketsRcvd)
+	d.Metadata.Counts.PacketsSent = binary.BigEndian.Uint64(data[64:72])    // Get global Counters (PacketsSent)
+	pos := 72
 
 	// Get block information
 	for i := 0; i < int(types.ColIdxCount); i++ {
 		d.BlockMetadata[i].CurrentOffset = int64(binary.BigEndian.Uint64(data[pos : pos+8]))
 		d.BlockMetadata[i].BlockList = make([]storage.BlockAtTime, nBlocks)
-		lastTimestamp := int64(binary.BigEndian.Uint64(data[pos+8 : pos+16]))
-		pos += 16
+		pos += 8
 		curOffset := 0
 		for j := 0; j < nBlocks; j++ {
 			d.BlockMetadata[i].BlockList[j].Offset = int64(curOffset)
 			d.BlockMetadata[i].BlockList[j].Len = int(binary.BigEndian.Uint32(data[pos : pos+4]))
 			d.BlockMetadata[i].BlockList[j].RawLen = int(binary.BigEndian.Uint32(data[pos+4 : pos+8]))
-			d.BlockMetadata[i].BlockList[j].Timestamp = lastTimestamp + int64(binary.BigEndian.Uint32(data[pos+8:pos+12]))
-			d.BlockMetadata[i].BlockList[j].EncoderType = encoders.Type(data[pos+12])
-			pos += 13
-			lastTimestamp = d.BlockMetadata[i].BlockList[j].Timestamp
+			d.BlockMetadata[i].BlockList[j].EncoderType = encoders.Type(data[pos+8])
+			pos += 9
+
 			curOffset += d.BlockMetadata[i].BlockList[j].Len
 		}
 	}
 
 	// Get Metadata.NumIPV4Entries
-	d.BlockNumV4Entries = make([]uint64, nBlocks)
+	d.BlockTraffic = make([]TrafficMetadata, nBlocks)
+	lastTimestamp := int64(binary.BigEndian.Uint64(data[pos : pos+8]))
+	pos += 8
 	for i := 0; i < nBlocks; i++ {
-		d.BlockNumV4Entries[i] = binary.BigEndian.Uint64(data[pos : pos+8])
-		pos += 8
+		d.BlockTraffic[i].NumV4Entries = uint64(binary.BigEndian.Uint32(data[pos : pos+4]))
+		d.BlockTraffic[i].NumV6Entries = uint64(binary.BigEndian.Uint32(data[pos+4 : pos+8]))
+		d.BlockTraffic[i].NumDrops = int(binary.BigEndian.Uint32(data[pos+8 : pos+12]))
+		thisTimestamp := lastTimestamp + int64(binary.BigEndian.Uint32(data[pos+12:pos+16]))
+		for j := 0; j < int(types.ColIdxCount); j++ {
+			d.BlockMetadata[j].BlockList[i].Timestamp = thisTimestamp
+		}
+		lastTimestamp = thisTimestamp
+		pos += 16
 	}
 
 	return nil
@@ -222,16 +270,22 @@ func (d *GPDir) Unmarshal(r ReadWriteSeekCloser) error {
 // Marshal marshals and writes the metadata of the GPDir instance into serialized metadata set
 func (d *GPDir) Marshal(w ReadWriteSeekCloser) error {
 
-	nBlocks := len(d.BlockNumV4Entries)
+	nBlocks := len(d.BlockTraffic)
 	size := 8 + // Overall number of blocks
 		8 + // Metadata.Version
-		nBlocks*8 + // Metadata.NumIPV4Entries (8 bytes each)
+		8 + // Metadata.NumV4Entries
+		8 + // Metadata.NumV6Entries
+		8 + // Metadata.NumDrops
+		8*4 + // Metadata.Counts
+		8 + // Metadata.BlockMetadata (first timestampm)
+		nBlocks*4 + // Metadata.GlobalBlockMetadata.NumV4Entries
+		nBlocks*4 + // Metadata.GlobalBlockMetadata.NumV6Entries
+		nBlocks*4 + // Metadata.GlobalBlockMetadata.NumDrops
+		nBlocks*4 + // Metadata.BlockMetadata.BlockList.Timestamp (Delta)
 		int(types.ColIdxCount)*8 + // Metadata.BlockMetadata.CurrentOffset
-		int(types.ColIdxCount)*8 + // Metadata.BlockMetadata (first timestampm)
-		nBlocks*int(types.ColIdxCount) + // Metadata.BlockMetadata.BlockList.Block.EncoderType
-		nBlocks*int(types.ColIdxCount)*4 + // Metadata.BlockMetadata.BlockList.Timestamp (Delta)
 		nBlocks*int(types.ColIdxCount)*4 + // Metadata.BlockMetadata.BlockList.Len
-		nBlocks*int(types.ColIdxCount)*4 // Metadata.BlockMetadata.BlockList.RawLen
+		nBlocks*int(types.ColIdxCount)*4 + // Metadata.BlockMetadata.BlockList.RawLen
+		nBlocks*int(types.ColIdxCount) // Metadata.BlockMetadata.BlockList.Block.EncoderType
 
 	// Note: Lengths and timestamp deltas are encoded as uint32s, allowing for a maximum block (!) size of
 	// 4 GiB (uncompressed / compressed).
@@ -244,32 +298,42 @@ func (d *GPDir) Marshal(w ReadWriteSeekCloser) error {
 	data := metaDataMemPool.Get(size)
 	defer metaDataMemPool.Put(data)
 
-	binary.BigEndian.PutUint64(data[0:8], uint64(nBlocks))             // Store flat nummber of blocks
-	binary.BigEndian.PutUint64(data[8:16], uint64(d.Metadata.Version)) // Store header version
-	pos := 16
+	binary.BigEndian.PutUint64(data[0:8], uint64(d.Metadata.Version))                // Store header version
+	binary.BigEndian.PutUint64(data[8:16], uint64(nBlocks))                          // Store flat nummber of blocks
+	binary.BigEndian.PutUint64(data[16:24], uint64(d.Metadata.Traffic.NumV4Entries)) // Store global number of IPv4 flows
+	binary.BigEndian.PutUint64(data[24:32], uint64(d.Metadata.Traffic.NumV6Entries)) // Store global number of IPv6 flows
+	binary.BigEndian.PutUint64(data[32:40], uint64(d.Metadata.Traffic.NumDrops))     // Store global number of dropped packets
+	binary.BigEndian.PutUint64(data[40:48], uint64(d.Metadata.Counts.BytesRcvd))     // Store global Counters (BytesRcvd)
+	binary.BigEndian.PutUint64(data[48:56], uint64(d.Metadata.Counts.BytesSent))     // Store global Counters (BytesSent)
+	binary.BigEndian.PutUint64(data[56:64], uint64(d.Metadata.Counts.PacketsRcvd))   // Store global Counters (PacketsRcvd)
+	binary.BigEndian.PutUint64(data[64:72], uint64(d.Metadata.Counts.PacketsSent))   // Store global Counters (PacketsSent)
+	pos := 72
 
 	if nBlocks > 0 {
 
 		// Store block information
 		for i := 0; i < int(types.ColIdxCount); i++ {
-			lastTimestamp := d.BlockMetadata[i].BlockList[0].Timestamp
 			binary.BigEndian.PutUint64(data[pos:pos+8], uint64(d.BlockMetadata[i].CurrentOffset))
-			binary.BigEndian.PutUint64(data[pos+8:pos+16], uint64(lastTimestamp))
-			pos += 16
+			pos += 8
 			for _, block := range d.BlockMetadata[i].BlockList {
 				binary.BigEndian.PutUint32(data[pos:pos+4], uint32(block.Len))
 				binary.BigEndian.PutUint32(data[pos+4:pos+8], uint32(block.RawLen))
-				binary.BigEndian.PutUint32(data[pos+8:pos+12], uint32(block.Timestamp-lastTimestamp))
-				data[pos+12] = byte(block.EncoderType)
-				lastTimestamp = block.Timestamp
-				pos += 13
+				data[pos+8] = byte(block.EncoderType)
+				pos += 9
 			}
 		}
 
 		// Store Metadata.NumIPV4Entries
-		for i := 0; i < len(d.BlockNumV4Entries); i++ {
-			binary.BigEndian.PutUint64(data[pos:pos+8], uint64(d.BlockNumV4Entries[i]))
-			pos += 8
+		lastTimestamp := d.BlockMetadata[0].BlockList[0].Timestamp
+		binary.BigEndian.PutUint64(data[pos:pos+8], uint64(lastTimestamp))
+		pos += 8
+		for i := 0; i < len(d.BlockTraffic); i++ {
+			binary.BigEndian.PutUint32(data[pos:pos+4], uint32(d.BlockTraffic[i].NumV4Entries))
+			binary.BigEndian.PutUint32(data[pos+4:pos+8], uint32(d.BlockTraffic[i].NumV6Entries))
+			binary.BigEndian.PutUint32(data[pos+8:pos+12], uint32(d.BlockTraffic[i].NumDrops))
+			binary.BigEndian.PutUint32(data[pos+12:pos+16], uint32(d.BlockMetadata[0].BlockList[i].Timestamp-lastTimestamp))
+			lastTimestamp = d.BlockMetadata[0].BlockList[i].Timestamp
+			pos += 16
 		}
 	}
 
@@ -315,7 +379,7 @@ func (d *GPDir) Close() error {
 
 	// Ensure resources are marked for cleanup
 	defer func() {
-		d.Metadata.BlockNumV4Entries = nil
+		d.Metadata.BlockTraffic = nil
 		for i := 0; i < int(types.ColIdxCount); i++ {
 			d.Metadata.BlockMetadata[i].BlockList = nil
 			d.Metadata.BlockMetadata[i] = nil

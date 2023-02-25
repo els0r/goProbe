@@ -58,9 +58,11 @@ func PrintMetaTable(gpDir *gpfile.GPDir, column types.ColumnIndex, w io.Writer) 
 	fmt.Fprintf(w, `
               Column: %s
     Number of Blocks: %d
+     Number of Flows: %d / %d (IP v4 / v6)
+             Traffic: %s
                 Size: %d bytes
 
-`, types.ColumnFileNames[column], len(blocks) /*gpf.TypeWidth(),*/, blockMetadata.CurrentOffset)
+`, types.ColumnFileNames[column], len(blocks), gpDir.Metadata.Traffic.NumV4Entries, gpDir.Metadata.Traffic.NumV6Entries, gpDir.Metadata.Counts, blockMetadata.CurrentOffset)
 
 	tw := tabwriter.NewWriter(w, 0, 0, 4, ' ', tabwriter.AlignRight)
 
@@ -68,8 +70,8 @@ func PrintMetaTable(gpDir *gpfile.GPDir, column types.ColumnIndex, w io.Writer) 
 
 	sep := "\t"
 
-	header := []string{"#", "offset (bl)", "ts", "time UTC", "length", "raw length", "encoder", "ratio %", "first 4 bytes", "", "integrity check"}
-	fmtStr := sep + strings.Join([]string{"%d", "%d", "%d", "%s", "%d", "%d", "%s", "%.2f", "%x", "%s", "%s"}, sep) + sep + "\n"
+	header := []string{"#", "ts", "time UTC", "offset", "len", "raw len", "encoder", "ratio", "#F v4", "#F v6", "drops", "first 4 bytes", "", "integrity check"}
+	fmtStr := sep + strings.Join([]string{"%d", "%d", "%s", "%d", "%d", "%d", "%s", "%.2f%%", "%d", "%d", "%d", "%x", "%s", "%s"}, sep) + sep + "\n"
 
 	fmt.Fprintln(tw, sep+strings.Join(header, sep)+sep)
 	fmt.Fprintln(tw, sep+strings.Repeat(sep, len(header))+sep)
@@ -121,10 +123,13 @@ func PrintMetaTable(gpDir *gpfile.GPDir, column types.ColumnIndex, w io.Writer) 
 			ratio = 100 * float64(block.Len) / float64(block.RawLen)
 		}
 		fmt.Fprintf(tw, fmtStr, i+1,
-			block.Offset,
 			block.Timestamp, time.Unix(block.Timestamp, 0).UTC().Format(tFormat),
+			block.Offset,
 			block.Len, block.RawLen,
 			block.EncoderType, ratio,
+			gpDir.BlockTraffic[i].NumV4Entries,
+			gpDir.BlockTraffic[i].NumV6Entries,
+			gpDir.BlockTraffic[i].NumDrops,
 			b, attn,
 			// TODO: diagnostics for lz4
 			"",

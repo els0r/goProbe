@@ -287,12 +287,9 @@ func parseIfaceList(dbPath string, ifacelist string) (ifaces []string, err error
 	}
 
 	if strings.ToLower(ifacelist) == "any" {
-		summary, err := goDB.ReadDBSummary(dbPath)
+		ifaces, err = goDB.GetInterfaces(dbPath)
 		if err != nil {
 			return nil, err
-		}
-		for iface := range summary.Interfaces {
-			ifaces = append(ifaces, iface)
 		}
 	} else {
 		ifaces = strings.Split(ifacelist, ",")

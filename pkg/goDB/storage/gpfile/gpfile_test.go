@@ -61,7 +61,7 @@ func TestWriteFile(t *testing.T) {
 	defer gpf.Delete()
 
 	timestamp := time.Now()
-	if err := gpf.WriteBlock(timestamp.Unix(), []byte{1, 2, 3, 4}); err != nil {
+	if err := gpf.writeBlock(timestamp.Unix(), []byte{1, 2, 3, 4}); err != nil {
 		t.Fatalf("Failed to write block: %s", err)
 	}
 
@@ -98,7 +98,7 @@ func testRoundtrip(t *testing.T, enc encoders.Type) {
 			binary.BigEndian.PutUint64(data, uint64(i))
 		}
 
-		if err := gpf.WriteBlock(int64(i), data); err != nil {
+		if err := gpf.writeBlock(int64(i), data); err != nil {
 			t.Fatalf("Failed to write block: %s", err)
 		}
 
@@ -221,8 +221,8 @@ func TestEmptyMetadata(t *testing.T) {
 		}
 	}
 
-	if len(testDir.Metadata.BlockNumV4Entries) != 0 {
-		t.Fatalf("BlockNumV4Entries should be empty")
+	if len(testDir.Metadata.BlockTraffic) != 0 {
+		t.Fatalf("BlockTraffic should be empty")
 	}
 }
 
@@ -255,9 +255,24 @@ func TestMetadataRoundTrip(t *testing.T) {
 			EncoderType: 0,
 		})
 	}
-	testDir.BlockNumV4Entries = append(testDir.BlockNumV4Entries, 0)
-	testDir.BlockNumV4Entries = append(testDir.BlockNumV4Entries, 10)
-	testDir.BlockNumV4Entries = append(testDir.BlockNumV4Entries, 24)
+	testDir.BlockTraffic = append(testDir.BlockTraffic, TrafficMetadata{
+		NumV4Entries: 10,
+		NumV6Entries: 5,
+		NumDrops:     0,
+	})
+	testDir.BlockTraffic = append(testDir.BlockTraffic, TrafficMetadata{
+		NumV4Entries: 0,
+		NumV6Entries: 30,
+		NumDrops:     1,
+	})
+	testDir.BlockTraffic = append(testDir.BlockTraffic, TrafficMetadata{
+		NumV4Entries: 3,
+		NumV6Entries: 3,
+		NumDrops:     10000,
+	})
+	for _, blockTraffic := range testDir.BlockTraffic {
+		testDir.Metadata.Traffic = testDir.Metadata.Traffic.Add(blockTraffic)
+	}
 
 	// Need to jump through hoops here in order to create a real deep copy of the metadata
 	buf := bytes.NewBuffer(nil)
@@ -278,13 +293,31 @@ func TestMetadataRoundTrip(t *testing.T) {
 		t.Fatalf("Error opening test dir for writing: %s", err)
 	}
 
-	if !reflect.DeepEqual(testDir.Metadata.BlockNumV4Entries, refMetadata.BlockNumV4Entries) {
-		t.Fatalf("Mismatched metadata: %#v vs %#v", testDir.Metadata.BlockNumV4Entries, refMetadata.BlockNumV4Entries)
+	if !reflect.DeepEqual(testDir.Metadata.BlockTraffic, refMetadata.BlockTraffic) {
+		t.Fatalf("Mismatched global block metadata: %#v vs %#v", testDir.Metadata.BlockTraffic, refMetadata.BlockTraffic)
 	}
 	for i := 0; i < int(types.ColIdxCount); i++ {
 		if !reflect.DeepEqual(testDir.Metadata.BlockMetadata[i], refMetadata.BlockMetadata[i]) {
 			t.Fatalf("Mismatched metadata: %#v vs %#v", testDir.Metadata.BlockMetadata[i], refMetadata.BlockMetadata[i])
 		}
+	}
+
+	var (
+		sumNumV4Entries, sumNumV6Entries, sumDrops int
+	)
+	for i := 0; i < testDir.NBlocks(); i++ {
+		sumNumV4Entries += int(testDir.BlockTraffic[i].NumV4Entries)
+		sumNumV6Entries += int(testDir.BlockTraffic[i].NumV6Entries)
+		sumDrops += int(testDir.BlockTraffic[i].NumDrops)
+	}
+	if sumNumV4Entries != int(testDir.Metadata.Traffic.NumV4Entries) {
+		t.Fatalf("Mismatched number of total IPv4 entries vs. computed (%d vs %d)", testDir.Metadata.Traffic.NumV4Entries, sumNumV4Entries)
+	}
+	if sumNumV6Entries != int(testDir.Metadata.Traffic.NumV6Entries) {
+		t.Fatalf("Mismatched number of total IPv6 entries vs. computed (%d vs %d)", testDir.Metadata.Traffic.NumV6Entries, sumNumV6Entries)
+	}
+	if sumDrops != int(testDir.Metadata.Traffic.NumDrops) {
+		t.Fatalf("Mismatched number of total packet drops vs. computed (%d vs %d)", testDir.Metadata.Traffic.NumDrops, sumDrops)
 	}
 }
 

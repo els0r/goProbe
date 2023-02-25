@@ -195,9 +195,9 @@ func (c converter) convertDir(w work, dryRun bool) error {
 		return allBlocks[i].ts < allBlocks[j].ts
 	})
 
-	metadata, err := goDB.ReadMetadata(filepath.Join(w.path, goDB.MetadataFileName))
+	metadata, err := ReadMetadata(filepath.Join(w.path, MetadataFileName))
 	if err != nil {
-		return fmt.Errorf("failed to read metadata from %s: %w", filepath.Join(w.path, goDB.MetadataFileName), err)
+		return fmt.Errorf("failed to read metadata from %s: %w", filepath.Join(w.path, MetadataFileName), err)
 	}
 	writer := goDB.NewDBWriter(c.dbDir, w.iface, encoders.EncoderTypeLZ4)
 
@@ -209,8 +209,10 @@ func (c converter) convertDir(w work, dryRun bool) error {
 		}
 
 		bulkWorkload = append(bulkWorkload, goDB.BulkWorkload{
-			FlowMap:   block.data,
-			Meta:      blockMetadata,
+			FlowMap: block.data,
+			CaptureMeta: goDB.CaptureMetadata{
+				PacketsDropped: blockMetadata.PcapPacketsDropped + blockMetadata.PcapPacketsIfDropped,
+			},
 			Timestamp: block.ts,
 		})
 	}
