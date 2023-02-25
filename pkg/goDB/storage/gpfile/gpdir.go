@@ -21,10 +21,18 @@ const (
 	EpochDay int64 = 86400
 
 	metadataFileName = ".blockmeta"
+	maxUint32        = 1<<32 - 1 // 4294967295
 )
 
-// Global memory pool used to minimize allocations
-var metaDataMemPool = NewMemPoolNoLimit()
+var (
+
+	// Global memory pool used to minimize allocations
+	metaDataMemPool = NewMemPoolNoLimit()
+
+	// ErrExceedsEncodingSize covers edge case scenarios where a block might (theoretically)
+	// contain data that exceeds the encoding width of 32-bit
+	ErrExceedsEncodingSize = errors.New("data size exceeds maximum bit width for encoding")
+)
 
 // TrafficMetadata denotes a serializable set of metadata information about traffic stats
 type TrafficMetadata struct {
@@ -292,8 +300,6 @@ func (d *GPDir) Marshal(w ReadWriteSeekCloser) error {
 	// If a single block is larger than that (or the time between consecutive block writes) is larger than that,
 	// something is _very_ wrong
 
-	// TODO: Add safety / bounds-check
-
 	// Fetch a buffer from the pool
 	data := metaDataMemPool.Get(size)
 	defer metaDataMemPool.Put(data)
@@ -316,6 +322,12 @@ func (d *GPDir) Marshal(w ReadWriteSeekCloser) error {
 			binary.BigEndian.PutUint64(data[pos:pos+8], uint64(d.BlockMetadata[i].CurrentOffset))
 			pos += 8
 			for _, block := range d.BlockMetadata[i].BlockList {
+
+				// Range check
+				if block.Len > maxUint32 || block.RawLen > maxUint32 {
+					return ErrExceedsEncodingSize
+				}
+
 				binary.BigEndian.PutUint32(data[pos:pos+4], uint32(block.Len))
 				binary.BigEndian.PutUint32(data[pos+4:pos+8], uint32(block.RawLen))
 				data[pos+8] = byte(block.EncoderType)
@@ -328,6 +340,15 @@ func (d *GPDir) Marshal(w ReadWriteSeekCloser) error {
 		binary.BigEndian.PutUint64(data[pos:pos+8], uint64(lastTimestamp))
 		pos += 8
 		for i := 0; i < len(d.BlockTraffic); i++ {
+
+			// Range check
+			if d.BlockTraffic[i].NumV4Entries > maxUint32 ||
+				d.BlockTraffic[i].NumV6Entries > maxUint32 ||
+				d.BlockTraffic[i].NumDrops > maxUint32 ||
+				d.BlockMetadata[0].BlockList[i].Timestamp-lastTimestamp > maxUint32 {
+				return ErrExceedsEncodingSize
+			}
+
 			binary.BigEndian.PutUint32(data[pos:pos+4], uint32(d.BlockTraffic[i].NumV4Entries))
 			binary.BigEndian.PutUint32(data[pos+4:pos+8], uint32(d.BlockTraffic[i].NumV6Entries))
 			binary.BigEndian.PutUint32(data[pos+8:pos+12], uint32(d.BlockTraffic[i].NumDrops))
