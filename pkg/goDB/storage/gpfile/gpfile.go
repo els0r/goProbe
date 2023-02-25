@@ -183,8 +183,8 @@ func (g *GPFile) ReadBlockAtIndex(idx int) ([]byte, error) {
 	return g.uncompData, nil
 }
 
-// WriteBlock writes data for a given timestamp to the file
-func (g *GPFile) WriteBlock(timestamp int64, blockData []byte) error {
+// writeBlock writes data for a given timestamp to the file (not exposed to ensure handling by GPDir)
+func (g *GPFile) writeBlock(timestamp int64, blockData []byte) error {
 	blockIdx, exists := g.header.BlockIndex(timestamp)
 	if exists {
 		return fmt.Errorf("timestamp %d already present: offset=%d", timestamp, g.header.BlockList[int64(blockIdx)].Offset)

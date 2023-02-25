@@ -46,7 +46,7 @@ func ifaces(args []string) []string {
 
 	dbpath := dbPath(args)
 
-	summ, err := goDB.ReadDBSummary(dbpath)
+	dbIfaces, err := goDB.GetInterfaces(dbpath)
 	if err != nil {
 		return nil
 	}
@@ -71,7 +71,7 @@ func ifaces(args []string) []string {
 			}
 		}
 
-		for iface := range summ.Interfaces {
+		for _, iface := range dbIfaces {
 			if _, used := used[iface]; !used && strings.HasPrefix(iface, last(ifaces)) {
 				if info, isTunnel := tunnels[iface]; isTunnel {
 					suggs = append(suggs, suggestion{iface, fmt.Sprintf("%s (%s: %s)   ", iface, info.PhysicalIface, info.Peer), true})

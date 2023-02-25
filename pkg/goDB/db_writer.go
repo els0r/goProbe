@@ -15,7 +15,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"time"
 
 	"github.com/els0r/goProbe/pkg/goDB/encoder/bitpack"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
@@ -27,8 +26,6 @@ import (
 const (
 	// QueryLogFile is the name of the query log written by the query package
 	QueryLogFile = "query.log"
-	// MetadataFileName specifies the location of the daily column metadata file
-	MetadataFileName = "meta.json"
 )
 
 // DBWriter writes goProbe flows to goDB database files
@@ -38,13 +35,11 @@ type DBWriter struct {
 
 	dayTimestamp int64
 	encoderType  encoders.Type
-
-	metadata *Metadata
 }
 
 // NewDBWriter initializes a new DBWriter
 func NewDBWriter(dbpath string, iface string, encoderType encoders.Type) (w *DBWriter) {
-	return &DBWriter{dbpath, iface, 0, encoderType, new(Metadata)}
+	return &DBWriter{dbpath, iface, 0, encoderType}
 }
 
 func (w *DBWriter) dailyDir(timestamp int64) (path string) {
@@ -52,39 +47,6 @@ func (w *DBWriter) dailyDir(timestamp int64) (path string) {
 	path = filepath.Join(w.dbpath, w.iface, dailyDir)
 	return
 }
-
-// TODO: Merge with GPDir metadata
-func (w *DBWriter) writeMetadata(timestamp int64, meta BlockMetadata) error {
-	if w.dayTimestamp != gpfile.DirTimestamp(timestamp) {
-		w.metadata = nil
-		w.dayTimestamp = gpfile.DirTimestamp(timestamp)
-	}
-
-	path := filepath.Join(w.dailyDir(timestamp), MetadataFileName)
-
-	if w.metadata == nil {
-		w.metadata = TryReadMetadata(path)
-	}
-
-	w.metadata.Blocks = append(w.metadata.Blocks, meta)
-
-	return WriteMetadata(path, w.metadata)
-}
-
-// func (w *DBWriter) writeBlock(timestamp int64, column string, data []byte) error {
-// 	path := filepath.Join(w.dailyDir(timestamp), column+".gpf")
-// 	gpfile, err := gpfile.New(path, gpfile.ModeWrite, gpfile.WithEncoder(w.encoderType))
-// 	if err != nil {
-// 		return err
-// 	}
-// 	defer gpfile.Close()
-
-// 	if err := gpfile.WriteBlock(timestamp, data); err != nil {
-// 		return err
-// 	}
-
-// 	return nil
-// }
 
 func (w *DBWriter) createQueryLog() error {
 	var (
@@ -107,58 +69,50 @@ func (w *DBWriter) createQueryLog() error {
 }
 
 // Write takes an aggregated flow map and its metadata and writes it to disk for a given timestamp
-func (w *DBWriter) Write(flowmap *hashmap.AggFlowMap, meta BlockMetadata, timestamp int64) (InterfaceSummaryUpdate, error) {
+func (w *DBWriter) Write(flowmap *hashmap.AggFlowMap, captureMeta CaptureMetadata, timestamp int64) error {
 	var (
 		data   [types.ColIdxCount][]byte
-		update InterfaceSummaryUpdate
+		update gpfile.Stats
 		err    error
 	)
 
 	dir := gpfile.NewDir(filepath.Join(w.dbpath, w.iface), timestamp, gpfile.ModeWrite)
 	if err = dir.Open(); err != nil {
 		err = fmt.Errorf("Could not create / open daily directory: %w", err)
-		return update, err
+		return err
 	}
 	defer dir.Close()
 
 	// check if the query log exists and create it if necessary
 	err = w.createQueryLog()
 	if err != nil {
-		return update, err
+		return err
 	}
 
 	data, update = dbData(w.iface, timestamp, flowmap)
-	if err := dir.WriteBlocks(timestamp, update.NumIPV4Entries, data); err != nil {
-		return update, err
+	if err := dir.WriteBlocks(timestamp, gpfile.TrafficMetadata{
+		NumV4Entries: update.Traffic.NumV4Entries,
+		NumV6Entries: update.Traffic.NumV6Entries,
+		NumDrops:     captureMeta.PacketsDropped,
+	}, update.Counts, data); err != nil {
+		return err
 	}
 
-	meta.FlowCount = update.FlowCount
-	meta.Traffic = update.Traffic
-
-	if err = w.writeMetadata(timestamp, meta); err != nil {
-		return update, err
-	}
-
-	return update, err
+	return err
 }
 
 type BulkWorkload struct {
-	FlowMap   *hashmap.AggFlowMap
-	Meta      BlockMetadata
-	Timestamp int64
+	FlowMap     *hashmap.AggFlowMap
+	CaptureMeta CaptureMetadata
+	Timestamp   int64
 }
 
 // WriteBulk takes multiple aggregated flow maps and their metadata and writes it to disk for a given timestamp
 func (w *DBWriter) WriteBulk(workloads []BulkWorkload, dirTimestamp int64) (err error) {
 	var (
 		data   [types.ColIdxCount][]byte
-		update InterfaceSummaryUpdate
+		update gpfile.Stats
 	)
-
-	metaDataPath := filepath.Join(w.dailyDir(dirTimestamp), MetadataFileName)
-	if w.metadata == nil {
-		w.metadata = TryReadMetadata(metaDataPath)
-	}
 
 	dir := gpfile.NewDir(filepath.Join(w.dbpath, w.iface), dirTimestamp, gpfile.ModeWrite)
 	if err = dir.Open(); err != nil {
@@ -175,20 +129,21 @@ func (w *DBWriter) WriteBulk(workloads []BulkWorkload, dirTimestamp int64) (err 
 
 	for _, workload := range workloads {
 		data, update = dbData(w.iface, workload.Timestamp, workload.FlowMap)
-		if err := dir.WriteBlocks(workload.Timestamp, update.NumIPV4Entries, data); err != nil {
+		if err := dir.WriteBlocks(workload.Timestamp, gpfile.TrafficMetadata{
+			NumV4Entries: update.Traffic.NumV4Entries,
+			NumV6Entries: update.Traffic.NumV6Entries,
+			NumDrops:     workload.CaptureMeta.PacketsDropped,
+		}, update.Counts, data); err != nil {
 			return err
 		}
-		workload.Meta.FlowCount = update.FlowCount
-		workload.Meta.Traffic = update.Traffic
-		w.metadata.Blocks = append(w.metadata.Blocks, workload.Meta)
 	}
 
-	return WriteMetadata(metaDataPath, w.metadata)
+	return nil
 }
 
-func dbData(iface string, timestamp int64, aggFlowMap *hashmap.AggFlowMap) ([types.ColIdxCount][]byte, InterfaceSummaryUpdate) {
+func dbData(iface string, timestamp int64, aggFlowMap *hashmap.AggFlowMap) ([types.ColIdxCount][]byte, gpfile.Stats) {
 	var dbData [types.ColIdxCount][]byte
-	summUpdate := new(InterfaceSummaryUpdate)
+	var summUpdate gpfile.Stats
 
 	v4List, v6List := aggFlowMap.Flatten()
 	v4List = v4List.Sort()
@@ -202,9 +157,6 @@ func dbData(iface string, timestamp int64, aggFlowMap *hashmap.AggFlowMap) ([typ
 		}
 	}
 
-	summUpdate.Timestamp = time.Unix(timestamp, 0)
-	summUpdate.Interface = iface
-
 	// loop through the v4 & v6 flow maps to extract the relevant
 	// values into database blocks.
 	var bytesRcvd, bytesSent, pktsRcvd, pktsSent []uint64
@@ -212,9 +164,7 @@ func dbData(iface string, timestamp int64, aggFlowMap *hashmap.AggFlowMap) ([typ
 		for _, flow := range list {
 
 			// global counters
-			summUpdate.FlowCount++
-			summUpdate.Traffic += flow.BytesRcvd
-			summUpdate.Traffic += flow.BytesSent
+			summUpdate.Counts = summUpdate.Counts.Add(flow.Val)
 
 			// counters
 			bytesRcvd = append(bytesRcvd, flow.BytesRcvd)
@@ -236,7 +186,8 @@ func dbData(iface string, timestamp int64, aggFlowMap *hashmap.AggFlowMap) ([typ
 	dbData[types.PacketsRcvdColIdx] = bitpack.Pack(pktsRcvd)
 	dbData[types.PacketsSentColIdx] = bitpack.Pack(pktsSent)
 
-	summUpdate.NumIPV4Entries = uint64(len(v4List))
+	summUpdate.Traffic.NumV4Entries = uint64(len(v4List))
+	summUpdate.Traffic.NumV6Entries = uint64(len(v6List))
 
-	return dbData, *summUpdate
+	return dbData, summUpdate
 }

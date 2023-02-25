@@ -330,3 +330,12 @@ func (c Counters) Add(c2 Counters) Counters {
 	c.PacketsSent += c2.PacketsSent
 	return c
 }
+
+// Sub subtracts the values from a different counter and returns the result
+func (c Counters) Sub(c2 Counters) Counters {
+	c.BytesRcvd -= c2.BytesRcvd
+	c.BytesSent -= c2.BytesSent
+	c.PacketsRcvd -= c2.PacketsRcvd
+	c.PacketsSent -= c2.PacketsSent
+	return c
+}

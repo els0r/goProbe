@@ -304,7 +304,6 @@ func handleWriteouts(handler *capture.WriteoutHandler, logToSyslog bool, logger 
 
 	for writeout := range writeoutsChan {
 		t0 := time.Now()
-		var summaryUpdates []goDB.InterfaceSummaryUpdate
 		count := 0
 		for taggedMap := range writeout.Chan {
 			// Ensure that there is a DBWriter for the given interface
@@ -318,26 +317,18 @@ func handleWriteouts(handler *capture.WriteoutHandler, logToSyslog bool, logger 
 				dbWriters[taggedMap.Iface] = w
 			}
 
-			// Prep metadata for current block
-			meta := goDB.BlockMetadata{}
-			meta.PcapPacketsReceived = -1
-			meta.PcapPacketsDropped = -1
-			meta.PcapPacketsIfDropped = -1
+			packetsDropped := 0
 			if taggedMap.Stats.Pcap != nil {
-				meta.PcapPacketsReceived = taggedMap.Stats.Pcap.PacketsReceived
-				meta.PcapPacketsDropped = taggedMap.Stats.Pcap.PacketsDropped
-				meta.PcapPacketsIfDropped = taggedMap.Stats.Pcap.PacketsIfDropped
+				packetsDropped = taggedMap.Stats.Pcap.PacketsDropped + taggedMap.Stats.Pcap.PacketsIfDropped
 			}
-			meta.PacketsLogged = taggedMap.Stats.PacketsLogged
-			meta.Timestamp = writeout.Timestamp.Unix()
 
 			// Write to database, update summary
-			update, err := dbWriters[taggedMap.Iface].Write(taggedMap.Map, meta, writeout.Timestamp.Unix())
+			err := dbWriters[taggedMap.Iface].Write(taggedMap.Map, goDB.CaptureMetadata{
+				PacketsDropped: packetsDropped,
+			}, writeout.Timestamp.Unix())
 			lastWrite[taggedMap.Iface] = writeoutsCount
 			if err != nil {
 				logger.Error(fmt.Sprintf("Error during writeout: %s", err.Error()))
-			} else {
-				summaryUpdates = append(summaryUpdates, update)
 			}
 
 			// write out flows to syslog if necessary
@@ -355,20 +346,6 @@ func handleWriteouts(handler *capture.WriteoutHandler, logToSyslog bool, logger 
 			}
 
 			count++
-		}
-
-		// We are done with the writeout, let's try to write the updated summary
-		err := goDB.ModifyDBSummary(capconfig.RuntimeDBPath(), 10*time.Second, func(summ *goDB.DBSummary) (*goDB.DBSummary, error) {
-			if summ == nil {
-				summ = goDB.NewDBSummary()
-			}
-			for _, update := range summaryUpdates {
-				summ.Update(update)
-			}
-			return summ, nil
-		})
-		if err != nil {
-			logger.Error(fmt.Sprintf("Error updating summary: %s", err.Error()))
 		}
 
 		// Clean up dead writers. We say that a writer is dead

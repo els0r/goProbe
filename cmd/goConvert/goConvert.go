@@ -23,7 +23,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	// for metrics export to metricsbeat
 	_ "expvar"
@@ -239,24 +238,10 @@ func main() {
 		// interface
 		//
 		// interface -> timestamp -> AggFlowMap
-		rowKeyV4   = types.NewEmptyV4Key().ExtendEmpty()
-		rowKeyV6   = types.NewEmptyV6Key().ExtendEmpty()
-		flowMaps   = make(map[string]map[int64]*hashmap.AggFlowMap)
-		rowSummary goDB.InterfaceSummaryUpdate
+		rowKeyV4 = types.NewEmptyV4Key().ExtendEmpty()
+		rowKeyV6 = types.NewEmptyV6Key().ExtendEmpty()
+		flowMaps = make(map[string]map[int64]*hashmap.AggFlowMap)
 	)
-
-	// try to read a summary file from the output folder. It may exist if data was previously written
-	// to the directory already.
-	summary := goDB.NewDBSummary()
-	summary, err = goDB.ReadDBSummary(config.SavePath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			summary = goDB.NewDBSummary()
-		} else {
-			fmt.Printf("Summary file for DB exists but cannot be read: %s\n", err.Error())
-			os.Exit(1)
-		}
-	}
 
 	// channel for passing flow maps to writer
 	writeChan := make(chan writeJob, 1024)
@@ -271,12 +256,8 @@ func main() {
 				mapWriters[fm.iface] = goDB.NewDBWriter(config.SavePath, fm.iface, encoders.Type(config.EncoderType))
 			}
 
-			// create an empty metadata block for this timestamp. Of course this
-			// isn't accurate, but we cannot recover the info from pcap anyhow at
-			// that moment
-			bm := goDB.BlockMetadata{Timestamp: fm.tstamp}
 			//        fmt.Println(fm.iface+": Writing:", fm.data)
-			if _, err = mapWriters[fm.iface].Write(fm.data, bm, fm.tstamp); err != nil {
+			if err = mapWriters[fm.iface].Write(fm.data, goDB.CaptureMetadata{}, fm.tstamp); err != nil {
 				fmt.Printf("Failed to write block at %d: %s\n", fm.tstamp, err.Error())
 				// TODO: bail here?
 				os.Exit(1)
@@ -406,15 +387,6 @@ func main() {
 
 		// insert the key-value pair into the correct flow map
 		flowMaps[iface][ts].Set(rowKey.Key(), rowVal)
-
-		// fill the summary update for this flow record and update the summary
-		rowSummary.Interface = iface
-		rowSummary.FlowCount = 1
-		rowSummary.Traffic = rowVal.SumBytes()
-		rowSummary.Timestamp = time.Unix(ts, 0)
-
-		summary.Update(rowSummary)
-
 		linesRead++
 	}
 
@@ -432,19 +404,6 @@ func main() {
 
 	close(writeChan)
 	wg.Wait()
-
-	// summary file update: this assumes that the summary was not modified during conversion
-	// of the CSV database. If a goProbe process were to write to the summary in the meantime,
-	// those changes would be overwritten.
-	err = goDB.ModifyDBSummary(config.SavePath, 10*time.Second,
-		func(summ *goDB.DBSummary) (*goDB.DBSummary, error) {
-			return summary, nil
-		},
-	)
-	if err != nil {
-		fmt.Printf("Failed to update summary: %s\n", err.Error())
-		os.Exit(1)
-	}
 
 	// return if the data write failed or exited
 	fmt.Print("| 100%")
