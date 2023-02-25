@@ -261,7 +261,8 @@ type Capture struct {
 	captureHandle capture.Source
 
 	// error map for logging errors more properly
-	errMap ErrorMap
+	errMap   ErrorMap
+	errCount int
 
 	// context for cancellation
 	ctx context.Context
@@ -443,55 +444,50 @@ func (c *Capture) reset() {
 	c.errMap = make(map[string]int)
 }
 
+func (c *Capture) capturePacket(pkt *afpacket.Packet, gppacket *GPPacket) (err error) {
+
+	// Fetch the next packet form the wire
+	_, err = c.captureHandle.NextPacket(pkt)
+	if err != nil {
+		// NextPacket should return a ErrorCaptureClosed in case the handle is closed
+		return fmt.Errorf("capture error: %w", err)
+	}
+
+	// Populate the GPPacket
+	err = gppacket.Populate(pkt)
+	if err == nil {
+		c.flowLog.Add(gppacket)
+		c.errCount = 0
+		c.packetsLogged++
+	} else {
+		c.errCount++
+		c.errMap[err.Error()]++
+
+		// shut down the interface thread if too many consecutive decoding failures
+		// have been encountered
+		if c.errCount > ErrorThreshold {
+			return fmt.Errorf("the last %d packets could not be decoded: [%s]",
+				ErrorThreshold,
+				c.errMap.String(),
+			)
+		}
+	}
+
+	return nil
+}
+
 // process is the heart of the Capture. It listens for network traffic on the
 // network interface and logs the corresponding flows.
 //
 // process keeps running until Close is called on its capture handle or it encounters
 // a serious capture error
 func (c *Capture) process() {
+
 	logger := logging.WithContext(c.ctx)
+	c.errCount = 0
 
-	var errcount int
-
-	gppacket := GPPacket{}
+	gppacket := &GPPacket{}
 	pkt := make(afpacket.Packet, Snaplen+6)
-
-	capturePacket := func() (err error) {
-		_, err = c.captureHandle.NextPacket(&pkt)
-		if err != nil {
-			// NextPacket should return a ErrorCaptureClosed in case the handle is closed
-			return fmt.Errorf("capture error: %w", err)
-		}
-
-		err = gppacket.Populate(&pkt)
-		if err == nil {
-			c.flowLog.Add(&gppacket)
-			errcount = 0
-			c.packetsLogged++
-		} else {
-			errcount++
-
-			// collect the error. The errors value is the key here. Otherwise, the address
-			// of the error would be taken, which results in a non-minimal set of errors
-			if _, exists := c.errMap[err.Error()]; !exists {
-				// TODO: Just logging for now - we might want to construct a new raw data logger that doesn't
-				// depend on gopacket (after all we could just dump the raw packet data for later analysis)
-				logger.Warnf("discovered faulty packet on %s: %s [%v]", c.iface, err, pkt.Payload())
-			}
-
-			c.errMap[err.Error()]++
-
-			// shut down the interface thread if too many consecutive decoding failures
-			// have been encountered
-			if errcount > ErrorThreshold {
-				return fmt.Errorf("the last %d packets could not be decoded: [%s]",
-					ErrorThreshold,
-					c.errMap.String(),
-				)
-			}
-		}
-		return nil
-	}
 
 	// this is the main packet capture loop which an interface should be in most of the time
 	for {
@@ -507,9 +503,12 @@ func (c *Capture) process() {
 				return
 			}
 		default:
-			err := capturePacket()
+			err := c.capturePacket(&pkt, gppacket)
 			if err != nil {
 				if errors.Is(err, capture.ErrCaptureStopped) { // capture stopped gracefully
+					if fErr := c.captureHandle.Free(); fErr != nil {
+						logger.Errorf("failed to free capture resources: %s", fErr)
+					}
 					return
 				}
 				c.captureErrors <- err
