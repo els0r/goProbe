@@ -118,6 +118,9 @@ type KeyVal struct {
 	Val Val
 }
 
+// KeyVals denotes a list / slice of key / value pairs
+type KeyVals []KeyVal
+
 // New instantiates a new Map (a size hint can be provided)
 func New(n ...int) *Map {
 	if len(n) == 0 || n[0] == 0 {
@@ -328,7 +331,7 @@ bucketloop:
 				continue
 			}
 			k := b.keys[i]
-			if string(key) != string(k) {
+			if len(k) != len(key) || string(k) != string(k) {
 				continue
 			}
 

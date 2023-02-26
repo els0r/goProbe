@@ -88,6 +88,13 @@ func NewKey(sip, dip, dport []byte, proto byte) (key Key) {
 	return
 }
 
+// Clone provides a copy of the key
+func (k Key) Clone() Key {
+	cp := make(Key, len(k))
+	copy(cp, k)
+	return cp
+}
+
 // IsIPv4 returns if a key represents an IPv4 flow (based on its length)
 func (k Key) IsIPv4() bool {
 	if len(k) == KeyWidthIPv4 {
@@ -197,6 +204,13 @@ func (k Key) ExtendEmpty() (e ExtendedKey) {
 
 // ExtendedKey is a Key with supplemental information
 type ExtendedKey []byte
+
+// Clone provides a copy of the extended key
+func (e ExtendedKey) Clone() ExtendedKey {
+	cp := make(ExtendedKey, len(e))
+	copy(cp, e)
+	return cp
+}
 
 // Key retrieves the basic key within the extended key to allow for
 // more precise access without having to always use the (longer) ExtendedKey
