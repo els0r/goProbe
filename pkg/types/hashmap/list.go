@@ -22,9 +22,9 @@ func (m *Map) Flatten() (v4List List, v6List List) {
 
 	for i := m.Iter(); i.Next(); {
 		if k := types.Key(i.Key()); k.IsIPv4() {
-			v4List = append(v4List, Item{i.Key(), i.Val()})
+			v4List = append(v4List, Item{k, i.Val()})
 		} else {
-			v6List = append(v6List, Item{i.Key(), i.Val()})
+			v6List = append(v6List, Item{k, i.Val()})
 		}
 	}
 
