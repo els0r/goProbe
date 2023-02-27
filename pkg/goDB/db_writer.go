@@ -14,7 +14,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 
 	"github.com/els0r/goProbe/pkg/goDB/encoder/bitpack"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
@@ -42,10 +41,8 @@ func NewDBWriter(dbpath string, iface string, encoderType encoders.Type) (w *DBW
 	return &DBWriter{dbpath, iface, 0, encoderType}
 }
 
-func (w *DBWriter) dailyDir(timestamp int64) (path string) {
-	dailyDir := strconv.FormatInt(gpfile.DirTimestamp(timestamp), 10)
-	path = filepath.Join(w.dbpath, w.iface, dailyDir)
-	return
+func (w *DBWriter) dailyDir(timestamp int64) string {
+	return filepath.Join(w.dbpath, w.iface, fmt.Sprintf("%d", timestamp))
 }
 
 func (w *DBWriter) createQueryLog() error {

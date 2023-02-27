@@ -32,6 +32,9 @@ var (
 	// ErrExceedsEncodingSize covers edge case scenarios where a block might (theoretically)
 	// contain data that exceeds the encoding width of 32-bit
 	ErrExceedsEncodingSize = errors.New("data size exceeds maximum bit width for encoding")
+
+	// ErrInputSizeTooSmall is thrown if the input size for desiralization is too small to be valid
+	ErrInputSizeTooSmall = errors.New("input size too small to be a GPDir metadata header")
 )
 
 // TrafficMetadata denotes a serializable set of metadata information about traffic stats
@@ -223,7 +226,7 @@ func (d *GPDir) Unmarshal(r ReadWriteSeekCloser) error {
 
 	data := memFile.Data()
 	if len(data) < 16 {
-		return fmt.Errorf("input data too small to be a GPDir metadata header (len: %d)", len(data))
+		return fmt.Errorf("%w (len: %d)", ErrInputSizeTooSmall, len(data))
 	}
 
 	d.Metadata = newMetadata()
@@ -439,8 +442,8 @@ func (d *GPDir) Column(colIdx types.ColumnIndex) (*GPFile, error) {
 
 // createIfRequired created the underlying path structure (if missing)
 func (d *GPDir) createIfRequired() error {
-	path := filepath.Join(d.basePath, strconv.FormatInt(d.timestamp, 10))
-	return os.MkdirAll(path, 0755)
+	return os.MkdirAll(filepath.Join(
+		d.basePath, fmt.Sprintf("%d", d.timestamp)), 0755)
 }
 
 // DirTimestamp returns timestamp rounded down to the nearest directory time frame (usually a day)

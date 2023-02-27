@@ -6,10 +6,10 @@ import (
 
 // Block denotes a block of goprobe data
 type Block struct {
-	Offset      int64         `json:"p,omitempty"`
-	Len         int           `json:"l,omitempty"`
-	RawLen      int           `json:"r,omitempty"`
-	EncoderType encoders.Type `json:"e,omitempty"`
+	Offset      int64
+	Len         int
+	RawLen      int
+	EncoderType encoders.Type
 }
 
 // IsEmpty checks if the block does not store any data
@@ -19,8 +19,8 @@ func (b Block) IsEmpty() bool {
 
 // BlockHeader denotes a list of blocks pertaining to a storage backend
 type BlockHeader struct {
-	BlockList     []BlockAtTime `json:"bl,omitempty"`
-	CurrentOffset int64         `json:"p,omitempty"`
+	BlockList     []BlockAtTime
+	CurrentOffset int64
 
 	blocks map[int64]int // Hidden from user / serialization (on-demand creation)
 }
