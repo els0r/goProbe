@@ -153,7 +153,7 @@ func (c converter) convertDir(w work, dryRun bool) error {
 
 	dirTimestamp, err := strconv.ParseInt(filepath.Base(w.path), 10, 64)
 	if err != nil {
-		return fmt.Errorf("failed to get directory timestamp: %s", err)
+		return fmt.Errorf("failed to get directory timestamp: %w", err)
 	}
 
 	defer func() {
