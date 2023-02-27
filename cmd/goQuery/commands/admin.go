@@ -10,8 +10,9 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/els0r/goProbe/pkg/goDB"
+	"github.com/els0r/goProbe/pkg/goDB/storage/gpfile"
 	"github.com/els0r/goProbe/pkg/query"
+	"github.com/els0r/goProbe/pkg/types"
 	"github.com/els0r/status"
 	"github.com/spf13/cobra"
 )
@@ -92,15 +93,15 @@ func printAdminHelp(cmd *cobra.Command, args []string) {
 }
 
 type cleanIfaceResult struct {
-	DeltaFlowCount uint64 // number of flows deleted
-	DeltaTraffic   uint64 // traffic bytes deleted
-	NewBegin       int64  // timestamp of new begin
-	Gone           bool   // The interface has no entries left
+	DeltaCounts  types.Counters         // number of flows deleted
+	DeltaTraffic gpfile.TrafficMetadata // traffic bytes deleted
+	NewBegin     int64                  // timestamp of new begin
+	Gone         bool                   // The interface has no entries left
 }
 
 func cleanIfaceDir(dbPath string, timestamp int64, iface string) (result cleanIfaceResult, err error) {
 
-	dayTimestamp := goDB.DayTimestamp(timestamp)
+	dayTimestamp := gpfile.DirTimestamp(timestamp)
 
 	status.Linef("cleaning DBs for %s", iface)
 
@@ -129,28 +130,28 @@ func cleanIfaceDir(dbPath string, timestamp int64, iface string) (result cleanIf
 		}
 
 		entryPath := filepath.Join(dbPath, iface, entry.Name())
-		metaFilePath := filepath.Join(entryPath, goDB.MetadataFileName)
-
+		gpDir := gpfile.NewDir(filepath.Join(dbPath, iface), dirTimestamp, gpfile.ModeRead)
 		if dirTimestamp < dayTimestamp {
 			// delete directory
 
-			meta := goDB.TryReadMetadata(metaFilePath)
+			if err := gpDir.Open(); err == nil {
+				result.DeltaCounts = result.DeltaCounts.Add(gpDir.Counts)
+				result.DeltaTraffic = result.DeltaTraffic.Add(gpDir.Traffic)
+			}
 
 			if err := os.RemoveAll(entryPath); err != nil {
 				return result, err
-			}
-
-			for _, block := range meta.Blocks {
-				result.DeltaFlowCount += block.FlowCount
-				result.DeltaTraffic += block.Traffic
 			}
 		} else {
 			clean = false
 			if dirTimestamp < result.NewBegin {
 				// update NewBegin
-				meta := goDB.TryReadMetadata(metaFilePath)
-				if len(meta.Blocks) > 0 && meta.Blocks[0].Timestamp < result.NewBegin {
-					result.NewBegin = meta.Blocks[0].Timestamp
+				if err := gpDir.Open(); err == nil {
+					if timeFirst, _ := gpDir.TimeRange(); gpDir.NBlocks() > 0 && timeFirst < result.NewBegin {
+						result.NewBegin = timeFirst
+					}
+					result.DeltaCounts = result.DeltaCounts.Add(gpDir.Counts)
+					result.DeltaTraffic = result.DeltaTraffic.Add(gpDir.Traffic)
 				}
 			}
 
@@ -194,26 +195,7 @@ func cleanOldDBDirs(dbPath string, timestamp int64) error {
 		}
 		ifaceResults[iface.Name()] = result
 	}
-
-	return goDB.ModifyDBSummary(dbPath, 10*time.Second, func(summ *goDB.DBSummary) (*goDB.DBSummary, error) {
-		if summ == nil {
-			return summ, fmt.Errorf("cannot update summary: summary missing")
-		}
-
-		for iface, change := range ifaceResults {
-			if change.Gone {
-				delete(summ.Interfaces, iface)
-			} else {
-				ifaceSumm := summ.Interfaces[iface]
-				ifaceSumm.FlowCount -= change.DeltaFlowCount
-				ifaceSumm.Traffic -= change.DeltaTraffic
-				ifaceSumm.Begin = change.NewBegin
-				summ.Interfaces[iface] = ifaceSumm
-			}
-		}
-
-		return summ, nil
-	})
+	return nil
 }
 
 func wipeDB(dbPath string) error {

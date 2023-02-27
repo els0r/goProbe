@@ -6,12 +6,15 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"text/tabwriter"
 	"time"
 
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 	"github.com/els0r/goProbe/pkg/goDB/storage/gpfile"
+	"github.com/els0r/goProbe/pkg/types"
 	"github.com/sirupsen/logrus"
 )
 
@@ -22,50 +25,44 @@ var (
 func main() {
 	logger := logrus.StandardLogger()
 
-	metaSuffix := ".meta"
-
 	flag.StringVar(&pathMetaFile, "path", "", "Path to meta file")
 	flag.Parse()
 
-	pathMetaFile = strings.TrimSpace(pathMetaFile)
-
-	if !strings.HasSuffix(pathMetaFile, metaSuffix) {
-		logger.Fatalf("path %q is not a GPF meta file", metaSuffix)
-	}
-
-	gpfPath := strings.TrimSuffix(pathMetaFile, metaSuffix)
-
-	gpfFile, err := gpfile.New(gpfPath, gpfile.ModeRead)
+	pathMetaFile = filepath.Clean(pathMetaFile)
+	dirPath := filepath.Dir(pathMetaFile)
+	timestamp, err := strconv.ParseInt(filepath.Base(dirPath), 10, 64)
 	if err != nil {
-		logger.WithField("path", gpfPath).Fatalf("failed to open GPF file: %v", err)
+		logger.Fatalf("failed to extract timestamp: %s", err)
 	}
+	baseDirPath := filepath.Dir(dirPath)
 
-	err = PrintMetaTable(gpfFile, os.Stdout)
-	if err != nil {
-		logger.Fatalf("print meta tabe: %v", err)
+	gpDir := gpfile.NewDir(baseDirPath, timestamp, gpfile.ModeRead)
+	if err := gpDir.Open(); err != nil {
+		logger.WithField("path", dirPath).Fatalf("failed to open GPF dir: %v", err)
+	}
+	defer gpDir.Close()
+
+	for i := types.ColumnIndex(0); i < types.ColIdxCount; i++ {
+		err = PrintMetaTable(gpDir, i, os.Stdout)
+		if err != nil {
+			logger.Fatalf("print meta table: %v", err)
+		}
 	}
 }
 
-func PrintMetaTable(gpf *gpfile.GPFile, w io.Writer) error {
-	file, err := os.OpenFile(gpf.Filename(), gpfile.ModeRead, 0644)
-	if err != nil {
-		return fmt.Errorf("failed to open GPF file for reading: %v", err)
-	}
-	defer file.Close()
+func PrintMetaTable(gpDir *gpfile.GPDir, column types.ColumnIndex, w io.Writer) error {
 
-	blocks, err := gpf.Blocks()
-	if err != nil {
-		return fmt.Errorf("failed to get blocks: %w", err)
-	}
+	blockMetadata := gpDir.BlockMetadata[column]
+	blocks := blockMetadata.Blocks()
 
 	fmt.Fprintf(w, `
-                File: %s
-             Version: %d
+              Column: %s
     Number of Blocks: %d
+     Number of Flows: %d / %d (IP v4 / v6)
+             Traffic: %s
                 Size: %d bytes
-    Default Encoding: %s
 
-`, gpf.Filename(), blocks.Version, len(blocks.Blocks) /*gpf.TypeWidth(),*/, blocks.CurrentOffset, gpf.DefaultEncoder().Type())
+`, types.ColumnFileNames[column], len(blocks), gpDir.Metadata.Traffic.NumV4Entries, gpDir.Metadata.Traffic.NumV6Entries, gpDir.Metadata.Counts, blockMetadata.CurrentOffset)
 
 	tw := tabwriter.NewWriter(w, 0, 0, 4, ' ', tabwriter.AlignRight)
 
@@ -73,8 +70,8 @@ func PrintMetaTable(gpf *gpfile.GPFile, w io.Writer) error {
 
 	sep := "\t"
 
-	header := []string{"#", "offset (bl)", "ts", "time UTC", "length", "raw length", "encoder", "ratio %", "first 4 bytes", "", "integrity check"}
-	fmtStr := sep + strings.Join([]string{"%d", "%d", "%d", "%s", "%d", "%d", "%s", "%.2f", "%x", "%s", "%s"}, sep) + sep + "\n"
+	header := []string{"#", "ts", "time UTC", "offset", "len", "raw len", "encoder", "ratio", "#F v4", "#F v6", "drops", "first 4 bytes", "", "integrity check"}
+	fmtStr := sep + strings.Join([]string{"%d", "%d", "%s", "%d", "%d", "%d", "%s", "%.2f%%", "%d", "%d", "%d", "%x", "%s", "%s"}, sep) + sep + "\n"
 
 	fmt.Fprintln(tw, sep+strings.Join(header, sep)+sep)
 	fmt.Fprintln(tw, sep+strings.Repeat(sep, len(header))+sep)
@@ -82,10 +79,29 @@ func PrintMetaTable(gpf *gpfile.GPFile, w io.Writer) error {
 	var curOffset int64
 	var b = make([]byte, 4)
 	attnMagicMismatch := " !"
-	for i, block := range blocks.OrderedList() {
-		n, err := file.ReadAt(b, curOffset)
+
+	colFile, err := gpDir.Column(column)
+	if err != nil {
+		return fmt.Errorf("failed to access underlying GPFile for column %s: %w", types.ColumnFileNames[column], err)
+	}
+	for i, block := range blocks {
+
+		// First, just attempt to read the block
+		if _, err := colFile.ReadBlock(block.Timestamp); err != nil {
+			return fmt.Errorf("column %d reading block %d failed: %w", column, i, err)
+		}
+	}
+
+	for i, block := range blocks {
+
+		// Access the raw data of the underlying file / buffer and validate its integrity
+		_, err := colFile.RawFile().Seek(curOffset, 0)
 		if err != nil {
-			return fmt.Errorf("file read at %d failed: %w", curOffset, err)
+			return fmt.Errorf("column %d seeking at block %d failed: %w", column, i, err)
+		}
+		n, err := colFile.RawFile().Read(b)
+		if err != nil {
+			return fmt.Errorf("column %d read at block %d failed: %w", column, i, err)
 		}
 		if n != 4 {
 			return fmt.Errorf("wrong number of bytes read: %d", n)
@@ -107,10 +123,13 @@ func PrintMetaTable(gpf *gpfile.GPFile, w io.Writer) error {
 			ratio = 100 * float64(block.Len) / float64(block.RawLen)
 		}
 		fmt.Fprintf(tw, fmtStr, i+1,
-			block.Offset,
 			block.Timestamp, time.Unix(block.Timestamp, 0).UTC().Format(tFormat),
+			block.Offset,
 			block.Len, block.RawLen,
 			block.EncoderType, ratio,
+			gpDir.BlockTraffic[i].NumV4Entries,
+			gpDir.BlockTraffic[i].NumV6Entries,
+			gpDir.BlockTraffic[i].NumDrops,
 			b, attn,
 			// TODO: diagnostics for lz4
 			"",

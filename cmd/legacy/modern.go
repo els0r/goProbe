@@ -6,22 +6,21 @@ import (
 	"path/filepath"
 
 	"github.com/els0r/goProbe/pkg/goDB/encoder/bitpack"
-	"github.com/els0r/goProbe/pkg/goDB/storage/gpfile"
 	"github.com/els0r/goProbe/pkg/types"
 	"github.com/els0r/goProbe/pkg/types/hashmap"
 	"github.com/sirupsen/logrus"
 )
 
 type ModernFileSet struct {
-	sipFile   *gpfile.GPFile
-	dipFile   *gpfile.GPFile
-	dportFile *gpfile.GPFile
-	protoFile *gpfile.GPFile
+	sipFile   *GPFile
+	dipFile   *GPFile
+	dportFile *GPFile
+	protoFile *GPFile
 
-	bytesRcvdFile *gpfile.GPFile
-	bytesSentFile *gpfile.GPFile
-	pktsRcvdFile  *gpfile.GPFile
-	pktsSentFile  *gpfile.GPFile
+	bytesRcvdFile *GPFile
+	bytesSentFile *GPFile
+	pktsRcvdFile  *GPFile
+	pktsSentFile  *GPFile
 }
 
 func NewModernFileSet(path string) (*ModernFileSet, error) {
@@ -30,35 +29,35 @@ func NewModernFileSet(path string) (*ModernFileSet, error) {
 		fileSet ModernFileSet
 	)
 
-	fileSet.sipFile, err = gpfile.New(filepath.Join(path, "sip.gpf"), gpfile.ModeRead)
+	fileSet.sipFile, err = New(filepath.Join(path, "sip.gpf"), ModeRead)
 	if err != nil {
 		return nil, err
 	}
-	fileSet.dipFile, err = gpfile.New(filepath.Join(path, "dip.gpf"), gpfile.ModeRead)
+	fileSet.dipFile, err = New(filepath.Join(path, "dip.gpf"), ModeRead)
 	if err != nil {
 		return nil, err
 	}
-	fileSet.dportFile, err = gpfile.New(filepath.Join(path, "dport.gpf"), gpfile.ModeRead)
+	fileSet.dportFile, err = New(filepath.Join(path, "dport.gpf"), ModeRead)
 	if err != nil {
 		return nil, err
 	}
-	fileSet.protoFile, err = gpfile.New(filepath.Join(path, "proto.gpf"), gpfile.ModeRead)
+	fileSet.protoFile, err = New(filepath.Join(path, "proto.gpf"), ModeRead)
 	if err != nil {
 		return nil, err
 	}
-	fileSet.bytesRcvdFile, err = gpfile.New(filepath.Join(path, "bytes_rcvd.gpf"), gpfile.ModeRead)
+	fileSet.bytesRcvdFile, err = New(filepath.Join(path, "bytes_rcvd.gpf"), ModeRead)
 	if err != nil {
 		return nil, err
 	}
-	fileSet.bytesSentFile, err = gpfile.New(filepath.Join(path, "bytes_sent.gpf"), gpfile.ModeRead)
+	fileSet.bytesSentFile, err = New(filepath.Join(path, "bytes_sent.gpf"), ModeRead)
 	if err != nil {
 		return nil, err
 	}
-	fileSet.pktsRcvdFile, err = gpfile.New(filepath.Join(path, "pkts_rcvd.gpf"), gpfile.ModeRead)
+	fileSet.pktsRcvdFile, err = New(filepath.Join(path, "pkts_rcvd.gpf"), ModeRead)
 	if err != nil {
 		return nil, err
 	}
-	fileSet.pktsSentFile, err = gpfile.New(filepath.Join(path, "pkts_sent.gpf"), gpfile.ModeRead)
+	fileSet.pktsSentFile, err = New(filepath.Join(path, "pkts_sent.gpf"), ModeRead)
 	if err != nil {
 		return nil, err
 	}
@@ -113,7 +112,7 @@ func (l ModernFileSet) GetTimestamps() ([]int64, error) {
 	return res, nil
 }
 
-func (l ModernFileSet) getBlock(f *gpfile.GPFile, ts int64) ([]byte, error) {
+func (l ModernFileSet) getBlock(f *GPFile, ts int64) ([]byte, error) {
 	block, err := f.ReadBlock(ts)
 	if err != nil {
 		return nil, err

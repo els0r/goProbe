@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -108,6 +109,9 @@ type fileSet interface {
 	Close() error
 }
 
+// headerFileSuffix denotes the suffix used for the legcay header data
+const headerFileSuffix = ".meta"
+
 func isLegacyDir(path string) (bool, error) {
 	dirents, err := os.ReadDir(path)
 	if err != nil {
@@ -119,7 +123,7 @@ func isLegacyDir(path string) (bool, error) {
 		dname := strings.TrimSpace(strings.ToLower(dirent.Name()))
 		if strings.HasSuffix(dname, gpfile.FileSuffix) {
 			countGPFs++
-		} else if strings.HasSuffix(dname, gpfile.FileSuffix+gpfile.HeaderFileSuffix) {
+		} else if strings.HasSuffix(dname, gpfile.FileSuffix+headerFileSuffix) {
 			countMeta++
 		}
 	}
@@ -145,6 +149,11 @@ func (c converter) convertDir(w work, dryRun bool) error {
 		if err != nil {
 			return fmt.Errorf("failed to read modern data set in %s: %w", w.path, err)
 		}
+	}
+
+	dirTimestamp, err := strconv.ParseInt(filepath.Base(w.path), 10, 64)
+	if err != nil {
+		return fmt.Errorf("failed to get directory timestamp: %w", err)
 	}
 
 	defer func() {
@@ -176,27 +185,41 @@ func (c converter) convertDir(w work, dryRun bool) error {
 		})
 	}
 
+	// If no blocks were read / remain (e.g. due to corruption), we can skip this directory
+	if len(allBlocks) == 0 {
+		return nil
+	}
+
 	// Sort by timestamp to cover potential out-of-order scenarios
 	sort.Slice(allBlocks, func(i, j int) bool {
 		return allBlocks[i].ts < allBlocks[j].ts
 	})
 
-	metadata, err := goDB.ReadMetadata(filepath.Join(w.path, goDB.MetadataFileName))
+	metadata, err := ReadMetadata(filepath.Join(w.path, MetadataFileName))
 	if err != nil {
-		return fmt.Errorf("failed to read metadata from %s: %w", filepath.Join(w.path, goDB.MetadataFileName), err)
+		return fmt.Errorf("failed to read metadata from %s: %w", filepath.Join(w.path, MetadataFileName), err)
 	}
 	writer := goDB.NewDBWriter(c.dbDir, w.iface, encoders.EncoderTypeLZ4)
 
+	var bulkWorkload []goDB.BulkWorkload
 	for _, block := range allBlocks {
 		blockMetadata, err := metadata.GetBlock(block.ts)
 		if err != nil {
 			return fmt.Errorf("failed to get block metdadata from file set: %w", err)
 		}
 
-		if !dryRun {
-			if _, err = writer.Write(block.data, blockMetadata, block.ts); err != nil {
-				return fmt.Errorf("failed to write flows: %w", err)
-			}
+		bulkWorkload = append(bulkWorkload, goDB.BulkWorkload{
+			FlowMap: block.data,
+			CaptureMeta: goDB.CaptureMetadata{
+				PacketsDropped: blockMetadata.PcapPacketsDropped + blockMetadata.PcapPacketsIfDropped,
+			},
+			Timestamp: block.ts,
+		})
+	}
+
+	if !dryRun {
+		if err = writer.WriteBulk(bulkWorkload, dirTimestamp); err != nil {
+			return fmt.Errorf("failed to write flows: %w", err)
 		}
 	}
 

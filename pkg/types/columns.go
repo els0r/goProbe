@@ -19,6 +19,48 @@ import (
 	"github.com/els0r/goProbe/pkg/goDB/protocols"
 )
 
+type ColumnIndex int
+
+const IPSizeOf = -1
+
+// Indices for all column types
+const (
+	// First the attribute columns...
+	SipColIdx, _ ColumnIndex = iota, iota
+	DipColIdx, _
+	ProtoColIdx, _
+	DportColIdx, _
+
+	// ... and then the columns we aggregate
+	BytesRcvdColIdx, ColIdxAttributeCount
+	BytesSentColIdx, _
+	PacketsRcvdColIdx, _
+	PacketsSentColIdx, _
+	ColIdxCount, _
+)
+
+// Sizeof (entry) for all column types
+const (
+	SipSizeof   int = IPSizeOf
+	DipSizeof   int = IPSizeOf
+	ProtoSizeof int = 1
+	DportSizeof int = 2
+)
+
+// IsCounterCol returns if a column is a counter (and hence does
+// not use fixed-width encoding)
+func (c ColumnIndex) IsCounterCol() bool {
+	return c >= ColIdxAttributeCount && c <= PacketsSentColIdx
+}
+
+var ColumnSizeofs = [ColIdxCount]int{
+	SipSizeof, DipSizeof, ProtoSizeof, DportSizeof,
+}
+
+var ColumnFileNames = [ColIdxCount]string{
+	"sip", "dip", "proto", "dport",
+	"bytes_rcvd", "bytes_sent", "pkts_rcvd", "pkts_sent"}
+
 type Column interface {
 	Name() string
 	Width() Width

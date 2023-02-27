@@ -177,7 +177,7 @@ func (s *Statement) Execute(ctx context.Context) (result *results.Result, err er
 
 	// Channel for handling of returned maps
 	mapChan := make(chan hashmap.AggFlowMapWithMetadata, 1024)
-	aggregateChan := aggregate(mapChan)
+	aggregateChan := aggregate(mapChan, s.Query.IsLowMem())
 
 	go func() {
 		select {
@@ -265,8 +265,13 @@ func (s *Statement) Execute(ctx context.Context) (result *results.Result, err er
 	// we are done with all worker jobs
 	close(mapChan)
 
-	// wait for the job to complete
+	// wait for the job to complete, then call a garbage collection
 	agg := <-aggregateChan
+	for _, workManager := range workManagers {
+		workManager.Close()
+		workManager = nil
+	}
+	runtime.GC()
 
 	// first inspect if err is set due to problems not related to aggregation
 	if err != nil {
@@ -326,7 +331,11 @@ func (s *Statement) Execute(ctx context.Context) (result *results.Result, err er
 	}
 
 	// Now is a good time to release memory one last time for the final processing step
-	agg.aggregatedMap.Map = nil
+	if s.Query.IsLowMem() {
+		agg.aggregatedMap.Map.Clear()
+	} else {
+		agg.aggregatedMap.Map = nil
+	}
 	runtime.GC()
 
 	result.Summary.Totals = agg.totals

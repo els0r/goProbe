@@ -16,7 +16,7 @@ func WithEncoder(e encoders.Type) Option {
 // upon first read access to minimize I/O load.
 // Seeking is handled by replacing the underlying file with a seekable
 // in-memory structure (c.f. readWriteSeekCloser interface)
-func WithReadAll(pool *MemPool) Option {
+func WithReadAll(pool MemPoolGCable) Option {
 	return func(g *GPFile) {
 		g.memPool = pool
 	}

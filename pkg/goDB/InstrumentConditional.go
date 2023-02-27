@@ -207,32 +207,32 @@ func generateCompareValue(condition *conditionNode) error {
 		switch condition.comparator {
 		case "=":
 			condition.compareValue = func(currentValue types.Key) bool {
-				return bytes.Equal(currentValue.GetDport(), value[:DportSizeof])
+				return bytes.Equal(currentValue.GetDport(), value[:types.DportSizeof])
 			}
 			return nil
 		case "!=":
 			condition.compareValue = func(currentValue types.Key) bool {
-				return !bytes.Equal(currentValue.GetDport(), value[:DportSizeof])
+				return !bytes.Equal(currentValue.GetDport(), value[:types.DportSizeof])
 			}
 			return nil
 		case "<":
 			condition.compareValue = func(currentValue types.Key) bool {
-				return bytes.Compare(currentValue.GetDport(), value[:DportSizeof]) < 0
+				return bytes.Compare(currentValue.GetDport(), value[:types.DportSizeof]) < 0
 			}
 			return nil
 		case ">":
 			condition.compareValue = func(currentValue types.Key) bool {
-				return bytes.Compare(currentValue.GetDport(), value[:DportSizeof]) > 0
+				return bytes.Compare(currentValue.GetDport(), value[:types.DportSizeof]) > 0
 			}
 			return nil
 		case "<=":
 			condition.compareValue = func(currentValue types.Key) bool {
-				return bytes.Compare(currentValue.GetDport(), value[:DportSizeof]) <= 0
+				return bytes.Compare(currentValue.GetDport(), value[:types.DportSizeof]) <= 0
 			}
 			return nil
 		case ">=":
 			condition.compareValue = func(currentValue types.Key) bool {
-				return bytes.Compare(currentValue.GetDport(), value[:DportSizeof]) >= 0
+				return bytes.Compare(currentValue.GetDport(), value[:types.DportSizeof]) >= 0
 			}
 			return nil
 		default:
