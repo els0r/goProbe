@@ -66,7 +66,7 @@ func (p *GPPacket) Populate(pkt capture.Packet) error {
 	// read the direction from which the packet entered the interface
 	p.dirInbound = pkt.Type() == 0
 	p.numBytes = uint16(pkt.TotalLen())
-	var protocol byte = 0xFF
+	var protocol byte
 
 	if int(srcPacket[0]>>4) == 4 {
 
@@ -99,7 +99,7 @@ func (p *GPPacket) Populate(pkt capture.Packet) error {
 			}
 		}
 
-		if protocol == 6 || protocol == 17 {
+		if protocol == TCP || protocol == UDP {
 
 			dport := srcPacket[ipv4.HeaderLen+2 : ipv4.HeaderLen+4]
 			sport := srcPacket[ipv4.HeaderLen : ipv4.HeaderLen+2]
@@ -111,7 +111,7 @@ func (p *GPPacket) Populate(pkt capture.Packet) error {
 			// into account. A major exception is traffic over port 53 as
 			// considering every single DNS request/response would
 			// significantly fill up the flow map
-			if protocol == 6 && (dport[0] != 0 || dport[1] != 53) && (sport[0] != 0 || sport[1] != 53) {
+			if protocol == TCP && (dport[0] != 0 || dport[1] != 53) && (sport[0] != 0 || sport[1] != 53) {
 				copy(p.epHash[34:36], sport)
 				copy(p.epHashReverse[34:36], dport)
 			}
@@ -128,7 +128,7 @@ func (p *GPPacket) Populate(pkt capture.Packet) error {
 
 		protocol = srcPacket[6]
 
-		if protocol == 6 || protocol == 17 {
+		if protocol == TCP || protocol == UDP {
 
 			dport := srcPacket[ipv6.HeaderLen+2 : ipv6.HeaderLen+4]
 			sport := srcPacket[ipv6.HeaderLen : ipv6.HeaderLen+2]
