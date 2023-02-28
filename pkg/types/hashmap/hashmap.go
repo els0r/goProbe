@@ -317,6 +317,10 @@ done:
 // part to minimize function call overhead and allocations
 func (m *Map) Merge(m2 *Map, totals *Val) {
 
+	if m2.Len() == 0 {
+		return
+	}
+
 	var it Iter
 	m2.iter(&it)
 
