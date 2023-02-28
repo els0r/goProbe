@@ -1,7 +1,5 @@
 module github.com/els0r/goProbe
 
-replace github.com/fako1024/slimcap => /home/fako/Develop/go/src/github.com/fako1024/slimcap
-
 require (
 	github.com/els0r/log v1.0.1-0.20190303012150-3e228cb82ff0
 	github.com/els0r/status v1.0.0
