@@ -134,13 +134,29 @@ func New(n ...int) *Map {
 // Just a convenient alias for the map type itself
 type AggFlowMap = Map
 
+// NilAggFlowMapWithMetadata denotes an empty / "nil" AggFlowMapWithMetadata
+var NilAggFlowMapWithMetadata = AggFlowMapWithMetadata{}
+
 // AggFlowMapWithMetadata provides a wrapper around the map with ancillary data
 type AggFlowMapWithMetadata struct {
-	*Map
+	*AggFlowMap
 
 	// Iface    string `json:"iface"`
 	HostID   uint   `json:"host_id"`
 	Hostname string `json:"host"`
+}
+
+// NewAggFlowMapWithMetadata instantiates a new AggFlowMapWithMetadata with an underlying
+// hashmap
+func NewAggFlowMapWithMetadata(n ...int) AggFlowMapWithMetadata {
+	return AggFlowMapWithMetadata{
+		AggFlowMap: New(n...),
+	}
+}
+
+// IsNil returns if an AggFlowMapWithMetadata is nil (used e.g. in cases of error)
+func (a AggFlowMapWithMetadata) IsNil() bool {
+	return a.AggFlowMap == nil
 }
 
 // NewHint instantiates a new Map with a hint as to how many valents
@@ -478,7 +494,7 @@ next:
 	goto next
 }
 
-// Clear deletes all keys from m.
+// Clear frees as many resources as possible by making them eligible for GC
 func (m *Map) Clear() {
 	if m == nil || m.count == 0 {
 		return
@@ -497,9 +513,12 @@ func (m *Map) Clear() {
 	m.ClearFast()
 }
 
+// ClearFast nils all main resources, making them eligible for GC (but
+// probably not as effectively as Clear())
 func (m *Map) ClearFast() {
 	m.oldBuckets = nil
 	m.keyData = nil
+	m = nil
 }
 
 func (m *Map) hashGrow() {

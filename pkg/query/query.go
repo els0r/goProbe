@@ -193,7 +193,7 @@ func (s *Statement) Execute(ctx context.Context) (result *results.Result, err er
 			agg := <-aggregateChan
 
 			// call the garbage collector
-			agg.aggregatedMap.Map = nil
+			agg.aggregatedMap.AggFlowMap = nil
 			runtime.GC()
 			debug.FreeOSMemory()
 
@@ -332,10 +332,9 @@ func (s *Statement) Execute(ctx context.Context) (result *results.Result, err er
 
 	// Now is a good time to release memory one last time for the final processing step
 	if s.Query.IsLowMem() {
-		agg.aggregatedMap.Map.Clear()
+		agg.aggregatedMap.Clear()
 	} else {
-		agg.aggregatedMap.Map.ClearFast()
-		agg.aggregatedMap.Map = nil
+		agg.aggregatedMap.ClearFast()
 	}
 	runtime.GC()
 

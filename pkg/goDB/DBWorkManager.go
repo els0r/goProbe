@@ -33,6 +33,10 @@ const (
 
 	// DBWriteInterval defines the periodic write out interval of goProbe
 	DBWriteInterval int64 = 300
+
+	// WorkBulkSize denotes the per-worker bulk size (number of GPDirs processed before
+	// transmitting the resulting map to for further reduction / aggregtion
+	WorkBulkSize = 32
 )
 
 // DBWorkload stores all relevant parameters to load a block and execute a query on it
@@ -151,7 +155,11 @@ func (w *DBWorkManager) grabAndProcessWorkload(ctx context.Context, wg *sync.Wai
 		defer wg.Done()
 
 		// parse conditions
-		var workload DBWorkload
+		var (
+			workload  DBWorkload
+			resultMap = hashmap.NewAggFlowMapWithMetadata()
+			nBulk     int
+		)
 		for chanOpen := true; chanOpen; {
 			select {
 			case <-ctx.Done():
@@ -160,21 +168,22 @@ func (w *DBWorkManager) grabAndProcessWorkload(ctx context.Context, wg *sync.Wai
 				return
 			case workload, chanOpen = <-workloadChan:
 				if chanOpen {
-					// create the map in which the workload will store the aggregations
-					resultMap := hashmap.AggFlowMapWithMetadata{
-						Map: hashmap.New(),
-					}
 
 					// if there is an error during one of the read jobs, throw a syslog message and terminate
 					err := w.readBlocksAndEvaluate(workload, resultMap)
 					if err != nil {
 						w.logger.Error(err.Error())
-						mapChan <- hashmap.AggFlowMapWithMetadata{Map: nil}
+						mapChan <- hashmap.NilAggFlowMapWithMetadata
 						return
 					}
 
 					w.nWorkloadsProcessed++
+					nBulk++
+				}
+
+				if nBulk%WorkBulkSize == 0 || !chanOpen {
 					mapChan <- resultMap
+					resultMap = hashmap.NewAggFlowMapWithMetadata()
 				}
 			}
 		}

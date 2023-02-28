@@ -26,9 +26,7 @@ func aggregate(mapChan <-chan hashmap.AggFlowMapWithMetadata, lowMem bool) chan 
 		// Since we know that the source maps retrieved over the channel are not
 		// changed anymore we can re-use the memory allocated for the keys in them by
 		// using them for the aggregate map
-		var finalMap = hashmap.AggFlowMapWithMetadata{
-			Map: hashmap.New(),
-		}
+		var finalMap = hashmap.NewAggFlowMapWithMetadata()
 
 		var (
 			totals types.Counters
@@ -36,7 +34,7 @@ func aggregate(mapChan <-chan hashmap.AggFlowMapWithMetadata, lowMem bool) chan 
 		)
 
 		for item := range mapChan {
-			if item.Map == nil {
+			if item.IsNil() {
 				resultChan <- aggregateResult{err: errorInternalProcessing}
 				return
 			}
@@ -70,10 +68,9 @@ func aggregate(mapChan <-chan hashmap.AggFlowMapWithMetadata, lowMem bool) chan 
 
 			nAgg++
 			if lowMem {
-				item.Map.Clear() // Safe even in zero-copy mode (since the elements itself are not touched)
+				item.Clear() // Safe even in zero-copy mode (since the elements itself are not touched)
 			} else {
-				item.Map.ClearFast()
-				item.Map = nil
+				item.ClearFast()
 			}
 		}
 
