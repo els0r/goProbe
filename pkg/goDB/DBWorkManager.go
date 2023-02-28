@@ -170,7 +170,7 @@ func (w *DBWorkManager) grabAndProcessWorkload(ctx context.Context, wg *sync.Wai
 				if chanOpen {
 
 					// if there is an error during one of the read jobs, throw a syslog message and terminate
-					err := w.readBlocksAndEvaluate(workload, resultMap)
+					err := w.readBlocksAndEvaluate(workload, &resultMap)
 					if err != nil {
 						w.logger.Error(err.Error())
 						mapChan <- hashmap.NilAggFlowMapWithMetadata
@@ -214,7 +214,7 @@ func (w *DBWorkManager) ExecuteWorkerReadJobs(ctx context.Context, mapChan chan 
 
 // Block evaluation and aggregation -----------------------------------------------------
 // this is where the actual reading and aggregation magic happens
-func (w *DBWorkManager) readBlocksAndEvaluate(workload DBWorkload, resultMap hashmap.AggFlowMapWithMetadata) error {
+func (w *DBWorkManager) readBlocksAndEvaluate(workload DBWorkload, resultMap *hashmap.AggFlowMapWithMetadata) error {
 	var err error
 
 	var (
@@ -234,6 +234,13 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workload DBWorkload, resultMap has
 	}
 	defer workload.workDir.Close()
 
+	// Set map metadata (and cross-check consistency for consecutive workloads)
+	if resultMap.Interface == "" {
+		resultMap.Interface = w.iface
+	} else if resultMap.Interface != w.iface {
+		return fmt.Errorf("discovered invalid workload for mismatching interfaces, want `%s`, have `%s`", resultMap.Interface, w.iface)
+	}
+
 	// Process the workload, looping over all blocks in this directory
 	for b, block := range dir.BlockMetadata[0].Blocks() {
 
@@ -246,8 +253,6 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workload DBWorkload, resultMap has
 		var (
 			blocks      [types.ColIdxCount][]byte
 			blockBroken bool
-			ts          int64
-			iface       string
 		)
 
 		// Read the blocks from their files
@@ -300,18 +305,12 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workload DBWorkload, resultMap has
 		}
 
 		// Initialize any (static) key extensions potentially present in the query
-		if query.hasAttrTime || query.hasAttrIface {
-			if query.hasAttrTime {
-				ts = block.Timestamp
-			}
-			if query.hasAttrIface {
-				iface = w.iface
-			}
-			v4Key = types.NewEmptyV4Key().Extend(ts, iface)
-			v6Key = types.NewEmptyV6Key().Extend(ts, iface)
+		if query.hasAttrTime {
+			v4Key = types.NewEmptyV4Key().Extend(block.Timestamp)
+			v6Key = types.NewEmptyV6Key().Extend(block.Timestamp)
 			if query.Conditional == nil {
-				v4ComparisonValue = types.NewEmptyV4Key().Extend(ts, iface)
-				v6ComparisonValue = types.NewEmptyV6Key().Extend(ts, iface)
+				v4ComparisonValue = types.NewEmptyV4Key().Extend(block.Timestamp)
+				v6ComparisonValue = types.NewEmptyV6Key().Extend(block.Timestamp)
 			}
 		}
 
@@ -327,20 +326,22 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workload DBWorkload, resultMap has
 
 		key, comparisonValue := v4Key, v4ComparisonValue
 		startEntry, isIPv4 := 0, true // TODO: Support traversal of IPv4 / IPv6 only if there's a matching condition
+		finalMap := resultMap.V4Map
 		for i := startEntry; i < numEntries; i++ {
 
-			// When reaching the v4/v6 mark, we switch to the IPv6 key
+			// When reaching the v4/v6 mark, we switch to the IPv6 key / submap
 			if i == int(numV4Entries) {
 				key, comparisonValue = v6Key, v6ComparisonValue
+				finalMap = resultMap.V6Map
 				isIPv4 = false
 			}
 
 			// Populate key for current entry
 			if query.hasAttrSip {
 				if isIPv4 {
-					key.PutSipV4(sipBlocks[i*4 : i*4+4])
+					key.PutSip(sipBlocks[i*4 : i*4+4])
 				} else {
-					key.PutSipV6(sipBlocks[numV4Entries*4+(i-numV4Entries)*16 : numV4Entries*4+(i-numV4Entries)*16+16])
+					key.PutSip(sipBlocks[numV4Entries*4+(i-numV4Entries)*16 : numV4Entries*4+(i-numV4Entries)*16+16])
 				}
 			}
 			if query.hasAttrDip {
@@ -351,10 +352,10 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workload DBWorkload, resultMap has
 				}
 			}
 			if query.hasAttrProto {
-				key.PutProto(protoBlocks[i])
+				key.PutProtoV(protoBlocks[i], isIPv4)
 			}
 			if query.hasAttrDport {
-				key.PutDport(dportBlocks[i*types.DportSizeof : i*types.DportSizeof+types.DportSizeof])
+				key.PutDportV(dportBlocks[i*types.DportSizeof:i*types.DportSizeof+types.DportSizeof], isIPv4)
 			}
 
 			// Check whether conditional is satisfied for current entry
@@ -366,9 +367,9 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workload DBWorkload, resultMap has
 				// Populate comparison value for current entry
 				if query.hasCondSip {
 					if isIPv4 {
-						comparisonValue.PutSipV4(sipBlocks[i*4 : i*4+4])
+						comparisonValue.PutSip(sipBlocks[i*4 : i*4+4])
 					} else {
-						comparisonValue.PutSipV6(sipBlocks[numV4Entries*4+(i-numV4Entries)*16 : numV4Entries*4+(i-numV4Entries)*16+16])
+						comparisonValue.PutSip(sipBlocks[numV4Entries*4+(i-numV4Entries)*16 : numV4Entries*4+(i-numV4Entries)*16+16])
 					}
 				}
 				if query.hasCondDip {
@@ -379,17 +380,17 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workload DBWorkload, resultMap has
 					}
 				}
 				if query.hasCondProto {
-					comparisonValue.PutProto(protoBlocks[i])
+					comparisonValue.PutProtoV(protoBlocks[i], isIPv4)
 				}
 				if query.hasCondDport {
-					comparisonValue.PutDport(dportBlocks[i*types.DportSizeof : i*types.DportSizeof+types.DportSizeof])
+					comparisonValue.PutDportV(dportBlocks[i*types.DportSizeof:i*types.DportSizeof+types.DportSizeof], isIPv4)
 				}
 
 				conditionalSatisfied = query.Conditional.evaluate(comparisonValue.Key())
 			}
 
 			if conditionalSatisfied {
-				resultMap.SetOrUpdate(key,
+				finalMap.SetOrUpdate(key,
 					bytesRcvdValues[i],
 					bytesSentValues[i],
 					pktsRcvdValues[i],

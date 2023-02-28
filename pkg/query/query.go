@@ -177,7 +177,7 @@ func (s *Statement) Execute(ctx context.Context) (result *results.Result, err er
 
 	// Channel for handling of returned maps
 	mapChan := make(chan hashmap.AggFlowMapWithMetadata, 1024)
-	aggregateChan := aggregate(mapChan, s.Query.IsLowMem())
+	aggregateChan := aggregate(mapChan, s)
 
 	go func() {
 		select {
@@ -193,7 +193,7 @@ func (s *Statement) Execute(ctx context.Context) (result *results.Result, err er
 			agg := <-aggregateChan
 
 			// call the garbage collector
-			agg.aggregatedMap.AggFlowMap = nil
+			agg.aggregatedMaps.ClearFast()
 			runtime.GC()
 			debug.FreeOSMemory()
 
@@ -298,45 +298,47 @@ func (s *Statement) Execute(ctx context.Context) (result *results.Result, err er
 		}
 	}
 
-	var rs = make(results.Rows, agg.aggregatedMap.Len())
+	var rs = make(results.Rows, agg.aggregatedMaps.Len())
 	count := 0
 
-	for i := agg.aggregatedMap.Iter(); i.Next(); {
+	for iface, aggMap := range agg.aggregatedMaps {
+		for i := aggMap.Iter(); i.Next(); {
 
-		key := types.ExtendedKey(i.Key())
-		val := i.Val()
+			key := types.ExtendedKey(i.Key())
+			val := i.Val()
 
-		if ts, hasTS := key.AttrTime(); hasTS {
-			rs[count].Labels.Timestamp = time.Unix(ts, 0)
-		}
-		rs[count].Labels.Iface, _ = key.AttrIface()
-		rs[count].Labels.HostID = agg.aggregatedMap.HostID
-		rs[count].Labels.Hostname = agg.aggregatedMap.Hostname
-		if sip != nil {
-			rs[count].Attributes.SrcIP = types.RawIPToAddr(key.Key().GetSip())
-		}
-		if dip != nil {
-			rs[count].Attributes.DstIP = types.RawIPToAddr(key.Key().GetDip())
-		}
-		if proto != nil {
-			rs[count].Attributes.IPProto = key.Key().GetProto()
-		}
-		if dport != nil {
-			rs[count].Attributes.DstPort = types.PortToUint16(key.Key().GetDport())
+			if ts, hasTS := key.AttrTime(); hasTS {
+				rs[count].Labels.Timestamp = time.Unix(ts, 0)
+			}
+			rs[count].Labels.Iface = iface
+			rs[count].Labels.HostID = aggMap.HostID
+			rs[count].Labels.Hostname = aggMap.Hostname
+			if sip != nil {
+				rs[count].Attributes.SrcIP = types.RawIPToAddr(key.Key().GetSip())
+			}
+			if dip != nil {
+				rs[count].Attributes.DstIP = types.RawIPToAddr(key.Key().GetDip())
+			}
+			if proto != nil {
+				rs[count].Attributes.IPProto = key.Key().GetProto()
+			}
+			if dport != nil {
+				rs[count].Attributes.DstPort = types.PortToUint16(key.Key().GetDport())
+			}
+
+			// assign / update counters
+			rs[count].Counters = rs[count].Counters.Add(val)
+			count++
 		}
 
-		// assign / update counters
-		rs[count].Counters = rs[count].Counters.Add(val)
-		count++
+		// Now is a good time to release memory one last time for the final processing step
+		if s.Query.IsLowMem() {
+			aggMap.Clear()
+		} else {
+			aggMap.ClearFast()
+		}
+		runtime.GC()
 	}
-
-	// Now is a good time to release memory one last time for the final processing step
-	if s.Query.IsLowMem() {
-		agg.aggregatedMap.Clear()
-	} else {
-		agg.aggregatedMap.ClearFast()
-	}
-	runtime.GC()
 
 	result.Summary.Totals = agg.totals
 

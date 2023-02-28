@@ -14,6 +14,7 @@ package main
 
 import (
 	"bufio"
+	"encoding/binary"
 	"errors"
 	"os"
 	"os/exec"
@@ -63,6 +64,40 @@ type keyIndParserItem struct {
 	parser goDB.StringKeyParser
 }
 
+// IfaceStringParser parses iface strings
+type IfaceStringParser struct{}
+
+// // ParseKey writes element to the Iface key
+func (i *IfaceStringParser) ParseKey(element string, key *types.ExtendedKey) error {
+
+	// Not very pretty: We basically just append the string and its length to the end
+	ifaceBytes := []byte(element)
+	newKey := make([]byte, len(*key)+len(ifaceBytes)+4)
+	pos := copy(newKey, *key)
+	pos += copy(newKey[pos:], ifaceBytes)
+	binary.BigEndian.PutUint32(newKey[len(newKey)-4:], uint32(len(element)))
+
+	*key = newKey
+
+	return nil
+}
+
+func extractIface(key []byte) ([]byte, string) {
+
+	strLen := int(binary.BigEndian.Uint32(key[len(key)-4:]))
+	ifaceName := string(key[len(key)-(strLen+4) : len(key)-4])
+	remainingKey := key[:len(key)-(strLen+4)]
+
+	return remainingKey, ifaceName
+}
+
+func newStringKeyParser(field string) goDB.StringKeyParser {
+	if field == "iface" {
+		return &IfaceStringParser{}
+	}
+	return goDB.NewStringKeyParser(field)
+}
+
 // CSVConverter can read CSV files containing goProbe flow information
 type CSVConverter struct {
 	// map field index to how it should be parsed
@@ -109,7 +144,7 @@ func (c *CSVConverter) readSchema(schema string) error {
 
 	// first try to extract all attributes which need to be parsed
 	for ind, field := range fields {
-		parser := goDB.NewStringKeyParser(field)
+		parser := newStringKeyParser(field)
 
 		// check if a NOP parser was created. If so, try to create
 		// a value parser from the field
@@ -128,8 +163,12 @@ func (c *CSVConverter) readSchema(schema string) error {
 		}
 	}
 
-	// Ensure that IP parsers are executed first (if present) to ensure correct parsing
+	// Ensure that IP parsers are executed first and interface parsers last (if present)
+	// to ensure correct parsing
 	sort.Slice(c.KeyParsers, func(i, j int) bool {
+		if _, isIfaceParser := c.KeyParsers[j].parser.(*IfaceStringParser); isIfaceParser {
+			return true
+		}
 		_, isSipParser := c.KeyParsers[i].parser.(*goDB.SipStringParser)
 		_, isDipParser := c.KeyParsers[i].parser.(*goDB.DipStringParser)
 		return isSipParser || isDipParser
@@ -150,7 +189,7 @@ func (c *CSVConverter) readSchema(schema string) error {
 
 func (c *CSVConverter) parsesIface() bool {
 	for _, p := range c.KeyParsers {
-		if _, ok := p.parser.(*goDB.IfaceStringParser); ok {
+		if _, ok := p.parser.(*IfaceStringParser); ok {
 			return true
 		}
 	}
@@ -283,7 +322,7 @@ func main() {
 						os.Exit(1)
 					}
 
-					p := &goDB.IfaceStringParser{}
+					p := &IfaceStringParser{}
 					if err := p.ParseKey(config.Iface, &rowKeyV4); err != nil {
 						fmt.Printf("Failed to parse interface from config: %s\n", err.Error())
 						os.Exit(1)
@@ -376,7 +415,9 @@ func main() {
 
 		// check if a new submap has to be created (e.g. if there's new data
 		// from another interface
-		iface, _ := rowKey.AttrIface()
+		var iface string
+		*rowKey, iface = extractIface(*rowKey)
+
 		ts, _ := rowKey.AttrTime()
 		if _, exists := flowMaps[iface]; !exists {
 			flowMaps[iface] = make(map[int64]*hashmap.AggFlowMap)

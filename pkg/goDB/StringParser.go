@@ -45,8 +45,6 @@ func NewStringKeyParser(kind string) StringKeyParser {
 		return &DportStringParser{}
 	case "proto":
 		return &ProtoStringParser{}
-	case "iface":
-		return &IfaceStringParser{}
 	case "time":
 		return &TimeStringParser{}
 	}
@@ -91,9 +89,6 @@ type ProtoStringParser struct{}
 
 // TimeStringParser parses time strings
 type TimeStringParser struct{}
-
-// IfaceStringParser parses iface strings
-type IfaceStringParser struct{}
 
 // value parsers
 
@@ -185,25 +180,7 @@ func (t *TimeStringParser) ParseKey(element string, key *types.ExtendedKey) erro
 		return err
 	}
 
-	attrIface, hasIface := key.AttrIface()
-	if hasIface {
-		*key = key.Key().Extend(num, attrIface)
-	} else {
-		*key = key.Key().Extend(num, "")
-	}
-
-	return nil
-}
-
-// // ParseKey writes element to the Iface key
-func (i *IfaceStringParser) ParseKey(element string, key *types.ExtendedKey) error {
-
-	attrTime, hasTime := key.AttrTime()
-	if hasTime {
-		*key = key.Key().Extend(attrTime, element)
-	} else {
-		*key = key.Key().Extend(0, element)
-	}
+	*key = key.Key().Extend(num)
 
 	return nil
 }

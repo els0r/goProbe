@@ -3,7 +3,6 @@
 package hashmap
 
 import (
-	"github.com/els0r/goProbe/pkg/types"
 	"github.com/zeebo/xxh3"
 )
 
@@ -15,16 +14,6 @@ func hash(in []byte) uint64 {
 	return xxh3.Hash(in)
 	// return uint64(runtime_memhash(*(*unsafe.Pointer)(unsafe.Pointer(&in)), 0, uintptr(len(in))))
 }
-
-// Type definitions for easy modification
-type (
-
-	// K defines the Key type of the map
-	Key = []byte
-
-	// E defines the value / valent type of the map
-	Val = types.Counters
-)
 
 const (
 	// Maximum number of key/val pairs a bucket can hold.
@@ -85,78 +74,6 @@ type bucket struct {
 	vals [bucketCnt]Val
 
 	overflow *bucket
-}
-
-// Iter provides a map Iter to allow traversal
-type Iter struct {
-	key         Key
-	val         Val
-	m           *Map
-	buckets     []bucket
-	bucketPtr   *bucket
-	startBucket int
-	offset      uint8
-	wrapped     bool
-	i           uint8
-	bucket      int
-	checkBucket int
-}
-
-// Key returns the key at the current iterator position
-func (it *Iter) Key() Key {
-	return it.key
-}
-
-// Val returns the value / valent at the current iterator position
-func (it *Iter) Val() Val {
-	return it.val
-}
-
-// KeyVal denotes a key / value pair
-type KeyVal struct {
-	Key Key
-	Val Val
-}
-
-// KeyVals denotes a list / slice of key / value pairs
-type KeyVals []KeyVal
-
-// New instantiates a new Map (a size hint can be provided)
-func New(n ...int) *Map {
-	if len(n) == 0 || n[0] == 0 {
-		return NewHint(0)
-	}
-	m := NewHint(n[0])
-	return m
-}
-
-// AggFlowMap stores all flows where the source port from the FlowLog has been aggregated
-// Just a convenient alias for the map type itself
-type AggFlowMap = Map
-
-// NilAggFlowMapWithMetadata denotes an empty / "nil" AggFlowMapWithMetadata
-var NilAggFlowMapWithMetadata = AggFlowMapWithMetadata{}
-
-// AggFlowMapWithMetadata provides a wrapper around the map with ancillary data
-type AggFlowMapWithMetadata struct {
-	*AggFlowMap
-
-	// Iface    string `json:"iface"`
-	HostID   uint   `json:"host_id"`
-	Hostname string `json:"host"`
-}
-
-// NewAggFlowMapWithMetadata instantiates a new AggFlowMapWithMetadata with an underlying
-// hashmap
-func NewAggFlowMapWithMetadata(n ...int) AggFlowMapWithMetadata {
-	return AggFlowMapWithMetadata{
-		AggFlowMap: New(n...),
-	}
-}
-
-// IsNil returns if an AggFlowMapWithMetadata is nil (used e.g. in cases of error)
-func (a AggFlowMapWithMetadata) IsNil() bool {
-	return a.AggFlowMap == nil
 }
 
 // NewHint instantiates a new Map with a hint as to how many valents
@@ -346,8 +263,7 @@ bucketloop:
 				}
 				continue
 			}
-			k := b.keys[i]
-			if len(k) != len(key) || string(k) != string(key) {
+			if string(b.keys[i]) != string(key) {
 				continue
 			}
 
@@ -396,6 +312,95 @@ bucketloop:
 done:
 }
 
+// Merge allows to incorporate the content of a map m2 into an existing map m (providing
+// additional in-place counter updates). It re-uses / duplicates code from the iterator
+// part to minimize function call overhead and allocations
+func (m *Map) Merge(m2 *Map, totals *Val) {
+
+	var it Iter
+	m2.iter(&it)
+
+start:
+	bucket := it.bucket
+	b := it.bucketPtr
+	i := it.i
+	checkBucket := it.checkBucket
+
+next:
+	if b == nil {
+		if bucket == it.startBucket && it.wrapped {
+			var (
+				zeroK Key
+				zeroE Val
+			)
+			it.key = zeroK
+			it.val = zeroE
+			return
+		}
+		if m2.isGrowing() && len(it.buckets) == len(m2.buckets) {
+			oldBucket := uint64(bucket) & it.m.oldBucketMask()
+			b = &(*m2.oldBuckets)[oldBucket]
+			if !evacuated(b) {
+				checkBucket = bucket
+			} else {
+				b = &it.buckets[bucket]
+				checkBucket = noCheck
+			}
+		} else {
+			b = &it.buckets[bucket]
+			checkBucket = noCheck
+		}
+
+		bucket++
+		if bucket == len(it.buckets) {
+			bucket = 0
+			it.wrapped = true
+		}
+		i = 0
+	}
+	for ; i < bucketCnt; i++ {
+		offi := (i + it.offset) & (bucketCnt - 1)
+		if isEmpty(b.topHash[offi]) || b.topHash[offi] == evacuatedEmpty {
+			continue
+		}
+		k := b.keys[offi]
+		if checkBucket != noCheck && !m2.sameSizeGrow() {
+			hash := hash(k)
+			if int(hash&m2.bucketMask()) != checkBucket {
+				continue
+			}
+		}
+		if b.topHash[offi] != evacuatedX && b.topHash[offi] != evacuatedY {
+			it.key = k
+			it.val = b.vals[offi]
+		} else {
+			rk, re := m2.mapaccessK(k)
+			if rk == nil {
+				continue
+			}
+			it.key = *rk
+			it.val = *re
+		}
+		it.bucket = bucket
+		if it.bucketPtr != b {
+			it.bucketPtr = b
+		}
+		it.i = i + 1
+		it.checkBucket = checkBucket
+
+		val := it.val
+		m.SetOrUpdate(it.key, val.BytesRcvd, val.BytesSent, val.PacketsRcvd, val.PacketsSent)
+		if totals != nil {
+			*totals = totals.Add(val)
+		}
+
+		goto start
+	}
+	b = b.overflow
+	i = 0
+	goto next
+}
+
 // Iter instantiates an Iter to traverse the map.
 func (m *Map) Iter() *Iter {
 	var it Iter
@@ -415,83 +420,6 @@ func (m *Map) iter(it *Iter) {
 	it.offset = uint8(r >> (64 - bucketCntBits))
 
 	return
-}
-
-func (it *Iter) Next() bool {
-	m := it.m
-	if m == nil {
-		return false
-	}
-	bucket := it.bucket
-	b := it.bucketPtr
-	i := it.i
-	checkBucket := it.checkBucket
-
-next:
-	if b == nil {
-		if bucket == it.startBucket && it.wrapped {
-			var (
-				zeroK Key
-				zeroE Val
-			)
-			it.key = zeroK
-			it.val = zeroE
-			return false
-		}
-		if m.isGrowing() && len(it.buckets) == len(m.buckets) {
-			oldBucket := uint64(bucket) & it.m.oldBucketMask()
-			b = &(*m.oldBuckets)[oldBucket]
-			if !evacuated(b) {
-				checkBucket = bucket
-			} else {
-				b = &it.buckets[bucket]
-				checkBucket = noCheck
-			}
-		} else {
-			b = &it.buckets[bucket]
-			checkBucket = noCheck
-		}
-		bucket++
-		if bucket == len(it.buckets) {
-			bucket = 0
-			it.wrapped = true
-		}
-		i = 0
-	}
-	for ; i < bucketCnt; i++ {
-		offi := (i + it.offset) & (bucketCnt - 1)
-		if isEmpty(b.topHash[offi]) || b.topHash[offi] == evacuatedEmpty {
-			continue
-		}
-		k := b.keys[offi]
-		if checkBucket != noCheck && !m.sameSizeGrow() {
-			hash := hash(k)
-			if int(hash&m.bucketMask()) != checkBucket {
-				continue
-			}
-		}
-		if b.topHash[offi] != evacuatedX && b.topHash[offi] != evacuatedY {
-			it.key = k
-			it.val = b.vals[offi]
-		} else {
-			rk, re := m.mapaccessK(k)
-			if rk == nil {
-				continue
-			}
-			it.key = *rk
-			it.val = *re
-		}
-		it.bucket = bucket
-		if it.bucketPtr != b {
-			it.bucketPtr = b
-		}
-		it.i = i + 1
-		it.checkBucket = checkBucket
-		return true
-	}
-	b = b.overflow
-	i = 0
-	goto next
 }
 
 // Clear frees as many resources as possible by making them eligible for GC

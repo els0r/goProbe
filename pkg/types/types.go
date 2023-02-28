@@ -21,17 +21,22 @@ const (
 	IPv4Width  Width = 4
 	DPortWidth Width = 2
 	ProtoWidth Width = 1
+
+	TimestampWidth Width = 8
 )
 
 const (
 	KeyWidthIPv6 = 2*IPv6Width + DPortWidth + ProtoWidth
 	KeyWidthIPv4 = 2*IPv4Width + DPortWidth + ProtoWidth
 
-	DPortPos   = 0
-	ProtoPos   = 2
-	SipPos     = 3
-	DipPosIPv4 = SipPos + IPv4Width
-	DipPosIPv6 = SipPos + IPv6Width
+	SipPos     = 0
+	DipPosIPv4 = IPv4Width
+	DipPosIPv6 = IPv6Width
+
+	DPortPosIPv4 = IPv4Width + IPv4Width
+	DPortPosIPv6 = IPv6Width + IPv6Width
+	ProtoPosIPv4 = DPortPosIPv4 + DPortWidth
+	ProtoPosIPv6 = DPortPosIPv6 + DPortWidth
 )
 
 // RawIPToAddr converts an ip byte slice to an actual netip.Addr
