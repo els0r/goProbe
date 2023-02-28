@@ -2,6 +2,7 @@ package writeout
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/els0r/goProbe/cmd/goProbe/config"
@@ -178,7 +179,6 @@ func (h *Handler) HandleWriteouts() <-chan struct{} {
 
 		for writeout := range h.writeoutsChan {
 			t0 := time.Now()
-			var summaryUpdates []goDB.InterfaceSummaryUpdate
 			count := 0
 			for taggedMap := range writeout.dataChan {
 				// Ensure that there is a DBWriter for the given interface
@@ -191,31 +191,24 @@ func (h *Handler) HandleWriteouts() <-chan struct{} {
 					dbWriters[taggedMap.Iface] = w
 				}
 
-				// Prep metadata for current block
-				meta := goDB.BlockMetadata{
-					PcapPacketsReceived: -1,
-					PcapPacketsDropped:  -1,
-				}
+				packetsDropped := 0
 				if taggedMap.Stats.CaptureStats != nil {
-					meta.PcapPacketsReceived = taggedMap.Stats.CaptureStats.PacketsReceived
-					meta.PcapPacketsDropped = taggedMap.Stats.CaptureStats.PacketsDropped
+					packetsDropped = taggedMap.Stats.PacketsDropped
 				}
-				meta.PacketsLogged = taggedMap.Stats.PacketsLogged
-				meta.Timestamp = writeout.atTimestamp.Unix()
 
 				// Write to database, update summary
-				update, err := dbWriters[taggedMap.Iface].Write(taggedMap.Map, meta, meta.Timestamp)
+				err := dbWriters[taggedMap.Iface].Write(taggedMap.Map, goDB.CaptureMetadata{
+					PacketsDropped: packetsDropped,
+				}, writeout.atTimestamp.Unix())
 				lastWrite[taggedMap.Iface] = writeoutsCount
 				if err != nil {
-					logger.Errorf("writeout failed: %v", err)
-				} else {
-					summaryUpdates = append(summaryUpdates, update)
+					logger.Error(fmt.Sprintf("Error during writeout: %s", err.Error()))
 				}
 
 				// write out flows to syslog if necessary
 				if h.logToSyslog {
 					if syslogWriter != nil {
-						syslogWriter.Write(taggedMap.Map, taggedMap.Iface, meta.Timestamp)
+						syslogWriter.Write(taggedMap.Map, taggedMap.Iface, writeout.atTimestamp.Unix())
 					} else {
 						logger.Error("cannot write flows to <nil> syslog writer. Attempting reinitialization")
 
@@ -226,20 +219,6 @@ func (h *Handler) HandleWriteouts() <-chan struct{} {
 					}
 				}
 				count++
-			}
-
-			// We are done with the writeout, let's try to write the updated summary
-			err := goDB.ModifyDBSummary(config.RuntimeDBPath(), 10*time.Second, func(summ *goDB.DBSummary) (*goDB.DBSummary, error) {
-				if summ == nil {
-					summ = goDB.NewDBSummary()
-				}
-				for _, update := range summaryUpdates {
-					summ.Update(update)
-				}
-				return summ, nil
-			})
-			if err != nil {
-				logger.Error("error updating summary: %v", err)
 			}
 
 			// Clean up dead writers. We say that a writer is dead
