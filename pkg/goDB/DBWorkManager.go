@@ -182,8 +182,10 @@ func (w *DBWorkManager) grabAndProcessWorkload(ctx context.Context, wg *sync.Wai
 				}
 
 				if nBulk%WorkBulkSize == 0 || !chanOpen {
-					mapChan <- resultMap
-					resultMap = hashmap.NewAggFlowMapWithMetadata()
+					if resultMap.Len() > 0 {
+						mapChan <- resultMap
+						resultMap = hashmap.NewAggFlowMapWithMetadata()
+					}
 				}
 			}
 		}
