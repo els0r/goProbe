@@ -6,7 +6,6 @@ require (
 	github.com/fako1024/slimcap v0.0.0-20230301104746-c9c82bfd73ae
 	github.com/go-chi/chi/v5 v5.0.7
 	github.com/json-iterator/go v1.1.12
-	github.com/sirupsen/logrus v1.9.0
 	github.com/spf13/cobra v1.5.0
 	github.com/stretchr/testify v1.8.1
 	github.com/throttled/throttled v2.2.5+incompatible
@@ -28,6 +27,7 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
+	github.com/sirupsen/logrus v1.9.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	go.uber.org/atomic v1.7.0 // indirect
 	go.uber.org/multierr v1.6.0 // indirect
