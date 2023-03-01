@@ -416,22 +416,12 @@ func (c *Capture) reset() {
 			// didn't work (which it really shouldn't)
 			logger.Error(err)
 		}
-
-		// TODO: Ideally this is called only _after_ the process() routine for this capture
-		// has returned (to ensure the ring buffer memory is not accessed anymore)
-		err = c.captureHandle.Free()
-		if err != nil {
-			logger.Error(err)
-		}
 	}
 
-	// We reset the Pcap part of the stats because we will create
-	// a new pcap handle with new counts when the Capture is next
-	// initialized. We don't reset the PacketsLogged field because
-	// it corresponds to the number of packets in the (untouched)
-	// flowLog.
+	// We reset the capture stats because we will create
+	// a new capture handle with new counts when the Capture is next
+	// initialized.
 	c.lastRotationStats.CaptureStats = &CaptureStats{}
-	c.captureHandle = nil
 
 	// reset the error map. The GC will take care of the previous
 	// one
@@ -502,6 +492,7 @@ func (c *Capture) process() {
 					if fErr := c.captureHandle.Free(); fErr != nil {
 						logger.Errorf("failed to free capture resources: %s", fErr)
 					}
+					c.captureHandle = nil
 					return
 				}
 				c.captureErrors <- err

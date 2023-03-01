@@ -1,11 +1,9 @@
 module github.com/els0r/goProbe
 
-replace github.com/fako1024/slimcap => /home/fako/Develop/go/src/github.com/fako1024/slimcap
-
 require (
 	github.com/els0r/log v1.0.1-0.20190303012150-3e228cb82ff0
 	github.com/els0r/status v1.0.0
-	github.com/fako1024/slimcap v0.0.0-20230225000255-57304a6396cc
+	github.com/fako1024/slimcap v0.0.0-20230301104746-c9c82bfd73ae
 	github.com/go-chi/chi/v5 v5.0.7
 	github.com/json-iterator/go v1.1.12
 	github.com/sirupsen/logrus v1.9.0
