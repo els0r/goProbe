@@ -54,11 +54,11 @@ type CaptureConfig struct {
 	Promisc    bool `json:"promisc"`
 
 	// used by the ring buffer
-	// BlockSize specifies the size of a block, which defines, how many packets
+	// RingBufferBlockSize specifies the size of a block, which defines, how many packets
 	// can be held within a block
-	BlockSize int `json:"block_size"`
-	// RingBufferSize guides how many blocks are part of the ring buffer
-	RingBufferSize int `json:"ring_buffer_size"`
+	RingBufferBlockSize int `json:"ring_buffer_block_size"`
+	// RingBufferNumBlocks guides how many blocks are part of the ring buffer
+	RingBufferNumBlocks int `json:"ring_buffer_num_blocks"`
 }
 
 const (

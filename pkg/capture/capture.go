@@ -325,7 +325,7 @@ func initializing(c *Capture) stateFn {
 	var err error
 	c.captureHandle, err = afpacket.NewRingBufSource(c.iface,
 		afpacket.CaptureLength(Snaplen),
-		afpacket.BufferSize(c.config.BufferSize/4, 4),
+		afpacket.BufferSize(c.config.RingBufferBlockSize, c.config.RingBufferNumBlocks),
 		afpacket.Promiscuous(c.config.Promisc),
 	)
 	if err != nil {
