@@ -41,7 +41,7 @@ func UnpackInto(b []byte, res []uint64) []uint64 {
 	nElements := (len(b) - 1) / neededBytes
 
 	if cap(res) < nElements {
-		res = make([]uint64, nElements, nElements)
+		res = make([]uint64, nElements, nElements*2)
 	}
 	res = res[:nElements]
 

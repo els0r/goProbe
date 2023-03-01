@@ -3,25 +3,46 @@ package gpfile
 import (
 	"fmt"
 	"io"
+	"io/fs"
+	"os"
 	"sync"
+	"time"
 )
 
-type readWriteSeekCloser interface {
+// ReadWriteSeekCloser provides an interface to all the wrapped interfaces
+// in one instance
+type ReadWriteSeekCloser interface {
+	Stat() (fs.FileInfo, error)
+
 	io.Reader
 	io.Writer
 	io.Seeker
 	io.Closer
 }
 
-// MemPool wraps a standard sync.Pool
-type MemPool struct {
+// MemPool denotes a generic memory buffer pool
+type MemPool interface {
+	Get(size int) (elem []byte)
+	Put(elem []byte)
+}
+
+// MemPoolGCable denotes a generic memory buffer pool that can be "cleaned", i.e.
+// that allows making all resources available for garbage collection
+type MemPoolGCable interface {
+	Clear()
+
+	MemPool
+}
+
+// MemPoolNoLimit wraps a standard sync.Pool (no limit to resources)
+type MemPoolNoLimit struct {
 	sync.Pool
 }
 
-// NewMemPool instantiates a new memory pool that manages bytes slices
-// of a given capacity
-func NewMemPool() *MemPool {
-	return &MemPool{
+// MemPoolNoLimit instantiates a new memory pool that manages bytes slices
+// of arbitrary capacity
+func NewMemPoolNoLimit() *MemPoolNoLimit {
+	return &MemPoolNoLimit{
 		Pool: sync.Pool{
 			New: func() any {
 				return make([]byte, 0)
@@ -31,17 +52,61 @@ func NewMemPool() *MemPool {
 }
 
 // Get retrieves a memory element (already performing the type assertion)
-func (p *MemPool) Get() []byte {
-	return p.Pool.Get().([]byte)
+func (p *MemPoolNoLimit) Get(size int) (elem []byte) {
+	elem = p.Pool.Get().([]byte)
+	if cap(elem) < size {
+		elem = make([]byte, size*2)
+	}
+	elem = elem[:size]
+	return
 }
 
 // Put returns a memory element to the pool, resetting its size to capacity
 // in the process
-func (p *MemPool) Put(elem []byte) {
+func (p *MemPoolNoLimit) Put(elem []byte) {
 	elem = elem[:cap(elem)]
 
 	// nolint:staticcheck
 	p.Pool.Put(elem)
+}
+
+// MemPoolLimit provides a channel-based memory buffer pool (limiting the number
+// of resources and allowing for cleanup)
+type MemPoolLimit struct {
+	elements chan []byte
+}
+
+// NewMemPool instantiates a new memory pool that manages bytes slices
+func NewMemPool(n int) *MemPoolLimit {
+	obj := MemPoolLimit{
+		elements: make(chan []byte, n),
+	}
+	for i := 0; i < n; i++ {
+		obj.elements <- make([]byte, 0)
+	}
+	return &obj
+}
+
+// Get retrieves a memory element (already performing the type assertion)
+func (p *MemPoolLimit) Get(size int) (elem []byte) {
+	elem = <-p.elements
+	if cap(elem) < size {
+		elem = make([]byte, size*2)
+	}
+	elem = elem[:size]
+	return
+}
+
+// Put returns a memory element to the pool, resetting its size to capacity
+// in the process
+func (p *MemPoolLimit) Put(elem []byte) {
+	elem = elem[:cap(elem)]
+	p.elements <- elem
+}
+
+// Clear releases all pool resources and makes them available for garbage collection
+func (p *MemPoolLimit) Clear() {
+	p.elements = nil
 }
 
 // MemFile denotes an in-memory abstraction of an underlying file, acting as
@@ -50,21 +115,25 @@ type MemFile struct {
 	data []byte
 	pos  int
 
-	pool *MemPool
+	pool MemPool
 }
 
 // NewMemFile instantiates a new in-memory file buffer
-func NewMemFile(r io.ReadCloser, length int, pool *MemPool) (*MemFile, error) {
+func NewMemFile(r ReadWriteSeekCloser, pool MemPool) (*MemFile, error) {
+	stat, err := r.Stat()
+	if err != nil {
+		return nil, err
+	}
 	obj := MemFile{
-		data: pool.Get(),
+		data: pool.Get(int(stat.Size())),
 		pool: pool,
 	}
-	if len(obj.data) < length {
-		obj.data = make([]byte, length)
-	}
-	obj.data = obj.data[:length]
-	if _, err := io.ReadFull(r, obj.data); err != nil {
+	n, err := io.ReadFull(r, obj.data)
+	if err != nil {
 		return nil, err
+	}
+	if n != int(stat.Size()) {
+		return nil, fmt.Errorf("unexpected number of bytes read (want %d, have %d)", stat.Size(), n)
 	}
 	return &obj, r.Close()
 }
@@ -101,8 +170,33 @@ func (m *MemFile) Seek(offset int64, whence int) (int64, error) {
 	return int64(m.pos), nil
 }
 
+// Data provides zero-copy access to the underlying data of the MemFile
+func (m *MemFile) Data() []byte {
+	return m.data
+}
+
 // Close fulfils the underlying io.Closer interface (returning the buffer to the pool)
 func (m *MemFile) Close() error {
 	m.pool.Put(m.data)
 	return nil
 }
+
+// Stat return the (stub) Stat element providing the length of the underlying data
+func (m *MemFile) Stat() (fs.FileInfo, error) {
+	return &memStat{
+		size: int64(len(m.data)),
+	}, nil
+}
+
+// A memStat is the (stub) implementation of FileInfo returned by Stat and Lstat, basically
+// only providing the ability to obtain the size / length of the underlying data
+type memStat struct {
+	size int64
+}
+
+func (s *memStat) Size() int64        { return s.size }
+func (s *memStat) Mode() os.FileMode  { return 0 }
+func (s *memStat) ModTime() time.Time { return time.Unix(0, 0) }
+func (s *memStat) IsDir() bool        { return false }
+func (s *memStat) Name() string       { return "" }
+func (s *memStat) Sys() any           { return nil }

@@ -17,7 +17,6 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/els0r/goProbe/cmd/goProbe/config"
 	"github.com/els0r/goProbe/pkg/logging"
@@ -32,11 +31,6 @@ const (
 
 	// ErrorThreshold is the maximum amount of consecutive errors that can occur on an interface before capturing is halted.
 	ErrorThreshold = 10000
-
-	// CaptureTimeout sets the maximum duration pcap waits until polling the kernel for more packets. Our experiments show that you don't want to set this value lower
-	// than roughly 100 ms. Otherwise we flood the kernel with syscalls
-	// and our performance drops.
-	CaptureTimeout time.Duration = 500 * time.Millisecond
 )
 
 //////////////////////// Ancillary types ////////////////////////
@@ -445,7 +439,6 @@ func (c *Capture) reset() {
 }
 
 func (c *Capture) capturePacket(pkt *afpacket.Packet, gppacket *GPPacket) (err error) {
-
 	// Fetch the next packet form the wire
 	_, err = c.captureHandle.NextPacket(pkt)
 	if err != nil {
@@ -482,8 +475,8 @@ func (c *Capture) capturePacket(pkt *afpacket.Packet, gppacket *GPPacket) (err e
 // process keeps running until Close is called on its capture handle or it encounters
 // a serious capture error
 func (c *Capture) process() {
-
 	logger := logging.WithContext(c.ctx)
+
 	c.errCount = 0
 
 	gppacket := &GPPacket{}

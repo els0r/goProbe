@@ -15,7 +15,7 @@ type aggregateResult struct {
 // Then send aggregation result over resultChan.
 // If an error occurs, aggregate may return prematurely.
 // Closes resultChan on termination.
-func aggregate(mapChan <-chan hashmap.AggFlowMapWithMetadata) chan aggregateResult {
+func aggregate(mapChan <-chan hashmap.AggFlowMapWithMetadata, lowMem bool) chan aggregateResult {
 
 	// create channel that returns the final aggregate result
 	resultChan := make(chan aggregateResult, 1)
@@ -69,7 +69,11 @@ func aggregate(mapChan <-chan hashmap.AggFlowMapWithMetadata) chan aggregateResu
 			}
 
 			nAgg++
-			item.Map = nil
+			if lowMem {
+				item.Map.Clear() // Safe even in zero-copy mode (since the elements itself are not touched)
+			} else {
+				item.Map = nil
+			}
 		}
 
 		// push the final result

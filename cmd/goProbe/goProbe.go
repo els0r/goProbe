@@ -240,9 +240,9 @@ func main() {
 	select {
 	case <-doneWriting:
 		logger.Info("graceful shut down completed")
-		os.Exit(0)
 	case <-fallbackCtx.Done():
 		logger.Error("forced shutdown")
-		os.Exit(1)
 	}
+
+	return
 }

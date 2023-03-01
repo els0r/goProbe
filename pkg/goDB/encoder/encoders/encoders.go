@@ -6,7 +6,7 @@ import (
 )
 
 // Type denotes the type of encoder
-type Type int
+type Type uint8
 
 // IMPORTANT:
 // When implementing new encoders, make sure to add the type above MaxEncoderType. Otherwise, compatibility
