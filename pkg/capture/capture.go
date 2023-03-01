@@ -17,7 +17,6 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/els0r/goProbe/cmd/goProbe/config"
 	"github.com/els0r/goProbe/pkg/logging"
@@ -32,11 +31,6 @@ const (
 
 	// ErrorThreshold is the maximum amount of consecutive errors that can occur on an interface before capturing is halted.
 	ErrorThreshold = 10000
-
-	// CaptureTimeout sets the maximum duration pcap waits until polling the kernel for more packets. Our experiments show that you don't want to set this value lower
-	// than roughly 100 ms. Otherwise we flood the kernel with syscalls
-	// and our performance drops.
-	CaptureTimeout time.Duration = 500 * time.Millisecond
 )
 
 //////////////////////// Ancillary types ////////////////////////
