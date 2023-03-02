@@ -207,7 +207,7 @@ func (cmd captureCommandUpdate) execute(c *Capture) {
 // helper struct to bundle up the multiple return values
 // of Rotate
 type rotateResult struct {
-	agg   *hashmap.Map
+	agg   *hashmap.AggFlowMap
 	stats Stats
 }
 

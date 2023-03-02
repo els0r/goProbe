@@ -423,11 +423,15 @@ func main() {
 			flowMaps[iface] = make(map[int64]*hashmap.AggFlowMap)
 		}
 		if _, exists := flowMaps[iface][ts]; !exists {
-			flowMaps[iface][ts] = hashmap.New()
+			flowMaps[iface][ts] = hashmap.NewAggFlowMap()
 		}
 
 		// insert the key-value pair into the correct flow map
-		flowMaps[iface][ts].Set(rowKey.Key(), rowVal)
+		if rowKey.IsIPv4() {
+			flowMaps[iface][ts].V4Map.Set(rowKey.Key(), rowVal)
+		} else {
+			flowMaps[iface][ts].V6Map.Set(rowKey.Key(), rowVal)
+		}
 		linesRead++
 	}
 

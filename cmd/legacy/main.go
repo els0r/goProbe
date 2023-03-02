@@ -100,12 +100,12 @@ func main() {
 type blockFlows struct {
 	ts    int64
 	iface string
-	data  *hashmap.Map
+	data  *hashmap.AggFlowMap
 }
 
 type fileSet interface {
 	GetTimestamps() ([]int64, error)
-	GetBlock(ts int64) (*hashmap.Map, error)
+	GetBlock(ts int64) (*hashmap.AggFlowMap, error)
 	Close() error
 }
 

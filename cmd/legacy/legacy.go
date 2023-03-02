@@ -116,8 +116,8 @@ func (l LegacyFileSet) getBlock(f *LegacyGPFile, ts int64) ([]byte, error) {
 	return block, nil
 }
 
-func (l LegacyFileSet) GetBlock(ts int64) (*hashmap.Map, error) {
-	data := hashmap.New()
+func (l LegacyFileSet) GetBlock(ts int64) (*hashmap.AggFlowMap, error) {
+	data := hashmap.NewAggFlowMap()
 
 	sipBlock, err := l.getBlock(l.sipFile, ts)
 	if err != nil {
@@ -166,21 +166,24 @@ func (l LegacyFileSet) GetBlock(ts int64) (*hashmap.Map, error) {
 			logrus.StandardLogger().Warnf("source / destination IP v4 / v6 mismatch: %s / %s, will convert to IPv6\n", sip, dip)
 		}
 
-		var K types.Key
 		var V types.Counters
-
-		if sip.Is4() && dip.Is4() {
-			K = types.NewV4KeyStatic(sip.As4(), dip.As4(), dportBlock[i*2:i*2+2], protoBlock[i])
-		} else {
-			K = types.NewV6KeyStatic(sip.As16(), dip.As16(), dportBlock[i*2:i*2+2], protoBlock[i])
-		}
 
 		V.BytesRcvd = binary.BigEndian.Uint64(bytesRcvdBlock[i*8 : i*8+8])
 		V.BytesSent = binary.BigEndian.Uint64(bytesSentBlock[i*8 : i*8+8])
 		V.PacketsRcvd = binary.BigEndian.Uint64(pktsRcvdBlock[i*8 : i*8+8])
 		V.PacketsSent = binary.BigEndian.Uint64(pktsSentBlock[i*8 : i*8+8])
 
-		data.SetOrUpdate(K, V.BytesRcvd, V.BytesSent, V.PacketsRcvd, V.PacketsSent)
+		if sip.Is4() && dip.Is4() {
+			data.V4Map.SetOrUpdate(
+				types.NewV4KeyStatic(sip.As4(), dip.As4(), dportBlock[i*2:i*2+2], protoBlock[i]),
+				V.BytesRcvd, V.BytesSent, V.PacketsRcvd, V.PacketsSent,
+			)
+		} else {
+			data.V6Map.SetOrUpdate(
+				types.NewV6KeyStatic(sip.As16(), dip.As16(), dportBlock[i*2:i*2+2], protoBlock[i]),
+				V.BytesRcvd, V.BytesSent, V.PacketsRcvd, V.PacketsSent,
+			)
+		}
 	}
 
 	return data, nil

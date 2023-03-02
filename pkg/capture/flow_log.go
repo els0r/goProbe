@@ -111,7 +111,7 @@ func (f *FlowLog) Add(packet *GPPacket) {
 // are discarded.
 //
 // Returns an AggFlowMap containing all flows since the last call to Rotate.
-func (f *FlowLog) Rotate() (agg *hashmap.Map) {
+func (f *FlowLog) Rotate() (agg *hashmap.AggFlowMap) {
 	if len(f.flowMap) == 0 {
 		f.logger.Debug("There are currently no flow records available")
 	}
@@ -121,9 +121,9 @@ func (f *FlowLog) Rotate() (agg *hashmap.Map) {
 	return
 }
 
-func (f *FlowLog) transferAndAggregate() (newFlowMap map[string]*GPFlow, agg *hashmap.Map) {
+func (f *FlowLog) transferAndAggregate() (newFlowMap map[string]*GPFlow, agg *hashmap.AggFlowMap) {
 	newFlowMap = make(map[string]*GPFlow)
-	agg = hashmap.New()
+	agg = hashmap.NewAggFlowMap()
 
 	for k, v := range f.flowMap {
 
@@ -131,7 +131,11 @@ func (f *FlowLog) transferAndAggregate() (newFlowMap map[string]*GPFlow, agg *ha
 
 		// check if the flow actually has any interesting information for us
 		if !v.HasBeenIdle() {
-			agg.SetOrUpdate(goDBKey, v.bytesRcvd, v.bytesSent, v.packetsRcvd, v.packetsSent)
+			if v.isIPv4 {
+				agg.V4Map.SetOrUpdate(goDBKey, v.bytesRcvd, v.bytesSent, v.packetsRcvd, v.packetsSent)
+			} else {
+				agg.V6Map.SetOrUpdate(goDBKey, v.bytesRcvd, v.bytesSent, v.packetsRcvd, v.packetsSent)
+			}
 
 			// check whether the flow should be retained for the next interval
 			// or thrown away
