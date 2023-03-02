@@ -14,6 +14,10 @@ import (
 
 const WriteoutsChanDepth = 100
 
+// writerCleanupCutoff governs when old DB writers are deleted from the map
+// of available writers
+const writerCleanupCutoff = 3
+
 type Handler struct {
 	// LastRotation is the time the handler last rotated all flow maps
 	LastRotation time.Time
@@ -61,12 +65,17 @@ func (w *writeout) close() {
 	close(w.dataChan)
 }
 
-func (h *Handler) FullWriteout(ctx context.Context, at time.Time) {
+const tFormat = "2006-01-02 15:04:05 -0700 MST"
+
+func (h *Handler) FullWriteout(ctx context.Context, at time.Time) error {
 	logger := logging.WithContext(ctx)
 
 	// don't rotate if a bogus timestamp is supplied
 	if at.Sub(h.LastRotation) < 0 {
-		return
+		return fmt.Errorf("attempting rotation at %s before the most recent one at %s",
+			at.Format(tFormat),
+			h.LastRotation.Format(tFormat),
+		)
 	}
 	h.LastRotation = at
 
@@ -76,20 +85,24 @@ func (h *Handler) FullWriteout(ctx context.Context, at time.Time) {
 	select {
 	case <-ctx.Done():
 		logger.Debug("writeout was cancelled")
-		return
+		return nil
 	case h.writeoutsChan <- writeout:
 		logger.Debug("initiating flow data flush")
 
 		h.captureManager.RotateAll(writeout.dataChan)
 	}
+	return nil
 }
 
-func (h *Handler) UpdateAndRotate(ctx context.Context, ifaces config.Ifaces, at time.Time) {
+func (h *Handler) UpdateAndRotate(ctx context.Context, ifaces config.Ifaces, at time.Time) error {
 	logger := logging.WithContext(ctx)
 
 	// don't rotate if a bogus timestamp is supplied
 	if at.Sub(h.LastRotation) < 0 {
-		return
+		return fmt.Errorf("attempting rotation at %s before the most recent one at %s",
+			at.Format(tFormat),
+			h.LastRotation.Format(tFormat),
+		)
 	}
 	h.LastRotation = at
 
@@ -99,12 +112,13 @@ func (h *Handler) UpdateAndRotate(ctx context.Context, ifaces config.Ifaces, at 
 	select {
 	case <-ctx.Done():
 		logger.Debug("writeout was cancelled")
-		return
+		return nil
 	case h.writeoutsChan <- writeout:
 		logger.Debug("initiating flow data flush")
 
 		h.captureManager.Update(ifaces, writeout.dataChan)
 	}
+	return nil
 }
 
 func (h *Handler) HandleRotations(ctx context.Context, interval time.Duration) {
@@ -135,14 +149,17 @@ func (h *Handler) HandleRotations(ctx context.Context, interval time.Duration) {
 				logger.Info("stopping rotation handler")
 				return
 			default:
-				h.FullWriteout(ctx, t)
-
-				if len(h.writeoutsChan) > 2 {
-					log := logger.With("queue_length", len(h.writeoutsChan))
-					if len(h.writeoutsChan) > capture.WriteoutsChanDepth {
-						log.Fatalf("writeouts are lagging behind too much")
+				err := h.FullWriteout(ctx, t)
+				if err != nil {
+					logger.Errorf("failed to write data: %v", err)
+				} else {
+					if len(h.writeoutsChan) > 2 {
+						log := logger.With("queue_length", len(h.writeoutsChan))
+						if len(h.writeoutsChan) > capture.WriteoutsChanDepth {
+							log.Fatalf("writeouts are lagging behind too much")
+						}
+						log.Warn("writeouts are lagging behind")
 					}
-					log.Warn("writeouts are lagging behind")
 				}
 
 				logger.Debug("restarting any interfaces that have encountered errors")
@@ -225,7 +242,7 @@ func (h *Handler) HandleWriteouts() <-chan struct{} {
 			// if it hasn't been used in the last few writeouts.
 			var remove []string
 			for iface, last := range lastWrite {
-				if writeoutsCount-last >= 3 {
+				if writeoutsCount-last >= writerCleanupCutoff {
 					remove = append(remove, iface)
 				}
 			}

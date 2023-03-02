@@ -11,7 +11,6 @@ type Flags struct {
 	Config  string
 	Version bool
 
-	Profiling          bool
 	ProfilingOutputDir string
 }
 
@@ -23,14 +22,13 @@ func Read() error {
 	flag.StringVar(&CmdLine.Config, "config", "", "path to goProbe's configuration file (required)")
 	flag.BoolVar(&CmdLine.Version, "version", false, "print goProbe's version and exit")
 
-	flag.BoolVar(&CmdLine.Profiling, "profiling", false, "enable profiling")
 	flag.StringVar(&CmdLine.ProfilingOutputDir, "profiling-output-dir", "", "directory to store CPU and memory profile in")
 
 	flag.Parse()
 
 	if CmdLine.Config == "" && !CmdLine.Version {
 		flag.PrintDefaults()
-		return errors.New("No configuration file provided")
+		return errors.New("no configuration file provided")
 	}
 	return nil
 }

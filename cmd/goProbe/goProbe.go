@@ -69,18 +69,27 @@ func main() {
 	}
 
 	// CPU profiling
-	if flags.CmdLine.Profiling {
-		f, perr := os.Create(filepath.Join(flags.CmdLine.ProfilingOutputDir, "goprobe_cpu_profile.pprof"))
+	if flags.CmdLine.ProfilingOutputDir != "" {
+		dirPath := flags.CmdLine.ProfilingOutputDir
+		err := os.MkdirAll(dirPath, 0755)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to create pprof directory: %v", err)
+			os.Exit(1)
+		}
+
+		f, perr := os.Create(filepath.Join(dirPath, "goprobe_cpu_profile.pprof"))
 		if perr != nil {
-			panic(perr)
+			fmt.Fprintf(os.Stderr, "Failed to create CPU profile file: %v", perr)
+			os.Exit(1)
 		}
 		pprof.StartCPUProfile(f)
 		defer pprof.StopCPUProfile()
 
 		defer func() {
-			f2, err := os.Create(filepath.Join(flags.CmdLine.ProfilingOutputDir, "goprobe_mem_profile.pprof"))
+			f2, err := os.Create(filepath.Join(dirPath, "goprobe_mem_profile.pprof"))
 			if err != nil {
-				panic(err)
+				fmt.Fprintf(os.Stderr, "Failed to create memory profile file: %v", err)
+				os.Exit(1)
 			}
 			pprof.Lookup("allocs").WriteTo(f2, 0)
 		}()

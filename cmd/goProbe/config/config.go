@@ -50,8 +50,7 @@ type DBConfig struct {
 }
 
 type CaptureConfig struct {
-	BufferSize int  `json:"buffer_size"`
-	Promisc    bool `json:"promisc"`
+	Promisc bool `json:"promisc"`
 
 	// used by the ring buffer
 	// RingBufferBlockSize specifies the size of a block, which defines, how many packets
@@ -158,8 +157,11 @@ func (d DiscoveryConfig) validate() error {
 }
 
 func (c CaptureConfig) validate() error {
-	if c.BufferSize <= 0 {
-		return fmt.Errorf("Buffer size must be a postive number")
+	if c.RingBufferBlockSize <= 0 {
+		return fmt.Errorf("ring buffer block size must be a postive number")
+	}
+	if c.RingBufferNumBlocks <= 0 {
+		return fmt.Errorf("ring buffer num blocks must be a postive number")
 	}
 	return nil
 }

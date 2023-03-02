@@ -42,7 +42,14 @@ func (a *API) handleReload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	a.writeoutHandler.UpdateAndRotate(ctx, cfg.Interfaces, time.Now())
+	err = a.writeoutHandler.UpdateAndRotate(ctx, cfg.Interfaces, time.Now())
+	if err != nil {
+		if pp {
+			status.Fail(err.Error())
+		} else {
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		}
+	}
 
 	// return OK
 	if pp {
