@@ -123,7 +123,7 @@ func (w *DBWorkManager) CreateWorkerJobs(tfirst int64, tlast int64, query *Query
 		curDir  *gpfile.GPDir
 	)
 	workloadBulk := make([]*gpfile.GPDir, 0, WorkBulkSize)
-	for i, file := range dirList {
+	for _, file := range dirList {
 		if file.IsDir() && (file.Name() != "./" || file.Name() != "../") {
 			dirName = file.Name()
 			tempdirTstamp, err := strconv.ParseInt(dirName, 10, 64)
@@ -150,16 +150,22 @@ func (w *DBWorkManager) CreateWorkerJobs(tfirst int64, tlast int64, query *Query
 					curDir.Close()
 				}
 				numDirs++
-			}
 
-			// create new workload for the directory
-			workloadBulk = append(workloadBulk, curDir)
-			if len(workloadBulk) == WorkBulkSize || i == len(dirList)-1 {
-				w.workloadChan <- DBWorkload{query: query, workDirs: workloadBulk}
-				w.nWorkloads++
-				workloadBulk = make([]*gpfile.GPDir, 0, WorkBulkSize)
+				// create new workload for the directory
+				workloadBulk = append(workloadBulk, curDir)
+				if len(workloadBulk) == WorkBulkSize {
+					w.workloadChan <- DBWorkload{query: query, workDirs: workloadBulk}
+					w.nWorkloads++
+					workloadBulk = make([]*gpfile.GPDir, 0, WorkBulkSize)
+				}
 			}
 		}
+	}
+
+	// Flush any remaining work
+	if len(workloadBulk) > 0 {
+		w.workloadChan <- DBWorkload{query: query, workDirs: workloadBulk}
+		w.nWorkloads++
 	}
 
 	// For the first and last item, check out the GPDir metadata for the actual first and
