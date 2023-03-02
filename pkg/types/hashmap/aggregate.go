@@ -46,8 +46,12 @@ type AggFlowMapWithMetadata struct {
 	Interface string `json:"iface"`
 }
 
+// NamedAggFlowMapWithMetadata provides wrapper around a map of AggFlowMapWithMetadata
+// instances (e.g. interface -> AggFlowMapWithMetadata associations)
 type NamedAggFlowMapWithMetadata map[string]*AggFlowMapWithMetadata
 
+// NewNamedAggFlowMapWithMetadata instantiates a new NewNamedAggFlowMapWithMetadata based
+// on a list of names, initializing an instance of AggFlowMapWithMetadata per element
 func NewNamedAggFlowMapWithMetadata(names []string) (m NamedAggFlowMapWithMetadata) {
 	m = make(NamedAggFlowMapWithMetadata)
 	for _, name := range names {
@@ -57,7 +61,7 @@ func NewNamedAggFlowMapWithMetadata(names []string) (m NamedAggFlowMapWithMetada
 	return
 }
 
-// Len returns the number of valents in the map
+// Len returns the number of entries in all maps
 func (n NamedAggFlowMapWithMetadata) Len() (l int) {
 	for _, v := range n {
 		l += v.Len()
@@ -83,7 +87,7 @@ func (n NamedAggFlowMapWithMetadata) ClearFast() {
 }
 
 // NewAggFlowMapWithMetadata instantiates a new AggFlowMapWithMetadata with an underlying
-// hashmap
+// hashmap for both IPv4 and IPv6 entries
 func NewAggFlowMapWithMetadata(n ...int) AggFlowMapWithMetadata {
 	return AggFlowMapWithMetadata{
 		V4Map: New(n...),
@@ -101,6 +105,7 @@ func (a AggFlowMapWithMetadata) Len() int {
 	return a.V4Map.count + a.V6Map.count
 }
 
+// Iter provides a map Iter to allow traversal of both underlying maps (IPv4 and IPv6)
 func (a AggFlowMapWithMetadata) Iter() *MetaIter {
 	return &MetaIter{
 		Iter:   a.V4Map.Iter(),
@@ -108,6 +113,8 @@ func (a AggFlowMapWithMetadata) Iter() *MetaIter {
 	}
 }
 
+// Merge allows to incorporate the content of a map b into an existing map a (providing
+// additional in-place counter updates).
 func (a AggFlowMapWithMetadata) Merge(b AggFlowMapWithMetadata, totals *Val) {
 	a.V4Map.Merge(b.V4Map, totals)
 	a.V6Map.Merge(b.V6Map, totals)

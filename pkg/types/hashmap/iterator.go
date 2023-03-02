@@ -1,5 +1,7 @@
 package hashmap
 
+import "github.com/zeebo/xxh3"
+
 // Iter provides a map Iter to allow traversal
 type Iter struct {
 	key         Key
@@ -74,7 +76,7 @@ next:
 		}
 		k := b.keys[offi]
 		if checkBucket != noCheck && !m.sameSizeGrow() {
-			hash := hash(k)
+			hash := xxh3.Hash(k)
 			if int(hash&m.bucketMask()) != checkBucket {
 				continue
 			}

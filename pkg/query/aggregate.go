@@ -58,13 +58,13 @@ func aggregate(mapChan <-chan hashmap.AggFlowMapWithMetadata, statement *Stateme
 
 			// Cleanup the now unused item / map
 			if statement.Query.IsLowMem() {
-				item.Clear() // Safe even in zero-copy mode (since the elements itself are not touched)
+				item.Clear()
 			} else {
 				item.ClearFast()
 			}
 		}
 
-		// push the final result
+		// Push the final result
 		if finalMaps.Len() == 0 {
 			resultChan <- aggregateResult{}
 			return

@@ -76,7 +76,7 @@ func NewDBWorkManager(dbpath string, iface string, numProcessingUnits int) (*DBW
 	return &DBWorkManager{
 		dbIfaceDir:         filepath.Join(dbpath, iface),
 		iface:              iface,
-		workloadChan:       make(chan DBWorkload, 128),
+		workloadChan:       make(chan DBWorkload, numProcessingUnits*64), // 64 is relatively arbitrary (but we're just sending quite basic objects)
 		numProcessingUnits: numProcessingUnits,
 		logger:             l,
 	}, nil
@@ -265,7 +265,6 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workDir *gpfile.GPDir, query *Quer
 		// If this block is outside of the rannge, skip it (only happens at the very first
 		// and /or very last directory)
 		if block.Timestamp < w.tFirstCovered || block.Timestamp > w.tLastCovered {
-			fmt.Println("skipping", time.Unix(block.Timestamp, 0), "vs", time.Unix(w.tFirstCovered, 0), "--", time.Unix(w.tLastCovered, 0))
 			continue
 		}
 
