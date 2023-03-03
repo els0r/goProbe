@@ -9,6 +9,7 @@ import (
 	"github.com/els0r/goProbe/cmd/goProbe/flags"
 	"github.com/els0r/goProbe/pkg/capture"
 	"github.com/els0r/goProbe/pkg/discovery"
+	"github.com/els0r/goProbe/pkg/logging"
 	"github.com/els0r/status"
 	"github.com/go-chi/chi/v5"
 )
@@ -20,20 +21,19 @@ func (a *API) postRequestRoutes(r chi.Router) {
 }
 
 func (a *API) handleReload(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	logger := logging.WithContext(ctx)
+
 	pp := printPretty(r)
 
 	if pp {
 		status.SetOutput(w)
-		status.Line("Reloading configuration")
+		status.Line("reloading configuration")
 	}
 
-	var writeoutsChan chan<- capture.Writeout = a.c.WriteoutHandler.WriteoutChan
-
-	config, err := reloadConfig()
+	cfg, err := reloadConfig()
 	if err != nil {
-		if a.logger != nil {
-			a.logger.Error(err.Error())
-		}
+		logger.Error(err)
 		if pp {
 			status.Fail(err.Error())
 		} else {
@@ -42,10 +42,14 @@ func (a *API) handleReload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	woChan := make(chan capture.TaggedAggFlowMap, capture.MaxIfaces)
-	writeoutsChan <- capture.Writeout{Chan: woChan, Timestamp: time.Now()}
-	a.c.Update(config.Interfaces, woChan)
-	close(woChan)
+	err = a.writeoutHandler.UpdateAndRotate(ctx, cfg.Interfaces, time.Now())
+	if err != nil {
+		if pp {
+			status.Fail(err.Error())
+		} else {
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		}
+	}
 
 	// return OK
 	if pp {
@@ -56,7 +60,7 @@ func (a *API) handleReload(w http.ResponseWriter, r *http.Request) {
 
 	// send discovery update
 	if a.discoveryConfigUpdate != nil {
-		a.discoveryConfigUpdate <- discovery.MakeConfig(config)
+		a.discoveryConfigUpdate <- discovery.MakeConfig(cfg)
 	}
 }
 
@@ -77,7 +81,7 @@ func reloadConfig() (*capconfig.Config, error) {
 		return nil, fmt.Errorf("cannot monitor more than %d interfaces", capture.MaxIfaces)
 	}
 
-	if capconfig.RuntimeDBPath() != c.DBPath {
+	if capconfig.RuntimeDBPath() != c.DB.Path {
 		return nil, fmt.Errorf("failed to reload config file: Cannot change database path while running")
 	}
 	return c, nil

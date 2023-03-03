@@ -1,0 +1,17 @@
+{"ifaces":["eth1"],"condition":"dport \u003c 100 \u0026 dport \u003e 100","query_type":"talk_conv","direction":"bi-directional","from":-917424292,"to":1674575708,"format":"json","limit":1000,"sort_by":"bytes","db":"./testdb"}
+{"ifaces":["eth1"],"query_type":"raw","direction":"bi-directional","from":-917424292,"to":1456428575,"format":"json","limit":1000,"sort_by":"time","sort_ascending":true,"db":"./testdb"}
+{"ifaces":["eth1"],"query_type":"time","direction":"sum","from":1456428000,"to":1456473000,"format":"json","limit":9999999999999999,"sort_by":"time","sort_ascending":true,"db":"./testdb"}
+{"ifaces":["eth1"],"condition":"proto = udp","query_type":"talk_conv","direction":"sum","from":1456428000,"to":1456473000,"format":"json","limit":99999999,"sort_by":"bytes","db":"./testdb"}
+{"ifaces":["eth1"],"condition":"dport = 443","query_type":"talk_conv","direction":"sum","from":1456428000,"to":1456473000,"format":"json","limit":99999999,"sort_by":"bytes","db":"./testdb"}
+{"ifaces":["eth1"],"condition":"dport \u003c 100 \u0026 dport \u003e 100","query_type":"talk_conv","direction":"bi-directional","from":-917394872,"to":1674605128,"format":"json","limit":1000,"sort_by":"bytes","db":"./testdb"}
+{"ifaces":["eth1"],"query_type":"raw","direction":"bi-directional","from":-917394872,"to":1456428575,"format":"json","limit":1000,"sort_by":"time","sort_ascending":true,"db":"./testdb"}
+{"ifaces":["eth1"],"query_type":"time","direction":"sum","from":1456428000,"to":1456473000,"format":"json","limit":9999999999999999,"sort_by":"time","sort_ascending":true,"db":"./testdb"}
+{"ifaces":["eth1"],"query_type":"sip,time","direction":"sum","from":1456428000,"to":1456473000,"format":"json","limit":99999999,"sort_by":"time","sort_ascending":true,"db":"./testdb"}
+{"ifaces":["eth1"],"condition":"dport \u003c 100 \u0026 dport \u003e 100","query_type":"talk_conv","direction":"bi-directional","from":-917394791,"to":1674605209,"format":"json","limit":1000,"sort_by":"bytes","db":"./testdb"}
+{"ifaces":["eth1"],"query_type":"raw","direction":"bi-directional","from":-917394791,"to":1456428575,"format":"json","limit":1000,"sort_by":"time","sort_ascending":true,"db":"./testdb"}
+{"ifaces":["eth1"],"query_type":"time","direction":"sum","from":1456428000,"to":1456473000,"format":"json","limit":9999999999999999,"sort_by":"time","sort_ascending":true,"db":"./testdb"}
+{"ifaces":["eth1"],"condition":"net!=154.203.49.202/24","query_type":"talk_conv","direction":"sum","from":1456428000,"to":1456473000,"format":"json","limit":99999999,"sort_by":"bytes","db":"./testdb"}
+{"ifaces":["eth1"],"condition":"dport \u003c 100 \u0026 dport \u003e 100","query_type":"talk_conv","direction":"bi-directional","from":-917343868,"to":1674656132,"format":"json","limit":1000,"sort_by":"bytes","db":"./testdb"}
+{"ifaces":["eth1"],"query_type":"raw","direction":"bi-directional","from":-917343868,"to":1456428575,"format":"json","limit":1000,"sort_by":"time","sort_ascending":true,"db":"./testdb"}
+{"ifaces":["eth1"],"query_type":"time","direction":"sum","from":1456428000,"to":1456473000,"format":"json","limit":9999999999999999,"sort_by":"time","sort_ascending":true,"db":"./testdb"}
+{"ifaces":["eth1"],"query_type":"dip,dport,proto","direction":"sum","from":1456428000,"to":1456473000,"format":"json","limit":99999999,"sort_by":"bytes","db":"./testdb"}

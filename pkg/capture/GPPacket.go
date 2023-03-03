@@ -17,8 +17,9 @@ package capture
 import (
 	"fmt"
 
-	"github.com/google/gopacket"
-	"github.com/google/gopacket/layers"
+	"github.com/fako1024/slimcap/capture"
+	"golang.org/x/net/ipv4"
+	"golang.org/x/net/ipv6"
 )
 
 var (
@@ -56,131 +57,103 @@ type GPPacket struct {
 }
 
 // Populate takes a raw packet and populates a GPPacket structure from it.
-func (p *GPPacket) Populate(srcPacket gopacket.Packet, inbound bool) error {
+func (p *GPPacket) Populate(pkt capture.Packet) error {
 
 	// first things first: reset packet from previous run
 	p.reset()
-
-	// size helper vars
-	var nlHeaderSize, tpHeaderSize uint16
-
-	// process metadata
-	p.numBytes = uint16(srcPacket.Metadata().CaptureInfo.Length)
+	srcPacket := pkt.IPLayer()
 
 	// read the direction from which the packet entered the interface
-	p.dirInbound = inbound
+	p.dirInbound = pkt.Type() == 0
+	p.numBytes = uint16(pkt.TotalLen())
+	var protocol byte
 
-	// for ESP traffic (which lacks a transport layer)
-	var skipTransport bool
+	if int(srcPacket[0]>>4) == 4 {
 
-	// decode packet
-	if srcPacket.NetworkLayer() != nil {
-		nwL := srcPacket.NetworkLayer().LayerContents()
-		nlHeaderSize = uint16(len(nwL))
+		p.isIPv4 = true
 
-		// exit if layer is available but the bytes aren't captured by the layer
-		// contents
-		if nlHeaderSize == 0 {
-			return fmt.Errorf("Network layer header not available")
+		// Parse IPv4 packet information
+		copy(p.epHash[0:4], srcPacket[12:16])
+		copy(p.epHash[16:20], srcPacket[16:20])
+		copy(p.epHashReverse[0:4], p.epHash[16:20])
+		copy(p.epHashReverse[16:20], p.epHash[0:4])
+
+		protocol = srcPacket[9]
+
+		// only run the fragmentation checks on fragmented TCP/UDP packets. For
+		// ESP, we don't have any transport layer information so there's no
+		// need to distinguish between ESP fragments or other ESP traffic
+		//
+		// Note: an ESP fragment will carry fragmentation information like any
+		// other IP packet. The fragment offset will of be MTU - 20 bytes (IP layer).
+		if protocol != ESP {
+
+			// check for IP fragmentation
+			fragBits := (0xe0 & srcPacket[6]) >> 5
+			fragOffset := (uint16(0x1f&srcPacket[6]) << 8) | uint16(srcPacket[7])
+
+			// return decoding error if the packet carries anything other than the
+			// first fragment, i.e. if the packet lacks a transport layer header
+			if fragOffset != 0 {
+				return fmt.Errorf("Fragmented IP packet: offset: %d flags: %d", fragOffset, fragBits)
+			}
 		}
 
-		// get ip info
-		ipsrc, ipdst := srcPacket.NetworkLayer().NetworkFlow().Endpoints()
-		copy(p.epHash[0:16], ipsrc.Raw())
-		copy(p.epHash[16:32], ipdst.Raw())
+		if protocol == TCP || protocol == UDP {
+
+			dport := srcPacket[ipv4.HeaderLen+2 : ipv4.HeaderLen+4]
+			sport := srcPacket[ipv4.HeaderLen : ipv4.HeaderLen+2]
+
+			copy(p.epHash[32:34], dport)
+			copy(p.epHashReverse[32:34], sport)
+
+			// If session based traffic is observed, the source port is taken
+			// into account. A major exception is traffic over port 53 as
+			// considering every single DNS request/response would
+			// significantly fill up the flow map
+			if protocol == TCP && (dport[0] != 0 || dport[1] != 53) && (sport[0] != 0 || sport[1] != 53) {
+				copy(p.epHash[34:36], sport)
+				copy(p.epHashReverse[34:36], dport)
+			}
+		}
+	} else if int(srcPacket[0]>>4) == 6 {
+
+		p.isIPv4 = false
+
+		// Parse IPv6 packet information
+		copy(p.epHash[0:16], srcPacket[8:24])
+		copy(p.epHash[16:32], srcPacket[24:40])
 		copy(p.epHashReverse[0:16], p.epHash[16:32])
 		copy(p.epHashReverse[16:32], p.epHash[0:16])
 
-		// read out the next layer protocol
-		// the default value is reserved by IANA and thus will never occur unless
-		// the protocol could not be correctly identified
-		var protocol byte = 0xFF
-		switch srcPacket.NetworkLayer().LayerType() {
-		case layers.LayerTypeIPv4:
+		protocol = srcPacket[6]
 
-			protocol = nwL[9]
-			p.isIPv4 = true
+		if protocol == TCP || protocol == UDP {
 
-			// only run the fragmentation checks on fragmented TCP/UDP packets. For
-			// ESP, we don't have any transport layer information so there's no
-			// need to distinguish between ESP fragments or other ESP traffic
-			//
-			// Note: an ESP fragment will carry fragmentation information like any
-			// other IP packet. The fragment offset will of be MTU - 20 bytes (IP layer).
-			if protocol == ESP {
-				skipTransport = true
-			} else {
-				// check for IP fragmentation
-				fragBits := (0xe0 & nwL[6]) >> 5
-				fragOffset := (uint16(0x1f&nwL[6]) << 8) | uint16(nwL[7])
+			dport := srcPacket[ipv6.HeaderLen+2 : ipv6.HeaderLen+4]
+			sport := srcPacket[ipv6.HeaderLen : ipv6.HeaderLen+2]
 
-				// return decoding error if the packet carries anything other than the
-				// first fragment, i.e. if the packet lacks a transport layer header
-				if fragOffset != 0 {
-					return fmt.Errorf("Fragmented IP packet: offset: %d flags: %d", fragOffset, fragBits)
-				}
-			}
-		case layers.LayerTypeIPv6:
-			protocol = nwL[6]
-		}
-		p.epHash[36], p.epHashReverse[36] = protocol, protocol
+			copy(p.epHash[32:34], dport)
+			copy(p.epHashReverse[32:34], sport)
 
-		if !skipTransport && srcPacket.TransportLayer() != nil {
-			// get layer contents
-			tpL := srcPacket.TransportLayer().LayerContents()
-			tpHeaderSize = uint16(len(tpL))
-
-			if tpHeaderSize == 0 {
-				return fmt.Errorf("Transport layer header not available")
+			// If session based traffic is observed, the source port is taken
+			// into account. A major exception is traffic over port 53 as
+			// considering every single DNS request/response would
+			// significantly fill up the flow map
+			if protocol == TCP && (dport[0] != 0 || dport[1] != 53) && (sport[0] != 0 || sport[1] != 53) {
+				copy(p.epHash[34:36], sport)
+				copy(p.epHashReverse[34:36], dport)
 			}
 
-			// get port bytes
-			psrc, dsrc := srcPacket.TransportLayer().TransportFlow().Endpoints()
-
-			// only get raw bytes if we actually have TCP or UDP
-			if protocol == TCP || protocol == UDP {
-				dport := dsrc.Raw()
-				sport := psrc.Raw()
-				copy(p.epHash[32:34], dport)
-				copy(p.epHashReverse[32:34], sport)
-
-				// If session based traffic is observed, the source port is taken
-				// into account. A major exception is traffic over port 53 as
-				// considering every single DNS request/response would
-				// significantly fill up the flow map
-				if protocol == 6 && (dport[0] != 0 || dport[1] != 53) && (sport[0] != 0 || sport[1] != 53) {
-					copy(p.epHash[34:36], sport)
-					copy(p.epHashReverse[34:36], dport)
-				}
-			}
-
-			// if the protocol is TCP, grab the flag information
 			if protocol == TCP {
-				if tpHeaderSize < 14 {
-					return fmt.Errorf("Incomplete TCP header: %d", tpL)
-				}
-
-				p.tcpFlags = tpL[13] // we are primarily interested in SYN, ACK and FIN
+				p.tcpFlags = srcPacket[ipv6.HeaderLen+13]
 			}
 		}
 	} else {
-
-		// extract error if available
-		if err := srcPacket.ErrorLayer(); err != nil {
-
-			// enrich it with concrete info about which layer failed
-			var layers string
-			for _, layer := range srcPacket.Layers() {
-				layers += layer.LayerType().String() + "/"
-			}
-			layers = layers[:len(layers)-1]
-			return fmt.Errorf("%s: %s", layers, err.Error())
-		}
-
-		// if the error layer is nil, the packet belongs to a protocol which does not contain
-		// IP layers and hence no useful information for goquery
-		return nil
+		return fmt.Errorf("received neither IPv4 nor IPv6 IP header: %v", srcPacket)
 	}
+
+	p.epHash[36], p.epHashReverse[36] = protocol, protocol
 
 	return nil
 }

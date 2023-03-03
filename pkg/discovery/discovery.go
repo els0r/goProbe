@@ -12,7 +12,7 @@ import (
 	"time"
 
 	capconfig "github.com/els0r/goProbe/cmd/goProbe/config"
-	log "github.com/els0r/log"
+	"github.com/els0r/goProbe/pkg/logging"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -380,14 +380,16 @@ type configUpdater struct {
 	identifier string
 }
 
-func (c *configUpdater) handleConfig(client ProbesClient, logger log.Logger) {
+func (c *configUpdater) handleConfig(client ProbesClient) {
+	logger := logging.Logger().With("probe_id", c.identifier)
+
 	// a nil config triggers de-registration of the probe
 	if c.config == nil {
 		err := client.Delete(c.identifier)
 		if err != nil {
-			logger.Errorf("failed to deregister probe with id=%s", c.identifier)
+			logger.Errorf("failed to deregister probe")
 		} else {
-			logger.Infof("deregistered probe with id=%s", c.identifier)
+			logger.Infof("deregistered probe")
 
 			// accept new configs
 			c.identifier = ""
@@ -396,7 +398,7 @@ func (c *configUpdater) handleConfig(client ProbesClient, logger log.Logger) {
 		return
 	}
 	if c.state == acceptNew {
-		err := RegisterOrUpdateConfig(client, c.config, logger)
+		err := RegisterOrUpdateConfig(client, c.config)
 		if err == nil {
 			c.state = idle
 			c.identifier = c.config.Identifier // store identifier for possible deregistration
@@ -405,8 +407,7 @@ func (c *configUpdater) handleConfig(client ProbesClient, logger log.Logger) {
 }
 
 // RunConfigRegistration listens for config updates and retries periodically to reach the discovery service and register the config
-func RunConfigRegistration(client ProbesClient, logger log.Logger) chan *Config {
-
+func RunConfigRegistration(client ProbesClient) chan *Config {
 	updater := &configUpdater{
 		state: acceptNew,
 	}
@@ -419,12 +420,12 @@ func RunConfigRegistration(client ProbesClient, logger log.Logger) chan *Config 
 		for {
 			select {
 			case <-time.After(5 * time.Minute):
-				updater.handleConfig(client, logger)
+				updater.handleConfig(client)
 			case cfg := <-cfgUpdateChan:
 				updater.state = acceptNew
 				updater.config = cfg
 
-				updater.handleConfig(client, logger)
+				updater.handleConfig(client)
 			}
 		}
 	}()
@@ -433,23 +434,25 @@ func RunConfigRegistration(client ProbesClient, logger log.Logger) chan *Config 
 }
 
 // RegisterOrUpdateConfig takes a configuration and registers it at the discovery service. If it exists already, it is updated.
-func RegisterOrUpdateConfig(client ProbesClient, cfg *Config, logger log.Logger) error {
+func RegisterOrUpdateConfig(client ProbesClient, cfg *Config) error {
+	logger := logging.Logger()
+
 	cfgRec, err := client.Create(cfg)
 	if err == nil {
-		logger.Info("Successfully registered probe with discovery service")
+		logger.Info("successfully registered probe with discovery service")
 
 		// check if config is the same, otherwise run an update
 		if !reflect.DeepEqual(cfgRec, cfg) {
 			_, err := client.Update(cfgRec.Identifier, cfg)
 			if err == nil {
-				logger.Info("Updated discovery configuration")
+				logger.Info("updated discovery configuration")
 			} else {
-				logger.Errorf("Probe discovery configuration update failed: %s", err)
+				logger.Errorf("probe discovery configuration update failed: %s", err)
 			}
 			return err
 		}
 	} else {
-		logger.Errorf("Probe registration failed: %s", err)
+		logger.Errorf("probe registration failed: %s", err)
 	}
 	return err
 }

@@ -15,6 +15,8 @@ import (
 // to disk. It is the equivalent of calling the binary `goQuery` on
 // the machine running goProbe.
 func (a *API) handleQuery(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	// set up default options
 	callerString := fmt.Sprintf("goProbe-API/%s", a.Version())
 	opts := []query.Option{
@@ -26,7 +28,7 @@ func (a *API) handleQuery(w http.ResponseWriter, r *http.Request) {
 
 	// parse additional arguments from command line
 	if err := json.Parse(r, &args); err != nil {
-		a.errorHandler.Handle(w, http.StatusBadRequest, err, "failed to decode query arguments")
+		a.errorHandler.Handle(ctx, w, http.StatusBadRequest, err, "failed to decode query arguments")
 		return
 	}
 
@@ -43,14 +45,14 @@ func (a *API) handleQuery(w http.ResponseWriter, r *http.Request) {
 	// prepare the query
 	stmt, err := args.Prepare(w)
 	if err != nil {
-		a.errorHandler.Handle(w, http.StatusBadRequest, err, "failed to prepare query. Invalid arguments provided")
+		a.errorHandler.Handle(ctx, w, http.StatusBadRequest, err, "failed to prepare query. Invalid arguments provided")
 		return
 	}
 
 	// execute query
-	result, err := stmt.Execute(r.Context())
+	result, err := stmt.Execute(ctx)
 	if err != nil {
-		a.errorHandler.Handle(w, http.StatusInternalServerError, err, "failed to execute query")
+		a.errorHandler.Handle(ctx, w, http.StatusInternalServerError, err, "failed to execute query")
 		return
 	}
 	if args.Format == "json" {
@@ -63,15 +65,15 @@ func (a *API) handleQuery(w http.ResponseWriter, r *http.Request) {
 		}
 		err = jsoniter.NewEncoder(w).Encode(result)
 		if err != nil {
-			a.errorHandler.Handle(w, http.StatusInternalServerError, err, "failed to JSON serialize results")
+			a.errorHandler.Handle(ctx, w, http.StatusInternalServerError, err, "failed to JSON serialize results")
 			return
 		}
 		return
 	}
 
-	err = stmt.Print(r.Context(), result)
+	err = stmt.Print(ctx, result)
 	if err != nil {
-		a.errorHandler.Handle(w, http.StatusInternalServerError, err, "failed to write results")
+		a.errorHandler.Handle(ctx, w, http.StatusInternalServerError, err, "failed to write results")
 		return
 	}
 }

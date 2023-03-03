@@ -3,7 +3,6 @@ package api
 import (
 	"expvar"
 	"fmt"
-	"io"
 	"net/http"
 	"time"
 
@@ -11,11 +10,12 @@ import (
 	v1 "github.com/els0r/goProbe/pkg/api/v1"
 	"github.com/els0r/goProbe/pkg/capture"
 	"github.com/els0r/goProbe/pkg/discovery"
+	"github.com/els0r/goProbe/pkg/goprobe/writeout"
+	"github.com/els0r/goProbe/pkg/logging"
 	log "github.com/els0r/log"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/go-chi/docgen"
 )
 
 // API is any type that exposes its URL paths via chi.Routes
@@ -41,8 +41,8 @@ type Server struct {
 	keys map[string]struct{}
 
 	// info
-	logger  log.Logger
-	metrics bool
+	logRequests bool
+	metrics     bool
 
 	// throttling parameters
 	perMinRateLimit       int
@@ -91,7 +91,7 @@ func getMetrics(w http.ResponseWriter, r *http.Request) {
 }
 
 // New creates a base router for goProbe's APIs and provides the metrics export out of the box
-func New(port string, manager *capture.Manager, opts ...Option) (*Server, error) {
+func New(port string, manager *capture.Manager, handler *writeout.Handler, opts ...Option) (*Server, error) {
 
 	s := &Server{
 		root:                  "/",
@@ -100,7 +100,6 @@ func New(port string, manager *capture.Manager, opts ...Option) (*Server, error)
 		perMinRateLimit:       DefaultPerMinRateLimit,
 		burstLimit:            DefaultBurstLimit,
 		concurrentAccessLimit: DefaultConcurrentAccessLimit,
-		logger:                log.NewDevNullLogger(), // default is logging to nothing
 	}
 
 	if port == "" {
@@ -121,16 +120,15 @@ func New(port string, manager *capture.Manager, opts ...Option) (*Server, error)
 
 	// initialize currently supported APIs
 	v1Options := []v1.Option{
-		v1.WithLogger(s.logger),
-		// inject standard error handler and attach api logger
-		v1.WithErrorHandler(errors.NewStandardHandler(s.logger)),
+		// inject standard error handler
+		v1.WithErrorHandler(errors.NewStandardHandler()),
 	}
 	if s.discoveryConfigUpdate != nil {
 		v1Options = append(v1Options, v1.WithDiscoveryConfigUpdate(s.discoveryConfigUpdate))
 	}
 
 	s.apis = append(s.apis,
-		v1.New(manager, v1Options...),
+		v1.New(manager, handler, v1Options...),
 	)
 
 	r := chi.NewRouter()
@@ -140,9 +138,7 @@ func New(port string, manager *capture.Manager, opts ...Option) (*Server, error)
 	r.Use(middleware.RealIP)
 
 	// only use the logging middleware if a logger was specifically provided
-	switch s.logger.(type) {
-	case *log.DevNullLogger:
-	default:
+	if s.logRequests {
 		r.Use(reqLogger) // prints to stdout at the moment
 	}
 	r.Use(middleware.Recoverer)
@@ -151,6 +147,8 @@ func New(port string, manager *capture.Manager, opts ...Option) (*Server, error)
 	// through ctx.Done() that the request has timed out and further
 	// processing should be stopped.
 	r.Use(middleware.Timeout(s.timeout))
+
+	logger := logging.Logger()
 
 	// set up request routing
 	r.Route(s.root, func(r chi.Router) {
@@ -164,20 +162,23 @@ func New(port string, manager *capture.Manager, opts ...Option) (*Server, error)
 				r.Use(middleware.Throttle(s.concurrentAccessLimit))
 			}
 
-			s.logger.Debugf("Set up rate limiter middleware: req/min=%d, burst=%d, concurrent req=%d", s.perMinRateLimit, s.burstLimit, s.concurrentAccessLimit)
+			logger.With(
+				"req/min", s.perMinRateLimit,
+				"burst", s.burstLimit,
+				"max_concurrent", s.concurrentAccessLimit,
+			).Debugf("set up rate limiter middleware")
 
 			// attach API authentication handler
 			if len(s.keys) > 0 {
 				r.Use(s.AuthenticationHandler(s.keys))
-				s.logger.Debugf("API authentication handler registered %d key(s)", len(s.keys))
+				logger.Debugf("API authentication handler registered %d key(s)", len(s.keys))
 			} else {
-				s.logger.Warn("running API without authentication keys exposes it to any (potentially malicious) third-party")
+				logger.Warn("running API without authentication keys exposes it to any (potentially malicious) third-party")
 			}
 
 			// mount all APIs
 			for _, api := range s.apis {
-
-				s.logger.Infof("Enabling API %s", api.Version())
+				logger.Infof("enabling API %s", api.Version())
 
 				// route base on the API version
 				r.Mount("/"+api.Version(), api.Routes())
@@ -187,7 +188,7 @@ func New(port string, manager *capture.Manager, opts ...Option) (*Server, error)
 
 	// expose metrics if needed
 	if s.metrics {
-		s.logger.Debugf("Enabling metrics export on http://%s%sdebug/vars", s.location, s.root)
+		logger.Debugf("enabling metrics export on http://%s%sdebug/vars", s.location, s.root)
 
 		// specify metrics location
 		r.Get("/debug/vars", getMetrics)
@@ -196,25 +197,6 @@ func New(port string, manager *capture.Manager, opts ...Option) (*Server, error)
 	s.router = r
 
 	return s, nil
-}
-
-// GenerateAPIDocs generates the API documentation
-func (s *Server) GenerateAPIDocs(json, md io.Writer) error {
-	var err, jerr, mderr error
-
-	// opportunistically write both documentations
-	_, jerr = fmt.Fprintf(json, docgen.JSONRoutesDoc(s.router))
-	if jerr != nil {
-		err = fmt.Errorf("json docgen: %s", jerr)
-	}
-	_, mderr = fmt.Fprintf(md, docgen.MarkdownRoutesDoc(s.router, docgen.MarkdownOpts{
-		ProjectPath: "github.com/els0r/goProbe",
-		Intro:       mdAPIDocIntro,
-	}))
-	if mderr != nil {
-		err = fmt.Errorf("%s; md docgen: %s", err, mderr)
-	}
-	return err
 }
 
 // Run launches the server to listen on a specified locations (e.g. 127.0.0.1:6060)
