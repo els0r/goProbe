@@ -29,14 +29,15 @@ const (
 	evacuatedEmpty = 4 // cell is empty, bucket is evacuated.
 	minTopHash     = 5 // minimum topHash for a normal filled cell.
 
-	// flags
-	iter         = 1 // there may be an Iter using buckets
-	oldIter      = 2 // there may be an Iter using oldBuckets
-	sameSizeGrow = 4 // the current map growth is to a new map of the same size
+	// Flags
+	sameSizeGrow = 1 // the current map growth is to a new map of the same size
 
-	// sentinel bucket ID for Iter checks
-	noCheck    = 4 << (^uintptr(0) >> 63)
-	ptrBitSize = noCheck * 8
+	// Special constant indicating an non-existing bucket
+	noBucket = -1
+
+	// System constants
+	ptrSize    = 4 << (^uintptr(0) >> 63)
+	ptrBitSize = ptrSize * 8
 )
 
 // Map denotes the main type of the hashmap implementation
@@ -306,11 +307,11 @@ next:
 				checkBucket = bucket
 			} else {
 				b = &it.buckets[bucket]
-				checkBucket = noCheck
+				checkBucket = noBucket
 			}
 		} else {
 			b = &it.buckets[bucket]
-			checkBucket = noCheck
+			checkBucket = noBucket
 		}
 
 		bucket++
@@ -326,7 +327,7 @@ next:
 			continue
 		}
 		k := b.keys[offi]
-		if checkBucket != noCheck && !m2.sameSizeGrow() {
+		if checkBucket != noBucket && !m2.sameSizeGrow() {
 			hash := xxh3.Hash(k)
 			if int(hash&m2.bucketMask()) != checkBucket {
 				continue
@@ -404,7 +405,7 @@ func (m *Map) iter(it *Iter) {
 	r := uint64(1)
 	it.m = m
 	it.buckets = m.buckets
-	it.startBucket = int(1 & m.bucketMask())
+	it.startBucket = int(r & m.bucketMask())
 	it.bucket = it.startBucket
 	it.offset = uint8(r >> (64 - bucketCntBits))
 
@@ -455,12 +456,12 @@ func (m *Map) hashGrow() {
 	oldBuckets := m.buckets
 	newBuckets := makeBucketArray(newSize)
 
-	flags := m.flags &^ (iter | oldIter)
-	if m.flags&iter != 0 {
-		flags |= oldIter
-	}
+	// flags := m.flags &^ (iter | oldIter)
+	// if m.flags&iter != 0 {
+	// 	flags |= oldIter
+	// }
 
-	m.flags = flags
+	// m.flags = flags
 	m.oldBuckets = &oldBuckets
 	m.buckets = newBuckets
 	m.nextOverflow = len(m.buckets)
@@ -562,12 +563,12 @@ func (m *Map) evacuate(oldBucket int) {
 			}
 		}
 
-		if m.flags&oldIter == 0 {
-			b := &(*m.oldBuckets)[oldBucket]
-			b.keys = [bucketCnt]Key{}
-			b.vals = [bucketCnt]Val{}
-			b.overflow = nil
-		}
+		// if m.flags&oldIter == 0 {
+		// b := &(*m.oldBuckets)[oldBucket]
+		// b.keys = [bucketCnt]Key{}
+		// b.vals = [bucketCnt]Val{}
+		// b.overflow = nil
+		// }
 	}
 
 	if oldBucket == m.nEvacuate {

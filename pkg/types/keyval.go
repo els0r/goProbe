@@ -114,65 +114,65 @@ func (k Key) Len() int {
 // PutDport stores a destination port in the key
 func (k Key) PutDport(dport []byte) {
 	if k.IsIPv4() {
-		copy(k[DPortPosIPv4:DPortPosIPv4+DPortWidth], dport)
+		copy(k[dportPosIPv4:dportPosIPv4+DPortWidth], dport)
 	} else {
-		copy(k[DPortPosIPv6:DPortPosIPv6+DPortWidth], dport)
+		copy(k[dportPosIPv6:dportPosIPv6+DPortWidth], dport)
 	}
 }
 
 // PutProto stores a protocol in the key
 func (k Key) PutProto(proto byte) {
 	if k.IsIPv4() {
-		k[ProtoPosIPv4] = proto
+		k[protoPosIPv4] = proto
 	} else {
-		k[ProtoPosIPv6] = proto
+		k[protoPosIPv6] = proto
 	}
 }
 
 // PutSip stores a source IP in the key
 func (k Key) PutSip(sip []byte) {
-	copy(k[SipPos:], sip)
+	copy(k[sipPos:], sip)
 }
 
 // PutDip stores a destination IP in the key
 func (k Key) PutDip(dip []byte) {
 	if k.IsIPv4() {
-		copy(k[DipPosIPv4:DipPosIPv4+IPv4Width], dip)
+		copy(k[dipPosIPv4:dipPosIPv4+IPv4Width], dip)
 	} else {
-		copy(k[DipPosIPv6:DipPosIPv6+IPv6Width], dip)
+		copy(k[dipPosIPv6:dipPosIPv6+IPv6Width], dip)
 	}
 }
 
 // GetDport retrieves the destination port from the key
 func (k Key) GetDport() []byte {
 	if k.IsIPv4() {
-		return k[DPortPosIPv4 : DPortPosIPv4+DPortWidth]
+		return k[dportPosIPv4 : dportPosIPv4+DPortWidth]
 	}
-	return k[DPortPosIPv6 : DPortPosIPv6+DPortWidth]
+	return k[dportPosIPv6 : dportPosIPv6+DPortWidth]
 }
 
 // GetProto retrieves the protocol from the key
 func (k Key) GetProto() byte {
 	if k.IsIPv4() {
-		return k[ProtoPosIPv4]
+		return k[protoPosIPv4]
 	}
-	return k[ProtoPosIPv6]
+	return k[protoPosIPv6]
 }
 
 // GetSip retrieves the source IP from the key
 func (k Key) GetSip() []byte {
 	if k.IsIPv4() {
-		return k[SipPos : SipPos+IPv4Width]
+		return k[sipPos : sipPos+IPv4Width]
 	}
-	return k[SipPos : SipPos+IPv6Width]
+	return k[sipPos : sipPos+IPv6Width]
 }
 
 // GetDip retrieves the destination IP from the key
 func (k Key) GetDip() []byte {
 	if k.IsIPv4() {
-		return k[DipPosIPv4 : DipPosIPv4+IPv4Width]
+		return k[dipPosIPv4 : dipPosIPv4+IPv4Width]
 	}
-	return k[DipPosIPv6 : DipPosIPv6+IPv6Width]
+	return k[dipPosIPv6 : dipPosIPv6+IPv6Width]
 }
 
 // Extend extends a "normal" key by wrapping it in an "ExtendedKey" and appending any
@@ -235,7 +235,7 @@ func (e ExtendedKey) IsIPv4() bool {
 
 // PutSip stores a source IP in the key
 func (e ExtendedKey) PutSip(sip []byte) {
-	copy(e[SipPos:], sip)
+	copy(e[sipPos:], sip)
 }
 
 // PutDip stores a destination IP in the key
@@ -282,64 +282,64 @@ func (e ExtendedKey) PutProtoV(proto byte, isIPv4 bool) {
 
 // PutDip stores a destination IP in the key (assuming it is an IPv4 key)
 func (e ExtendedKey) PutDipV4(dip []byte) {
-	copy(e[DipPosIPv4:DipPosIPv4+IPv4Width], dip)
+	copy(e[dipPosIPv4:dipPosIPv4+IPv4Width], dip)
 }
 
 // PutDport stores a destination port in the key (assuming it is an IPv4 key)
 func (e ExtendedKey) PutDportV4(dport []byte) {
-	copy(e[DPortPosIPv4:DPortPosIPv4+DPortWidth], dport)
+	copy(e[dportPosIPv4:dportPosIPv4+DPortWidth], dport)
 }
 
 // PutProto stores a protocol in the key (assuming it is an IPv4 key)
 func (e ExtendedKey) PutProtoV4(proto byte) {
-	e[ProtoPosIPv4] = proto
+	e[protoPosIPv4] = proto
 }
 
 // PutDip stores a destination IP in the key (assuming it is an IPv6 key)
 func (e ExtendedKey) PutDipV6(dip []byte) {
-	copy(e[DipPosIPv6:DipPosIPv6+IPv6Width], dip)
+	copy(e[dipPosIPv6:dipPosIPv6+IPv6Width], dip)
 }
 
 // PutDport stores a destination port in the key (assuming it is an IPv6 key)
 func (e ExtendedKey) PutDportV6(dport []byte) {
-	copy(e[DPortPosIPv6:DPortPosIPv6+DPortWidth], dport)
+	copy(e[dportPosIPv6:dportPosIPv6+DPortWidth], dport)
 }
 
 // PutProto stores a protocol in the key (assuming it is an IPv6 key)
 func (e ExtendedKey) PutProtoV6(proto byte) {
-	e[ProtoPosIPv6] = proto
+	e[protoPosIPv6] = proto
 }
 
 // GetDport retrieves the destination port from the key
 func (e ExtendedKey) GetDport() []byte {
 	if e.IsIPv4() {
-		return e[DPortPosIPv4 : DPortPosIPv4+DPortWidth]
+		return e[dportPosIPv4 : dportPosIPv4+DPortWidth]
 	}
-	return e[DPortPosIPv6 : DPortPosIPv6+DPortWidth]
+	return e[dportPosIPv6 : dportPosIPv6+DPortWidth]
 }
 
 // GetProto retrieves the protocol from the key
 func (e ExtendedKey) GetProto() byte {
 	if e.IsIPv4() {
-		return e[ProtoPosIPv4]
+		return e[protoPosIPv4]
 	}
-	return e[ProtoPosIPv6]
+	return e[protoPosIPv6]
 }
 
 // GetSip retrieves the source IP from the key
 func (e ExtendedKey) GetSip() []byte {
 	if e.IsIPv4() {
-		return e[SipPos : SipPos+IPv4Width]
+		return e[sipPos : sipPos+IPv4Width]
 	}
-	return e[SipPos : SipPos+IPv6Width]
+	return e[sipPos : sipPos+IPv6Width]
 }
 
 // GetDip retrieves the destination IP from the key
 func (e ExtendedKey) GetDip() []byte {
 	if e.IsIPv4() {
-		return e[DipPosIPv4 : DipPosIPv4+IPv4Width]
+		return e[dipPosIPv4 : dipPosIPv4+IPv4Width]
 	}
-	return e[DipPosIPv6 : DipPosIPv6+IPv6Width]
+	return e[dipPosIPv6 : dipPosIPv6+IPv6Width]
 }
 
 // AttrTime retrieves the time extension (indicating its presence via the second result parameter)

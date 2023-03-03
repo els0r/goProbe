@@ -26,17 +26,20 @@ const (
 )
 
 const (
-	KeyWidthIPv6 = 2*IPv6Width + DPortWidth + ProtoWidth
-	KeyWidthIPv4 = 2*IPv4Width + DPortWidth + ProtoWidth
+	sipPos       = 0
+	dipPosIPv4   = IPv4Width
+	dipPosIPv6   = IPv6Width
+	dportPosIPv4 = sipDipIPv4Width
+	dportPosIPv6 = sipDipIPv6Width
+	protoPosIPv4 = dportPosIPv4 + DPortWidth
+	protoPosIPv6 = dportPosIPv6 + DPortWidth
 
-	SipPos     = 0
-	DipPosIPv4 = IPv4Width
-	DipPosIPv6 = IPv6Width
+	nonIPKeysWidth  = DPortWidth + ProtoWidth
+	sipDipIPv4Width = 2 * IPv4Width
+	sipDipIPv6Width = 2 * IPv6Width
 
-	DPortPosIPv4 = IPv4Width + IPv4Width
-	DPortPosIPv6 = IPv6Width + IPv6Width
-	ProtoPosIPv4 = DPortPosIPv4 + DPortWidth
-	ProtoPosIPv6 = DPortPosIPv6 + DPortWidth
+	KeyWidthIPv4 = sipDipIPv4Width + nonIPKeysWidth
+	KeyWidthIPv6 = sipDipIPv6Width + nonIPKeysWidth
 )
 
 // RawIPToAddr converts an ip byte slice to an actual netip.Addr

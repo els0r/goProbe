@@ -181,7 +181,8 @@ func (l ModernFileSet) GetBlock(ts int64) (*hashmap.AggFlowMap, error) {
 		sip := rawIPToAddr(sipBlock[i*16 : i*16+16])
 		dip := rawIPToAddr(dipBlock[i*16 : i*16+16])
 		if sip.Is4() != dip.Is4() && !sip.IsUnspecified() {
-			logger.Warnf("source / destination IP v4 / v6 mismatch: %s / %s, will convert to IPv6\n", sip, dip)
+			logger.Warnf("unexpected source / destination IP v4 / v6 mismatch: %s / %s, skipping entry", sip, dip)
+			continue
 		}
 
 		var V types.Counters
@@ -199,17 +200,10 @@ func (l ModernFileSet) GetBlock(ts int64) (*hashmap.AggFlowMap, error) {
 			V.PacketsSent = binary.BigEndian.Uint64(pktsSentBlock[i*8 : i*8+8])
 		}
 
-		if sip.Is4() && dip.Is4() {
-			data.V4Map.SetOrUpdate(
-				types.NewV4KeyStatic(sip.As4(), dip.As4(), dportBlock[i*2:i*2+2], protoBlock[i]),
-				V.BytesRcvd, V.BytesSent, V.PacketsRcvd, V.PacketsSent,
-			)
-		} else {
-			data.V6Map.SetOrUpdate(
-				types.NewV6KeyStatic(sip.As16(), dip.As16(), dportBlock[i*2:i*2+2], protoBlock[i]),
-				V.BytesRcvd, V.BytesSent, V.PacketsRcvd, V.PacketsSent,
-			)
-		}
+		isIPv4 := sip.Is4() && dip.Is4()
+		data.SetOrUpdate(
+			newKeyFromNetIPAddr(sip, dip, dportBlock[i*2:i*2+2], protoBlock[i], isIPv4),
+			isIPv4, V.BytesRcvd, V.BytesSent, V.PacketsRcvd, V.PacketsSent)
 	}
 
 	return data, nil

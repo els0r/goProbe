@@ -136,11 +136,7 @@ func (f *FlowLog) transferAndAggregate() (newFlowMap map[string]*GPFlow, agg *ha
 
 		// check if the flow actually has any interesting information for us
 		if !v.HasBeenIdle() {
-			if v.isIPv4 {
-				agg.V4Map.SetOrUpdate(goDBKey, v.bytesRcvd, v.bytesSent, v.packetsRcvd, v.packetsSent)
-			} else {
-				agg.V6Map.SetOrUpdate(goDBKey, v.bytesRcvd, v.bytesSent, v.packetsRcvd, v.packetsSent)
-			}
+			agg.SetOrUpdate(goDBKey, v.isIPv4, v.bytesRcvd, v.bytesSent, v.packetsRcvd, v.packetsSent)
 
 			// check whether the flow should be retained for the next interval
 			// or thrown away

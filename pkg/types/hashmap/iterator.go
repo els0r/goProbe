@@ -56,11 +56,11 @@ next:
 				checkBucket = bucket
 			} else {
 				b = &it.buckets[bucket]
-				checkBucket = noCheck
+				checkBucket = noBucket
 			}
 		} else {
 			b = &it.buckets[bucket]
-			checkBucket = noCheck
+			checkBucket = noBucket
 		}
 		bucket++
 		if bucket == len(it.buckets) {
@@ -75,7 +75,7 @@ next:
 			continue
 		}
 		k := b.keys[offi]
-		if checkBucket != noCheck && !m.sameSizeGrow() {
+		if checkBucket != noBucket && !m.sameSizeGrow() {
 			hash := xxh3.Hash(k)
 			if int(hash&m.bucketMask()) != checkBucket {
 				continue

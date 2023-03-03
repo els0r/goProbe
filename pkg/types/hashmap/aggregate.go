@@ -94,7 +94,6 @@ func (n NamedAggFlowMapWithMetadata) Clear() {
 func (n NamedAggFlowMapWithMetadata) ClearFast() {
 	for _, v := range n {
 		v.ClearFast()
-		// delete(n, k)
 	}
 }
 
@@ -124,6 +123,18 @@ func (a AggFlowMap) Iter() *MetaIter {
 	return &MetaIter{
 		Iter:   a.V4Map.Iter(),
 		v6Iter: a.V6Map.Iter(),
+	}
+}
+
+// Iter provides a map Iter to allow traversal of both underlying maps (IPv4 and IPv6)
+// SetOrUpdate either creates a new entry based on the provided values or
+// updates any existing valent (if exists). This way may be very specific, but
+// it avoids intermediate allocation of a value type valent in case of an update
+func (a AggFlowMap) SetOrUpdate(key Key, isIPv4 bool, eA, eB, eC, eD uint64) {
+	if isIPv4 {
+		a.V4Map.SetOrUpdate(key, eA, eB, eC, eD)
+	} else {
+		a.V6Map.SetOrUpdate(key, eA, eB, eC, eD)
 	}
 }
 

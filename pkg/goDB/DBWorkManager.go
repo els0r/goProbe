@@ -147,7 +147,9 @@ func (w *DBWorkManager) CreateWorkerJobs(tfirst int64, tlast int64, query *Query
 					if tfirst < dirFirst {
 						w.tFirstCovered = dirFirst
 					}
-					curDir.Close()
+					if err := curDir.Close(); err != nil {
+						return false, fmt.Errorf("failed to close first GPDir %s after ascertaining query block timing: %w", curDir.Path(), err)
+					}
 				}
 				numDirs++
 
@@ -181,10 +183,12 @@ func (w *DBWorkManager) CreateWorkerJobs(tfirst int64, tlast int64, query *Query
 		if tlast > dirLast {
 			w.tLastCovered = dirLast
 		}
-		curDir.Close()
+		if err := curDir.Close(); err != nil {
+			return false, fmt.Errorf("failed to close last GPDir %s after ascertaining query block timing: %w", curDir.Path(), err)
+		}
 	}
 
-	return 0 < numDirs, err
+	return 0 < numDirs, nil
 }
 
 // main query processing
@@ -192,10 +196,7 @@ func (w *DBWorkManager) grabAndProcessWorkload(ctx context.Context, wg *sync.Wai
 	go func() {
 		defer wg.Done()
 
-		// parse conditions
-		var (
-			workload DBWorkload
-		)
+		var workload DBWorkload
 		for chanOpen := true; chanOpen; {
 			select {
 			case <-ctx.Done():
@@ -216,7 +217,7 @@ func (w *DBWorkManager) grabAndProcessWorkload(ctx context.Context, wg *sync.Wai
 						}
 					}
 
-					// Workload is counted, but we only add it to the final reesult if we got any entries
+					// Workload is counted, but we only add it to the final result if we got any entries
 					w.nWorkloadsProcessed++
 					if resultMap.Len() > 0 {
 						mapChan <- resultMap
@@ -285,7 +286,7 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workDir *gpfile.GPDir, query *Quer
 			// Read the block from the file
 			if blocks[colIdx], err = workDir.ReadBlockAtIndex(colIdx, b); err != nil {
 				blockBroken = true
-				w.logger.Warnf("[D %s; B %d] Failed to read column %s: %s", workDir, block.Timestamp, types.ColumnFileNames[colIdx], err.Error())
+				w.logger.Warnf("[D %s; B %d] Failed to read column %s: %s", workDir, block.Timestamp, types.ColumnFileNames[colIdx], err)
 				break
 			}
 		}
@@ -350,13 +351,11 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workDir *gpfile.GPDir, query *Quer
 
 		key, comparisonValue := v4Key, v4ComparisonValue
 		startEntry, isIPv4 := 0, true // TODO: Support traversal of IPv4 / IPv6 only if there's a matching condition
-		finalMap := resultMap.V4Map
 		for i := startEntry; i < numEntries; i++ {
 
 			// When reaching the v4/v6 mark, we switch to the IPv6 key / submap
 			if i == int(numV4Entries) {
 				key, comparisonValue = v6Key, v6ComparisonValue
-				finalMap = resultMap.V6Map
 				isIPv4 = false
 			}
 
@@ -414,7 +413,8 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workDir *gpfile.GPDir, query *Quer
 			}
 
 			if conditionalSatisfied {
-				finalMap.SetOrUpdate(key,
+				resultMap.SetOrUpdate(key,
+					isIPv4,
 					bytesRcvdValues[i],
 					bytesSentValues[i],
 					pktsRcvdValues[i],
