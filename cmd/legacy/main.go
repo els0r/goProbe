@@ -15,7 +15,7 @@ import (
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 	"github.com/els0r/goProbe/pkg/goDB/storage/gpfile"
 	"github.com/els0r/goProbe/pkg/types/hashmap"
-	"github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 )
 
 type work struct {
@@ -28,9 +28,17 @@ type converter struct {
 	pipe  chan work
 }
 
-var logger = logrus.StandardLogger()
+var logger *zap.SugaredLogger
 
 func main() {
+
+	zapLogger, err := zap.NewProduction()
+	if err != nil {
+		fmt.Printf("failed to instantiate logger: %s\n", err)
+		os.Exit(1)
+	}
+	defer zapLogger.Sync()
+	logger = zapLogger.Sugar()
 
 	var (
 		inPath, outPath string
@@ -58,9 +66,9 @@ func main() {
 		go func() {
 			for w := range c.pipe {
 				if err := c.convertDir(w, dryRun); err != nil {
-					logrus.StandardLogger().Fatalf("Error converting legacy dir %s: %s", w.path, err)
+					logger.Fatalf("Error converting legacy dir %s: %s", w.path, err)
 				}
-				logrus.StandardLogger().Infof("Converted legacy dir %s", w.path)
+				logger.Infof("Converted legacy dir %s", w.path)
 			}
 			wg.Done()
 		}()
@@ -69,7 +77,7 @@ func main() {
 	// Get all interfaces
 	ifaces, err := ioutil.ReadDir(inPath)
 	if err != nil {
-		logrus.StandardLogger().Fatal(err)
+		logger.Fatal(err)
 	}
 	for _, iface := range ifaces {
 		if !iface.IsDir() {
@@ -79,7 +87,7 @@ func main() {
 		// Get all date directories (usually days)
 		dates, err := ioutil.ReadDir(filepath.Join(inPath, iface.Name()))
 		if err != nil {
-			logrus.StandardLogger().Fatal(err)
+			logger.Fatal(err)
 		}
 		for _, date := range dates {
 			if !date.IsDir() {

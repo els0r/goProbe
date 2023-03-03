@@ -8,7 +8,6 @@ import (
 	"github.com/els0r/goProbe/pkg/goDB/encoder/bitpack"
 	"github.com/els0r/goProbe/pkg/types"
 	"github.com/els0r/goProbe/pkg/types/hashmap"
-	"github.com/sirupsen/logrus"
 )
 
 type ModernFileSet struct {
@@ -182,7 +181,7 @@ func (l ModernFileSet) GetBlock(ts int64) (*hashmap.AggFlowMap, error) {
 		sip := rawIPToAddr(sipBlock[i*16 : i*16+16])
 		dip := rawIPToAddr(dipBlock[i*16 : i*16+16])
 		if sip.Is4() != dip.Is4() && !sip.IsUnspecified() {
-			logrus.StandardLogger().Warnf("source / destination IP v4 / v6 mismatch: %s / %s, will convert to IPv6\n", sip, dip)
+			logger.Warnf("source / destination IP v4 / v6 mismatch: %s / %s, will convert to IPv6\n", sip, dip)
 		}
 
 		var V types.Counters

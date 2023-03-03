@@ -15,7 +15,7 @@ import (
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 	"github.com/els0r/goProbe/pkg/goDB/storage/gpfile"
 	"github.com/els0r/goProbe/pkg/types"
-	"github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 )
 
 var (
@@ -23,7 +23,14 @@ var (
 )
 
 func main() {
-	logger := logrus.StandardLogger()
+
+	zapLogger, err := zap.NewProduction()
+	if err != nil {
+		fmt.Printf("failed to instantiate logger: %s\n", err)
+		os.Exit(1)
+	}
+	defer zapLogger.Sync()
+	logger := zapLogger.Sugar()
 
 	flag.StringVar(&pathMetaFile, "path", "", "Path to meta file")
 	flag.Parse()
@@ -38,7 +45,7 @@ func main() {
 
 	gpDir := gpfile.NewDir(baseDirPath, timestamp, gpfile.ModeRead)
 	if err := gpDir.Open(); err != nil {
-		logger.WithField("path", dirPath).Fatalf("failed to open GPF dir: %v", err)
+		logger.Fatalf("failed to open GPF dir: %v", err)
 	}
 	defer gpDir.Close()
 
