@@ -33,24 +33,30 @@ const (
 
 	// DBWriteInterval defines the periodic write out interval of goProbe
 	DBWriteInterval int64 = 300
+
+	// WorkBulkSize denotes the per-worker bulk size (number of GPDirs processed before
+	// transmitting the resulting map to for further reduction / aggregtion
+	WorkBulkSize = 32
 )
 
 // DBWorkload stores all relevant parameters to load a block and execute a query on it
 type DBWorkload struct {
-	query   *Query
-	workDir *gpfile.GPDir
+	query    *Query
+	workDirs []*gpfile.GPDir
 }
 
 // DBWorkManager schedules parallel processing of blocks relevant for a query
 type DBWorkManager struct {
 	dbIfaceDir         string // path to interface directory in DB, e.g. /path/to/db/eth0
 	iface              string
-	workloads          []DBWorkload
+	workloadChan       chan DBWorkload
 	numProcessingUnits int
 
 	tFirstCovered, tLastCovered int64
-	nWorkloadsProcessed         int
-	memPool                     gpfile.MemPoolGCable
+
+	nWorkloads          int
+	nWorkloadsProcessed int
+	memPool             gpfile.MemPoolGCable
 
 	logger log.Logger
 }
@@ -70,7 +76,7 @@ func NewDBWorkManager(dbpath string, iface string, numProcessingUnits int) (*DBW
 	return &DBWorkManager{
 		dbIfaceDir:         filepath.Join(dbpath, iface),
 		iface:              iface,
-		workloads:          []DBWorkload{},
+		workloadChan:       make(chan DBWorkload, numProcessingUnits*64), // 64 is relatively arbitrary (but we're just sending quite basic objects)
 		numProcessingUnits: numProcessingUnits,
 		logger:             l,
 	}, nil
@@ -78,7 +84,7 @@ func NewDBWorkManager(dbpath string, iface string, numProcessingUnits int) (*DBW
 
 // GetNumWorkers returns the number of workloads available to the outside world for loop bounds etc.
 func (w *DBWorkManager) GetNumWorkers() int {
-	return len(w.workloads)
+	return w.nWorkloads
 }
 
 // GetCoveredTimeInterval can be used to determine the time span actually covered by the query
@@ -88,6 +94,10 @@ func (w *DBWorkManager) GetCoveredTimeInterval() (time.Time, time.Time) {
 
 // CreateWorkerJobs sets up all workloads for query execution
 func (w *DBWorkManager) CreateWorkerJobs(tfirst int64, tlast int64, query *Query) (nonempty bool, err error) {
+
+	// Make sure the channel is closed at the end of this function no matter what to
+	// ensure graceful termination of all workers
+	defer close(w.workloadChan)
 
 	// Get list of files in directory (ordered by file name, i.e. time)
 	dirList, err := os.ReadDir(w.dbIfaceDir)
@@ -108,41 +118,77 @@ func (w *DBWorkManager) CreateWorkerJobs(tfirst int64, tlast int64, query *Query
 
 	// make sure to start with zero workloads as the number of assigned
 	// workloads depends on how many directories have to be read
-	numDirs := 0
-	for i, file := range dirList {
+	var (
+		numDirs int
+		curDir  *gpfile.GPDir
+	)
+	workloadBulk := make([]*gpfile.GPDir, 0, WorkBulkSize)
+	for _, file := range dirList {
 		if file.IsDir() && (file.Name() != "./" || file.Name() != "../") {
 			dirName = file.Name()
-			tempdirTstamp, _ := strconv.ParseInt(dirName, 10, 64)
+			tempdirTstamp, err := strconv.ParseInt(dirName, 10, 64)
+			if err != nil {
+				return false, fmt.Errorf("failed to parse timestamp from directory `%s`: %w", dirName, err)
+			}
 
 			// check if the directory is within time frame of interest
 			if tfirst < tempdirTstamp+gpfile.EpochDay && tempdirTstamp < tlast+DBWriteInterval {
-				numDirs++
-
-				dir := gpfile.NewDir(w.dbIfaceDir, tempdirTstamp, gpfile.ModeRead, gpFileOptions...)
+				curDir = gpfile.NewDir(w.dbIfaceDir, tempdirTstamp, gpfile.ModeRead, gpFileOptions...)
 
 				// For the first and last item, check out the GPDir metadata for the actual first and
 				// last block timestamp to cover (and adapt variables accordingly)
-				if i == 0 || i == len(dirList)-1 {
-					if err := dir.Open(); err != nil {
-						return false, fmt.Errorf("failed to open GPDir %s to ascertain query block timing: %w", dir.Path(), err)
+				// We will grab the timestamp from the first visited / valid directory that fulfils
+				// the timestamp condition on directory level
+				if numDirs == 0 {
+					if err := curDir.Open(); err != nil {
+						return false, fmt.Errorf("failed to open first GPDir %s to ascertain query block timing: %w", curDir.Path(), err)
 					}
-					defer dir.Close()
-
-					dirFirst, dirLast := dir.TimeRange()
-					if i == 0 && tfirst < dirFirst {
+					dirFirst, _ := curDir.TimeRange()
+					if tfirst < dirFirst {
 						w.tFirstCovered = dirFirst
-					} else if i == len(dirList)-1 && tlast > dirLast {
-						w.tLastCovered = dirLast
+					}
+					if err := curDir.Close(); err != nil {
+						return false, fmt.Errorf("failed to close first GPDir %s after ascertaining query block timing: %w", curDir.Path(), err)
 					}
 				}
+				numDirs++
 
 				// create new workload for the directory
-				w.workloads = append(w.workloads, DBWorkload{query: query, workDir: dir})
+				workloadBulk = append(workloadBulk, curDir)
+				if len(workloadBulk) == WorkBulkSize {
+					w.workloadChan <- DBWorkload{query: query, workDirs: workloadBulk}
+					w.nWorkloads++
+					workloadBulk = make([]*gpfile.GPDir, 0, WorkBulkSize)
+				}
 			}
 		}
 	}
 
-	return 0 < len(w.workloads), err
+	// Flush any remaining work
+	if len(workloadBulk) > 0 {
+		w.workloadChan <- DBWorkload{query: query, workDirs: workloadBulk}
+		w.nWorkloads++
+	}
+
+	// For the first and last item, check out the GPDir metadata for the actual first and
+	// last block timestamp to cover (and adapt variables accordingly)
+	// This has to happen here because we cannot known when the last directory fulfilled the
+	// timestamp condition above. If curDir is not nil then it points to the last visited / valid
+	// directory
+	if curDir != nil {
+		if err := curDir.Open(); err != nil {
+			return false, fmt.Errorf("failed to open last GPDir %s to ascertain query block timing: %w", curDir.Path(), err)
+		}
+		_, dirLast := curDir.TimeRange()
+		if tlast > dirLast {
+			w.tLastCovered = dirLast
+		}
+		if err := curDir.Close(); err != nil {
+			return false, fmt.Errorf("failed to close last GPDir %s after ascertaining query block timing: %w", curDir.Path(), err)
+		}
+	}
+
+	return 0 < numDirs, nil
 }
 
 // main query processing
@@ -150,31 +196,32 @@ func (w *DBWorkManager) grabAndProcessWorkload(ctx context.Context, wg *sync.Wai
 	go func() {
 		defer wg.Done()
 
-		// parse conditions
 		var workload DBWorkload
 		for chanOpen := true; chanOpen; {
 			select {
 			case <-ctx.Done():
 				// query was cancelled, exit
-				w.logger.Infof("Query cancelled (workload %d / %d)...", w.nWorkloadsProcessed, len(w.workloads))
+				w.logger.Infof("Query cancelled (workload %d / %d)...", w.nWorkloadsProcessed, w.nWorkloads)
 				return
 			case workload, chanOpen = <-workloadChan:
 				if chanOpen {
-					// create the map in which the workload will store the aggregations
-					resultMap := hashmap.AggFlowMapWithMetadata{
-						Map: hashmap.New(),
+					resultMap := hashmap.NewAggFlowMapWithMetadata()
+					for _, workDir := range workload.workDirs {
+
+						// if there is an error during one of the read jobs, throw a syslog message and terminate
+						err := w.readBlocksAndEvaluate(workDir, workload.query, &resultMap)
+						if err != nil {
+							w.logger.Error(err.Error())
+							mapChan <- hashmap.NilAggFlowMapWithMetadata
+							return
+						}
 					}
 
-					// if there is an error during one of the read jobs, throw a syslog message and terminate
-					err := w.readBlocksAndEvaluate(workload, resultMap)
-					if err != nil {
-						w.logger.Error(err.Error())
-						mapChan <- hashmap.AggFlowMapWithMetadata{Map: nil}
-						return
-					}
-
+					// Workload is counted, but we only add it to the final result if we got any entries
 					w.nWorkloadsProcessed++
-					mapChan <- resultMap
+					if resultMap.Len() > 0 {
+						mapChan <- resultMap
+					}
 				}
 			}
 		}
@@ -184,20 +231,13 @@ func (w *DBWorkManager) grabAndProcessWorkload(ctx context.Context, wg *sync.Wai
 
 // ExecuteWorkerReadJobs runs the query concurrently with multiple sprocessing units
 func (w *DBWorkManager) ExecuteWorkerReadJobs(ctx context.Context, mapChan chan hashmap.AggFlowMapWithMetadata) {
-	workloadChan := make(chan DBWorkload, len(w.workloads))
 
 	var wg = new(sync.WaitGroup)
 	wg.Add(w.numProcessingUnits)
 	for i := 0; i < w.numProcessingUnits; i++ {
 		// start worker up
-		w.grabAndProcessWorkload(ctx, wg, workloadChan, mapChan)
+		w.grabAndProcessWorkload(ctx, wg, w.workloadChan, mapChan)
 	}
-
-	// push the workloads onto the channel
-	for _, workload := range w.workloads {
-		workloadChan <- workload
-	}
-	close(workloadChan)
 
 	// check if all workers are done
 	wg.Wait()
@@ -205,13 +245,7 @@ func (w *DBWorkManager) ExecuteWorkerReadJobs(ctx context.Context, mapChan chan 
 
 // Block evaluation and aggregation -----------------------------------------------------
 // this is where the actual reading and aggregation magic happens
-func (w *DBWorkManager) readBlocksAndEvaluate(workload DBWorkload, resultMap hashmap.AggFlowMapWithMetadata) error {
-	var err error
-
-	var (
-		query = workload.query
-		dir   = workload.workDir
-	)
+func (w *DBWorkManager) readBlocksAndEvaluate(workDir *gpfile.GPDir, query *Query, resultMap *hashmap.AggFlowMapWithMetadata) (err error) {
 
 	var (
 		v4Key, v4ComparisonValue                                         = types.NewEmptyV4Key().ExtendEmpty(), types.NewEmptyV4Key().ExtendEmpty()
@@ -220,13 +254,20 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workload DBWorkload, resultMap has
 	)
 
 	// Open GPDir (reading metadata in the process)
-	if err := workload.workDir.Open(); err != nil {
+	if err := workDir.Open(); err != nil {
 		return err
 	}
-	defer workload.workDir.Close()
+	defer workDir.Close()
+
+	// Set map metadata (and cross-check consistency for consecutive workloads)
+	if resultMap.Interface == "" {
+		resultMap.Interface = w.iface
+	} else if resultMap.Interface != w.iface {
+		return fmt.Errorf("discovered invalid workload for mismatching interfaces, want `%s`, have `%s`", resultMap.Interface, w.iface)
+	}
 
 	// Process the workload, looping over all blocks in this directory
-	for b, block := range dir.BlockMetadata[0].Blocks() {
+	for b, block := range workDir.BlockMetadata[0].Blocks() {
 
 		// If this block is outside of the rannge, skip it (only happens at the very first
 		// and /or very last directory)
@@ -237,23 +278,21 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workload DBWorkload, resultMap has
 		var (
 			blocks      [types.ColIdxCount][]byte
 			blockBroken bool
-			ts          int64
-			iface       string
 		)
 
 		// Read the blocks from their files
 		for _, colIdx := range query.columnIndices {
 
 			// Read the block from the file
-			if blocks[colIdx], err = dir.ReadBlockAtIndex(colIdx, b); err != nil {
+			if blocks[colIdx], err = workDir.ReadBlockAtIndex(colIdx, b); err != nil {
 				blockBroken = true
-				w.logger.Warnf("[D %s; B %d] Failed to read column %s: %s", dir, block.Timestamp, types.ColumnFileNames[colIdx], err.Error())
+				w.logger.Warnf("[D %s; B %d] Failed to read column %s: %s", workDir, block.Timestamp, types.ColumnFileNames[colIdx], err)
 				break
 			}
 		}
 
 		// Check whether all blocks have matching number of entries
-		numV4Entries := int(dir.NumIPv4EntriesAtIndex(b))
+		numV4Entries := int(workDir.NumIPv4EntriesAtIndex(b))
 		numEntries := bitpack.Len(blocks[types.BytesRcvdColIdx])
 		for _, colIdx := range query.columnIndices {
 			l := len(blocks[colIdx])
@@ -291,18 +330,12 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workload DBWorkload, resultMap has
 		}
 
 		// Initialize any (static) key extensions potentially present in the query
-		if query.hasAttrTime || query.hasAttrIface {
-			if query.hasAttrTime {
-				ts = block.Timestamp
-			}
-			if query.hasAttrIface {
-				iface = w.iface
-			}
-			v4Key = types.NewEmptyV4Key().Extend(ts, iface)
-			v6Key = types.NewEmptyV6Key().Extend(ts, iface)
+		if query.hasAttrTime {
+			v4Key = types.NewEmptyV4Key().Extend(block.Timestamp)
+			v6Key = types.NewEmptyV6Key().Extend(block.Timestamp)
 			if query.Conditional == nil {
-				v4ComparisonValue = types.NewEmptyV4Key().Extend(ts, iface)
-				v6ComparisonValue = types.NewEmptyV6Key().Extend(ts, iface)
+				v4ComparisonValue = types.NewEmptyV4Key().Extend(block.Timestamp)
+				v6ComparisonValue = types.NewEmptyV6Key().Extend(block.Timestamp)
 			}
 		}
 
@@ -320,7 +353,7 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workload DBWorkload, resultMap has
 		startEntry, isIPv4 := 0, true // TODO: Support traversal of IPv4 / IPv6 only if there's a matching condition
 		for i := startEntry; i < numEntries; i++ {
 
-			// When reaching the v4/v6 mark, we switch to the IPv6 key
+			// When reaching the v4/v6 mark, we switch to the IPv6 key / submap
 			if i == int(numV4Entries) {
 				key, comparisonValue = v6Key, v6ComparisonValue
 				isIPv4 = false
@@ -329,9 +362,9 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workload DBWorkload, resultMap has
 			// Populate key for current entry
 			if query.hasAttrSip {
 				if isIPv4 {
-					key.PutSipV4(sipBlocks[i*4 : i*4+4])
+					key.PutSip(sipBlocks[i*4 : i*4+4])
 				} else {
-					key.PutSipV6(sipBlocks[numV4Entries*4+(i-numV4Entries)*16 : numV4Entries*4+(i-numV4Entries)*16+16])
+					key.PutSip(sipBlocks[numV4Entries*4+(i-numV4Entries)*16 : numV4Entries*4+(i-numV4Entries)*16+16])
 				}
 			}
 			if query.hasAttrDip {
@@ -342,10 +375,10 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workload DBWorkload, resultMap has
 				}
 			}
 			if query.hasAttrProto {
-				key.PutProto(protoBlocks[i])
+				key.PutProtoV(protoBlocks[i], isIPv4)
 			}
 			if query.hasAttrDport {
-				key.PutDport(dportBlocks[i*types.DportSizeof : i*types.DportSizeof+types.DportSizeof])
+				key.PutDportV(dportBlocks[i*types.DportSizeof:i*types.DportSizeof+types.DportSizeof], isIPv4)
 			}
 
 			// Check whether conditional is satisfied for current entry
@@ -357,9 +390,9 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workload DBWorkload, resultMap has
 				// Populate comparison value for current entry
 				if query.hasCondSip {
 					if isIPv4 {
-						comparisonValue.PutSipV4(sipBlocks[i*4 : i*4+4])
+						comparisonValue.PutSip(sipBlocks[i*4 : i*4+4])
 					} else {
-						comparisonValue.PutSipV6(sipBlocks[numV4Entries*4+(i-numV4Entries)*16 : numV4Entries*4+(i-numV4Entries)*16+16])
+						comparisonValue.PutSip(sipBlocks[numV4Entries*4+(i-numV4Entries)*16 : numV4Entries*4+(i-numV4Entries)*16+16])
 					}
 				}
 				if query.hasCondDip {
@@ -370,10 +403,10 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workload DBWorkload, resultMap has
 					}
 				}
 				if query.hasCondProto {
-					comparisonValue.PutProto(protoBlocks[i])
+					comparisonValue.PutProtoV(protoBlocks[i], isIPv4)
 				}
 				if query.hasCondDport {
-					comparisonValue.PutDport(dportBlocks[i*types.DportSizeof : i*types.DportSizeof+types.DportSizeof])
+					comparisonValue.PutDportV(dportBlocks[i*types.DportSizeof:i*types.DportSizeof+types.DportSizeof], isIPv4)
 				}
 
 				conditionalSatisfied = query.Conditional.evaluate(comparisonValue.Key())
@@ -381,6 +414,7 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workload DBWorkload, resultMap has
 
 			if conditionalSatisfied {
 				resultMap.SetOrUpdate(key,
+					isIPv4,
 					bytesRcvdValues[i],
 					bytesSentValues[i],
 					pktsRcvdValues[i],

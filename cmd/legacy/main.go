@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"sort"
@@ -14,6 +15,7 @@ import (
 	"github.com/els0r/goProbe/pkg/goDB"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 	"github.com/els0r/goProbe/pkg/goDB/storage/gpfile"
+	"github.com/els0r/goProbe/pkg/types"
 	"github.com/els0r/goProbe/pkg/types/hashmap"
 	"go.uber.org/zap"
 )
@@ -108,12 +110,12 @@ func main() {
 type blockFlows struct {
 	ts    int64
 	iface string
-	data  *hashmap.Map
+	data  *hashmap.AggFlowMap
 }
 
 type fileSet interface {
 	GetTimestamps() ([]int64, error)
-	GetBlock(ts int64) (*hashmap.Map, error)
+	GetBlock(ts int64) (*hashmap.AggFlowMap, error)
 	Close() error
 }
 
@@ -232,4 +234,11 @@ func (c converter) convertDir(w work, dryRun bool) error {
 	}
 
 	return nil
+}
+
+func newKeyFromNetIPAddr(sip, dip netip.Addr, dport []byte, proto byte, isIPv4 bool) types.Key {
+	if isIPv4 {
+		return types.NewV4KeyStatic(sip.As4(), dip.As4(), dport, proto)
+	}
+	return types.NewV6KeyStatic(sip.As16(), dip.As16(), dport, proto)
 }

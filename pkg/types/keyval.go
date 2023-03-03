@@ -37,10 +37,10 @@ func NewV4KeyStatic(sip, dip [4]byte, dport []byte, proto byte) Key {
 func NewV4Key(sip, dip, dport []byte, proto byte) (key Key) {
 	key = NewEmptyV4Key()
 
-	key.PutDport(dport)
-	key.PutProto(proto)
 	key.PutSip(sip)
 	key.PutDip(dip)
+	key.PutDport(dport)
+	key.PutProto(proto)
 
 	return
 }
@@ -59,10 +59,10 @@ func NewV6KeyStatic(sip, dip [16]byte, dport []byte, proto byte) Key {
 func NewV6Key(sip, dip, dport []byte, proto byte) (key Key) {
 	key = NewEmptyV6Key()
 
-	key.PutDport(dport)
-	key.PutProto(proto)
 	key.PutSip(sip)
 	key.PutDip(dip)
+	key.PutDport(dport)
+	key.PutProto(proto)
 
 	return
 }
@@ -80,12 +80,19 @@ func NewKey(sip, dip, dport []byte, proto byte) (key Key) {
 		key = NewEmptyV6Key()
 	}
 
-	key.PutDport(dport)
-	key.PutProto(proto)
 	key.PutSip(sip)
 	key.PutDip(dip)
+	key.PutDport(dport)
+	key.PutProto(proto)
 
 	return
+}
+
+// Clone provides a copy of the key
+func (k Key) Clone() Key {
+	cp := make(Key, len(k))
+	copy(cp, k)
+	return cp
 }
 
 // IsIPv4 returns if a key represents an IPv4 flow (based on its length)
@@ -106,85 +113,86 @@ func (k Key) Len() int {
 
 // PutDport stores a destination port in the key
 func (k Key) PutDport(dport []byte) {
-	copy(k[DPortPos:DPortPos+DPortWidth], dport[:])
+	if k.IsIPv4() {
+		copy(k[dportPosIPv4:dportPosIPv4+DPortWidth], dport)
+	} else {
+		copy(k[dportPosIPv6:dportPosIPv6+DPortWidth], dport)
+	}
 }
 
 // PutProto stores a protocol in the key
 func (k Key) PutProto(proto byte) {
-	copy(k[ProtoPos:ProtoPos+ProtoWidth], []byte{proto})
+	if k.IsIPv4() {
+		k[protoPosIPv4] = proto
+	} else {
+		k[protoPosIPv6] = proto
+	}
 }
 
 // PutSip stores a source IP in the key
 func (k Key) PutSip(sip []byte) {
-	copy(k[SipPos:], sip)
+	copy(k[sipPos:], sip)
 }
 
 // PutDip stores a destination IP in the key
 func (k Key) PutDip(dip []byte) {
-	if len(dip) == IPv4Width {
-		copy(k[DipPosIPv4:], dip)
+	if k.IsIPv4() {
+		copy(k[dipPosIPv4:dipPosIPv4+IPv4Width], dip)
 	} else {
-		copy(k[DipPosIPv6:], dip)
+		copy(k[dipPosIPv6:dipPosIPv6+IPv6Width], dip)
 	}
 }
 
 // GetDport retrieves the destination port from the key
 func (k Key) GetDport() []byte {
-	return k[DPortPos : DPortPos+DPortWidth]
+	if k.IsIPv4() {
+		return k[dportPosIPv4 : dportPosIPv4+DPortWidth]
+	}
+	return k[dportPosIPv6 : dportPosIPv6+DPortWidth]
 }
 
 // GetProto retrieves the protocol from the key
 func (k Key) GetProto() byte {
-	return k[ProtoPos]
+	if k.IsIPv4() {
+		return k[protoPosIPv4]
+	}
+	return k[protoPosIPv6]
 }
 
 // GetSip retrieves the source IP from the key
 func (k Key) GetSip() []byte {
 	if k.IsIPv4() {
-		return k[SipPos : SipPos+IPv4Width]
+		return k[sipPos : sipPos+IPv4Width]
 	}
-	return k[SipPos : SipPos+IPv6Width]
+	return k[sipPos : sipPos+IPv6Width]
 }
 
 // GetDip retrieves the destination IP from the key
 func (k Key) GetDip() []byte {
 	if k.IsIPv4() {
-		return k[DipPosIPv4 : DipPosIPv4+IPv4Width]
+		return k[dipPosIPv4 : dipPosIPv4+IPv4Width]
 	}
-	return k[DipPosIPv6 : DipPosIPv6+IPv6Width]
+	return k[dipPosIPv6 : dipPosIPv6+IPv6Width]
 }
 
 // Extend extends a "normal" key by wrapping it in an "ExtendedKey" and appending any
 // additional parameters to it
-func (k Key) Extend(ts int64, iface string) (e ExtendedKey) {
+func (k Key) Extend(ts int64) (e ExtendedKey) {
 
-	requiredLen := len(k) + 1 // Add one byte to store bitmask for key type / content
-	if ts > 0 {
-		requiredLen += 8
+	// If no timestamp was provided, just convert the Key to an ExtendedKey
+	if ts <= 0 {
+		return ExtendedKey(k)
 	}
-	if iface != "" {
-		requiredLen += len(iface)
-	}
+
+	// Allocate a copy of sufficient size
+	requiredLen := len(k) + TimestampWidth
 	e = make(ExtendedKey, requiredLen)
 
-	// Copy basic key into the new, extended one and flag it as IPv4 or IPv6
-	pos := 1 + copy(e[1:1+len(k)], k)
-	if !k.IsIPv4() {
-		e[0] |= (1 << 0)
-	}
+	// Copy basic key into the new, extended one
+	pos := copy(e, k)
 
-	// If provided, encode the timestamp and add its flag
-	if ts > 0 {
-		binary.BigEndian.PutUint64(e[pos:pos+8], uint64(ts))
-		e[0] |= (1 << 1)
-		pos += 8
-	}
-
-	// If provided, append the interface name and add its flag
-	if iface != "" {
-		copy(e[pos:], iface)
-		e[0] |= (1 << 2)
-	}
+	// Encode the timestamp
+	binary.BigEndian.PutUint64(e[pos:pos+8], uint64(ts))
 
 	return
 }
@@ -192,96 +200,155 @@ func (k Key) Extend(ts int64, iface string) (e ExtendedKey) {
 // ExtendEmpty extends a "normal" key by wrapping it in an "ExtendedKey", filling
 // no additional information
 func (k Key) ExtendEmpty() (e ExtendedKey) {
-	return k.Extend(0, "")
+	return k.Extend(0)
 }
 
 // ExtendedKey is a Key with supplemental information
 type ExtendedKey []byte
 
+// Clone provides a copy of the extended key
+func (e ExtendedKey) Clone() ExtendedKey {
+	cp := make(ExtendedKey, len(e))
+	copy(cp, e)
+	return cp
+}
+
 // Key retrieves the basic key within the extended key to allow for
 // more precise access without having to always use the (longer) ExtendedKey
 func (e ExtendedKey) Key() Key {
 	if e.IsIPv4() {
-		return Key(e[1 : 1+KeyWidthIPv4])
+		return Key(e[:KeyWidthIPv4])
 	}
-	return Key(e[1 : 1+KeyWidthIPv6])
+	return Key(e[:KeyWidthIPv6])
 }
 
 // IsIPv4 returns if the key represents an IPv4 packet / flow
 func (e ExtendedKey) IsIPv4() bool {
-	return e[0]&(1<<0) <= 0
+	if len(e) == KeyWidthIPv4 || len(e) == KeyWidthIPv4+TimestampWidth {
+		return true
+	}
+	if len(e) == KeyWidthIPv6 || len(e) == KeyWidthIPv6+TimestampWidth {
+		return false
+	}
+	panic("extended key is neither ipv4 nor ipv6")
 }
 
 // PutSip stores a source IP in the key
 func (e ExtendedKey) PutSip(sip []byte) {
-	copy(e[1+SipPos:], sip)
-}
-
-// PutSipV4 stores an IPv4 source IP in the key
-func (e ExtendedKey) PutSipV4(sip []byte) {
-	copy(e[1+SipPos:1+SipPos+IPv4Width], sip)
-}
-
-// PutSipV6 stores an IPv6 source IP in the key
-func (e ExtendedKey) PutSipV6(sip []byte) {
-	copy(e[1+SipPos:1+SipPos+IPv6Width], sip)
+	copy(e[sipPos:], sip)
 }
 
 // PutDip stores a destination IP in the key
 func (e ExtendedKey) PutDip(dip []byte) {
-	if len(dip) == IPv4Width {
-		copy(e[1+DipPosIPv4:], dip)
-	} else {
-		copy(e[1+DipPosIPv6:], dip)
-	}
-}
-
-// PutDipV4 stores an IPv4 destination IP in the key
-func (e ExtendedKey) PutDipV4(dip []byte) {
-	copy(e[1+DipPosIPv4:1+DipPosIPv4+IPv4Width], dip)
-}
-
-// PutDipV6 stores an IPv6 destination IP in the key
-func (e ExtendedKey) PutDipV6(dip []byte) {
-	copy(e[1+DipPosIPv6:1+DipPosIPv6+IPv6Width], dip)
+	e.PutDipV(dip, e.IsIPv4())
 }
 
 // PutDport stores a destination port in the key
 func (e ExtendedKey) PutDport(dport []byte) {
-	copy(e[1+DPortPos:1+DPortPos+DPortWidth], dport[:])
+	e.PutDportV(dport, e.IsIPv4())
 }
 
 // PutProto stores a protocol in the key
 func (e ExtendedKey) PutProto(proto byte) {
-	copy(e[1+ProtoPos:1+ProtoPos+ProtoWidth], []byte{proto})
+	e.PutProtoV(proto, e.IsIPv4())
+}
+
+// PutDip stores a destination IP in the key (depending on the IP protocol version)
+func (e ExtendedKey) PutDipV(dip []byte, isIPv4 bool) {
+	if isIPv4 {
+		e.PutDipV4(dip)
+	} else {
+		e.PutDipV6(dip)
+	}
+}
+
+// PutDport stores a destination port in the key (depending on the IP protocol version)
+func (e ExtendedKey) PutDportV(dport []byte, isIPv4 bool) {
+	if isIPv4 {
+		e.PutDportV4(dport)
+	} else {
+		e.PutDportV6(dport)
+	}
+}
+
+// PutProto stores a protocol in the key (depending on the IP protocol version)
+func (e ExtendedKey) PutProtoV(proto byte, isIPv4 bool) {
+	if isIPv4 {
+		e.PutProtoV4(proto)
+	} else {
+		e.PutProtoV6(proto)
+	}
+}
+
+// PutDip stores a destination IP in the key (assuming it is an IPv4 key)
+func (e ExtendedKey) PutDipV4(dip []byte) {
+	copy(e[dipPosIPv4:dipPosIPv4+IPv4Width], dip)
+}
+
+// PutDport stores a destination port in the key (assuming it is an IPv4 key)
+func (e ExtendedKey) PutDportV4(dport []byte) {
+	copy(e[dportPosIPv4:dportPosIPv4+DPortWidth], dport)
+}
+
+// PutProto stores a protocol in the key (assuming it is an IPv4 key)
+func (e ExtendedKey) PutProtoV4(proto byte) {
+	e[protoPosIPv4] = proto
+}
+
+// PutDip stores a destination IP in the key (assuming it is an IPv6 key)
+func (e ExtendedKey) PutDipV6(dip []byte) {
+	copy(e[dipPosIPv6:dipPosIPv6+IPv6Width], dip)
+}
+
+// PutDport stores a destination port in the key (assuming it is an IPv6 key)
+func (e ExtendedKey) PutDportV6(dport []byte) {
+	copy(e[dportPosIPv6:dportPosIPv6+DPortWidth], dport)
+}
+
+// PutProto stores a protocol in the key (assuming it is an IPv6 key)
+func (e ExtendedKey) PutProtoV6(proto byte) {
+	e[protoPosIPv6] = proto
+}
+
+// GetDport retrieves the destination port from the key
+func (e ExtendedKey) GetDport() []byte {
+	if e.IsIPv4() {
+		return e[dportPosIPv4 : dportPosIPv4+DPortWidth]
+	}
+	return e[dportPosIPv6 : dportPosIPv6+DPortWidth]
+}
+
+// GetProto retrieves the protocol from the key
+func (e ExtendedKey) GetProto() byte {
+	if e.IsIPv4() {
+		return e[protoPosIPv4]
+	}
+	return e[protoPosIPv6]
+}
+
+// GetSip retrieves the source IP from the key
+func (e ExtendedKey) GetSip() []byte {
+	if e.IsIPv4() {
+		return e[sipPos : sipPos+IPv4Width]
+	}
+	return e[sipPos : sipPos+IPv6Width]
+}
+
+// GetDip retrieves the destination IP from the key
+func (e ExtendedKey) GetDip() []byte {
+	if e.IsIPv4() {
+		return e[dipPosIPv4 : dipPosIPv4+IPv4Width]
+	}
+	return e[dipPosIPv6 : dipPosIPv6+IPv6Width]
 }
 
 // AttrTime retrieves the time extension (indicating its presence via the second result parameter)
 func (e ExtendedKey) AttrTime() (int64, bool) {
-	if e[0]&(1<<1) > 0 {
-		if e.IsIPv4() {
-			return int64(binary.BigEndian.Uint64(e[1+KeyWidthIPv4 : 9+KeyWidthIPv4])), true
-		}
-		return int64(binary.BigEndian.Uint64(e[1+KeyWidthIPv6 : 9+KeyWidthIPv6])), true
+	if len(e) == KeyWidthIPv4 || len(e) == KeyWidthIPv6 {
+		return 0, false
 	}
-	return 0, false
-}
 
-// AttrIface retrieves the interface name extension (indicating its presence via the second result parameter)
-func (e ExtendedKey) AttrIface() (string, bool) {
-	if e[0]&(1<<2) > 0 {
-		pos := 1
-		if e.IsIPv4() {
-			pos += KeyWidthIPv4
-		} else {
-			pos += KeyWidthIPv6
-		}
-		if e[0]&(1<<1) > 0 {
-			pos += 8
-		}
-		return string(e[pos:]), true
-	}
-	return "", false
+	return int64(binary.BigEndian.Uint64(e[len(e)-8:])), true
 }
 
 // String prints the key as a comma separated attribute list

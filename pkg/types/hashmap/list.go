@@ -17,15 +17,14 @@ type Item struct {
 type List []Item
 
 // Flatten converts a flow map to a flat table / list
-func (m *Map) Flatten() (v4List List, v6List List) {
-	v4List, v6List = make(List, 0), make(List, 0)
+func (a AggFlowMap) Flatten() (v4List List, v6List List) {
+	v4List, v6List = make(List, a.V4Map.Len()), make(List, a.V6Map.Len())
 
-	for i := m.Iter(); i.Next(); {
-		if k := types.Key(i.Key()); k.IsIPv4() {
-			v4List = append(v4List, Item{i.Key(), i.Val()})
-		} else {
-			v6List = append(v6List, Item{i.Key(), i.Val()})
-		}
+	for j, it := 0, a.V4Map.Iter(); it.Next(); j++ {
+		v4List[j] = Item{it.Key(), it.Val()}
+	}
+	for j, it := 0, a.V6Map.Iter(); it.Next(); j++ {
+		v6List[j] = Item{it.Key(), it.Val()}
 	}
 
 	return

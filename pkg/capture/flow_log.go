@@ -121,14 +121,14 @@ func (f *FlowLog) Add(packet *GPPacket) {
 // are discarded.
 //
 // Returns an AggFlowMap containing all flows since the last call to Rotate.
-func (f *FlowLog) Rotate() (agg *hashmap.Map) {
+func (f *FlowLog) Rotate() (agg *hashmap.AggFlowMap) {
 	f.flowMap, agg = f.transferAndAggregate()
 	return
 }
 
-func (f *FlowLog) transferAndAggregate() (newFlowMap map[string]*GPFlow, agg *hashmap.Map) {
+func (f *FlowLog) transferAndAggregate() (newFlowMap map[string]*GPFlow, agg *hashmap.AggFlowMap) {
 	newFlowMap = make(map[string]*GPFlow)
-	agg = hashmap.New()
+	agg = hashmap.NewAggFlowMap()
 
 	for k, v := range f.flowMap {
 
@@ -136,7 +136,7 @@ func (f *FlowLog) transferAndAggregate() (newFlowMap map[string]*GPFlow, agg *ha
 
 		// check if the flow actually has any interesting information for us
 		if !v.HasBeenIdle() {
-			agg.SetOrUpdate(goDBKey, v.bytesRcvd, v.bytesSent, v.packetsRcvd, v.packetsSent)
+			agg.SetOrUpdate(goDBKey, v.isIPv4, v.bytesRcvd, v.bytesSent, v.packetsRcvd, v.packetsSent)
 
 			// check whether the flow should be retained for the next interval
 			// or thrown away

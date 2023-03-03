@@ -120,8 +120,8 @@ func (l ModernFileSet) getBlock(f *GPFile, ts int64) ([]byte, error) {
 	return block, nil
 }
 
-func (l ModernFileSet) GetBlock(ts int64) (*hashmap.Map, error) {
-	data := hashmap.New()
+func (l ModernFileSet) GetBlock(ts int64) (*hashmap.AggFlowMap, error) {
+	data := hashmap.NewAggFlowMap()
 
 	sipBlock, err := l.getBlock(l.sipFile, ts)
 	if err != nil {
@@ -181,17 +181,11 @@ func (l ModernFileSet) GetBlock(ts int64) (*hashmap.Map, error) {
 		sip := rawIPToAddr(sipBlock[i*16 : i*16+16])
 		dip := rawIPToAddr(dipBlock[i*16 : i*16+16])
 		if sip.Is4() != dip.Is4() && !sip.IsUnspecified() {
-			logger.Warnf("source / destination IP v4 / v6 mismatch: %s / %s, will convert to IPv6\n", sip, dip)
+			logger.Warnf("unexpected source / destination IP v4 / v6 mismatch: %s / %s, skipping entry", sip, dip)
+			continue
 		}
 
-		var K types.Key
 		var V types.Counters
-
-		if sip.Is4() && dip.Is4() {
-			K = types.NewV4KeyStatic(sip.As4(), dip.As4(), dportBlock[i*2:i*2+2], protoBlock[i])
-		} else {
-			K = types.NewV6KeyStatic(sip.As16(), dip.As16(), dportBlock[i*2:i*2+2], protoBlock[i])
-		}
 
 		// Unpack counters using bit packing if enabled, otherwise just copy them using fixed bit width
 		if useBitPacking {
@@ -206,7 +200,10 @@ func (l ModernFileSet) GetBlock(ts int64) (*hashmap.Map, error) {
 			V.PacketsSent = binary.BigEndian.Uint64(pktsSentBlock[i*8 : i*8+8])
 		}
 
-		data.SetOrUpdate(K, V.BytesRcvd, V.BytesSent, V.PacketsRcvd, V.PacketsSent)
+		isIPv4 := sip.Is4() && dip.Is4()
+		data.SetOrUpdate(
+			newKeyFromNetIPAddr(sip, dip, dportBlock[i*2:i*2+2], protoBlock[i], isIPv4),
+			isIPv4, V.BytesRcvd, V.BytesSent, V.PacketsRcvd, V.PacketsSent)
 	}
 
 	return data, nil

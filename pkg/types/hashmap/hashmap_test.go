@@ -188,6 +188,25 @@ func BenchmarkStringedByteSliceMapAccess(b *testing.B) {
 	}
 }
 
+func BenchmarkHashMapIterator(b *testing.B) {
+
+	testMap := New()
+	for i := 0; i < 100000; i++ {
+		temp := make([]byte, 8)
+		binary.BigEndian.PutUint64(temp, uint64(i))
+		testMap.Set(temp, types.Counters{BytesRcvd: uint64(i), BytesSent: 0, PacketsRcvd: 0, PacketsSent: 0})
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		for it := testMap.Iter(); it.Next(); {
+			_ = it.Key()
+			_ = it.Val()
+		}
+	}
+}
+
 func BenchmarkHashMapAccesses(b *testing.B) {
 
 	testMap := New()

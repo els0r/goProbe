@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"sort"
 	"testing"
 
 	"github.com/els0r/goProbe/pkg/goDB"
@@ -27,25 +28,29 @@ const (
 )
 
 var parserTests = []struct {
-	schema string
-	input  string
-	outKey types.ExtendedKey
-	outVal types.Counters
+	schema   string
+	input    string
+	outKey   types.ExtendedKey
+	outVal   types.Counters
+	outIface string
 }{
 	{sipDipSchema,
 		"1460362502,eth2,213.156.236.211,213.156.236.255,2,0,0.00,525,0,0.00",
-		types.NewV4KeyStatic([4]byte{213, 156, 236, 211}, [4]byte{213, 156, 236, 255}, []byte{0, 0}, 0).Extend(int64(1460362502), "eth2"),
+		types.NewV4KeyStatic([4]byte{213, 156, 236, 211}, [4]byte{213, 156, 236, 255}, []byte{0, 0}, 0).Extend(int64(1460362502)),
 		types.Counters{BytesRcvd: uint64(525), BytesSent: uint64(0), PacketsRcvd: uint64(2), PacketsSent: uint64(0)},
+		"eth2",
 	},
 	{sipDipProtoSchema,
 		"1460362502,eth2,213.156.236.211,213.156.236.255,8080,TCP,2,0,0.00,525,0,0.00",
-		types.NewV4KeyStatic([4]byte{213, 156, 236, 211}, [4]byte{213, 156, 236, 255}, []byte{0x1f, 0x90}, 6).Extend(int64(1460362502), "eth2"),
+		types.NewV4KeyStatic([4]byte{213, 156, 236, 211}, [4]byte{213, 156, 236, 255}, []byte{0x1f, 0x90}, 6).Extend(int64(1460362502)),
 		types.Counters{BytesRcvd: uint64(525), BytesSent: uint64(0), PacketsRcvd: uint64(2), PacketsSent: uint64(0)},
+		"eth2",
 	},
 	{rawSchema,
 		"1460362502,eth2,213.156.236.211,213.156.236.255,8080,TCP,2,0,0.00,525,0,0.00",
-		types.NewV4KeyStatic([4]byte{213, 156, 236, 211}, [4]byte{213, 156, 236, 255}, []byte{0x1f, 0x90}, 6).Extend(int64(1460362502), "eth2"),
+		types.NewV4KeyStatic([4]byte{213, 156, 236, 211}, [4]byte{213, 156, 236, 255}, []byte{0x1f, 0x90}, 6).Extend(int64(1460362502)),
 		types.Counters{BytesRcvd: uint64(525), BytesSent: uint64(0), PacketsRcvd: uint64(2), PacketsSent: uint64(0)},
+		"eth2",
 	},
 }
 
@@ -270,6 +275,18 @@ func TestParsers(t *testing.T) {
 			t.Fatalf("Unable to read schema: %s", err.Error())
 		}
 
+		// Ensure that IP parsers are executed first  and interface parsers last (if present)
+		// to ensure correct parsing
+		sort.Slice(conv.KeyParsers, func(i, j int) bool {
+			if _, isIfaceParser := conv.KeyParsers[j].parser.(*IfaceStringParser); isIfaceParser {
+				return true
+			}
+
+			_, isSipParser := conv.KeyParsers[i].parser.(*goDB.SipStringParser)
+			_, isDipParser := conv.KeyParsers[i].parser.(*goDB.DipStringParser)
+			return isSipParser || isDipParser
+		})
+
 		fields := strings.Split(tt.input, ",")
 		for _, parser := range conv.KeyParsers {
 			if err = parser.parser.ParseKey(fields[parser.ind], rowKey); err != nil {
@@ -291,12 +308,18 @@ func TestParsers(t *testing.T) {
 			}
 		}
 
+		var iface string
+		*rowKey, iface = extractIface(*rowKey)
+
 		// check equality of keys and values
 		if !bytes.Equal(*rowKey, tt.outKey) {
 			t.Fatalf("Key (%s): got: %s; expect: %s", tt.input, fmt.Sprint(rowKey), fmt.Sprint(tt.outKey))
 		}
 		if !reflect.DeepEqual(rowVal, tt.outVal) {
 			t.Fatalf("Val (%s): got: %s; expect: %s", tt.input, fmt.Sprint(rowVal), fmt.Sprint(tt.outVal))
+		}
+		if iface != tt.outIface {
+			t.Fatalf("Key (%s): got: `%x`; expect: `%x`", tt.input, iface, tt.outIface)
 		}
 	}
 }
