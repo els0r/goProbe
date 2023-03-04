@@ -11,6 +11,9 @@ import (
 	"github.com/els0r/goProbe/pkg/goDB/storage"
 )
 
+// Global pool for reusable memory buffers
+var bufPool = NewMemPoolNoLimit()
+
 const (
 	// FileSuffix denotes the suffix used for the raw data stored
 	FileSuffix = ".gpf"
@@ -20,6 +23,10 @@ const (
 
 	// defaultEncoderType denotes the default encoder / compressor
 	defaultEncoderType = encoders.EncoderTypeLZ4
+
+	// bufferPreallocSize denotes the number of bytes to pre-allocate for
+	// all reusable buffers (to avoid unnecessary grow operations)
+	bufferPreallocSize = 8192
 
 	// headerVersion denotes the current header version
 	headerVersion = 1
@@ -90,6 +97,10 @@ func New(filename string, header *storage.BlockHeader, accessMode int, options .
 			return nil, err
 		}
 	}
+
+	// Preallocate reusable buffers for uncompressed / block data from the global pool
+	g.uncompData = bufPool.Get(bufferPreallocSize)
+	g.blockData = bufPool.Get(bufferPreallocSize)
 
 	return g, nil
 }
@@ -250,6 +261,9 @@ func (g *GPFile) RawFile() ReadWriteSeekCloser {
 
 // Close closes the file
 func (g *GPFile) Close() error {
+	bufPool.Put(g.uncompData)
+	bufPool.Put(g.blockData)
+
 	if g.freeEncoder {
 		if err := g.defaultEncoder.Close(); err != nil {
 			return err

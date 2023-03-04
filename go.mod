@@ -9,7 +9,6 @@ require (
 	github.com/spf13/cobra v1.5.0
 	github.com/stretchr/testify v1.8.1
 	github.com/throttled/throttled v2.2.5+incompatible
-	github.com/valyala/gozstd v1.17.0
 	github.com/zeebo/xxh3 v1.0.2
 	go.uber.org/zap v1.24.0
 	golang.org/x/net v0.7.0
