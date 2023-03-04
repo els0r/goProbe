@@ -7,6 +7,7 @@ import (
 
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/lz4"
+	"github.com/els0r/goProbe/pkg/goDB/encoder/zstd"
 )
 
 var testEncoders = []encoders.Type{
@@ -62,7 +63,11 @@ func TestCompressionDecompression(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to instantiate encoder of type %s: %s", encType, err)
 			}
-
+			defer func() {
+				if err := enc.Close(); err != nil {
+					t.Fatalf("Failed to release encoder of type %s: %s", encType, err)
+				}
+			}()
 			buf := bytes.NewBuffer(nil)
 			nCompressed, err := enc.Compress(encodingCorpus, nil, buf)
 			if err != nil {
@@ -98,6 +103,7 @@ func BenchmarkEncodersCompress(b *testing.B) {
 			if err != nil {
 				b.Fatalf("Failed to instantiate encoder of type %s: %s", encType, err)
 			}
+			defer enc.Close()
 
 			b.ReportAllocs()
 			b.SetBytes(nBytes)
@@ -106,9 +112,9 @@ func BenchmarkEncodersCompress(b *testing.B) {
 
 			for i := 0; i < b.N; i++ {
 				enc.Compress(encodingCorpus, nil, buf)
+				_ = buf
+				buf.Reset()
 			}
-
-			_ = buf
 		})
 	}
 }
@@ -122,6 +128,11 @@ func BenchmarkEncodersDecompress(b *testing.B) {
 			if err != nil {
 				b.Fatalf("Failed to instantiate encoder of type %s: %s", encType, err)
 			}
+			defer func() {
+				if err := enc.Close(); err != nil {
+					b.Fatalf("Failed to release encoder of type %s: %s", encType, err)
+				}
+			}()
 			buf := bytes.NewBuffer(nil)
 			nWritten, err := enc.Compress(encodingCorpus, nil, buf)
 			if err != nil {
@@ -132,37 +143,102 @@ func BenchmarkEncodersDecompress(b *testing.B) {
 			b.SetBytes(int64(nWritten))
 			b.ResetTimer()
 
+			out := make([]byte, nBytes, nBytes)
+			in := make([]byte, nWritten, nWritten)
 			for i := 0; i < b.N; i++ {
-				out := make([]byte, nBytes, nBytes)
-				in := make([]byte, nWritten, nWritten)
 				enc.Decompress(in, out, buf)
 
 				_ = in
 				_ = out
+				buf.Reset()
 			}
 		})
 	}
 }
 
-func BenchmarkLZ4LevelsCompress(b *testing.B) {
+func BenchmarkLevelsCompress(b *testing.B) {
 	var nBytes = int64(len(encodingCorpus))
 
-	for i := 0; i <= 9; i++ {
-		level := 1 << i
-		b.Run(encoders.EncoderTypeLZ4.String()+fmt.Sprintf("-lvl-%d", level), func(b *testing.B) {
-			enc := lz4.New(lz4.WithCompressionLevel(level))
+	encoders := map[encoders.Type]func(int) Encoder{
+		encoders.EncoderTypeLZ4: func(level int) Encoder {
+			return lz4.New(lz4.WithCompressionLevel(level))
+		},
+		encoders.EncoderTypeZSTD: func(level int) Encoder {
+			return zstd.New(zstd.WithCompressionLevel(level))
+		},
+	}
 
-			b.ReportAllocs()
-			b.SetBytes(nBytes)
-			b.ResetTimer()
-			buf := bytes.NewBuffer(nil)
+	for encType, encFn := range encoders {
+		for level := 1; level <= 12; level++ {
+			b.Run(encType.String()+fmt.Sprintf("-lvl-%d", level), func(b *testing.B) {
 
-			for i := 0; i < b.N; i++ {
-				enc.Compress(encodingCorpus, nil, buf)
-			}
+				enc := encFn(level)
+				defer func() {
+					if err := enc.Close(); err != nil {
+						b.Fatalf("Failed to release encoder of type %s: %s", encType, err)
+					}
+				}()
 
-			_ = buf
-		})
+				b.ReportAllocs()
+				b.SetBytes(nBytes)
+				b.ResetTimer()
+				buf := bytes.NewBuffer(nil)
+
+				tmp := make([]byte, 1725)
+
+				for i := 0; i < b.N; i++ {
+					enc.Compress(encodingCorpus, tmp, buf)
+					_ = buf
+					buf.Reset()
+				}
+			})
+		}
+	}
+}
+
+func BenchmarkLevelsDecompress(b *testing.B) {
+	var nBytes = int64(len(encodingCorpus))
+
+	encoders := map[encoders.Type]func(int) Encoder{
+		encoders.EncoderTypeLZ4: func(level int) Encoder {
+			return lz4.New(lz4.WithCompressionLevel(level))
+		},
+		encoders.EncoderTypeZSTD: func(level int) Encoder {
+			return zstd.New(zstd.WithCompressionLevel(level))
+		},
+	}
+
+	for encType, encFn := range encoders {
+		for level := 1; level <= 12; level++ {
+			b.Run(encType.String()+fmt.Sprintf("-lvl-%d", level), func(b *testing.B) {
+
+				enc := encFn(level)
+				defer func() {
+					if err := enc.Close(); err != nil {
+						b.Fatalf("Failed to release encoder of type %s: %s", encType, err)
+					}
+				}()
+
+				b.ReportAllocs()
+				b.SetBytes(nBytes)
+				b.ResetTimer()
+				buf := bytes.NewBuffer(nil)
+				nWritten, err := enc.Compress(encodingCorpus, nil, buf)
+				if err != nil {
+					b.Fatalf("Failed to encode test data for encoder type %s: %s", encType, err)
+				}
+
+				out := make([]byte, nBytes, nBytes)
+				in := make([]byte, nWritten, nWritten)
+				for i := 0; i < b.N; i++ {
+					enc.Decompress(in, out, buf)
+
+					_ = in
+					_ = out
+					buf.Reset()
+				}
+			})
+		}
 	}
 }
 

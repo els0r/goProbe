@@ -7,6 +7,7 @@ import (
 
 	"github.com/els0r/goProbe/pkg/goDB/encoder"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
+	"github.com/els0r/goProbe/pkg/goDB/encoder/null"
 	"github.com/els0r/goProbe/pkg/goDB/storage"
 )
 
@@ -50,7 +51,7 @@ type GPFile struct {
 	// defaultEncoderType governs how data blocks are (de-)compressed by default
 	defaultEncoderType encoders.Type
 	defaultEncoder     encoder.Encoder
-	nullEncoder        encoder.Encoder
+	freeEncoder        bool
 
 	// accessMode denotes if the file is opened for read or write operations (to avoid
 	// race conditions and unpredictable behavior, only one mode is possible at a time)
@@ -70,6 +71,7 @@ func New(filename string, header *storage.BlockHeader, accessMode int, options .
 		header:             header,
 		accessMode:         accessMode,
 		defaultEncoderType: defaultEncoderType,
+		freeEncoder:        true,
 	}
 
 	if header == nil {
@@ -81,15 +83,12 @@ func New(filename string, header *storage.BlockHeader, accessMode int, options .
 		opt(g)
 	}
 
-	// Initialize default encoder based on requested encoder type. If the colunn has
-	// a high-cardinality, the default encoder is overwritten with the high cardinality
-	// encoder
-	var err error
-	if g.defaultEncoder, err = encoder.New(g.defaultEncoderType); err != nil {
-		return nil, err
-	}
-	if g.nullEncoder, err = encoder.New(encoders.EncoderTypeNull); err != nil {
-		return nil, err
+	// Initialize default encoder based on requested encoder type (if not provided via options)
+	if g.defaultEncoder == nil {
+		var err error
+		if g.defaultEncoder, err = encoder.New(g.defaultEncoderType); err != nil {
+			return nil, err
+		}
 	}
 
 	return g, nil
@@ -170,7 +169,7 @@ func (g *GPFile) ReadBlockAtIndex(idx int) ([]byte, error) {
 		// micro-optimization that saves the allocation of blockData for decompression
 		// in the Null decompression case, since it is essentially just a byte read
 		// and the src bytes aren't used
-		nRead, err = g.nullEncoder.Decompress(nil, g.uncompData, g.file)
+		nRead, err = null.DefaultEncoder.Decompress(nil, g.uncompData, g.file)
 	}
 	if err != nil {
 		return nil, err
@@ -224,7 +223,7 @@ func (g *GPFile) writeBlock(timestamp int64, blockData []byte) error {
 	if nWritten > len(blockData) {
 		encType = encoders.EncoderTypeNull
 		g.fileWriteBuffer.Reset(g.file)
-		nWritten, err = g.nullEncoder.Compress(blockData, g.blockData, g.fileWriteBuffer)
+		nWritten, err = null.DefaultEncoder.Compress(blockData, g.blockData, g.fileWriteBuffer)
 		if err != nil {
 			return fmt.Errorf("failed to re-encode with %s encoder: %w", encType, err)
 		}
@@ -251,6 +250,11 @@ func (g *GPFile) RawFile() ReadWriteSeekCloser {
 
 // Close closes the file
 func (g *GPFile) Close() error {
+	if g.freeEncoder {
+		if err := g.defaultEncoder.Close(); err != nil {
+			return err
+		}
+	}
 	if g.file != nil {
 		return g.file.Close()
 	}

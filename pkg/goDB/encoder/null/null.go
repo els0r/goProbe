@@ -7,6 +7,10 @@ import (
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 )
 
+// DefaultEncoder proivdes a globally usable null encoder / DefaultEncoder
+// Since all null compression / decompression actions are stateless it is safe
+var DefaultEncoder = New()
+
 // Encoder compresses data without any algorithm
 type Encoder struct{}
 
@@ -19,6 +23,11 @@ func New() *Encoder {
 // Type will return the type of encoder
 func (e *Encoder) Type() encoders.Type {
 	return encoders.EncoderTypeNull
+}
+
+// Close will close the encoder and release potentially allocated resources
+func (e *Encoder) Close() error {
+	return nil
 }
 
 // Compress directly writes "data" to "dst" without any further manipulation

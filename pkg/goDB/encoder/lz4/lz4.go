@@ -2,15 +2,28 @@
 package lz4
 
 /*
-#cgo linux CFLAGS: -O3 -g
+#cgo linux CFLAGS: -O3
 #cgo linux LDFLAGS: -O3 -llz4
 #cgo darwin,amd64 LDFLAGS: -O3 -llz4
 #cgo darwin,arm64 LDFLAGS: -O3 -llz4
-#include <stdlib.h>
+#include <stdint.h>
 #include <stdio.h>
 #include "lz4frame.h"
 
+LZ4F_dctx* lz4InitDCtx() {
+
+	// Create / initialize decompression context
+	LZ4F_dctx* dctx;
+	LZ4F_errorCode_t const dctxStatus = LZ4F_createDecompressionContext(&dctx, LZ4F_VERSION);
+	if (LZ4F_isError(dctxStatus)) {
+		return NULL;
+	}
+
+	return dctx;
+}
+
 size_t lz4Compress(const char *src, const size_t srcSize, char *dst, const size_t dstSize, const int level) {
+
 	// initialize the frame compression preferences
 	// taken from https://github.com/lz4/lz4/blob/dev/examples/frameCompress.c
 	const LZ4F_preferences_t prefs = {
@@ -28,10 +41,14 @@ size_t lz4Compress(const char *src, const size_t srcSize, char *dst, const size_
 		1,
 		{ 0, 0, 0 },
 	};
+
 	return LZ4F_compressFrame(dst, dstSize, src, srcSize, &prefs);
 }
 
 size_t lz4GetCompressBound(const size_t srcSize, const int level) {
+
+	// initialize the frame compression preferences
+	// taken from https://github.com/lz4/lz4/blob/dev/examples/frameCompress.c
 	const LZ4F_preferences_t prefs = {
 		{
 			LZ4F_max64KB,
@@ -47,6 +64,7 @@ size_t lz4GetCompressBound(const size_t srcSize, const int level) {
 		1,
 		{ 0, 0, 0 },
 	};
+
 	return LZ4F_compressFrameBound(srcSize, &prefs);
 }
 
@@ -61,20 +79,8 @@ const char* lz4GetErrorName(const int code) {
 	return LZ4F_getErrorName(code);
 }
 
-size_t lz4Decompress(const char *src, const size_t srcSize, char *dst, size_t dstSize) {
-	// create decompression context
-	LZ4F_dctx* ctx;
+size_t lz4Decompress(uintptr_t dctx, const char *src, const size_t srcSize, char *dst, size_t dstSize) {
 
-	// check if context creation was successful
-	size_t const dctxStatus = LZ4F_createDecompressionContext(&ctx, LZ4F_VERSION);
-	if (LZ4F_isError(dctxStatus)) {
-		return dctxStatus;
-	}
-	if (!ctx) {
-		return -1;
-	}
-
-	// actual decompression
 	// read from src until there are no more bytes to be read
 	const void* srcPtr = (const char*)src;
 	const void* srcEnd = (const char*)src + srcSize;
@@ -82,15 +88,12 @@ size_t lz4Decompress(const char *src, const size_t srcSize, char *dst, size_t ds
 	while (srcPtr < srcEnd && result != 0) {
 		size_t sSize = (const char*)srcEnd - (const char*)srcPtr;
 
-		result = LZ4F_decompress(ctx, dst, &dstSize, src, &sSize, &decompOpts);
+		result = LZ4F_decompress((LZ4F_dctx*)dctx, dst, &dstSize, src, &sSize, &decompOpts);
 		if (LZ4F_isError(result)) {
 			return result;
 		}
 		srcPtr = (const char*)srcPtr + sSize;
 	}
-
-	// release context
-	LZ4F_freeDecompressionContext(ctx);
 
 	// LZ4_decompress writes the amount of decompressed bytes into dSize
 	return dstSize;
@@ -111,6 +114,10 @@ const defaultCompressionLevel = 6
 
 // Encoder compresses data with the LZ4 algorithm (omitting certain bounds-checks for performance reasons)
 type Encoder struct {
+
+	// decompression context
+	dCtx *C.LZ4F_dctx
+
 	// compression level
 	level int
 }
@@ -141,6 +148,17 @@ func WithCompressionLevel(level int) Option {
 // Type will return the type of encoder
 func (e *Encoder) Type() encoders.Type {
 	return encoders.EncoderTypeLZ4
+}
+
+// Close will close the encoder and release potentially allocated resources
+func (e *Encoder) Close() error {
+	if e.dCtx != nil {
+		if fErr := int(C.LZ4F_freeDecompressionContext(e.dCtx)); fErr < 0 {
+			errName := C.GoString(C.lz4GetErrorName(C.int(fErr)))
+			return fmt.Errorf("lz4: decompression context release failed: %s", errName)
+		}
+	}
+	return nil
 }
 
 // Compress compresses the input data and writes it to dst
@@ -196,8 +214,16 @@ func (e *Encoder) Decompress(in, out []byte, src io.Reader) (int, error) {
 		return 0, errors.New("lz4: incorrect number of bytes read from data source")
 	}
 
+	// If no decompression context exists, create one
+	if e.dCtx == nil {
+		if e.dCtx = C.lz4InitDCtx(); e.dCtx == nil {
+			return 0, errors.New("lz4: decompression context creation failed")
+		}
+	}
+
 	// decompress data
 	decompLen := int(C.lz4Decompress(
+		C.uintptr_t(uintptr(unsafe.Pointer(e.dCtx))),
 		(*C.char)(unsafe.Pointer(&in[0])),
 		C.size_t(len(in)),
 		(*C.char)(unsafe.Pointer(&out[0])),
