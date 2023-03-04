@@ -231,11 +231,10 @@ func BenchmarkLevelsDecompress(b *testing.B) {
 				out := make([]byte, nBytes, nBytes)
 				in := make([]byte, nWritten, nWritten)
 				for i := 0; i < b.N; i++ {
-					enc.Decompress(in, out, buf)
+					_, _ = enc.Decompress(in, out, bytes.NewBuffer(buf.Bytes()))
 
 					_ = in
 					_ = out
-					buf.Reset()
 				}
 			})
 		}
