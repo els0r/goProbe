@@ -34,8 +34,8 @@ const (
 	// ModeRead denotes read access
 	ModeRead = os.O_RDONLY
 
-	// ModeWrite denotes write / append access
-	ModeWrite = os.O_APPEND | os.O_CREATE | os.O_WRONLY
+	// ModeWrite denotes write access (no O_APPEND to allow for Seek())
+	ModeWrite = os.O_CREATE | os.O_WRONLY
 )
 
 // GPFile implements the binary data file used to store goProbe's flows
@@ -300,6 +300,12 @@ func (g *GPFile) open(flags int) (err error) {
 	// Open file for append, create if not exists
 	g.file, err = os.OpenFile(g.filename, flags, defaultPermissions)
 	if flags == ModeWrite {
+
+		// Ensure that the file is loaded at the position of the last known successful write
+		// The bufio.Writer will honor that position, even after a Reset()
+		if _, err = g.file.Seek(g.header.CurrentOffset, 0); err != nil {
+			return
+		}
 		g.fileWriteBuffer = bufio.NewWriter(g.file)
 	}
 	if flags == ModeRead && g.memPool != nil {

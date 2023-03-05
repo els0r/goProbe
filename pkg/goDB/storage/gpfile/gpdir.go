@@ -413,19 +413,16 @@ func (d *GPDir) Close() error {
 		}
 	}()
 
+	// If there was an error writing _any_ of the column files we abort
+	// in order to avoid metadata with incorrect / broken information being
+	// written to disk (allowing for recovery on the next write)
+	if len(errs) > 0 {
+		return fmt.Errorf("errors encountered during write of GPFile(s): %v", errs)
+	}
+
 	// In write mode, update the metadata on disk (creating / overwriting)
 	if d.accessMode == ModeWrite {
-		metadataFile, err := os.OpenFile(d.MetadataPath(), os.O_CREATE|os.O_WRONLY, 0644)
-		if err != nil {
-			return err
-		}
-		defer func() {
-			if cerr := metadataFile.Close(); cerr != nil && err == nil {
-				err = cerr
-			}
-		}()
-
-		return d.Marshal(metadataFile)
+		return d.writeMetadataAtomic()
 	}
 
 	return nil
@@ -447,6 +444,31 @@ func (d *GPDir) Column(colIdx types.ColumnIndex) (*GPFile, error) {
 func (d *GPDir) createIfRequired() error {
 	return os.MkdirAll(filepath.Join(
 		d.basePath, fmt.Sprintf("%d", d.timestamp)), 0755)
+}
+
+func (d *GPDir) writeMetadataAtomic() error {
+
+	// Create a temporary file (in the destinantion directory to avoid moving accross the FS barrier)
+	tempFile, err := os.CreateTemp(d.dirPath, ".tmp-metadata-*")
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if cerr := os.Remove(tempFile.Name()); cerr != nil && err == nil {
+			err = cerr
+		}
+	}()
+
+	// Serialize the metadata and flush / close the temporary file
+	if err = d.Marshal(tempFile); err != nil {
+		return err
+	}
+	if err = tempFile.Close(); err != nil {
+		return err
+	}
+
+	// Move the temporary file
+	return os.Rename(tempFile.Name(), d.MetadataPath())
 }
 
 // DirTimestamp returns timestamp rounded down to the nearest directory time frame (usually a day)

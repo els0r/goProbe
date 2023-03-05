@@ -237,6 +237,61 @@ func TestMetadataRoundTrip(t *testing.T) {
 	require.Equal(t, sumDrops, int(testDir.Metadata.Traffic.NumDrops), "mismatched number of total packet drops vs. computed")
 }
 
+func TestBrokenWrite(t *testing.T) {
+
+	require.Nil(t, os.RemoveAll("/tmp/test_db"))
+
+	// Write some blocks and flush the data to disk
+	testDir := NewDir("/tmp/test_db", 1000, ModeWrite)
+	require.Nil(t, testDir.Open(), "error opening test dir for writing")
+	require.Nil(t, writeDummyBlock(1, testDir, 1), "failed to write blocks")
+	require.Nil(t, writeDummyBlock(2, testDir, 2), "failed to write blocks")
+	expectedOffset := testDir.BlockMetadata[0].CurrentOffset
+	require.Nil(t, testDir.Close(), "error writing test dir")
+
+	// Append another block, flush the GPFiles but "fail" to write the metadata
+	testDir = NewDir("/tmp/test_db", 1000, ModeWrite)
+	require.Nil(t, testDir.Open(), "error opening test dir for writing")
+	require.Nil(t, writeDummyBlock(3, testDir, 3), "failed to write blocks")
+	require.NotEqual(t, expectedOffset, testDir.BlockMetadata[0].CurrentOffset)
+	for i := 0; i < int(types.ColIdxCount); i++ {
+		if testDir.gpFiles[i] != nil {
+			require.Nil(t, testDir.gpFiles[i].Close())
+		}
+	}
+
+	// Read the directory and validate that we only "see" two blocks on metadata level
+	testDir = NewDir("/tmp/test_db", 1000, ModeRead)
+	require.Nil(t, testDir.Open(), "error opening test dir for reading")
+	require.Equal(t, expectedOffset, testDir.BlockMetadata[0].CurrentOffset)
+	require.Equal(t, testDir.BlockMetadata[0].NBlocks(), 2)
+	require.Nil(t, testDir.Close(), "error closing test dir")
+
+	// Append another two blocks and write normally
+	testDir = NewDir("/tmp/test_db", 1000, ModeWrite)
+	require.Nil(t, testDir.Open(), "error opening test dir for writing")
+	require.Equal(t, expectedOffset, testDir.BlockMetadata[0].CurrentOffset)
+	require.Nil(t, writeDummyBlock(4, testDir, 4), "failed to write blocks")
+	require.Nil(t, writeDummyBlock(5, testDir, 5), "failed to write blocks")
+	expectedOffset = testDir.BlockMetadata[0].CurrentOffset
+	require.Equal(t, testDir.BlockMetadata[0].NBlocks(), 4)
+	require.Nil(t, testDir.Close(), "error writing test dir")
+
+	// Read the directory and validate that we only "see" four blocks on metadata level
+	testDir = NewDir("/tmp/test_db", 1000, ModeRead)
+	require.Nil(t, testDir.Open(), "error opening test dir for reading")
+	require.Equal(t, expectedOffset, testDir.BlockMetadata[0].CurrentOffset)
+	require.Equal(t, testDir.BlockMetadata[0].NBlocks(), 4)
+	for i := types.ColumnIndex(0); i < types.ColIdxCount; i++ {
+		for j := 0; j < testDir.BlockMetadata[0].NBlocks(); j++ {
+			data, err := testDir.ReadBlockAtIndex(i, j)
+			require.Nilf(t, err, "error fetching block data at index %d, block %d", i, j)
+			require.Equalf(t, int64(data[0]), testDir.BlockMetadata[i].Blocks()[j].Timestamp, "unexpected block data at index %d / block %d, want %d, have %d", i, j, testDir.BlockMetadata[i].Blocks()[j].Timestamp, data[0])
+		}
+	}
+	require.Nil(t, testDir.Close(), "error closing test dir")
+}
+
 func (g *GPFile) validateBlocks(nExpected int) error {
 	blocks, err := g.Blocks()
 	if err != nil {
@@ -247,4 +302,17 @@ func (g *GPFile) validateBlocks(nExpected int) error {
 	}
 
 	return nil
+}
+
+func writeDummyBlock(timestamp int64, dir *GPDir, dummyByte byte) error {
+	return dir.WriteBlocks(timestamp, TrafficMetadata{
+		NumV4Entries: uint64(dummyByte),
+		NumV6Entries: uint64(dummyByte),
+		NumDrops:     int(dummyByte),
+	}, types.Counters{
+		BytesRcvd:   uint64(dummyByte),
+		BytesSent:   uint64(dummyByte),
+		PacketsRcvd: uint64(dummyByte),
+		PacketsSent: uint64(dummyByte),
+	}, [types.ColIdxCount][]byte{{dummyByte}, {dummyByte}, {dummyByte}, {dummyByte}, {dummyByte}, {dummyByte}, {dummyByte}, {dummyByte}})
 }
