@@ -122,7 +122,10 @@ func NewDir(basePath string, timestamp int64, accessMode int, options ...Option)
 }
 
 // Open accesses the metadata and prepares the GPDir for reading / writing
-func (d *GPDir) Open() error {
+func (d *GPDir) Open(options ...Option) error {
+
+	// append functional options, if any
+	d.options = append(d.options, options...)
 
 	// If the directory has been opened in write mode, ensure it is created if required
 	if d.accessMode == ModeWrite {

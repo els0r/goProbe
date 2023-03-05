@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/els0r/goProbe/pkg/goDB/encoder"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 	"github.com/els0r/goProbe/pkg/goDB/storage"
 	"github.com/els0r/goProbe/pkg/types"
@@ -61,9 +62,12 @@ func TestRoundtrip(t *testing.T) {
 	}
 }
 
-func testRoundtrip(t *testing.T, enc encoders.Type) {
+func testRoundtrip(t *testing.T, encType encoders.Type) {
 
 	m := newMetadata()
+
+	enc, err := encoder.New(encType)
+	require.Nilf(t, err, "failed to create encoder of type %s", encType)
 
 	gpf, err := New(testFilePath, m.BlockMetadata[0], ModeWrite, WithEncoder(enc))
 	require.Nil(t, err, "failed to create new GPFile")
@@ -93,7 +97,7 @@ func testRoundtrip(t *testing.T, enc encoders.Type) {
 	for i, block := range blocks.Blocks() {
 		require.Equalf(t, block.Timestamp, int64(i), "unexpected timestamp at block %d: %d", i, block.Timestamp)
 		require.Equalf(t, block.Timestamp, int64(i), "unexpected timestamp at block %d: %d", i, block.Timestamp)
-		if block.Len > 0 && block.EncoderType != enc && block.EncoderType != encoders.EncoderTypeNull {
+		if block.Len > 0 && block.EncoderType != encType && block.EncoderType != encoders.EncoderTypeNull {
 			t.Fatalf("unexpected encoder at block %d: %v", i, gpf.defaultEncoderType)
 		}
 
@@ -112,7 +116,7 @@ func testRoundtrip(t *testing.T, enc encoders.Type) {
 	for _, blockItem := range blocks.Blocks() {
 		block, found := blocks.BlockAtTime(blockItem.Timestamp)
 		require.Truef(t, found, "missing block for timestamp %d in lookup map", blockItem.Timestamp)
-		if block.Len > 0 && block.EncoderType != enc && block.EncoderType != encoders.EncoderTypeNull {
+		if block.Len > 0 && block.EncoderType != encType && block.EncoderType != encoders.EncoderTypeNull {
 			t.Fatalf("Unexpected encoder at block %d: %v (want %v)", blockItem.Timestamp, block.EncoderType, enc)
 		}
 

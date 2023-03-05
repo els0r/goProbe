@@ -61,6 +61,11 @@ func (e *Encoder) Type() encoders.Type {
 	return encoders.EncoderTypeLZ4Custom
 }
 
+// Close will close the encoder and release potentially allocated resources
+func (e *Encoder) Close() error {
+	return nil
+}
+
 // Compress compresses the input data and writes it to dst
 func (e *Encoder) Compress(data, buf []byte, dst io.Writer) (n int, err error) {
 

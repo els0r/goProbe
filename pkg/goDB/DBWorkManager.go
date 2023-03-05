@@ -22,7 +22,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/els0r/goProbe/pkg/goDB/encoder"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/bitpack"
+	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 	"github.com/els0r/goProbe/pkg/goDB/storage/gpfile"
 	"github.com/els0r/goProbe/pkg/types"
 	"github.com/els0r/goProbe/pkg/types/hashmap"
@@ -37,6 +39,9 @@ const (
 	// WorkBulkSize denotes the per-worker bulk size (number of GPDirs processed before
 	// transmitting the resulting map to for further reduction / aggregtion
 	WorkBulkSize = 32
+
+	// defaultEncoderType denotes the default encoder / compressor
+	defaultEncoderType = encoders.EncoderTypeLZ4
 )
 
 // DBWorkload stores all relevant parameters to load a block and execute a query on it
@@ -196,6 +201,13 @@ func (w *DBWorkManager) grabAndProcessWorkload(ctx context.Context, wg *sync.Wai
 	go func() {
 		defer wg.Done()
 
+		enc, err := encoder.New(defaultEncoderType)
+		if err != nil {
+			w.logger.Error(err.Error())
+			mapChan <- hashmap.NilAggFlowMapWithMetadata
+		}
+		defer enc.Close()
+
 		var workload DBWorkload
 		for chanOpen := true; chanOpen; {
 			select {
@@ -209,7 +221,7 @@ func (w *DBWorkManager) grabAndProcessWorkload(ctx context.Context, wg *sync.Wai
 					for _, workDir := range workload.workDirs {
 
 						// if there is an error during one of the read jobs, throw a syslog message and terminate
-						err := w.readBlocksAndEvaluate(workDir, workload.query, &resultMap)
+						err := w.readBlocksAndEvaluate(workDir, workload.query, enc, &resultMap)
 						if err != nil {
 							w.logger.Error(err.Error())
 							mapChan <- hashmap.NilAggFlowMapWithMetadata
@@ -245,7 +257,7 @@ func (w *DBWorkManager) ExecuteWorkerReadJobs(ctx context.Context, mapChan chan 
 
 // Block evaluation and aggregation -----------------------------------------------------
 // this is where the actual reading and aggregation magic happens
-func (w *DBWorkManager) readBlocksAndEvaluate(workDir *gpfile.GPDir, query *Query, resultMap *hashmap.AggFlowMapWithMetadata) (err error) {
+func (w *DBWorkManager) readBlocksAndEvaluate(workDir *gpfile.GPDir, query *Query, enc encoder.Encoder, resultMap *hashmap.AggFlowMapWithMetadata) (err error) {
 
 	var (
 		v4Key, v4ComparisonValue                                         = types.NewEmptyV4Key().ExtendEmpty(), types.NewEmptyV4Key().ExtendEmpty()
@@ -254,7 +266,7 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workDir *gpfile.GPDir, query *Quer
 	)
 
 	// Open GPDir (reading metadata in the process)
-	if err := workDir.Open(); err != nil {
+	if err := workDir.Open(gpfile.WithEncoder(enc)); err != nil {
 		return err
 	}
 	defer workDir.Close()

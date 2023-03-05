@@ -1,14 +1,16 @@
 package gpfile
 
-import "github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
+import "github.com/els0r/goProbe/pkg/goDB/encoder"
 
 // Option defines optional arguments to gpfile
 type Option func(*GPFile)
 
 // WithEncoder allows to set the compression implementation
-func WithEncoder(e encoders.Type) Option {
+func WithEncoder(e encoder.Encoder) Option {
 	return func(g *GPFile) {
-		g.defaultEncoderType = e
+		g.defaultEncoder = e
+		g.defaultEncoderType = e.Type()
+		g.freeEncoder = false
 	}
 }
 

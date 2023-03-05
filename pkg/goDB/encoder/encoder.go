@@ -17,6 +17,9 @@ type Encoder interface {
 	// Type will return the type of encoder
 	Type() encoders.Type
 
+	// Close will close the encoder and release potentially allocated resources
+	Close() error
+
 	// Compress will take the input data slice and write it to dst. The number of written compressed bytes is returned with n
 	Compress(data, buf []byte, dst io.Writer) (n int, err error)
 
