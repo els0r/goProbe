@@ -13,7 +13,7 @@ package main
 import (
 	"strings"
 
-	"github.com/els0r/goProbe/pkg/conditions"
+	"github.com/els0r/goProbe/pkg/goDB/conditions"
 	"github.com/els0r/goProbe/pkg/goDB/protocols"
 )
 

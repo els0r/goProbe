@@ -16,7 +16,7 @@
 package goDB
 
 import (
-	"github.com/els0r/goProbe/pkg/conditions/node"
+	"github.com/els0r/goProbe/pkg/goDB/conditions/node"
 	"github.com/els0r/goProbe/pkg/types"
 )
 

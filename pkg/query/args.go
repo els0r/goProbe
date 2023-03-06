@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/els0r/goProbe/pkg/conditions"
+	"github.com/els0r/goProbe/pkg/goDB/conditions"
 	"github.com/els0r/goProbe/pkg/goDB/info"
 	"github.com/els0r/goProbe/pkg/query/dns"
 	"github.com/els0r/goProbe/pkg/results"

@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/els0r/goProbe/pkg/conditions"
+	"github.com/els0r/goProbe/pkg/goDB/conditions"
 )
 
 var resolveTests = []struct {

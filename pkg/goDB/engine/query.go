@@ -9,8 +9,8 @@ import (
 	"sort"
 	"time"
 
-	"github.com/els0r/goProbe/pkg/conditions/node"
 	"github.com/els0r/goProbe/pkg/goDB"
+	"github.com/els0r/goProbe/pkg/goDB/conditions/node"
 	"github.com/els0r/goProbe/pkg/goDB/info"
 	"github.com/els0r/goProbe/pkg/query"
 	"github.com/els0r/goProbe/pkg/query/heap"
