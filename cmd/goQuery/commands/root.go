@@ -10,9 +10,11 @@ import (
 	"time"
 
 	"github.com/els0r/goProbe/pkg/goDB/engine"
+	"github.com/els0r/goProbe/pkg/logging"
 	"github.com/els0r/goProbe/pkg/query"
 	"github.com/els0r/goProbe/pkg/results"
 	"github.com/els0r/goProbe/pkg/types"
+	"github.com/els0r/goProbe/pkg/version"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/spf13/cobra"
 )
@@ -49,6 +51,7 @@ var (
 )
 
 func init() {
+	cobra.OnInitialize(initLogger)
 
 	// flags to be also passed to children commands
 	subRootCmd.PersistentFlags().StringVarP(&subcmdLineParams.DBPath, "db-path", "d", query.DefaultDBPath, helpMap["DBPath"])
@@ -92,8 +95,25 @@ func init() {
 	rootCmd.Flags().DurationVarP(&cmdLineParams.QueryTimeout, "timeout", "", query.DefaultQueryTimeout, helpMap["QueryTimeout"])
 }
 
+func initLogger() {
+	outputPaths := []string{"stderr"}
+
+	// since this is a command line tool, only warnings and errors should be printed and they
+	// shouldn't go to a dedicated file
+	err := logging.Init("goQuery", version.Short(), "warn", "console",
+		logging.WithOutputPaths(outputPaths),
+		logging.WithErrorPaths(outputPaths),
+	)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to set up logger: %v", err)
+		os.Exit(1)
+	}
+}
+
 // main program entrypoint
 func entrypoint(cmd *cobra.Command, args []string) error {
+	// initialize logger
+
 	// assign query args
 	var queryArgs = *cmdLineParams
 
@@ -191,9 +211,7 @@ func entrypoint(cmd *cobra.Command, args []string) error {
 	}
 
 	// run the query
-	runner := engine.NewQueryRunner()
-
-	res, err := runner.Run(ctx, stmt)
+	res, err := engine.NewQueryRunner().Run(ctx, stmt)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Query execution failed: %v\n", err)
 		return err
@@ -221,7 +239,7 @@ func entrypoint(cmd *cobra.Command, args []string) error {
 		}
 		return nil
 	}
-	err = stmt.Print(ctx, &result)
+	err = stmt.Print(ctx, result)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Result printing failed: %v\n", err)
 		return err

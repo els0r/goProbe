@@ -22,7 +22,7 @@ func desugarConditionNode(node conditionNode) (Node, error) {
 	helper := func(name, src, dst, comparator, value string) (Node, error) {
 		var result Node
 		if comparator != "=" && comparator != "!=" {
-			return result, fmt.Errorf("Invalid comparison operator in %s condition: %s", name, comparator)
+			return result, fmt.Errorf("invalid comparison operator in %s condition: %s", name, comparator)
 		}
 
 		result = orNode{
@@ -47,6 +47,7 @@ func desugarConditionNode(node conditionNode) (Node, error) {
 		return result, nil
 	}
 
+	// map aliases to proper attribute names
 	switch node.attribute {
 	case "src":
 		node.attribute = "sip"

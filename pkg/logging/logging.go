@@ -37,6 +37,22 @@ func WithStackTraces(b bool) Option {
 	}
 }
 
+// WithOutputPaths sets to which paths level "info" and above shall be sent. Treats "stdout" and "stderr" as
+// special paths
+func WithOutputPaths(paths []string) Option {
+	return func(lc *loggingConfig) {
+		lc.Config.OutputPaths = paths
+	}
+}
+
+// WithErrorPaths sets to which paths level "error" and below shall be sent. Treats "stdout" and "stderr" as
+// special paths
+func WithErrorPaths(paths []string) Option {
+	return func(lc *loggingConfig) {
+		lc.Config.ErrorOutputPaths = paths
+	}
+}
+
 // Init initializes the global logger. The `encoding` variable sets whether content should
 // be printed for console output or in JSON (for machine consumption)
 func Init(appName, appVersion, logLevel, encoding string, opts ...Option) error {

@@ -89,7 +89,7 @@ func (a *API) handleQuery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = stmt.Print(ctx, &result)
+	err = stmt.Print(ctx, result)
 	if err != nil {
 		a.errorHandler.Handle(ctx, w, http.StatusInternalServerError, err, "failed to write results")
 		return

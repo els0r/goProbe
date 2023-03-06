@@ -170,7 +170,7 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 		return s, fmt.Errorf("unknown sorting parameter '%s' specified", a.SortBy)
 	}
 
-	_, _, _, err = types.ParseQueryType(a.Query)
+	s.Attributes, _, _, err = types.ParseQueryType(a.Query)
 	if err != nil {
 		return s, fmt.Errorf("failed to parse query type: %w", err)
 	}

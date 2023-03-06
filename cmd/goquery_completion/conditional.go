@@ -52,6 +52,7 @@ func nextAll(prevprev, prev string, openParens int) []suggestion {
 			s("host", false),
 			s("net", false),
 			s("dport", false),
+			s("port", false),
 			s("proto", false),
 		}
 	case "!":
@@ -66,6 +67,7 @@ func nextAll(prevprev, prev string, openParens int) []suggestion {
 			s("host", false),
 			s("net", false),
 			s("dport", false),
+			s("port", false),
 			s("proto", false),
 		}
 	case "dip", "sip", "dnet", "snet", "dst", "src", "host", "net":
@@ -73,7 +75,7 @@ func nextAll(prevprev, prev string, openParens int) []suggestion {
 			s("=", false),
 			s("!=", false),
 		}
-	case "dport", "proto":
+	case "dport", "port", "proto":
 		return []suggestion{
 			s("=", false),
 			s("!=", false),

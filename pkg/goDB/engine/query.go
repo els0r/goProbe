@@ -29,7 +29,7 @@ func NewQueryRunner() *QueryRunner {
 }
 
 // Execute runs the query with the provided parameters
-func (qr *QueryRunner) Run(ctx context.Context, stmt *query.Statement) (res []results.Result, err error) {
+func (qr *QueryRunner) Run(ctx context.Context, stmt *query.Statement) (res []*results.Result, err error) {
 	result := &results.Result{
 		Status: types.StatusOK,
 		Summary: results.Summary{
@@ -255,6 +255,9 @@ func (qr *QueryRunner) Run(ctx context.Context, stmt *query.Statement) (res []re
 	}
 	result.Summary.Hits.Displayed = len(rs)
 	result.Rows = rs
+
+	// assign the result
+	res = []*results.Result{result}
 
 	return res, nil
 }

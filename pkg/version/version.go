@@ -33,3 +33,12 @@ func Version() string {
 	)
 	return str
 }
+
+// Short returns a shortened GitSHA string that is equivalent to
+// git rev-parse --short
+func Short() string {
+	if GitSHA == "" {
+		return "devel"
+	}
+	return GitSHA[0:8]
+}

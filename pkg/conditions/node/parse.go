@@ -312,7 +312,7 @@ func (p *parser) condition() (result Node) {
 func (p *parser) attribute() (result string) {
 	attributes := []string{
 		"dip", "sip", "dnet", "snet", "dport", "proto", // non-sugar
-		"dst", "src", "host", "net", // sugar
+		"dst", "src", "host", "net", "port", "protocol", "ipproto", // sugar
 	}
 	for _, attrib := range attributes {
 		if p.accept(attrib) {
