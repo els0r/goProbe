@@ -102,6 +102,7 @@ func initLogger() {
 	err := logging.Init("goQuery", version.Short(), "warn", "console",
 		logging.WithOutputPaths(outputPaths),
 		logging.WithErrorPaths(outputPaths),
+		logging.WithStackTraces(false),
 	)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to set up logger: %v", err)

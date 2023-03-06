@@ -31,9 +31,7 @@ func WithDevelopmentMode(b bool) Option {
 // WithStackTraces enables/disables stacktraces logged under the "stacktraces" key
 func WithStackTraces(b bool) Option {
 	return func(lc *loggingConfig) {
-		if !b {
-			lc.Config.DisableStacktrace = true
-		}
+		lc.Config.DisableStacktrace = !b
 	}
 }
 
