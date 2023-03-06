@@ -99,13 +99,13 @@ func initLogger() {
 
 	// since this is a command line tool, only warnings and errors should be printed and they
 	// shouldn't go to a dedicated file
-	err := logging.Init("goQuery", version.Short(), "warn", "console",
+	err := logging.Init("goQuery", version.Short(), "warn", "logfmt",
 		logging.WithOutputPaths(outputPaths),
 		logging.WithErrorPaths(outputPaths),
 		logging.WithStackTraces(false),
 	)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to set up logger: %v", err)
+		fmt.Fprintf(os.Stderr, "failed to initialize logger: %v\n", err)
 		os.Exit(1)
 	}
 }

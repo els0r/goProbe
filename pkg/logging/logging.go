@@ -9,9 +9,12 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+
+	_ "github.com/jsternberg/zap-logfmt"
 )
 
 type loggingConfig struct {
@@ -55,7 +58,7 @@ func WithErrorPaths(paths []string) Option {
 // be printed for console output or in JSON (for machine consumption)
 func Init(appName, appVersion, logLevel, encoding string, opts ...Option) error {
 	switch strings.ToLower(encoding) {
-	case "json", "console":
+	case "json", "console", "logfmt":
 	default:
 		return fmt.Errorf("unknown encoding %q", encoding)
 	}
@@ -90,6 +93,13 @@ func Init(appName, appVersion, logLevel, encoding string, opts ...Option) error 
 		EncodeTime:     zapcore.ISO8601TimeEncoder,
 		EncodeDuration: zapcore.MillisDurationEncoder,
 		EncodeCaller:   zapcore.ShortCallerEncoder,
+	}
+
+	// registering the encoder is taken care of the by teh zaplogfmt library itself
+	if encoding == "logfmt" {
+		zapEncoderConfig.EncodeTime = func(ts time.Time, encoder zapcore.PrimitiveArrayEncoder) {
+			encoder.AppendString(ts.UTC().Format(time.RFC3339))
+		}
 	}
 
 	cfg := zap.Config{
