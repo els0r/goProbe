@@ -103,7 +103,7 @@ An example configuration file is created during installation at `/etc/goprobe.co
 
 #### DB location
 
-The location of the goDB database to which flows are written is configured with `dbpath` , e.g. `"db_path" : "/path/to/database"`
+The location of the goDB database to which flows are written is configured with `dbpath` , e.g. `"db_path" : "/path/to/database"`. Changes to the goDB configuration require a *restart* of goProbe.
 
 #### Interface
 
