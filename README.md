@@ -139,23 +139,23 @@ For a list of supported encoders, refer to [encoders.go](./pkg/goDB/encoder/enco
 
 #### Logging
 
-goProbe has flexible logging capabilities. It uses the `Logger` interface from third-party package [log](https://github.com/els0r/log), which is compatible with most third-party logging frameworks. Hence, other loggers can be injected into goProbe.
+The default configuration has goProbe log to console with level "info". The config blocks looks as follows:
 
-The default configuration has goProbe log to syslog with level "info". The config blocks looks as follows:
 ```
 "logging" : {
-    "destination" : "console", // will write log messages to stdout/stderr
-    "level" : "debug"          // more verbose logging
+    "encoding" : "console", // will write log messages to stdout/stderr
+    "level" : "debug"       // more verbose logging
 }
 ```
 
-Changes to the logging configuration require a _restart_ of goProbe.
+Changes to the logging configuration require a *restart* of goProbe.
 
 #### API
 
 By default, goProbe spawns a command-and-control HTTP API server. For more information on the capabilities of the API, see [API documentation](./pkg/api/README.md).
 
 The API itself is configured via the following parameters:
+
 ```
 "api" : {
     "host" : "localhost",

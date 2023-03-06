@@ -12,7 +12,6 @@ import (
 	"github.com/els0r/goProbe/pkg/discovery"
 	"github.com/els0r/goProbe/pkg/goprobe/writeout"
 	"github.com/els0r/goProbe/pkg/logging"
-	log "github.com/els0r/log"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -76,9 +75,10 @@ const (
 	DefaultTimeout = 30
 )
 
-func getLoggerHandler(logger log.Logger) func(next http.Handler) http.Handler {
+func getLoggerHandler() func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		fn := func(w http.ResponseWriter, r *http.Request) {
+			logger := logging.WithContext(r.Context())
 			logger.Debugf("%s %s", r.Method, r.URL.Path)
 			next.ServeHTTP(w, r)
 		}
