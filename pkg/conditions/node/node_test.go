@@ -1,6 +1,6 @@
 /////////////////////////////////////////////////////////////////////////////////
 //
-// Conditional_test.go
+// node_test.go
 //
 //
 // Written by Lorenz Breidenbach lob@open.ch, September 2015
@@ -9,7 +9,7 @@
 //
 /////////////////////////////////////////////////////////////////////////////////
 
-package goDB
+package node
 
 import (
 	"fmt"
@@ -20,26 +20,26 @@ var negationNormalFormTests = []struct {
 	inTokens []string
 	output   string
 }{
-	//No change
+	// No change
 	{[]string{"sip", "!=", "127.0.0.1"}, "sip != 127.0.0.1"},
 	{[]string{"sip", "=", "127.0.0.1"}, "sip = 127.0.0.1"},
 	{[]string{"sip", ">=", "127.0.0.1"}, "sip >= 127.0.0.1"},
 	{[]string{"sip", "<=", "127.0.0.1"}, "sip <= 127.0.0.1"},
 	{[]string{"sip", "<", "127.0.0.1"}, "sip < 127.0.0.1"},
 	{[]string{"sip", ">", "127.0.0.1"}, "sip > 127.0.0.1"},
-	//Flip comparison op
+	// Flip comparison op
 	{[]string{"!", "sip", "!=", "127.0.0.1"}, "sip = 127.0.0.1"},
 	{[]string{"!", "sip", "=", "127.0.0.1"}, "sip != 127.0.0.1"},
 	{[]string{"!", "sip", ">=", "127.0.0.1"}, "sip < 127.0.0.1"},
 	{[]string{"!", "sip", "<=", "127.0.0.1"}, "sip > 127.0.0.1"},
 	{[]string{"!", "sip", "<", "127.0.0.1"}, "sip >= 127.0.0.1"},
 	{[]string{"!", "sip", ">", "127.0.0.1"}, "sip <= 127.0.0.1"},
-	//Double negation
+	// Double negation
 	{[]string{"!", "(", "!", "sip", "!=", "127.0.0.1", ")"}, "sip != 127.0.0.1"},
-	//Logical connectives
+	// Logical connectives
 	{[]string{"sip", "!=", "127.0.0.1", "&", "sip", "!=", "192.168.0.1"}, "(sip != 127.0.0.1 & sip != 192.168.0.1)"},
 	{[]string{"sip", "!=", "127.0.0.1", "|", "sip", "!=", "192.168.0.1"}, "(sip != 127.0.0.1 | sip != 192.168.0.1)"},
-	//Nested formula
+	// Nested formula
 	{[]string{"!", "(", "!", "sip", "!=", "127.0.0.1", "|", "dport", "<", "80", ")"}, "(sip != 127.0.0.1 & dport >= 80)"},
 }
 

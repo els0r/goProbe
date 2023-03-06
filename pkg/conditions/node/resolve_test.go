@@ -1,6 +1,6 @@
 /////////////////////////////////////////////////////////////////////////////////
 //
-// ResolveConditional_test.go
+// resolve_test.go
 //
 // Written by Lorenz Breidenbach lob@open.ch, February 2016
 // Copyright (c) 2016 Open Systems AG, Switzerland
@@ -8,12 +8,14 @@
 //
 /////////////////////////////////////////////////////////////////////////////////
 
-package goDB
+package node
 
 import (
 	"fmt"
 	"testing"
 	"time"
+
+	"github.com/els0r/goProbe/pkg/conditions"
 )
 
 var resolveTests = []struct {
@@ -40,7 +42,7 @@ var resolveTests = []struct {
 	{
 		"sip = google-public-dns-a.google.com | dip = google-public-dns-a.google.com", //
 		2 * time.Second,
-		"((sip = 8.8.8.8 | sip = 2001:4860:4860::8888) | (dip = 8.8.8.8 | dip = 2001:4860:4860::8888))",
+		"((sip = 2001:4860:4860::8888 | sip = 8.8.8.8) | (dip = 2001:4860:4860::8888 | dip = 8.8.8.8))",
 		true,
 	},
 	// do we leave non-sip and non-dip attributes untouched?
@@ -66,15 +68,15 @@ var resolveTests = []struct {
 }
 
 // Note that this test is inherently brittle since it relies on:
-// * working DNS resolution
-// * google-public-dns-a.google.com resolving to 2001:4860:4860::8888 and 8.8.8.8
-//   I couldn't think of a more stable domain-IP pair, but of course google can
-//   change this at any moment.
+//   - working DNS resolution
+//   - google-public-dns-a.google.com resolving to 2001:4860:4860::8888 and 8.8.8.8
+//     I couldn't think of a more stable domain-IP pair, but of course google can
+//     change this at any moment.
 //
 // It's probably still better to have a slightly brittle test than to have no test.
 func TestResolveInConditional(t *testing.T) {
 	for _, test := range resolveTests {
-		tokens, err := TokenizeConditional(test.conditional)
+		tokens, err := conditions.Tokenize(test.conditional)
 		if err != nil {
 			t.Fatalf("Tokenizing %v unexpectly failed. Error:\n%v", test.conditional, err)
 		}

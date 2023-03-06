@@ -13,7 +13,7 @@ package main
 import (
 	"strings"
 
-	"github.com/els0r/goProbe/pkg/goDB"
+	"github.com/els0r/goProbe/pkg/conditions"
 	"github.com/els0r/goProbe/pkg/goDB/protocols"
 )
 
@@ -127,16 +127,14 @@ func nextAll(prevprev, prev string, openParens int) []suggestion {
 
 func conditional(args []string) []string {
 	tokenize := func(conditional string) []string {
-		san, err := goDB.SanitizeUserInput(conditional)
+		san, err := conditions.SanitizeUserInput(conditional)
 		if err != nil {
 			return nil
 		}
-		//fmt.Fprintf(os.Stderr, "%#v\n", san)
-		tokens, err := goDB.TokenizeConditional(san)
+		tokens, err := conditions.Tokenize(san)
 		if err != nil {
 			return nil
 		}
-		//fmt.Fprintf(os.Stderr, "%#v\n", tokens)
 
 		var startedNewToken bool
 		startedNewToken = len(tokens) == 0 || strings.LastIndex(conditional, tokens[len(tokens)-1])+len(tokens[len(tokens)-1]) < len(conditional)

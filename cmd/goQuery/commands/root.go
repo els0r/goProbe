@@ -9,6 +9,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/els0r/goProbe/pkg/goDB/engine"
 	"github.com/els0r/goProbe/pkg/query"
 	"github.com/els0r/goProbe/pkg/results"
 	"github.com/els0r/goProbe/pkg/types"
@@ -64,7 +65,7 @@ func init() {
 	rootCmd.Flags().BoolVarP(&cmdLineParams.In, "in", "", query.DefaultIn, helpMap["In"])
 	rootCmd.Flags().BoolVarP(&cmdLineParams.List, "list", "", false, helpMap["List"])
 	rootCmd.Flags().BoolVarP(&cmdLineParams.Out, "out", "", query.DefaultOut, helpMap["Out"])
-	rootCmd.Flags().BoolVarP(&cmdLineParams.Resolve, "resolve", "", false, helpMap["Resolve"])
+	rootCmd.Flags().BoolVarP(&cmdLineParams.DNSResolution.Enabled, "resolve", "", false, helpMap["Resolve"])
 	rootCmd.Flags().BoolVarP(&cmdLineParams.SortAscending, "ascending", "a", false, helpMap["SortAscending"])
 	rootCmd.Flags().BoolVarP(&cmdLineParams.Sum, "sum", "", false, helpMap["Sum"])
 	rootCmd.Flags().BoolVarP(&cmdLineParams.Version, "version", "v", false, "Print version information and exit\n")
@@ -82,8 +83,8 @@ func init() {
 
 	// Integers
 	rootCmd.Flags().IntVarP(&cmdLineParams.NumResults, "limit", "n", query.DefaultNumResults, helpMap["NumResults"])
-	rootCmd.Flags().IntVarP(&cmdLineParams.ResolveRows, "resolve-rows", "", query.DefaultResolveRows, helpMap["ResolveRows"])
-	rootCmd.Flags().IntVarP(&cmdLineParams.ResolveTimeout, "resolve-timeout", "", query.DefaultResolveTimeout, helpMap["ResolveTimeout"])
+	rootCmd.Flags().IntVarP(&cmdLineParams.DNSResolution.MaxRows, "resolve-rows", "", query.DefaultResolveRows, helpMap["ResolveRows"])
+	rootCmd.Flags().DurationVarP(&cmdLineParams.DNSResolution.Timeout, "resolve-timeout", "", query.DefaultResolveTimeout, helpMap["ResolveTimeout"])
 	rootCmd.Flags().IntVarP(&cmdLineParams.MaxMemPct, "max-mem", "", query.DefaultMaxMemPct, helpMap["MaxMemPct"])
 	rootCmd.Flags().BoolVarP(&cmdLineParams.LowMem, "low-mem", "", false, helpMap["LowMem"])
 
@@ -165,7 +166,7 @@ func entrypoint(cmd *cobra.Command, args []string) error {
 	queryArgs.Caller = os.Args[0] // take the full path of called binary
 
 	// convert the command line parameters
-	query, err := queryArgs.Prepare()
+	stmt, err := queryArgs.Prepare()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Query preparation failed: %v\n", err)
 		return err
@@ -180,32 +181,47 @@ func entrypoint(cmd *cobra.Command, args []string) error {
 		defer cancel()
 	}
 
+	emptyResReturn := func(stmt *query.Statement) error {
+		if stmt.External || stmt.Format == "json" {
+			msg := results.ErrorMsgExternal{Status: types.StatusEmpty, Message: results.ErrorNoResults.Error()}
+			return jsoniter.NewEncoder(stmt.Output).Encode(msg)
+		}
+		fmt.Fprintln(stmt.Output, results.ErrorNoResults.Error())
+		return nil
+	}
+
 	// run the query
-	result, err := query.Execute(ctx)
+	runner := engine.NewQueryRunner()
+
+	res, err := runner.Run(ctx, stmt)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Query execution failed: %v\n", err)
 		return err
 	}
 	// empty results should be handled here exclusively
-	if len(result.Rows) == 0 {
-		if query.External || query.Format == "json" {
-			msg := results.ErrorMsgExternal{Status: types.StatusEmpty, Message: results.ErrorNoResults.Error()}
-			return jsoniter.NewEncoder(query.Output).Encode(msg)
-		}
-		fmt.Fprintln(query.Output, results.ErrorNoResults.Error())
+	if len(res) == 0 {
+		return emptyResReturn(stmt)
+	} else if len(res) > 1 {
+		fmt.Fprintln(stmt.Output, "unexpected number of results encountered")
 		return nil
 	}
 
+	// when running against a local goDB, there should be exactly one result
+	result := res[0]
+	if len(result.Rows) == 0 {
+		return emptyResReturn(stmt)
+	}
+
 	// serialize raw result if json is selected
-	if query.Format == "json" {
-		err = jsoniter.NewEncoder(query.Output).Encode(result)
+	if stmt.Format == "json" {
+		err = jsoniter.NewEncoder(stmt.Output).Encode(result)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Results serialization failed: %v\n", err)
 			return err
 		}
 		return nil
 	}
-	err = query.Print(ctx, result)
+	err = stmt.Print(ctx, &result)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Result printing failed: %v\n", err)
 		return err

@@ -421,7 +421,7 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workDir *gpfile.GPDir, query *Quer
 					comparisonValue.PutDportV(dportBlocks[i*types.DportSizeof:i*types.DportSizeof+types.DportSizeof], isIPv4)
 				}
 
-				conditionalSatisfied = query.Conditional.evaluate(comparisonValue.Key())
+				conditionalSatisfied = query.Conditional.Evaluate(comparisonValue.Key())
 			}
 
 			if conditionalSatisfied {

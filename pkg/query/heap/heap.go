@@ -1,7 +1,8 @@
-package query
+package heap
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"runtime"
 	"runtime/debug"
@@ -17,8 +18,12 @@ const (
 	goGCLimit    = 6291456 // Limit for GC call, in bytes
 )
 
-// watchHeap makes sure to alert on too high memory consumption
-func watchHeap(ctx context.Context, maxAllowedMemPct int) (errors chan error) {
+var (
+	ErrorMemoryBreach = errors.New("maximum memory breach")
+)
+
+// Watch makes sure to alert on too high memory consumption
+func Watch(ctx context.Context, maxAllowedMemPct int) (errors chan error) {
 	errors = make(chan error)
 	go func() {
 		// obtain physical memory of this host
@@ -50,7 +55,7 @@ func watchHeap(ctx context.Context, maxAllowedMemPct int) (errors chan error) {
 				// physical memory
 				if usedMem/1024 > maxAllowedMem {
 					memTicker.Stop()
-					errors <- fmt.Errorf("memory consumption above %v%% of physical memory. Aborting query", maxAllowedMemPct)
+					errors <- fmt.Errorf("%w: %v%% of physical memory", ErrorMemoryBreach, maxAllowedMemPct)
 					return
 				}
 

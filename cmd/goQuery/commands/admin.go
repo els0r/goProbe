@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/els0r/goProbe/pkg/goDB/info"
 	"github.com/els0r/goProbe/pkg/goDB/storage/gpfile"
 	"github.com/els0r/goProbe/pkg/query"
 	"github.com/els0r/goProbe/pkg/types"
@@ -43,7 +44,7 @@ var cleanCmd = &cobra.Command{
 		}
 
 		// check if DB exists at path
-		err = query.CheckDBExists(subcmdLineParams.DBPath)
+		err = info.CheckDBExists(subcmdLineParams.DBPath)
 		if err != nil {
 			return err
 		}
@@ -67,7 +68,7 @@ var wipeCmd = &cobra.Command{
 		status.Linef("Completely wiping DB")
 
 		// check if DB exists at path
-		err := query.CheckDBExists(subcmdLineParams.DBPath)
+		err := info.CheckDBExists(subcmdLineParams.DBPath)
 		defer handleStatus(err)
 
 		if err != nil {

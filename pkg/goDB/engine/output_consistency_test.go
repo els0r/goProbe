@@ -9,7 +9,7 @@
 //
 /////////////////////////////////////////////////////////////////////////////////
 
-package query
+package engine
 
 import (
 	"bytes"
@@ -23,6 +23,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/els0r/goProbe/pkg/goDB/info"
+	"github.com/els0r/goProbe/pkg/query"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -63,7 +65,7 @@ const (
 func TestOutputConsistency(t *testing.T) {
 	t.Parallel()
 
-	CheckDBExists(TestDB)
+	info.CheckDBExists(TestDB)
 
 	testCases, err := testCases()
 	if err != nil {
@@ -82,7 +84,7 @@ func TestOutputConsistency(t *testing.T) {
 			t.Fatalf("Could not read argument file %s. Error: %s", argumentFile, err)
 		}
 
-		var arguments []Args
+		var arguments []query.Args
 		err = jsoniter.Unmarshal(argumentsJSON, &arguments)
 		if err != nil {
 			t.Fatalf("Could not decode argument file %s. Error: %s", argumentFile, err)
@@ -100,7 +102,7 @@ func TestOutputConsistency(t *testing.T) {
 		}
 
 		var buf = &bytes.Buffer{}
-		var stmt *Statement
+		var stmt *query.Statement
 		for i, args := range arguments {
 			buf.Reset()
 
@@ -111,7 +113,7 @@ func TestOutputConsistency(t *testing.T) {
 			}
 
 			// run query
-			_, err = stmt.Execute(context.Background())
+			_, err = NewQueryRunner().Run(context.Background(), stmt)
 			if err != nil {
 				t.Fatalf("[%d] failed to run query: %s", i, err)
 			}

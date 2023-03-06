@@ -1,6 +1,6 @@
 /////////////////////////////////////////////////////////////////////////////////
 //
-// ParseConditional.go
+// parse.go
 //
 // This file contains code for parsing tokenized conditionals into conditional ASTs
 // For example, the conditional expression
@@ -28,7 +28,7 @@
 //
 /////////////////////////////////////////////////////////////////////////////////
 
-package goDB
+package node
 
 import "fmt"
 
@@ -61,13 +61,15 @@ func parseConditional(tokens []string) (conditionalNode Node, err error) {
 // The parser is implemented using a recursive descent technique.
 // We first left-factor the condition grammar so we get an equivalent grammar
 // that contains no left recursion.
-//     conditional -> disjunction
-//     disjunction -> conjunction ('|' conjunction)*
-//     conjunction -> negation ('&' negation)*
-//     negation -> '!' primitive | primitive
-//     primitive -> '(' disjunction ')' | condition
-//     condition -> attribute comparator value
-//     comparator -> '=' | '!=' | '<' | '>' | '<=' | '>='
+//
+//	conditional -> disjunction
+//	disjunction -> conjunction ('|' conjunction)*
+//	conjunction -> negation ('&' negation)*
+//	negation -> '!' primitive | primitive
+//	primitive -> '(' disjunction ')' | condition
+//	condition -> attribute comparator value
+//	comparator -> '=' | '!=' | '<' | '>' | '<=' | '>='
+//
 // (Terminal symbols are written in single quotes)
 // (A rule part written with a star is meant to be repeated zero or more times)
 // We observe that this grammar is in LL(1), i.e. the parser can always decide which
@@ -101,10 +103,10 @@ func (p parser) success() bool {
 // Creates a parser error with the given description and a nice error
 // message pointing to current token in the token stream.
 // Example of an error message created by this method:
-//        ( sip = 192.168.1.1
-//                            ^
-//        Expected ), but didn't get it.
 //
+//	( sip = 192.168.1.1
+//	                    ^
+//	Expected ), but didn't get it.
 func (p *parser) die(description string, args ...interface{}) {
 	// Reassemble the tokens.
 	final := ""
@@ -174,22 +176,24 @@ func (p *parser) conditional() Node {
 // argument is true) or a right-hanging tree of orNodes (if the and argument is false).
 // Example:
 // listToTree(true, []Node{A,B,C}) produces
-//      [&]
-//       /\
-//      /  \
-//     A   [&]
-//          /\
-//         /  \
-//        B    C
+//
+//	 [&]
+//	  /\
+//	 /  \
+//	A   [&]
+//	     /\
+//	    /  \
+//	   B    C
 //
 // listToTree(false, []Node{A,B,C}) produces
-//      [|]
-//       /\
-//      /  \
-//     A   [|]
-//          /\
-//         /  \
-//        B    C
+//
+//	 [|]
+//	  /\
+//	 /  \
+//	A   [|]
+//	     /\
+//	    /  \
+//	   B    C
 //
 // If nodes[] doesn't contain any element of type *Node, the resulting tree
 // also won't contain any elements of type *Node.

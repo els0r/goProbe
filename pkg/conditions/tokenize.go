@@ -1,6 +1,6 @@
 /////////////////////////////////////////////////////////////////////////////////
 //
-// TokenizeConditional.go
+// tokenize.go
 //
 // This file contains code for tokenizing conditionals into string slices.
 // For example, the conditional expression
@@ -15,7 +15,7 @@
 //
 /////////////////////////////////////////////////////////////////////////////////
 
-package goDB
+package conditions
 
 import (
 	"bufio"
@@ -32,16 +32,19 @@ import (
 // to the grammar-conforming expression "(dport=443|dport=8080)"
 //
 // Input:
-//  conditional: string containing the conditional specified in "user grammar"
+//
+//	conditional: string containing the conditional specified in "user grammar"
 //
 // Output:
-//  string:  conditional string in the condition grammar. Note that this may still
-//           include syntactical errors or malspecified conditions. These will be caught
-//           at a latter stage
-//  error:   any error from golang's regex module
+//
+//	string:  conditional string in the condition grammar. Note that this may still
+//	         include syntactical errors or malspecified conditions. These will be caught
+//	         at a latter stage
+//	error:   any error from golang's regex module
 //
 // NOTE:  the current implementation of GPDPIProtocols.go has to make sure that the map keys
-//        of "proto" to numbers are all lower case
+//
+//	of "proto" to numbers are all lower case
 func SanitizeUserInput(conditional string) (string, error) {
 
 	var (
@@ -166,10 +169,10 @@ func wordSplitFunc(data []byte, atEOF bool) (advance int, token []byte, err erro
 
 // Split function for tokenization of the conditionalData. (For more info, see bufio.SplitFunc)
 // The conditional grammar consits of two types of tokens:
-// * Word tokens are attribute names (e.g. "sip" or "dnet"), protocol names (e.g. "UDP")
-//   numbers, ip addresses (e.g. "fe80::abcd:ce23"), and CIDR records (e.g. "10.0.0.0/8").
-// * Delimiter tokens delimit other tokens (word tokens and delimiter tokens). Delimiter tokens
-//   consist of all logical operators, comparison operators, parentheses, and white space characters.
+//   - Word tokens are attribute names (e.g. "sip" or "dnet"), protocol names (e.g. "UDP")
+//     numbers, ip addresses (e.g. "fe80::abcd:ce23"), and CIDR records (e.g. "10.0.0.0/8").
+//   - Delimiter tokens delimit other tokens (word tokens and delimiter tokens). Delimiter tokens
+//     consist of all logical operators, comparison operators, parentheses, and white space characters.
 func conditionalSplitFunc(data []byte, atEOF bool) (advance int, token []byte, err error) {
 	if len(data) == 0 {
 		return
@@ -183,14 +186,14 @@ func conditionalSplitFunc(data []byte, atEOF bool) (advance int, token []byte, e
 	return wordSplitFunc(data, atEOF)
 }
 
-// TokenizeConditional tokenizes the given conditional. Note that the tokenization is "loose":
+// Tokenize tokenizes the given conditional. Note that the tokenization is "loose":
 // All valid conditionals will be correctly tokenized, but there are invalid conditionals that
 // will also be tokenized. Its the parser's job to catch those.
 // Whitespace in conditionals is only useful for tokenization and not needed afterwards.
-// TokenizeConditional doesn't emit any whitespace tokens.
+// Tokenize doesn't emit any whitespace tokens.
 //
 // Limitations: Only ASCII is supported. May give strange results on fancy Unicode strings.
-func TokenizeConditional(condExpression string) ([]string, error) {
+func Tokenize(condExpression string) ([]string, error) {
 	var condTokens []string
 
 	s := bufio.NewScanner(strings.NewReader(condExpression))

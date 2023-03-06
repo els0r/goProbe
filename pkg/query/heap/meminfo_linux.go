@@ -1,20 +1,23 @@
-//+build linux
+//go:build linux
+// +build linux
 
-package query
+package heap
 
 import (
 	"bufio"
-	"errors"
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
 )
 
+const memFilePath = "/proc/meminfo"
+
 func getPhysMem() (float64, error) {
 	var memFile *os.File
 	var ferr error
-	if memFile, ferr = os.OpenFile("/proc/meminfo", os.O_RDONLY, 0444); ferr != nil {
-		return 0.0, errors.New("Unable to open /proc/meminfo: " + ferr.Error())
+	if memFile, ferr = os.OpenFile(memFilePath, os.O_RDONLY, 0444); ferr != nil {
+		return 0.0, fmt.Errorf("unable to open %s: %w", memFilePath, ferr)
 	}
 
 	physMem := 0.0
@@ -27,11 +30,11 @@ func getPhysMem() (float64, error) {
 	}
 
 	if physMem < 0.1 {
-		return 0.0, errors.New("Unable to obtain amount of physical memory from /proc/meminfo")
+		return 0.0, fmt.Errorf("unable to obtain amount of physical memory from %s", memFilePath)
 	}
 
 	if ferr = memFile.Close(); ferr != nil {
-		return 0.0, errors.New("Unable to close /proc/meminfo after reading: " + ferr.Error())
+		return 0.0, fmt.Errorf("unable to close %s after reading: %w", memFilePath, ferr)
 	}
 
 	return physMem, nil

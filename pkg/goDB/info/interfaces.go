@@ -1,6 +1,9 @@
-package goDB
+package info
 
-import "os"
+import (
+	"os"
+	"sort"
+)
 
 // GetInterfaces returns a list of interfaces covered by this goDB
 // TODO: This needs some extension to also allow for access to metadata
@@ -17,6 +20,9 @@ func GetInterfaces(dbPath string) ([]string, error) {
 			ifaces = append(ifaces, dirent.Name())
 		}
 	}
+	sort.SliceStable(ifaces, func(i, j int) bool {
+		return ifaces[i] < ifaces[j]
+	})
 
 	return ifaces, nil
 }

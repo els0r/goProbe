@@ -1,6 +1,6 @@
 /////////////////////////////////////////////////////////////////////////////////
 //
-// InstrumentConditional.go
+// instrument.go
 //
 // This file contains functionality for instrumenting conditions with comparison
 // functions. Each conditionNode has a field that references a comparison function
@@ -14,12 +14,12 @@
 //
 /////////////////////////////////////////////////////////////////////////////////
 
-package goDB
+package node
 
 import (
 	"bytes"
 	"errors"
-	"net"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -70,7 +70,7 @@ func generateCompareValue(condition *conditionNode) error {
 			}
 			return nil
 		default:
-			return errors.New("Comparator \"" + condition.comparator + "\" not allowed for attribute \"" + condition.attribute + "\"")
+			return fmt.Errorf("comparator %q not allowed for attribute %q", condition.comparator, condition.attribute)
 		}
 	case "dip":
 		switch condition.comparator {
@@ -85,7 +85,7 @@ func generateCompareValue(condition *conditionNode) error {
 			}
 			return nil
 		default:
-			return errors.New("Comparator \"" + condition.comparator + "\" not allowed for attribute \"" + condition.attribute + "\"")
+			return fmt.Errorf("comparator %q not allowed for attribute %q", condition.comparator, condition.attribute)
 		}
 	case "snet":
 		// in case of matching networks, only the relevant bytes (e.g. those
@@ -125,7 +125,7 @@ func generateCompareValue(condition *conditionNode) error {
 				}
 				return nil
 			default:
-				return errors.New("Comparator \"" + condition.comparator + "\" not allowed for attribute \"" + condition.attribute + "\"")
+				return fmt.Errorf("comparator %q not allowed for attribute %q", condition.comparator, condition.attribute)
 			}
 		} else {
 			// in case we have a multiple of 8, some bytes are left out of the
@@ -142,7 +142,7 @@ func generateCompareValue(condition *conditionNode) error {
 				}
 				return nil
 			default:
-				return errors.New("Comparator \"" + condition.comparator + "\" not allowed for attribute \"" + condition.attribute + "\"")
+				return fmt.Errorf("comparator %q not allowed for attribute %q", condition.comparator, condition.attribute)
 			}
 		}
 	case "dnet":
@@ -183,7 +183,7 @@ func generateCompareValue(condition *conditionNode) error {
 				}
 				return nil
 			default:
-				return errors.New("Comparator \"" + condition.comparator + "\" not allowed for attribute \"" + condition.attribute + "\"")
+				return fmt.Errorf("comparator %q not allowed for attribute %q", condition.comparator, condition.attribute)
 			}
 		} else {
 			// in case we have a multiple of 8, some bytes are left out of the
@@ -200,7 +200,7 @@ func generateCompareValue(condition *conditionNode) error {
 				}
 				return nil
 			default:
-				return errors.New("Comparator \"" + condition.comparator + "\" not allowed for attribute \"" + condition.attribute + "\"")
+				return fmt.Errorf("comparator %q not allowed for attribute %q", condition.comparator, condition.attribute)
 			}
 		}
 	case "dport":
@@ -236,7 +236,7 @@ func generateCompareValue(condition *conditionNode) error {
 			}
 			return nil
 		default:
-			return errors.New("Comparator \"" + condition.comparator + "\" not allowed for attribute \"" + condition.attribute + "\"")
+			return fmt.Errorf("comparator %q not allowed for attribute %q", condition.comparator, condition.attribute)
 		}
 	case "proto":
 		switch condition.comparator {
@@ -271,10 +271,10 @@ func generateCompareValue(condition *conditionNode) error {
 			}
 			return nil
 		default:
-			return errors.New("Comparator \"" + condition.comparator + "\" not allowed for attribute \"" + condition.attribute + "\"")
+			return fmt.Errorf("comparator %q not allowed for attribute %q", condition.comparator, condition.attribute)
 		}
 	default:
-		return errors.New("Unknown attribute \"" + condition.attribute + "\"")
+		return fmt.Errorf("unknown attribute %q", condition.attribute)
 	}
 }
 
@@ -310,8 +310,8 @@ func conditionBytesAndNetmask(condition conditionNode) ([]byte, int, error) {
 	case "=", "!=", "<", ">", "<=", ">=":
 		switch attribute {
 		case "dip", "sip":
-			if condBytes, err = IPStringToBytes(value); err != nil {
-				return nil, 0, errors.New("could not parse IP address: " + value)
+			if condBytes, err = types.IPStringToBytes(value); err != nil {
+				return nil, 0, fmt.Errorf("could not parse IP address: %s", value)
 			}
 		case "dnet", "snet":
 			cidr := strings.Split(value, "/")
@@ -321,7 +321,7 @@ func conditionBytesAndNetmask(condition conditionNode) ([]byte, int, error) {
 
 			// parse netmask and run sanity checks
 			if netmask, err = strconv.ParseInt(cidr[1], 10, 32); err != nil {
-				return nil, 0, errors.New("failed to parse netmask " + cidr[1] + ". Use CIDR notation. Example: 192.168.1.17/25")
+				return nil, 0, fmt.Errorf("failed to parse netmask %s. Use CIDR notation. Example: 192.168.1.17/25", cidr[1])
 			}
 
 			// check if the netmask is within allowed bounds
@@ -338,8 +338,8 @@ func conditionBytesAndNetmask(condition conditionNode) ([]byte, int, error) {
 			}
 
 			// get ip bytes and apply netmask
-			if condBytes, err = IPStringToBytes(cidr[0]); err != nil {
-				return nil, 0, errors.New("Could not parse ip address: " + value)
+			if condBytes, err = types.IPStringToBytes(cidr[0]); err != nil {
+				return nil, 0, fmt.Errorf("could not parse IP address: %s", value)
 			}
 
 			maskWidth := int64(4)
@@ -359,39 +359,23 @@ func conditionBytesAndNetmask(condition conditionNode) ([]byte, int, error) {
 		case "proto":
 			if num, err = strconv.ParseUint(value, 10, 8); err != nil {
 				if num, isIn = protocols.GetIPProtoID(value); !isIn {
-					return nil, 0, errors.New("Could not parse protocol value: " + err.Error())
+					return nil, 0, fmt.Errorf("could not parse protocol value: %w", err)
 				}
 			}
 
 			condBytes = []byte{uint8(num & 0xff)}
 		case "dport":
 			if num, err = strconv.ParseUint(value, 10, 16); err != nil {
-				return nil, 0, errors.New("Could not parse dport value: " + err.Error())
+				return nil, 0, fmt.Errorf("could not parse dport value: %w", err)
 			}
 
 			condBytes = []byte{uint8(num >> 8), uint8(num & 0xff)}
 		default:
-			return nil, 0, errors.New("Unknown attribute: " + attribute)
+			return nil, 0, fmt.Errorf("unknown attribute: %s", attribute)
 		}
 	default:
-		return nil, 0, errors.New("Unknown comparator: " + comparator)
+		return nil, 0, fmt.Errorf("unknown comparator: %s", comparator)
 	}
 
 	return condBytes, int(netmask), nil
-}
-
-// IPStringToBytes creates a goDB compatible bytes slice from an IP address string
-func IPStringToBytes(ip string) ([]byte, error) {
-	var isIPv4 = strings.Contains(ip, ".")
-
-	ipaddr := net.ParseIP(ip)
-	if len(ipaddr) == 0 {
-		return nil, errors.New("IP parse: incorrect format")
-	}
-
-	if isIPv4 {
-		return []byte{ipaddr[12], ipaddr[13], ipaddr[14], ipaddr[15]}, nil
-	}
-
-	return ipaddr, nil
 }

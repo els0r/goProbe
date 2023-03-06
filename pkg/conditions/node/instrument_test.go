@@ -1,6 +1,6 @@
 /////////////////////////////////////////////////////////////////////////////////
 //
-// InstrumentConditional_test.go
+// instrument_test.go
 //
 // Written by Lorenz Breidenbach lob@open.ch, September 2015
 // Copyright (c) 2015 Open Systems AG, Switzerland
@@ -8,11 +8,13 @@
 //
 /////////////////////////////////////////////////////////////////////////////////
 
-package goDB
+package node
 
 import (
 	"reflect"
 	"testing"
+
+	"github.com/els0r/goProbe/pkg/types"
 )
 
 var IPStringToBytesTests = []struct {
@@ -28,7 +30,7 @@ var IPStringToBytesTests = []struct {
 
 func TestIpStringToBytes(t *testing.T) {
 	for _, test := range IPStringToBytesTests {
-		outIP, err := IPStringToBytes(test.input)
+		outIP, err := types.IPStringToBytes(test.input)
 		if !test.success {
 			if err == nil {
 				t.Fatalf("IPStringToBytes is expected to fail on input %v but it didn't. Instead it output %v",

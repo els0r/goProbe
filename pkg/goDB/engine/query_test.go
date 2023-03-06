@@ -1,10 +1,11 @@
-package query
+package engine
 
 import (
 	"bytes"
 	"context"
 	"testing"
 
+	"github.com/els0r/goProbe/pkg/query"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -19,14 +20,14 @@ func TestEmptyOutput(t *testing.T) {
 		name  string
 		iface string
 		query string
-		opts  []Option
+		opts  []query.Option
 	}{
-		{"eth1 talk_conv with condition - json output", "eth1", "talk_conv", []Option{WithDBPath(TestDB), WithFirst("-30000d"), WithCondition("dport < 100 & dport > 100"), WithFormat("json")}},
+		{"eth1 talk_conv with condition - json output", "eth1", "talk_conv", []query.Option{query.WithDBPath(TestDB), query.WithFirst("-30000d"), query.WithCondition("dport < 100 & dport > 100"), query.WithFormat("json")}},
 		// border case:
 		// the value of the -l parameter forces us to consider the day 1456358400,
 		// but day 1456358400 contains no blocks with timestamp < 1456428875
 		// (= 1456428575 + DB_WRITEOUT_INTERVAL).
-		{"eth1 raw - json output", "eth1", "raw", []Option{WithDBPath(TestDB), WithFirst("-30000d"), WithLast("1456428575"), WithFormat("json")}},
+		{"eth1 raw - json output", "eth1", "raw", []query.Option{query.WithDBPath(TestDB), query.WithFirst("-30000d"), query.WithLast("1456428575"), query.WithFormat("json")}},
 	}
 
 	// run table-driven test
@@ -34,7 +35,7 @@ func TestEmptyOutput(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 
 			// create args
-			a := NewArgs(test.query, test.iface, test.opts...)
+			a := query.NewArgs(test.query, test.iface, test.opts...)
 
 			// prepare query
 			stmt, err := a.Prepare()
@@ -47,7 +48,7 @@ func TestEmptyOutput(t *testing.T) {
 			stmt.Output = buf
 
 			// execute query
-			_, err = stmt.Execute(context.Background())
+			_, err = NewQueryRunner().Run(context.Background(), stmt)
 			if err != nil {
 				t.Fatalf("execute query: %s", err)
 			}
@@ -75,13 +76,13 @@ func TestSimpleQuery(t *testing.T) {
 		name  string
 		iface string
 		query string
-		opts  []Option
+		opts  []query.Option
 	}{
 		{
 			"time query on eth1 - json output",
 			"eth1",
 			"time",
-			[]Option{WithDirectionSum(), WithDBPath(TestDB), WithFirst("1456428000"), WithLast("1456473000"), WithNumResults(MaxResults), WithFormat("json")},
+			[]query.Option{query.WithDirectionSum(), query.WithDBPath(TestDB), query.WithFirst("1456428000"), query.WithLast("1456473000"), query.WithNumResults(query.MaxResults), query.WithFormat("json")},
 		},
 	}
 
@@ -90,10 +91,10 @@ func TestSimpleQuery(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			// append output capture (to dev null, since this test only checks if the query
 			// can be exectued
-			test.opts = append(test.opts, WithOutput("/dev/null"))
+			test.opts = append(test.opts, query.WithOutput("/dev/null"))
 
 			// create args
-			a := NewArgs(test.query, test.iface, test.opts...)
+			a := query.NewArgs(test.query, test.iface, test.opts...)
 
 			// prepare query
 			stmt, err := a.Prepare()
@@ -102,7 +103,7 @@ func TestSimpleQuery(t *testing.T) {
 			}
 
 			// execute query
-			_, err = stmt.Execute(context.Background())
+			_, err = NewQueryRunner().Run(context.Background(), stmt)
 			if err != nil {
 				t.Fatalf("execute query: %s", err)
 			}

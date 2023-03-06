@@ -9,7 +9,7 @@
 //
 /////////////////////////////////////////////////////////////////////////////////
 
-package goDB
+package node
 
 import "fmt"
 
@@ -52,6 +52,10 @@ func desugarConditionNode(node conditionNode) (Node, error) {
 		node.attribute = "sip"
 	case "dst":
 		node.attribute = "dip"
+	case "port":
+		node.attribute = "dport"
+	case "ipproto", "protocol":
+		node.attribute = "proto"
 	case "host":
 		return helper("host", "sip", "dip", node.comparator, node.value)
 	case "net":

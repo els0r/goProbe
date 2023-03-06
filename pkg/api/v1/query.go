@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/els0r/goProbe/pkg/api/json"
+	"github.com/els0r/goProbe/pkg/goDB/engine"
 	"github.com/els0r/goProbe/pkg/query"
 	"github.com/els0r/goProbe/pkg/results"
 	"github.com/els0r/goProbe/pkg/types"
@@ -49,12 +50,29 @@ func (a *API) handleQuery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	emptyResReturn := func(stmt *query.Statement) {
+		if stmt.External || stmt.Format == "json" {
+			msg := results.ErrorMsgExternal{Status: types.StatusEmpty, Message: results.ErrorNoResults.Error()}
+			jsoniter.NewEncoder(w).Encode(msg)
+		}
+	}
+
 	// execute query
-	result, err := stmt.Execute(ctx)
+	res, err := engine.NewQueryRunner().Run(ctx, stmt)
 	if err != nil {
 		a.errorHandler.Handle(ctx, w, http.StatusInternalServerError, err, "failed to execute query")
 		return
 	}
+	// empty results should be handled here exclusively
+	if len(res) == 0 {
+		emptyResReturn(stmt)
+		return
+	} else if len(res) > 1 {
+		a.errorHandler.Handle(ctx, w, http.StatusInternalServerError, err, "unexpected number of results encountered")
+		return
+	}
+
+	result := res[0]
 	if args.Format == "json" {
 		// handle empty results only for the external case. Otherwise,
 		// return the entire result data structure with empty "rows"
@@ -71,7 +89,7 @@ func (a *API) handleQuery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = stmt.Print(ctx, result)
+	err = stmt.Print(ctx, &result)
 	if err != nil {
 		a.errorHandler.Handle(ctx, w, http.StatusInternalServerError, err, "failed to write results")
 		return

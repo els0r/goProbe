@@ -1,6 +1,7 @@
-//+build darwin
+//go:build darwin
+// +build darwin
 
-package query
+package heap
 
 const gb = 1204 * 1024 * 1024
 

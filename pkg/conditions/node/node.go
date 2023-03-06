@@ -1,6 +1,6 @@
 /////////////////////////////////////////////////////////////////////////////////
 //
-// Conditional.go
+// node.go
 //
 // Main file for conditional handling.
 // In goProbe/goQuery lingo, a conditional is an expression like
@@ -18,24 +18,25 @@
 //
 /////////////////////////////////////////////////////////////////////////////////
 
-package goDB
+package node
 
 import (
 	"fmt"
 	"time"
 
+	"github.com/els0r/goProbe/pkg/conditions"
 	"github.com/els0r/goProbe/pkg/types"
 )
 
-// ParseAndInstrumentConditional parses and instruments the given conditional string for evaluation.
+// ParseAndInstrument parses and instruments the given conditional string for evaluation.
 // This is the main external function related to conditionals.
-func ParseAndInstrumentConditional(conditional string, dnsTimeout time.Duration) (Node, error) {
-	tokenList, err := TokenizeConditional(conditional)
+func ParseAndInstrument(conditional string, dnsTimeout time.Duration) (Node, error) {
+	tokens, err := conditions.Tokenize(conditional)
 	if err != nil {
 		return nil, err
 	}
 
-	conditionalNode, err := parseConditional(tokenList)
+	conditionalNode, err := parseConditional(tokens)
 	if err != nil {
 		return nil, err
 	}
@@ -73,10 +74,10 @@ type Node interface {
 
 	// Evaluates the conditional. Make sure that you called
 	// instrument before calling this.
-	evaluate(types.Key) bool
+	Evaluate(types.Key) bool
 
 	// Returns the set of attributes used in the conditional.
-	attributes() map[string]struct{}
+	Attributes() map[string]struct{}
 }
 
 type conditionNode struct {
@@ -103,10 +104,10 @@ func (n conditionNode) instrument() (Node, error) {
 	err := generateCompareValue(&n)
 	return n, err
 }
-func (n conditionNode) evaluate(comparisonValue types.Key) bool {
+func (n conditionNode) Evaluate(comparisonValue types.Key) bool {
 	return n.compareValue(comparisonValue)
 }
-func (n conditionNode) attributes() map[string]struct{} {
+func (n conditionNode) Attributes() map[string]struct{} {
 	return map[string]struct{}{
 		n.attribute: {},
 	}
@@ -130,11 +131,11 @@ func (n notNode) transform(transformer func(conditionNode) (Node, error)) (Node,
 	n.node, err = n.node.transform(transformer)
 	return n, err
 }
-func (n notNode) evaluate(comparisonValue types.Key) bool {
-	return !n.node.evaluate(comparisonValue)
+func (n notNode) Evaluate(comparisonValue types.Key) bool {
+	return !n.node.Evaluate(comparisonValue)
 }
-func (n notNode) attributes() map[string]struct{} {
-	return n.node.attributes()
+func (n notNode) Attributes() map[string]struct{} {
+	return n.node.Attributes()
 }
 
 type andNode struct {
@@ -165,12 +166,12 @@ func (n andNode) transform(transformer func(conditionNode) (Node, error)) (Node,
 	n.right, err = n.right.transform(transformer)
 	return n, err
 }
-func (n andNode) evaluate(comparisonValue types.Key) bool {
-	return n.left.evaluate(comparisonValue) && n.right.evaluate(comparisonValue)
+func (n andNode) Evaluate(comparisonValue types.Key) bool {
+	return n.left.Evaluate(comparisonValue) && n.right.Evaluate(comparisonValue)
 }
-func (n andNode) attributes() map[string]struct{} {
-	result := n.left.attributes()
-	for attribute := range n.right.attributes() {
+func (n andNode) Attributes() map[string]struct{} {
+	result := n.left.Attributes()
+	for attribute := range n.right.Attributes() {
 		result[attribute] = struct{}{}
 	}
 	return result
@@ -204,12 +205,14 @@ func (n orNode) transform(transformer func(conditionNode) (Node, error)) (Node, 
 	n.right, err = n.right.transform(transformer)
 	return n, err
 }
-func (n orNode) evaluate(comparisonValue types.Key) bool {
-	return n.left.evaluate(comparisonValue) || n.right.evaluate(comparisonValue)
+
+func (n orNode) Evaluate(comparisonValue types.Key) bool {
+	return n.left.Evaluate(comparisonValue) || n.right.Evaluate(comparisonValue)
 }
-func (n orNode) attributes() map[string]struct{} {
-	result := n.left.attributes()
-	for attribute := range n.right.attributes() {
+
+func (n orNode) Attributes() map[string]struct{} {
+	result := n.left.Attributes()
+	for attribute := range n.right.Attributes() {
 		result[attribute] = struct{}{}
 	}
 	return result
