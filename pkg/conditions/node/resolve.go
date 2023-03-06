@@ -14,6 +14,8 @@ import (
 	"fmt"
 	"net"
 	"regexp"
+	"sort"
+	"strings"
 	"time"
 )
 
@@ -61,6 +63,12 @@ func resolve(node Node, timeout time.Duration) (Node, error) {
 		hostname := hostname
 		go func() {
 			addrs, err := net.LookupHost(hostname)
+
+			// always arrange the addresses that IPv4 comes before IPv6
+			sort.SliceStable(addrs, func(i, j int) bool {
+				return strings.Contains(addrs[i], ".") && !strings.Contains(addrs[i], ":") && strings.Contains(addrs[j], ":")
+			})
+
 			resultChan <- lookupHostResult{hostname, addrs, err}
 		}()
 	}
@@ -69,7 +77,7 @@ func resolve(node Node, timeout time.Duration) (Node, error) {
 	for count := 0; count < len(hostnames); count++ {
 		select {
 		case <-timer.C:
-			return nil, fmt.Errorf("Timeout while resolving hostnames in conditional")
+			return nil, fmt.Errorf("timeout while resolving hostnames in conditional")
 		case result := <-resultChan:
 			if result.err != nil {
 				return nil, result.err
