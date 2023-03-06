@@ -15,7 +15,6 @@ import (
 	"net"
 	"regexp"
 	"sort"
-	"strings"
 	"time"
 )
 
@@ -64,9 +63,11 @@ func resolve(node Node, timeout time.Duration) (Node, error) {
 		go func() {
 			addrs, err := net.LookupHost(hostname)
 
-			// always arrange the addresses that IPv4 comes before IPv6
+			// always arrange the addresses such that IPv4 comes before IPv6
 			sort.SliceStable(addrs, func(i, j int) bool {
-				return strings.Contains(addrs[i], ".") && !strings.Contains(addrs[i], ":") && strings.Contains(addrs[j], ":")
+				addrA := net.ParseIP(addrs[i])
+				addrB := net.ParseIP(addrs[j])
+				return addrA.To4() != nil && addrB.To4() == nil
 			})
 
 			resultChan <- lookupHostResult{hostname, addrs, err}
