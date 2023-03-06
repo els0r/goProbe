@@ -1,6 +1,7 @@
 package results
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/netip"
@@ -13,18 +14,14 @@ var (
 	ErrorNoResults = errors.New("query returned no results")
 )
 
-// ErrorMsgExternal stores status and message for external callers
-type ErrorMsgExternal struct {
-	Status  types.Status `json:"status"`
-	Message string       `json:"statusMessage"`
-}
-
 // Result bundles the data rows returned and the query meta information
 type Result struct {
-	Status  types.Status `json:"status"`
-	Summary Summary      `json:"summary"`
-	Query   Query        `json:"query"`
-	Rows    Rows         `json:"rows"`
+	Status        types.Status `json:"status"`
+	StatusMessage string       `json:"status_message,omitempty"`
+
+	Summary Summary `json:"summary"`
+	Query   Query   `json:"query"`
+	Rows    Rows    `json:"rows"`
 }
 
 // Query stores the kind of query that was run
@@ -80,7 +77,29 @@ type Labels struct {
 	Timestamp time.Time `json:"timestamp,omitempty"`
 	Iface     string    `json:"iface,omitempty"`
 	Hostname  string    `json:"host,omitempty"`
-	HostID    uint      `json:"host_id,omitempty"`
+	HostID    string    `json:"host_id,omitempty"`
+}
+
+// MarshalJSON implements the json.Marshaler interface. It makes sure
+// that empty timestamps don't show up in the json output
+func (l Labels) MarshalJSON() ([]byte, error) {
+	var aux = struct {
+		// TODO: this is expensive. Check how to get rid of re-assigning
+		// values in order to properly treat empties
+		Timestamp *time.Time `json:"timestamp,omitempty"`
+		Iface     string     `json:"iface,omitempty"`
+		Hostname  string     `json:"host,omitempty"`
+		HostID    string     `json:"host_id,omitempty"`
+	}{
+		nil,
+		l.Iface,
+		l.Hostname,
+		l.HostID,
+	}
+	if !l.Timestamp.IsZero() {
+		aux.Timestamp = &l.Timestamp
+	}
+	return json.Marshal(aux)
 }
 
 // Attributes are traffic attributes by which the goDB can be aggregated
@@ -98,12 +117,33 @@ func (r Row) String() string {
 
 // String prints all result labels
 func (l Labels) String() string {
-	return fmt.Sprintf("ts=%s iface=%s hostname=%s hostID=%d",
+	return fmt.Sprintf("ts=%s iface=%s hostname=%s hostID=%s",
 		l.Timestamp,
 		l.Iface,
 		l.Hostname,
 		l.HostID,
 	)
+}
+
+func (a Attributes) MarshalJSON() ([]byte, error) {
+	var aux = struct {
+		// TODO: this is expensive. Check how to get rid of re-assigning
+		// values in order to properly treat empties
+		SrcIP   *netip.Addr `json:"sip,omitempty"`
+		DstIP   *netip.Addr `json:"dip,omitempty"`
+		IPProto uint8       `json:"proto,omitempty"`
+		DstPort uint16      `json:"dport,omitempty"`
+	}{
+		IPProto: a.IPProto,
+		DstPort: a.DstPort,
+	}
+	if a.SrcIP.IsValid() {
+		aux.SrcIP = &a.SrcIP
+	}
+	if a.DstIP.IsValid() {
+		aux.DstIP = &a.DstIP
+	}
+	return json.Marshal(aux)
 }
 
 // String prints all result attributes

@@ -65,18 +65,7 @@ func aggregate(mapChan <-chan hashmap.AggFlowMapWithMetadata, ifaces []string, i
 				return
 			}
 
-			// Set the metadata of the final map according to the first element received. For all
-			// consecutive elements validate consistency
 			finalMap := finalMaps[item.Interface]
-			if nAgg[item.Interface] == 0 {
-				finalMap.HostID = item.HostID
-				finalMap.Hostname = item.Hostname
-			} else {
-				if finalMap.HostID != item.HostID || finalMap.Hostname != item.Hostname {
-					resultChan <- aggregateResult{err: errorMismatchingHosts}
-					return
-				}
-			}
 
 			// Merge the item into the final map for this interface, then update the aggregation counter
 			finalMap.Merge(item, &totals)

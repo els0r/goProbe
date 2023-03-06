@@ -1,12 +1,11 @@
 package engine
 
 import (
-	"bytes"
 	"context"
 	"testing"
 
 	"github.com/els0r/goProbe/pkg/query"
-	jsoniter "github.com/json-iterator/go"
+	"github.com/els0r/goProbe/pkg/types"
 )
 
 var (
@@ -43,27 +42,19 @@ func TestEmptyOutput(t *testing.T) {
 				t.Fatalf("prepare query: %s; args: %s", err, a)
 			}
 
-			// capture output in buffer
-			var buf = &bytes.Buffer{}
-			stmt.Output = buf
-
 			// execute query
-			_, err = NewQueryRunner().Run(context.Background(), stmt)
+			res, err := NewQueryRunner().Run(context.Background(), stmt)
 			if err != nil {
 				t.Fatalf("execute query: %s", err)
 			}
 
-			actualOutputJSON := buf.Bytes()
-
-			var actualOutput map[string]string
-			err = jsoniter.Unmarshal(actualOutputJSON, &actualOutput)
-			if err != nil {
-				t.Log(string(actualOutputJSON))
-				t.Log(a)
-				t.Fatalf("failed to parse output as JSON: %s", err)
+			if len(res) != 1 {
+				t.Fatalf("expected exactly one result")
 			}
-			if actualOutput["status"] != "empty" || actualOutput["statusMessage"] != errorNoResults.Error() {
-				t.Fatalf("unexpected output: %v", actualOutput)
+
+			result := res[0]
+			if result.Status != types.StatusEmpty {
+				t.Fatalf("unexpected status %q: %s", result.Status, result.StatusMessage)
 			}
 		})
 	}

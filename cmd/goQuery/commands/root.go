@@ -64,7 +64,6 @@ func init() {
 	subRootCmd.InitDefaultHelpCmd()
 	subRootCmd.InitDefaultHelpFlag()
 
-	rootCmd.Flags().BoolVarP(&cmdLineParams.External, "external", "x", false, helpMap["External"])
 	rootCmd.Flags().BoolVarP(&cmdLineParams.In, "in", "", query.DefaultIn, helpMap["In"])
 	rootCmd.Flags().BoolVarP(&cmdLineParams.List, "list", "", false, helpMap["List"])
 	rootCmd.Flags().BoolVarP(&cmdLineParams.Out, "out", "", query.DefaultOut, helpMap["Out"])
@@ -201,16 +200,9 @@ func entrypoint(cmd *cobra.Command, args []string) error {
 		defer cancel()
 	}
 
-	emptyResReturn := func(stmt *query.Statement) error {
-		if stmt.External || stmt.Format == "json" {
-			msg := results.ErrorMsgExternal{Status: types.StatusEmpty, Message: results.ErrorNoResults.Error()}
-			return jsoniter.NewEncoder(stmt.Output).Encode(msg)
-		}
-		fmt.Fprintln(stmt.Output, results.ErrorNoResults.Error())
-		return nil
-	}
-
 	// run the query
+	var result *results.Result
+
 	res, err := engine.NewQueryRunner().Run(ctx, stmt)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Query execution failed: %v\n", err)
@@ -218,27 +210,32 @@ func entrypoint(cmd *cobra.Command, args []string) error {
 	}
 	// empty results should be handled here exclusively
 	if len(res) == 0 {
-		return emptyResReturn(stmt)
+		res = []*results.Result{
+			{Status: types.StatusEmpty, StatusMessage: results.ErrorNoResults.Error()},
+		}
 	} else if len(res) > 1 {
-		fmt.Fprintln(stmt.Output, "unexpected number of results encountered")
-		return nil
+		res = []*results.Result{
+			{Status: types.StatusError, StatusMessage: fmt.Sprintf("unexpected number of results encountered (%d)", len(res))},
+		}
 	}
 
-	// when running against a local goDB, there should be exactly one result
-	result := res[0]
-	if len(result.Rows) == 0 {
-		return emptyResReturn(stmt)
-	}
-
-	// serialize raw result if json is selected
+	// serialize raw results array if json is selected
 	if stmt.Format == "json" {
-		err = jsoniter.NewEncoder(stmt.Output).Encode(result)
+		err = jsoniter.NewEncoder(stmt.Output).Encode(res)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Results serialization failed: %v\n", err)
 			return err
 		}
 		return nil
 	}
+
+	// when running against a local goDB, there should be exactly one result
+	result = res[0]
+	if result.Status != types.StatusOK {
+		fmt.Fprintf(stmt.Output, "Status %q: %s\n", result.Status, result.StatusMessage)
+		return nil
+	}
+
 	err = stmt.Print(ctx, result)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Result printing failed: %v\n", err)

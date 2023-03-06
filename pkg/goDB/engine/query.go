@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"os"
 	"runtime"
 	"runtime/debug"
 	"sort"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/els0r/goProbe/pkg/conditions/node"
 	"github.com/els0r/goProbe/pkg/goDB"
+	"github.com/els0r/goProbe/pkg/goDB/info"
 	"github.com/els0r/goProbe/pkg/query"
 	"github.com/els0r/goProbe/pkg/query/heap"
 	"github.com/els0r/goProbe/pkg/results"
@@ -74,6 +76,13 @@ func (qr *QueryRunner) Run(ctx context.Context, stmt *query.Statement) (res []*r
 	if qr.query.Conditional != nil {
 		result.Query.Condition = qr.query.Conditional.String()
 	}
+
+	// get hostname and host ID if available
+	hostname, err := os.Hostname()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get system hostname: %w", err)
+	}
+	hostID := info.GetHostID()
 
 	// start ticker to check memory consumption every second
 	heapWatchCtx, cancelHeapWatch := context.WithCancel(ctx)
@@ -212,8 +221,12 @@ func (qr *QueryRunner) Run(ctx context.Context, stmt *query.Statement) (res []*r
 				rs[count].Labels.Timestamp = time.Unix(ts, 0)
 			}
 			rs[count].Labels.Iface = iface
-			rs[count].Labels.HostID = aggMap.HostID
-			rs[count].Labels.Hostname = aggMap.Hostname
+
+			// the host ID and hostname are statically assigned since a goDB is inherently limited to the
+			// system it runs on. The two parameters never change during query execution
+			rs[count].Labels.HostID = hostID
+			rs[count].Labels.Hostname = hostname
+
 			if sip != nil {
 				rs[count].Attributes.SrcIP = types.RawIPToAddr(key.Key().GetSip())
 			}
@@ -255,6 +268,12 @@ func (qr *QueryRunner) Run(ctx context.Context, stmt *query.Statement) (res []*r
 	}
 	result.Summary.Hits.Displayed = len(rs)
 	result.Rows = rs
+
+	// set status and error message in case the query returned no results
+	if len(result.Rows) == 0 {
+		result.Status = types.StatusEmpty
+		result.StatusMessage = results.ErrorNoResults.Error()
+	}
 
 	// assign the result
 	res = []*results.Result{result}

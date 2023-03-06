@@ -53,8 +53,6 @@ var NilAggFlowMapWithMetadata = AggFlowMapWithMetadata{}
 type AggFlowMapWithMetadata struct {
 	*AggFlowMap
 
-	HostID    uint   `json:"host_id"`
-	Hostname  string `json:"host"`
 	Interface string `json:"iface"`
 }
 

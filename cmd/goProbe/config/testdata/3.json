@@ -1,0 +1,29 @@
+{
+  "db": {
+    "path": "/usr/local/goProbe/db"
+  },
+  "interfaces": {
+    "en0": {
+      "ring_buffer_block_size": 1048576,
+      "ring_buffer_num_blocks": 2,
+      "promisc": true
+    },
+    "en1": {
+      "bpf_filter": "not arp and not icmp",
+      "buf_size": 2097152,
+      "promisc": true
+    }
+  },
+  "logging": {
+    "destination": "console",
+    "level": "debug"
+  },
+  "api": {
+    "port": "6060",
+    "request_logging": true,
+    "keys": [
+      "da53ae3fb482db63d9606a9324a694bf51f7ad47623c04ab7b97a811f2a78e05",
+      "9e3b84ae1437a73154ac5c48a37d5085a3f6e68621b56b626f81620de271a2f6"
+    ]
+  }
+}

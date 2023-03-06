@@ -38,8 +38,7 @@ type Statement struct {
 	Output        io.Writer         `json:"-"`
 
 	// parameters for external calls
-	External bool   `json:"external,omitempty"` // for error messages
-	Caller   string `json:"caller,omitempty"`   // who called the query
+	Caller string `json:"caller,omitempty"` // who called the query
 
 	// resolution parameters (probably part of table printer)
 	DNSResolution struct {

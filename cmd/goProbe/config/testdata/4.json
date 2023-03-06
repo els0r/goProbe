@@ -1,0 +1,13 @@
+{
+  "db": {
+    "path": "/usr/local/goProbe/db"
+  },
+  "logging": {
+    "destination": "console",
+    "level": "debug"
+  },
+  "api": {
+    "port": "6060",
+    "request_logging": false
+  }
+}

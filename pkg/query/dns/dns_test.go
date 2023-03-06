@@ -29,7 +29,7 @@ func TestLookup(t *testing.T) {
 	// 8.8.8.8 is google's DNS server. This lookup should yield the same
 	// result for many years.
 	ips2domains := TimedReverseLookup([]string{"8.8.8.8", "0.0.0.0"}, 2*time.Second)
-	if domain, ok := ips2domains["8.8.8.8"]; ok && domain != "google-public-dns-a.google.com." {
+	if domain, ok := ips2domains["8.8.8.8"]; ok && domain != "dns.google." {
 		t.Fatalf("RDNS lookup yielded wrong result: %s", domain)
 	} else if !ok {
 		t.Log("RDNS lookup yielded no result. Perhaps your internet is down?")
