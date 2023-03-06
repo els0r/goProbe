@@ -73,13 +73,13 @@ func main() {
 		dirPath := flags.CmdLine.ProfilingOutputDir
 		err := os.MkdirAll(dirPath, 0755)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to create pprof directory: %v", err)
+			fmt.Fprintf(os.Stderr, "failed to create pprof directory: %v\n", err)
 			os.Exit(1)
 		}
 
 		f, perr := os.Create(filepath.Join(dirPath, "goprobe_cpu_profile.pprof"))
 		if perr != nil {
-			fmt.Fprintf(os.Stderr, "Failed to create CPU profile file: %v", perr)
+			fmt.Fprintf(os.Stderr, "failed to create CPU profile file: %v\n", perr)
 			os.Exit(1)
 		}
 		pprof.StartCPUProfile(f)
@@ -88,7 +88,7 @@ func main() {
 		defer func() {
 			f2, err := os.Create(filepath.Join(dirPath, "goprobe_mem_profile.pprof"))
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to create memory profile file: %v", err)
+				fmt.Fprintf(os.Stderr, "failed to create memory profile file: %v\n", err)
 				os.Exit(1)
 			}
 			pprof.Lookup("allocs").WriteTo(f2, 0)
@@ -98,7 +98,7 @@ func main() {
 	// Config file
 	config, err = capconfig.ParseFile(flags.CmdLine.Config)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to load config file: %v", err)
+		fmt.Fprintf(os.Stderr, "failed to load config file: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -109,7 +109,7 @@ func main() {
 	}
 	err = logging.Init(appName, appVersion, config.Logging.Level, config.Logging.Encoding, logOpts...)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to initialize logger: %v. Exiting!", err)
+		fmt.Fprintf(os.Stderr, "failed to initialize logger: %v\n", err)
 		os.Exit(1)
 	}
 

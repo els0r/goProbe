@@ -1,7 +1,10 @@
 package types
 
 import (
+	"errors"
+	"net"
 	"net/netip"
+	"strings"
 )
 
 type Status string
@@ -73,4 +76,18 @@ func numZeros(ip []byte) uint8 {
 		}
 	}
 	return numZeros
+}
+
+// IPStringToBytes creates a goDB compatible bytes slice from an IP address string
+func IPStringToBytes(ip string) ([]byte, error) {
+	var isIPv4 = strings.Contains(ip, ".")
+
+	ipaddr := net.ParseIP(ip)
+	if len(ipaddr) == 0 {
+		return nil, errors.New("IP parse: incorrect format")
+	}
+	if isIPv4 {
+		return []byte{ipaddr[12], ipaddr[13], ipaddr[14], ipaddr[15]}, nil
+	}
+	return ipaddr, nil
 }

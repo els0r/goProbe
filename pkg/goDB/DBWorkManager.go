@@ -26,9 +26,9 @@ import (
 	"github.com/els0r/goProbe/pkg/goDB/encoder/bitpack"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 	"github.com/els0r/goProbe/pkg/goDB/storage/gpfile"
+	"github.com/els0r/goProbe/pkg/logging"
 	"github.com/els0r/goProbe/pkg/types"
 	"github.com/els0r/goProbe/pkg/types/hashmap"
-	"github.com/els0r/log"
 )
 
 const (
@@ -62,28 +62,15 @@ type DBWorkManager struct {
 	nWorkloads          int
 	nWorkloadsProcessed int
 	memPool             gpfile.MemPoolGCable
-
-	logger log.Logger
 }
 
 // NewDBWorkManager sets up a new work manager for executing queries
 func NewDBWorkManager(dbpath string, iface string, numProcessingUnits int) (*DBWorkManager, error) {
-	// whenever a new workload is created the logging facility is set up. Make sure to honor environments where syslog may not be available
-	loggerStr := os.Getenv("GODB_LOGGER")
-	if !(loggerStr == "devnull" || loggerStr == "console") {
-		loggerStr = "syslog"
-	}
-	l, err := log.NewFromString(loggerStr)
-	if err != nil {
-		return nil, err
-	}
-
 	return &DBWorkManager{
 		dbIfaceDir:         filepath.Join(dbpath, iface),
 		iface:              iface,
 		workloadChan:       make(chan DBWorkload, numProcessingUnits*64), // 64 is relatively arbitrary (but we're just sending quite basic objects)
 		numProcessingUnits: numProcessingUnits,
-		logger:             l,
 	}, nil
 }
 
@@ -201,9 +188,11 @@ func (w *DBWorkManager) grabAndProcessWorkload(ctx context.Context, wg *sync.Wai
 	go func() {
 		defer wg.Done()
 
+		logger := logging.WithContext(ctx)
+
 		enc, err := encoder.New(defaultEncoderType)
 		if err != nil {
-			w.logger.Error(err.Error())
+			logger.Error(err.Error())
 			mapChan <- hashmap.NilAggFlowMapWithMetadata
 		}
 		defer enc.Close()
@@ -213,7 +202,7 @@ func (w *DBWorkManager) grabAndProcessWorkload(ctx context.Context, wg *sync.Wai
 			select {
 			case <-ctx.Done():
 				// query was cancelled, exit
-				w.logger.Infof("Query cancelled (workload %d / %d)...", w.nWorkloadsProcessed, w.nWorkloads)
+				logger.Infof("Query cancelled (workload %d / %d)...", w.nWorkloadsProcessed, w.nWorkloads)
 				return
 			case workload, chanOpen = <-workloadChan:
 				if chanOpen {
@@ -223,7 +212,7 @@ func (w *DBWorkManager) grabAndProcessWorkload(ctx context.Context, wg *sync.Wai
 						// if there is an error during one of the read jobs, throw a syslog message and terminate
 						err := w.readBlocksAndEvaluate(workDir, workload.query, enc, &resultMap)
 						if err != nil {
-							w.logger.Error(err.Error())
+							logger.Error(err.Error())
 							mapChan <- hashmap.NilAggFlowMapWithMetadata
 							return
 						}
@@ -258,6 +247,7 @@ func (w *DBWorkManager) ExecuteWorkerReadJobs(ctx context.Context, mapChan chan 
 // Block evaluation and aggregation -----------------------------------------------------
 // this is where the actual reading and aggregation magic happens
 func (w *DBWorkManager) readBlocksAndEvaluate(workDir *gpfile.GPDir, query *Query, enc encoder.Encoder, resultMap *hashmap.AggFlowMapWithMetadata) (err error) {
+	logger := logging.Logger()
 
 	var (
 		v4Key, v4ComparisonValue                                         = types.NewEmptyV4Key().ExtendEmpty(), types.NewEmptyV4Key().ExtendEmpty()
@@ -298,7 +288,7 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workDir *gpfile.GPDir, query *Quer
 			// Read the block from the file
 			if blocks[colIdx], err = workDir.ReadBlockAtIndex(colIdx, b); err != nil {
 				blockBroken = true
-				w.logger.Warnf("[D %s; B %d] Failed to read column %s: %s", workDir, block.Timestamp, types.ColumnFileNames[colIdx], err)
+				logger.Warnf("[D %s; B %d] Failed to read column %s: %s", workDir, block.Timestamp, types.ColumnFileNames[colIdx], err)
 				break
 			}
 		}
@@ -311,25 +301,25 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workDir *gpfile.GPDir, query *Quer
 			if colIdx.IsCounterCol() {
 				if bitpack.Len(blocks[colIdx]) != numEntries {
 					blockBroken = true
-					w.logger.Warnf("[Bl %d] Incorrect number of entries in file [%s.gpf]. Expected %d, found %d", b, types.ColumnFileNames[colIdx], numEntries, bitpack.Len(blocks[colIdx]))
+					logger.Warnf("[Bl %d] Incorrect number of entries in file [%s.gpf]. Expected %d, found %d", b, types.ColumnFileNames[colIdx], numEntries, bitpack.Len(blocks[colIdx]))
 					break
 				}
 			} else {
 				if types.ColumnSizeofs[colIdx] == types.IPSizeOf {
 					if l != (numEntries-int(numV4Entries))*types.IPv6Width+int(numV4Entries)*types.IPv4Width {
 						blockBroken = true
-						w.logger.Warnf("[Bl %d] Incorrect number of entries in variable block size file [%s.gpf]. Expected file length %d, have %d", b, types.ColumnFileNames[colIdx], (numEntries-int(numV4Entries))*types.IPv6Width+int(numV4Entries)*types.IPv4Width, l)
+						logger.Warnf("[Bl %d] Incorrect number of entries in variable block size file [%s.gpf]. Expected file length %d, have %d", b, types.ColumnFileNames[colIdx], (numEntries-int(numV4Entries))*types.IPv6Width+int(numV4Entries)*types.IPv4Width, l)
 						break
 					}
 				} else {
 					if l/types.ColumnSizeofs[colIdx] != numEntries {
 						blockBroken = true
-						w.logger.Warnf("[Bl %d] Incorrect number of entries in column [%s.gpf]. Expected %d, found %d", b, types.ColumnFileNames[colIdx], numEntries, l/types.ColumnSizeofs[colIdx])
+						logger.Warnf("[Bl %d] Incorrect number of entries in column [%s.gpf]. Expected %d, found %d", b, types.ColumnFileNames[colIdx], numEntries, l/types.ColumnSizeofs[colIdx])
 						break
 					}
 					if l%types.ColumnSizeofs[colIdx] != 0 {
 						blockBroken = true
-						w.logger.Warnf("[Bl %d] Entry size does not evenly divide block size in file [%s.gpf]", b, types.ColumnFileNames[colIdx])
+						logger.Warnf("[Bl %d] Entry size does not evenly divide block size in file [%s.gpf]", b, types.ColumnFileNames[colIdx])
 						break
 					}
 				}
@@ -421,7 +411,7 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workDir *gpfile.GPDir, query *Quer
 					comparisonValue.PutDportV(dportBlocks[i*types.DportSizeof:i*types.DportSizeof+types.DportSizeof], isIPv4)
 				}
 
-				conditionalSatisfied = query.Conditional.evaluate(comparisonValue.Key())
+				conditionalSatisfied = query.Conditional.Evaluate(comparisonValue.Key())
 			}
 
 			if conditionalSatisfied {

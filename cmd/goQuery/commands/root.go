@@ -9,9 +9,12 @@ import (
 	"os"
 	"time"
 
+	"github.com/els0r/goProbe/pkg/goDB/engine"
+	"github.com/els0r/goProbe/pkg/logging"
 	"github.com/els0r/goProbe/pkg/query"
 	"github.com/els0r/goProbe/pkg/results"
 	"github.com/els0r/goProbe/pkg/types"
+	"github.com/els0r/goProbe/pkg/version"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/spf13/cobra"
 )
@@ -48,6 +51,7 @@ var (
 )
 
 func init() {
+	cobra.OnInitialize(initLogger)
 
 	// flags to be also passed to children commands
 	subRootCmd.PersistentFlags().StringVarP(&subcmdLineParams.DBPath, "db-path", "d", query.DefaultDBPath, helpMap["DBPath"])
@@ -60,11 +64,10 @@ func init() {
 	subRootCmd.InitDefaultHelpCmd()
 	subRootCmd.InitDefaultHelpFlag()
 
-	rootCmd.Flags().BoolVarP(&cmdLineParams.External, "external", "x", false, helpMap["External"])
 	rootCmd.Flags().BoolVarP(&cmdLineParams.In, "in", "", query.DefaultIn, helpMap["In"])
 	rootCmd.Flags().BoolVarP(&cmdLineParams.List, "list", "", false, helpMap["List"])
 	rootCmd.Flags().BoolVarP(&cmdLineParams.Out, "out", "", query.DefaultOut, helpMap["Out"])
-	rootCmd.Flags().BoolVarP(&cmdLineParams.Resolve, "resolve", "", false, helpMap["Resolve"])
+	rootCmd.Flags().BoolVarP(&cmdLineParams.DNSResolution.Enabled, "resolve", "", false, helpMap["Resolve"])
 	rootCmd.Flags().BoolVarP(&cmdLineParams.SortAscending, "ascending", "a", false, helpMap["SortAscending"])
 	rootCmd.Flags().BoolVarP(&cmdLineParams.Sum, "sum", "", false, helpMap["Sum"])
 	rootCmd.Flags().BoolVarP(&cmdLineParams.Version, "version", "v", false, "Print version information and exit\n")
@@ -82,8 +85,8 @@ func init() {
 
 	// Integers
 	rootCmd.Flags().IntVarP(&cmdLineParams.NumResults, "limit", "n", query.DefaultNumResults, helpMap["NumResults"])
-	rootCmd.Flags().IntVarP(&cmdLineParams.ResolveRows, "resolve-rows", "", query.DefaultResolveRows, helpMap["ResolveRows"])
-	rootCmd.Flags().IntVarP(&cmdLineParams.ResolveTimeout, "resolve-timeout", "", query.DefaultResolveTimeout, helpMap["ResolveTimeout"])
+	rootCmd.Flags().IntVarP(&cmdLineParams.DNSResolution.MaxRows, "resolve-rows", "", query.DefaultResolveRows, helpMap["ResolveRows"])
+	rootCmd.Flags().DurationVarP(&cmdLineParams.DNSResolution.Timeout, "resolve-timeout", "", query.DefaultResolveTimeout, helpMap["ResolveTimeout"])
 	rootCmd.Flags().IntVarP(&cmdLineParams.MaxMemPct, "max-mem", "", query.DefaultMaxMemPct, helpMap["MaxMemPct"])
 	rootCmd.Flags().BoolVarP(&cmdLineParams.LowMem, "low-mem", "", false, helpMap["LowMem"])
 
@@ -91,8 +94,26 @@ func init() {
 	rootCmd.Flags().DurationVarP(&cmdLineParams.QueryTimeout, "timeout", "", query.DefaultQueryTimeout, helpMap["QueryTimeout"])
 }
 
+func initLogger() {
+	outputPaths := []string{"stderr"}
+
+	// since this is a command line tool, only warnings and errors should be printed and they
+	// shouldn't go to a dedicated file
+	err := logging.Init("goQuery", version.Short(), "warn", "logfmt",
+		logging.WithOutputPaths(outputPaths),
+		logging.WithErrorPaths(outputPaths),
+		logging.WithStackTraces(false),
+	)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to initialize logger: %v\n", err)
+		os.Exit(1)
+	}
+}
+
 // main program entrypoint
 func entrypoint(cmd *cobra.Command, args []string) error {
+	// initialize logger
+
 	// assign query args
 	var queryArgs = *cmdLineParams
 
@@ -165,7 +186,7 @@ func entrypoint(cmd *cobra.Command, args []string) error {
 	queryArgs.Caller = os.Args[0] // take the full path of called binary
 
 	// convert the command line parameters
-	query, err := queryArgs.Prepare()
+	stmt, err := queryArgs.Prepare()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Query preparation failed: %v\n", err)
 		return err
@@ -181,31 +202,42 @@ func entrypoint(cmd *cobra.Command, args []string) error {
 	}
 
 	// run the query
-	result, err := query.Execute(ctx)
+	var result *results.Result
+
+	res, err := engine.NewQueryRunner().Run(ctx, stmt)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Query execution failed: %v\n", err)
 		return err
 	}
 	// empty results should be handled here exclusively
-	if len(result.Rows) == 0 {
-		if query.External || query.Format == "json" {
-			msg := results.ErrorMsgExternal{Status: types.StatusEmpty, Message: results.ErrorNoResults.Error()}
-			return jsoniter.NewEncoder(query.Output).Encode(msg)
+	if len(res) == 0 {
+		res = []*results.Result{
+			{Status: types.StatusEmpty, StatusMessage: results.ErrorNoResults.Error()},
 		}
-		fmt.Fprintln(query.Output, results.ErrorNoResults.Error())
-		return nil
+	} else if len(res) > 1 {
+		res = []*results.Result{
+			{Status: types.StatusError, StatusMessage: fmt.Sprintf("unexpected number of results encountered (%d)", len(res))},
+		}
 	}
 
-	// serialize raw result if json is selected
-	if query.Format == "json" {
-		err = jsoniter.NewEncoder(query.Output).Encode(result)
+	// serialize raw results array if json is selected
+	if stmt.Format == "json" {
+		err = jsoniter.NewEncoder(stmt.Output).Encode(res)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Results serialization failed: %v\n", err)
 			return err
 		}
 		return nil
 	}
-	err = query.Print(ctx, result)
+
+	// when running against a local goDB, there should be exactly one result
+	result = res[0]
+	if result.Status != types.StatusOK {
+		fmt.Fprintf(stmt.Output, "Status %q: %s\n", result.Status, result.StatusMessage)
+		return nil
+	}
+
+	err = stmt.Print(ctx, result)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Result printing failed: %v\n", err)
 		return err

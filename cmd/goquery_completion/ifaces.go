@@ -14,7 +14,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/els0r/goProbe/pkg/goDB"
+	"github.com/els0r/goProbe/pkg/goDB/info"
 	"github.com/els0r/goProbe/pkg/util"
 )
 
@@ -46,7 +46,7 @@ func ifaces(args []string) []string {
 
 	dbpath := dbPath(args)
 
-	dbIfaces, err := goDB.GetInterfaces(dbpath)
+	dbIfaces, err := info.GetInterfaces(dbpath)
 	if err != nil {
 		return nil
 	}

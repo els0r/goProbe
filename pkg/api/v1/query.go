@@ -1,12 +1,13 @@
 package v1
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 
 	"github.com/els0r/goProbe/pkg/api/json"
+	"github.com/els0r/goProbe/pkg/goDB/engine"
 	"github.com/els0r/goProbe/pkg/query"
-	"github.com/els0r/goProbe/pkg/results"
 	"github.com/els0r/goProbe/pkg/types"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -50,19 +51,14 @@ func (a *API) handleQuery(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// execute query
-	result, err := stmt.Execute(ctx)
+	res, err := engine.NewQueryRunner().Run(ctx, stmt)
 	if err != nil {
 		a.errorHandler.Handle(ctx, w, http.StatusInternalServerError, err, "failed to execute query")
 		return
 	}
-	if args.Format == "json" {
-		// handle empty results only for the external case. Otherwise,
-		// return the entire result data structure with empty "rows"
-		if len(result.Rows) == 0 && stmt.External {
-			msg := results.ErrorMsgExternal{Status: types.StatusEmpty, Message: results.ErrorNoResults.Error()}
-			jsoniter.NewEncoder(w).Encode(msg)
-			return
-		}
+
+	result := res[0]
+	if stmt.Format == "json" {
 		err = jsoniter.NewEncoder(w).Encode(result)
 		if err != nil {
 			a.errorHandler.Handle(ctx, w, http.StatusInternalServerError, err, "failed to JSON serialize results")
@@ -71,9 +67,22 @@ func (a *API) handleQuery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = stmt.Print(ctx, result)
-	if err != nil {
-		a.errorHandler.Handle(ctx, w, http.StatusInternalServerError, err, "failed to write results")
+	// when running against a local goDB, there should be exactly one result
+	result = res[0]
+
+	statusCode := http.StatusInternalServerError
+	switch result.Status {
+	case types.StatusOK:
+		err = stmt.Print(ctx, result)
+		if err != nil {
+			a.errorHandler.Handle(ctx, w, http.StatusInternalServerError, err, "failed to write results")
+			return
+		}
 		return
+	case types.StatusEmpty:
+		statusCode = http.StatusNoContent
 	}
+
+	a.errorHandler.Handle(ctx, w, statusCode, errors.New(result.StatusMessage), string(result.Status))
+	return
 }

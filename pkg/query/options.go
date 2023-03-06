@@ -1,5 +1,7 @@
 package query
 
+import "time"
+
 // Option allows to modify an existing Args container
 type Option func(*Args)
 
@@ -46,13 +48,13 @@ func WithList() Option { return func(a *Args) { a.List = true } }
 func WithVersion() Option { return func(a *Args) { a.Version = true } }
 
 // WithResolve enables reverse lookups of IPs
-func WithResolve() Option { return func(a *Args) { a.Resolve = true } }
+func WithResolve() Option { return func(a *Args) { a.DNSResolution.Enabled = true } }
 
 // WithResolveTimeout sets the timeout for reverse lookups (in seconds)
-func WithResolveTimeout(t int) Option { return func(a *Args) { a.ResolveTimeout = t } }
+func WithResolveTimeout(t time.Duration) Option { return func(a *Args) { a.DNSResolution.Timeout = t } }
 
 // WithResolveRows sets the amount of rows for which lookups should be attempted
-func WithResolveRows(r int) Option { return func(a *Args) { a.ResolveRows = r } }
+func WithResolveRows(r int) Option { return func(a *Args) { a.DNSResolution.MaxRows = r } }
 
 // WithDBPath sets the location of the goDB
 func WithDBPath(p string) Option { return func(a *Args) { a.DBPath = p } }

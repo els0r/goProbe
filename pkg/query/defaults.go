@@ -15,7 +15,7 @@ var (
 	DefaultNumResults     = 1000
 	DefaultOut            = false
 	DefaultResolveRows    = 25
-	DefaultResolveTimeout = 1 // seconds
+	DefaultResolveTimeout = 1 * time.Second
 	DefaultQueryTimeout   = 0 * time.Second
 	DefaultSortBy         = "bytes"
 )

@@ -15,14 +15,17 @@
 
 package goDB
 
-import "github.com/els0r/goProbe/pkg/types"
+import (
+	"github.com/els0r/goProbe/pkg/goDB/conditions/node"
+	"github.com/els0r/goProbe/pkg/types"
+)
 
 // Query stores all relevant parameters for data selection
 type Query struct {
 	// list of attributes that will be compared, e.g. "dip" "sip"
 	// in a "talk_conv" query
 	Attributes  []types.Attribute
-	Conditional Node
+	Conditional node.Node
 
 	// Explicity attribute flags that allow granular processing logic
 	// without having to rely on array loops
@@ -96,7 +99,7 @@ var queryConditionalColumnFlagSetters = [types.ColIdxAttributeCount]func(q *Quer
 }
 
 // NewQuery creates a new Query object based on the parsed command line parameters
-func NewQuery(attributes []types.Attribute, conditional Node, hasAttrTime, hasAttrIface bool) *Query {
+func NewQuery(attributes []types.Attribute, conditional node.Node, hasAttrTime, hasAttrIface bool) *Query {
 	q := &Query{
 		Attributes:   attributes,
 		Conditional:  conditional,
@@ -115,7 +118,7 @@ func NewQuery(attributes []types.Attribute, conditional Node, hasAttrTime, hasAt
 	}
 
 	if q.Conditional != nil {
-		for attribName := range q.Conditional.attributes() {
+		for attribName := range q.Conditional.Attributes() {
 			colIdx := conditionalAttributeNameToColumnIndex(attribName)
 			q.conditionalAttributeIndices = append(q.conditionalAttributeIndices, colIdx)
 			isAttributeIndex[colIdx] = true

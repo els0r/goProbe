@@ -12,7 +12,6 @@ package goDB
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 
 	"github.com/els0r/goProbe/pkg/goDB/encoder/bitpack"
@@ -20,11 +19,6 @@ import (
 	"github.com/els0r/goProbe/pkg/goDB/storage/gpfile"
 	"github.com/els0r/goProbe/pkg/types"
 	"github.com/els0r/goProbe/pkg/types/hashmap"
-)
-
-const (
-	// QueryLogFile is the name of the query log written by the query package
-	QueryLogFile = "query.log"
 )
 
 // DBWriter writes goProbe flows to goDB database files
@@ -45,26 +39,6 @@ func (w *DBWriter) dailyDir(timestamp int64) string {
 	return filepath.Join(w.dbpath, w.iface, fmt.Sprintf("%d", timestamp))
 }
 
-func (w *DBWriter) createQueryLog() error {
-	var (
-		err     error
-		logfile *os.File
-	)
-	qlogPath := filepath.Join(w.dbpath, QueryLogFile)
-	logfile, err = os.OpenFile(qlogPath, os.O_CREATE, 0666)
-	if err != nil {
-		err = fmt.Errorf("failed to create query log: %s", err)
-		return err
-	}
-	logfile.Close()
-	err = os.Chmod(qlogPath, 0666)
-	if err != nil {
-		err = fmt.Errorf("failed to set query log permissions: %s", err)
-		return err
-	}
-	return nil
-}
-
 // Write takes an aggregated flow map and its metadata and writes it to disk for a given timestamp
 func (w *DBWriter) Write(flowmap *hashmap.AggFlowMap, captureMeta CaptureMetadata, timestamp int64) error {
 	var (
@@ -79,12 +53,6 @@ func (w *DBWriter) Write(flowmap *hashmap.AggFlowMap, captureMeta CaptureMetadat
 		return err
 	}
 	defer dir.Close()
-
-	// check if the query log exists and create it if necessary
-	err = w.createQueryLog()
-	if err != nil {
-		return err
-	}
 
 	data, update = dbData(w.iface, timestamp, flowmap)
 	if err := dir.WriteBlocks(timestamp, gpfile.TrafficMetadata{
@@ -117,12 +85,6 @@ func (w *DBWriter) WriteBulk(workloads []BulkWorkload, dirTimestamp int64) (err 
 		return err
 	}
 	defer dir.Close()
-
-	// check if the query log exists and create it if necessary
-	err = w.createQueryLog()
-	if err != nil {
-		return err
-	}
 
 	for _, workload := range workloads {
 		data, update = dbData(w.iface, workload.Timestamp, workload.FlowMap)

@@ -14,7 +14,7 @@
 package goDB
 
 import (
-	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -116,9 +116,9 @@ func (n *NOPStringParser) ParseVal(element string, val *types.Counters) error {
 
 // ParseKey parses a source IP string and writes it to the source IP key slice
 func (s *SipStringParser) ParseKey(element string, key *types.ExtendedKey) error {
-	ipBytes, err := IPStringToBytes(element)
+	ipBytes, err := types.IPStringToBytes(element)
 	if err != nil {
-		return errors.New("Could not parse 'sip' attribute: " + err.Error())
+		return fmt.Errorf("could not parse 'sip' attribute: %w", err)
 	}
 	if (len(ipBytes) == 4) != key.Key().IsIPv4() {
 		return ErrIPVersionMismatch
@@ -130,9 +130,9 @@ func (s *SipStringParser) ParseKey(element string, key *types.ExtendedKey) error
 
 // ParseKey parses a destination IP string and writes it to the desintation IP key slice
 func (d *DipStringParser) ParseKey(element string, key *types.ExtendedKey) error {
-	ipBytes, err := IPStringToBytes(element)
+	ipBytes, err := types.IPStringToBytes(element)
 	if err != nil {
-		return errors.New("Could not parse 'dip' attribute: " + err.Error())
+		return fmt.Errorf("could not parse 'dip' attribute: %w", err)
 	}
 	if (len(ipBytes) == 4) != key.Key().IsIPv4() {
 		return ErrIPVersionMismatch
@@ -146,7 +146,7 @@ func (d *DipStringParser) ParseKey(element string, key *types.ExtendedKey) error
 func (d *DportStringParser) ParseKey(element string, key *types.ExtendedKey) error {
 	num, err := strconv.ParseUint(element, 10, 16)
 	if err != nil {
-		return errors.New("Could not parse 'dport' attribute: " + err.Error())
+		return fmt.Errorf("could not parse 'dport' attribute: %w", err)
 	}
 	key.Key().PutDport([]byte{uint8(num >> 8), uint8(num & 0xff)})
 	return nil
@@ -164,7 +164,7 @@ func (p *ProtoStringParser) ParseKey(element string, key *types.ExtendedKey) err
 	if num, err = strconv.ParseUint(element, 10, 8); err != nil {
 		// then try to parse as string (e.g. TCP or UDP)
 		if num, isIn = protocols.GetIPProtoID(strings.ToLower(element)); !isIn {
-			return errors.New("Could not parse 'protocol' attribute: " + err.Error())
+			return fmt.Errorf("could not parse 'protocol' attribute: %w", err)
 		}
 	}
 

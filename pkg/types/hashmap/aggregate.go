@@ -53,8 +53,6 @@ var NilAggFlowMapWithMetadata = AggFlowMapWithMetadata{}
 type AggFlowMapWithMetadata struct {
 	*AggFlowMap
 
-	HostID    uint   `json:"host_id"`
-	Hostname  string `json:"host"`
 	Interface string `json:"iface"`
 }
 
@@ -109,6 +107,14 @@ func NewAggFlowMapWithMetadata(n ...int) AggFlowMapWithMetadata {
 }
 
 // IsNil returns if an AggFlowMapWithMetadata is nil (used e.g. in cases of error)
+func (a AggFlowMapWithMetadata) IsNil() bool {
+	if a.AggFlowMap == nil {
+		return true
+	}
+	return a.AggFlowMap.IsNil()
+}
+
+// IsNil returns if an AggFlowMap is nil (used e.g. in cases of error)
 func (a AggFlowMap) IsNil() bool {
 	return a.V4Map == nil && a.V6Map == nil
 }

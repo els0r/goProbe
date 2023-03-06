@@ -7,7 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/els0r/goProbe/pkg/goDB"
+	"github.com/els0r/goProbe/pkg/goDB/conditions"
+	"github.com/els0r/goProbe/pkg/goDB/info"
 	"github.com/els0r/goProbe/pkg/query/dns"
 	"github.com/els0r/goProbe/pkg/results"
 	"github.com/els0r/goProbe/pkg/types"
@@ -21,17 +22,23 @@ func NewArgs(query, ifaces string, opts ...Option) *Args {
 		Ifaces: ifaces,
 
 		// defaults
-		DBPath:         DefaultDBPath,
-		First:          time.Now().AddDate(0, -1, 0).Format(time.ANSIC),
-		Format:         DefaultFormat,
-		In:             DefaultIn,
-		Last:           time.Now().Format(time.ANSIC),
-		MaxMemPct:      DefaultMaxMemPct,
-		NumResults:     DefaultNumResults,
-		Out:            DefaultOut,
-		ResolveRows:    DefaultResolveRows,
-		ResolveTimeout: DefaultResolveTimeout,
-		SortBy:         DefaultSortBy,
+		DBPath:     DefaultDBPath,
+		First:      time.Now().AddDate(0, -1, 0).Format(time.ANSIC),
+		Format:     DefaultFormat,
+		In:         DefaultIn,
+		Last:       time.Now().Format(time.ANSIC),
+		MaxMemPct:  DefaultMaxMemPct,
+		NumResults: DefaultNumResults,
+		Out:        DefaultOut,
+		DNSResolution: struct {
+			Enabled bool
+			Timeout time.Duration
+			MaxRows int
+		}{
+			MaxRows: DefaultResolveRows,
+			Timeout: DefaultResolveTimeout,
+		},
+		SortBy: DefaultSortBy,
 	}
 
 	// apply functional options
@@ -75,9 +82,11 @@ type Args struct {
 	Version bool
 
 	// resolution
-	Resolve        bool
-	ResolveTimeout int
-	ResolveRows    int
+	DNSResolution struct {
+		Enabled bool
+		Timeout time.Duration
+		MaxRows int
+	}
 
 	// file system
 	DBPath    string
@@ -106,9 +115,9 @@ func (a *Args) String() string {
 		a.First,
 		a.Last,
 	)
-	if a.Resolve {
-		str += fmt.Sprintf(", dns-resolution: %t, dns-timeout: %ds, dns-rows-resolved: %d",
-			a.Resolve, a.ResolveTimeout, a.ResolveRows,
+	if a.DNSResolution.Enabled {
+		str += fmt.Sprintf(", dns-resolution: %t, dns-timeout: %s, dns-rows-resolved: %d",
+			a.DNSResolution.Enabled, a.DNSResolution.Timeout.Round(time.Second), a.DNSResolution.MaxRows,
 		)
 	}
 	if a.Caller != "" {
@@ -120,18 +129,22 @@ func (a *Args) String() string {
 
 // Prepare takes the query Arguments, validates them and creates an executable statement. Optionally, additional writers can be passed to route query results to different destinations.
 func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
-
 	// if not already done beforehand, enforce defaults for args
 	if a.SortBy == "" {
 		a.SortBy = "packets"
 	}
 
 	s := &Statement{
-		QueryType:  a.Query,
-		Resolve:    a.Resolve,
-		Conditions: a.Condition,
-		Caller:     a.Caller,
-		Output:     os.Stdout, // by default, we write results to the console
+		QueryType: a.Query,
+		DNSResolution: struct {
+			Enabled bool          `json:"enabled,omitempty"`
+			Timeout time.Duration `json:"dns_timeout,omitempty"`
+			MaxRows int           `json:"max_rows,omitempty"`
+		}(a.DNSResolution),
+		Condition: a.Condition,
+		LowMem:    a.LowMem,
+		Caller:    a.Caller,
+		Output:    os.Stdout, // by default, we write results to the console
 	}
 
 	var err error
@@ -143,17 +156,12 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 	}
 	s.Format = a.Format
 
-	// check DB path
-	err = CheckDBExists(a.DBPath)
-	if err != nil {
-		return s, err
-	}
 	s.DBPath = a.DBPath
 
 	// assign ifaces
 	s.Ifaces, err = parseIfaceList(s.DBPath, a.Ifaces)
 	if err != nil {
-		return s, fmt.Errorf("failed to parse interface list: %s", err)
+		return s, fmt.Errorf("failed to parse interface list: %w", err)
 	}
 
 	// assign sort order and direction
@@ -162,10 +170,9 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 		return s, fmt.Errorf("unknown sorting parameter '%s' specified", a.SortBy)
 	}
 
-	var queryAttributes []types.Attribute
-	queryAttributes, s.HasAttrTime, s.HasAttrIface, err = types.ParseQueryType(a.Query)
+	s.Attributes, _, _, err = types.ParseQueryType(a.Query)
 	if err != nil {
-		return s, fmt.Errorf("failed to parse query type: %s", err)
+		return s, fmt.Errorf("failed to parse query type: %w", err)
 	}
 
 	// insert iface attribute here in case multiple interfaces where specified and the
@@ -185,11 +192,11 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 	// parse time bound
 	s.Last, err = ParseTimeArgument(a.Last)
 	if err != nil {
-		return s, fmt.Errorf("invalid time format for --last: %s", err)
+		return s, fmt.Errorf("invalid time format for --last: %w", err)
 	}
 	s.First, err = ParseTimeArgument(a.First)
 	if err != nil {
-		return s, fmt.Errorf("invalid time format for --first: %s", err)
+		return s, fmt.Errorf("invalid time format for --first: %w", err)
 	}
 	if s.Last <= s.First {
 		return s, fmt.Errorf("invalid time interval: the lower time bound cannot be greater than the upper time bound")
@@ -216,34 +223,25 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 	}
 
 	// check resolve timeout and DNS
-	if s.Resolve {
+	if s.DNSResolution.Enabled {
 		err := dns.CheckDNS()
 		if err != nil {
-			return s, fmt.Errorf("DNS warning: %s", err)
+			return s, fmt.Errorf("DNS warning: %w", err)
 		}
-		if !(0 < a.ResolveTimeout) {
+		if !(0 < s.DNSResolution.Timeout) {
 			return s, fmt.Errorf("resolve-timeout must be greater than 0")
 		}
-		s.ResolveTimeout = time.Duration(a.ResolveTimeout) * time.Second
-
-		if !(0 < a.ResolveRows) {
+		if !(0 < s.DNSResolution.MaxRows) {
 			return s, fmt.Errorf("resolve-rows must be greater than 0")
 		}
-		s.ResolveRows = a.ResolveRows
 	}
 
 	// sanitize conditional if one was provided
-	a.Condition, err = goDB.SanitizeUserInput(a.Condition)
+	a.Condition, err = conditions.SanitizeUserInput(a.Condition)
 	if err != nil {
-		return s, fmt.Errorf("condition sanitization error: %s", err)
+		return s, fmt.Errorf("failed to sanitize condition: %w", err)
 	}
-	s.Conditions = a.Condition
-
-	// build condition tree to check if there is a syntax error before starting processing
-	queryConditional, parseErr := goDB.ParseAndInstrumentConditional(a.Condition, time.Duration(a.ResolveTimeout))
-	if parseErr != nil {
-		return s, fmt.Errorf("condition error: %s", parseErr)
-	}
+	s.Condition = a.Condition
 
 	// check memory flag
 	if !(0 < a.MaxMemPct && a.MaxMemPct <= 100) {
@@ -277,7 +275,6 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 		s.Output = io.MultiWriter(writers...)
 	}
 
-	s.Query = goDB.NewQuery(queryAttributes, queryConditional, s.HasAttrTime, s.HasAttrIface).LowMem(a.LowMem)
 	return s, nil
 }
 
@@ -287,33 +284,18 @@ func parseIfaceList(dbPath string, ifacelist string) (ifaces []string, err error
 	}
 
 	if strings.ToLower(ifacelist) == "any" {
-		ifaces, err = goDB.GetInterfaces(dbPath)
+		ifaces, err = info.GetInterfaces(dbPath)
 		if err != nil {
 			return nil, err
 		}
 	} else {
 		ifaces = strings.Split(ifacelist, ",")
 		for _, iface := range ifaces {
-			if strings.Contains(iface, "-") { // TODO: checking for "-" is kinda ugly
-				err = fmt.Errorf("interface list contains invalid character '-'")
+			if iface == "" {
+				err = fmt.Errorf("interface list contains empty interface name")
 				return
 			}
 		}
 	}
 	return
-}
-
-// CheckDBExists will return nil if a DB at path exists and otherwise the error encountered
-func CheckDBExists(path string) error {
-	if path == "" {
-		return fmt.Errorf("empty DB path provided")
-	}
-	_, err := os.Stat(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return fmt.Errorf("DB directory does not exist at %s", path)
-		}
-		return fmt.Errorf("failed to check DB directory: %s", err)
-	}
-	return nil
 }

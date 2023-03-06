@@ -30,9 +30,10 @@ import (
 
 	"github.com/els0r/goProbe/pkg/goDB"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
+	"github.com/els0r/goProbe/pkg/logging"
 	"github.com/els0r/goProbe/pkg/types"
 	"github.com/els0r/goProbe/pkg/types/hashmap"
-	log "github.com/els0r/log"
+	"github.com/els0r/goProbe/pkg/version"
 
 	"flag"
 	"fmt"
@@ -103,37 +104,18 @@ type CSVConverter struct {
 	// map field index to how it should be parsed
 	KeyParsers []keyIndParserItem
 	ValParsers map[int]goDB.StringValParser
-
-	// logging
-	logger log.Logger
-}
-
-// Option allows to configure the CSVConverter
-type Option func(*CSVConverter)
-
-// WithLogger passes a logger to the CSVConverter
-func WithLogger(l log.Logger) Option {
-	return func(c *CSVConverter) {
-		c.logger = l
-	}
 }
 
 // NewCSVConverter initializes a CSVConverter with the Key- and Value parsers for goProbe flows
-func NewCSVConverter(opts ...Option) *CSVConverter {
-
-	c := &CSVConverter{
+func NewCSVConverter() *CSVConverter {
+	return &CSVConverter{
 		KeyParsers: make([]keyIndParserItem, 0),
 		ValParsers: make(map[int]goDB.StringValParser),
 	}
-
-	// apply options
-	for _, opt := range opts {
-		opt(c)
-	}
-	return c
 }
 
 func (c *CSVConverter) readSchema(schema string) error {
+	logger := logging.Logger()
 
 	fields := strings.Split(schema, ",")
 
@@ -181,9 +163,7 @@ func (c *CSVConverter) readSchema(schema string) error {
 	}
 
 	// print parseable/unparseable fields:
-	if c.logger != nil {
-		c.logger.Debugf("SCHEMA: can parse: %s. Will not parse: %s", canParse, cantParse)
-	}
+	logger.Debugf("SCHEMA: can parse: %s. Will not parse: %s", canParse, cantParse)
 	return nil
 }
 
@@ -224,18 +204,18 @@ func main() {
 	}
 
 	// get logger
-	logger, err := log.NewFromString("console", log.WithLevel(log.DEBUG))
+	err := logging.Init("goConvert", version.Short(), "debug", "console")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to spawn logger: %s\n", err)
 		os.Exit(1)
 	}
+	logger := logging.Logger()
 
 	// get number of lines to read in the specified file
 	cmd := exec.Command("wc", "-l", config.FilePath)
 	out, cmderr := cmd.Output()
 	if cmderr != nil {
-		logger.Errorf("could not obtain line count on file %s", config.FilePath)
-		os.Exit(1)
+		logger.Fatalf("could not obtain line count on file %s", config.FilePath)
 	}
 
 	nlString := strings.Split(string(out), " ")
@@ -250,16 +230,14 @@ func main() {
 	var file *os.File
 
 	if file, err = os.Open(config.FilePath); err != nil {
-		logger.Errorf("file open error: %s", err)
-		os.Exit(1)
+		logger.Fatalf("file open error: %s", err)
 	}
 
 	// create a CSV converter
-	var csvconv = NewCSVConverter(WithLogger(logger))
+	var csvconv = NewCSVConverter()
 	if config.Schema != "" {
 		if err = csvconv.readSchema(config.Schema); err != nil {
-			logger.Errorf("failed to read schema: %s", err)
-			os.Exit(1)
+			logger.Fatalf("failed to read schema: %s", err)
 		}
 	}
 
@@ -295,9 +273,8 @@ func main() {
 				mapWriters[fm.iface] = goDB.NewDBWriter(config.SavePath, fm.iface, encoders.Type(config.EncoderType))
 			}
 
-			//        fmt.Println(fm.iface+": Writing:", fm.data)
 			if err = mapWriters[fm.iface].Write(fm.data, goDB.CaptureMetadata{}, fm.tstamp); err != nil {
-				fmt.Printf("Failed to write block at %d: %s\n", fm.tstamp, err.Error())
+				fmt.Printf("Failed to write block at %d: %s\n", fm.tstamp, err)
 				// TODO: bail here?
 				os.Exit(1)
 			}
@@ -306,30 +283,25 @@ func main() {
 
 	fmt.Print("Progress:   0% |")
 	for scanner.Scan() {
-
 		// create the parsers for the converter based on the title line provided in the CSV file
 		if linesRead == 1 {
 			if config.Schema == "" {
 				if err = csvconv.readSchema(scanner.Text()); err != nil {
-					fmt.Printf("Failed to read schema: %s. Schema title line needed in CSV\n", err.Error())
-					os.Exit(1)
+					logger.Fatalf("Failed to read schema: %s. Schema title line needed in CSV\n", err)
 				}
 
 				// assign interface to row key if it was specified
 				if !csvconv.parsesIface() {
 					if config.Iface == "" {
-						fmt.Printf("Interface has not been specified by either data or -iface parameter. Aborting")
-						os.Exit(1)
+						logger.Fatalf("Interface has not been specified by either data or -iface parameter. Aborting")
 					}
 
 					p := &IfaceStringParser{}
 					if err := p.ParseKey(config.Iface, &rowKeyV4); err != nil {
-						fmt.Printf("Failed to parse interface from config: %s\n", err.Error())
-						os.Exit(1)
+						logger.Fatalf("Failed to parse interface from config: %s\n", err)
 					}
 					if err := p.ParseKey(config.Iface, &rowKeyV6); err != nil {
-						fmt.Printf("Failed to parse interface from config: %s\n", err.Error())
-						os.Exit(1)
+						logger.Fatalf("Failed to parse interface from config: %s\n", err)
 					}
 				}
 

@@ -9,7 +9,6 @@ import (
 
 	"github.com/els0r/goProbe/pkg/goDB"
 	"github.com/els0r/goProbe/pkg/types"
-	log "github.com/els0r/log"
 
 	"bufio"
 	"bytes"
@@ -266,11 +265,9 @@ func TestParsers(t *testing.T) {
 	)
 	rowKey := &rowKeyV4
 
-	logger, _ := log.NewFromString("console", log.WithLevel(log.DEBUG))
-
 	t.Parallel()
 	for _, tt := range parserTests {
-		conv := NewCSVConverter(WithLogger(logger))
+		conv := NewCSVConverter()
 		if err = conv.readSchema(tt.schema); err != nil {
 			t.Fatalf("Unable to read schema: %s", err.Error())
 		}
