@@ -23,27 +23,31 @@ import (
 )
 
 var (
-	byteArray37Zeros = [37]byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
+	emptyTransportLayer = [14]byte{}
+	emptyEPHash         = [37]byte{}
 )
 
 // Enumeration of the most common IP protocols
 const (
-	TCP byte = 6
-	UDP      = 17
-	ESP      = 50
+	ICMP   byte = 0x01 //  1
+	TCP         = 0x06 //  6
+	UDP         = 0x11 // 17
+	ESP         = 0x32 // 50
+	ICMPv6      = 0x3A // 58
 )
 
 // EPHash is a typedef that allows us to replace the type of hash
 type EPHash [37]byte
+
+// TransportLayer denotes the first n bytes of the transport layer populated
+// for further analysis
+type TransportLayer [14]byte
 
 // GPPacket stores all relevant packet details for a flow
 type GPPacket struct {
 
 	// packet size
 	numBytes uint16
-
-	// direction indicator fields
-	tcpFlags byte
 
 	// packet inbound or outbound on interface
 	dirInbound bool
@@ -52,8 +56,9 @@ type GPPacket struct {
 	isIPv4 bool
 
 	// packet descriptors / hashes
-	epHash        EPHash
-	epHashReverse EPHash
+	epHash         EPHash
+	epHashReverse  EPHash
+	transportLayer TransportLayer
 }
 
 // Populate takes a raw packet and populates a GPPacket structure from it.
@@ -104,18 +109,23 @@ func (p *GPPacket) Populate(pkt capture.Packet) error {
 			dport := srcPacket[ipv4.HeaderLen+2 : ipv4.HeaderLen+4]
 			sport := srcPacket[ipv4.HeaderLen : ipv4.HeaderLen+2]
 
-			copy(p.epHash[32:34], dport)
-			copy(p.epHashReverse[32:34], sport)
-
 			// If session based traffic is observed, the source port is taken
 			// into account. A major exception is traffic over port 53 as
 			// considering every single DNS request/response would
 			// significantly fill up the flow map
-			if protocol == TCP && (dport[0] != 0 || dport[1] != 53) && (sport[0] != 0 || sport[1] != 53) {
+			if dport[0] != 0 || dport[1] != 53 {
 				copy(p.epHash[34:36], sport)
+				copy(p.epHashReverse[32:34], sport)
+			}
+			if sport[0] != 0 || sport[1] != 53 {
+				copy(p.epHash[32:34], dport)
 				copy(p.epHashReverse[34:36], dport)
 			}
 		}
+
+		// Transfer the first bytes of the application layer (if present) for further analysis
+		copy(p.transportLayer[:], srcPacket[ipv4.HeaderLen:])
+
 	} else if int(srcPacket[0]>>4) == 6 {
 
 		p.isIPv4 = false
@@ -133,22 +143,23 @@ func (p *GPPacket) Populate(pkt capture.Packet) error {
 			dport := srcPacket[ipv6.HeaderLen+2 : ipv6.HeaderLen+4]
 			sport := srcPacket[ipv6.HeaderLen : ipv6.HeaderLen+2]
 
-			copy(p.epHash[32:34], dport)
-			copy(p.epHashReverse[32:34], sport)
-
 			// If session based traffic is observed, the source port is taken
 			// into account. A major exception is traffic over port 53 as
 			// considering every single DNS request/response would
 			// significantly fill up the flow map
-			if protocol == TCP && (dport[0] != 0 || dport[1] != 53) && (sport[0] != 0 || sport[1] != 53) {
+			if dport[0] != 0 || dport[1] != 53 {
 				copy(p.epHash[34:36], sport)
+				copy(p.epHashReverse[32:34], sport)
+			}
+			if sport[0] != 0 || sport[1] != 53 {
+				copy(p.epHash[32:34], dport)
 				copy(p.epHashReverse[34:36], dport)
 			}
-
-			if protocol == TCP {
-				p.tcpFlags = srcPacket[ipv6.HeaderLen+13]
-			}
 		}
+
+		// Transfer the first bytes of the application layer (if present) for further analysis
+		copy(p.transportLayer[:], srcPacket[ipv6.HeaderLen:])
+
 	} else {
 		return fmt.Errorf("received neither IPv4 nor IPv6 IP header: %v", srcPacket)
 	}
@@ -160,8 +171,8 @@ func (p *GPPacket) Populate(pkt capture.Packet) error {
 
 func (p *GPPacket) reset() {
 	p.numBytes = uint16(0)
-	p.tcpFlags = 0
-	p.epHash = byteArray37Zeros
-	p.epHashReverse = byteArray37Zeros
+	p.epHash = emptyEPHash
+	p.epHashReverse = emptyEPHash
+	p.transportLayer = emptyTransportLayer
 	p.dirInbound = false
 }

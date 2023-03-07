@@ -81,7 +81,7 @@ func (f *FlowLog) TablePrint(w *tabwriter.Writer) error {
 		if g.HasBeenIdle() {
 			state += "!"
 		}
-		if g.pktDirectionSet {
+		if g.directionConfidenceHigh {
 			state += "*"
 		}
 		if state == "" {

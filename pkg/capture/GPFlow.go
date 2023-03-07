@@ -23,12 +23,12 @@ type GPFlow struct {
 	epHash EPHash
 
 	// Hash Map Value variables
-	bytesRcvd       uint64
-	bytesSent       uint64
-	packetsRcvd     uint64
-	packetsSent     uint64
-	pktDirectionSet bool
-	isIPv4          bool
+	bytesRcvd               uint64
+	bytesSent               uint64
+	packetsRcvd             uint64
+	packetsSent             uint64
+	directionConfidenceHigh bool
+	isIPv4                  bool
 }
 
 // Key returns a goDB compliant key from the current flow
@@ -66,28 +66,28 @@ func (f *GPFlow) MarshalJSON() ([]byte, error) {
 	)
 }
 
-func updateDirection(packet *GPPacket) bool {
-	directionSet := false
+func (f *GPFlow) updateDirection(packet *GPPacket) {
 	if direction := ClassifyPacketDirection(packet); direction != Unknown {
-		directionSet = true
+		f.directionConfidenceHigh = direction.IsConfidenceHigh()
 
 		// switch fields if direction was opposite to the default direction
 		// "DirectionRemains"
-		if direction == DirectionReverts {
-			packet.epHash, packet.epHashReverse = packet.epHashReverse, packet.epHash
+		if direction == DirectionReverts || direction == DirectionMaybeReverts {
+			f.epHash = packet.epHashReverse
 		}
 	}
 
-	return directionSet
+	return
 }
 
 // NewGPFlow creates a new flow based on the packet
 func NewGPFlow(packet *GPPacket) *GPFlow {
+
 	res := GPFlow{
-		epHash:          packet.epHash,
-		pktDirectionSet: updateDirection(packet), // try to get the packet direction
-		isIPv4:          packet.isIPv4,
+		epHash: packet.epHash,
+		isIPv4: packet.isIPv4,
 	}
+	res.updateDirection(packet)
 
 	// set packet and byte counters with respect to its interface direction
 	if packet.dirInbound {
@@ -113,9 +113,9 @@ func (f *GPFlow) UpdateFlow(packet *GPPacket) {
 		f.packetsSent++
 	}
 
-	// try to update direction if necessary
-	if !(f.pktDirectionSet) {
-		f.pktDirectionSet = updateDirection(packet)
+	// try to update direction if necessary (as long as we're not confident enough)
+	if !f.directionConfidenceHigh {
+		f.updateDirection(packet)
 	}
 }
 
@@ -136,7 +136,7 @@ func (f *GPFlow) Reset() {
 }
 
 func (f *GPFlow) hasIdentifiedDirection() bool {
-	return f.pktDirectionSet
+	return f.directionConfidenceHigh
 }
 
 // HasBeenIdle checks whether the flow has received packets into any direction. In the flow
