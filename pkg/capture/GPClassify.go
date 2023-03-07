@@ -30,23 +30,6 @@ func (d Direction) IsConfidenceHigh() bool {
 	return d == DirectionRemains || d == DirectionReverts
 }
 
-// Lookup table storing frequently used destination ports which fall outside of the service
-// port range 1-1023. These are explicit exceptions to the direction heuristic below
-var specialPortsLoookupTable = [65536]bool{
-	1352:  true, // Lotus Notes
-	2049:  true, // NFS
-	5222:  true, // XMPP, iMessage
-	5353:  true, // DNS
-	8080:  true, // Proxy
-	8612:  true, // Canon BJNP
-	17500: true, // Dropbox LanSync
-}
-
-// IsSpecialPort checks whether port is a well-known high port
-func IsSpecialPort(port uint16) bool {
-	return specialPortsLoookupTable[port]
-}
-
 // ClassifyPacketDirection is responsible for running a variety of heuristics on the packet
 // in order to determine its direction. This classification is important since the
 // termination of flows in regular intervals otherwise results in the incapability

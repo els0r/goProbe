@@ -47,7 +47,7 @@ type TransportLayer [14]byte
 type GPPacket struct {
 
 	// packet size
-	numBytes uint16
+	numBytes uint32
 
 	// packet inbound or outbound on interface
 	dirInbound bool
@@ -70,7 +70,7 @@ func (p *GPPacket) Populate(pkt capture.Packet) error {
 
 	// read the direction from which the packet entered the interface
 	p.dirInbound = pkt.Type() == 0
-	p.numBytes = uint16(pkt.TotalLen())
+	p.numBytes = pkt.TotalLen()
 	var protocol byte
 
 	if int(srcPacket[0]>>4) == 4 {
@@ -113,11 +113,11 @@ func (p *GPPacket) Populate(pkt capture.Packet) error {
 			// into account. A major exception is traffic over port 53 as
 			// considering every single DNS request/response would
 			// significantly fill up the flow map
-			if dport[0] != 0 || dport[1] != 53 {
+			if isNotCommonPort(dport) {
 				copy(p.epHash[34:36], sport)
 				copy(p.epHashReverse[32:34], sport)
 			}
-			if sport[0] != 0 || sport[1] != 53 {
+			if isNotCommonPort(sport) {
 				copy(p.epHash[32:34], dport)
 				copy(p.epHashReverse[34:36], dport)
 			}
@@ -147,11 +147,11 @@ func (p *GPPacket) Populate(pkt capture.Packet) error {
 			// into account. A major exception is traffic over port 53 as
 			// considering every single DNS request/response would
 			// significantly fill up the flow map
-			if dport[0] != 0 || dport[1] != 53 {
+			if isNotCommonPort(dport) {
 				copy(p.epHash[34:36], sport)
 				copy(p.epHashReverse[32:34], sport)
 			}
-			if sport[0] != 0 || sport[1] != 53 {
+			if isNotCommonPort(sport) {
 				copy(p.epHash[32:34], dport)
 				copy(p.epHashReverse[34:36], dport)
 			}
@@ -169,8 +169,18 @@ func (p *GPPacket) Populate(pkt capture.Packet) error {
 	return nil
 }
 
+func isNotCommonPort(port []byte) bool {
+	return port[0] != 0 || // Certainly not interesting
+		port[1] != 53 // Not DNS
+
+	// TODO: Potentially extend to more common ports?
+	// return port[0] > 1 || // Neither of the below
+	// 	port[0] == 0 && port[1] != 53 && port[1] != 80 || // DNS or HTTP
+	// 	port[1] != 187 // HTTPS
+}
+
 func (p *GPPacket) reset() {
-	p.numBytes = uint16(0)
+	p.numBytes = 0
 	p.epHash = emptyEPHash
 	p.epHashReverse = emptyEPHash
 	p.transportLayer = emptyTransportLayer

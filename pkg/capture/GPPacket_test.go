@@ -68,6 +68,16 @@ func TestMaxEphemeralPort(t *testing.T) {
 	require.Equal(t, uint16(65535), maxEphemeralPort, "Maximum ephemeral port is != max(uint16), adapt isEphemeralPort() accordingly !")
 }
 
+func TestPortMergeLogic(t *testing.T) {
+	for i := uint16(0); i < 65535; i++ {
+		if i == 53 {
+			require.Falsef(t, isNotCommonPort(uint16ToPort(i)), "Port %d considered common port, adapt isNotCommonPort() accordingly !", i)
+		} else {
+			require.Truef(t, isNotCommonPort(uint16ToPort(i)), "Port %d not considered common port, adapt isNotCommonPort() accordingly !", i)
+		}
+	}
+}
+
 func TestPopulation(t *testing.T) {
 	for _, params := range testCases {
 		t.Run(params.String(), func(t *testing.T) {
@@ -245,4 +255,10 @@ func (d *dummyPacket) IPLayer() capture.IPLayer {
 // Type denotes the packet type (i.e. the packet direction w.r.t. the interface)
 func (d *dummyPacket) Type() capture.PacketType {
 	return d.pktType
+}
+
+func uint16ToPort(p uint16) (res []byte) {
+	res = make([]byte, 2)
+	binary.BigEndian.PutUint16(res, p)
+	return
 }
