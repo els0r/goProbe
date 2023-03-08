@@ -50,17 +50,22 @@ var testCases = []testParams{
 	{"10.0.0.2", "10.0.0.1", 0, 0, ICMP, [14]byte{0x00}, DirectionReverts},                   // ICMP echo reply
 	{"10.0.0.1", "10.0.0.2", 37485, 17500, TCP, [14]byte{}, DirectionRemains},                // TCP request to Dropbox LanSync from client on ephemeral port
 	{"10.0.0.2", "10.0.0.1", 17500, 34000, TCP, [14]byte{}, DirectionReverts},                // TCP response from Dropbox LanSync to client on ephemeral port
-	{"10.0.0.1", "4.5.6.7", 33561, 443, UDP, [14]byte{}, DirectionRemains},                   // UDP request from ephemaral port to privileged port
-	{"4.5.6.7", "10.0.0.1", 443, 33561, UDP, [14]byte{}, DirectionReverts},                   // UDP response from privileged port to ephemaral port
+	{"10.0.0.1", "4.5.6.7", 33561, 444, UDP, [14]byte{}, DirectionRemains},                   // UDP request from ephemaral port to privileged port
+	{"4.5.6.7", "10.0.0.1", 444, 33561, UDP, [14]byte{}, DirectionReverts},                   // UDP response from privileged port to ephemaral port
 	{"10.0.0.1", "4.5.6.7", 33561, 33560, UDP, [14]byte{}, DirectionRemains},                 // UDP request from higher ephemaral port to lower ephemaral port
 	{"4.5.6.7", "10.0.0.1", 33560, 33561, UDP, [14]byte{}, DirectionReverts},                 // UDP response from lower ephemaral port to higher ephemaral port
-	{"10.0.0.1", "4.5.6.7", 444, 443, UDP, [14]byte{}, DirectionRemains},                     // UDP request from higher privileged port to lower privileged port
-	{"4.5.6.7", "10.0.0.1", 443, 444, UDP, [14]byte{}, DirectionReverts},                     // UDP response from lower privileged port to higher privileged port
+	{"10.0.0.1", "4.5.6.7", 445, 444, UDP, [14]byte{}, DirectionRemains},                     // UDP request from higher privileged port to lower privileged port
+	{"4.5.6.7", "10.0.0.1", 444, 445, UDP, [14]byte{}, DirectionReverts},                     // UDP response from lower privileged port to higher privileged port
 	{"10.0.0.1", "4.5.6.7", 33561, 33561, UDP, [14]byte{}, DirectionRemains},                 // UDP packet from identical ephemaral ports (no change, have to assume this is the first packet)
-	{"10.0.0.1", "4.5.6.7", 443, 443, UDP, [14]byte{}, DirectionRemains},                     // UDP packet from identical privileged ports (no change, have to assume this is the first packet)
+	{"10.0.0.1", "4.5.6.7", 444, 444, UDP, [14]byte{}, DirectionRemains},                     // UDP packet from identical privileged ports (no change, have to assume this is the first packet)
+	{"0.0.0.0", "255.255.255.255", 68, 67, UDP, [14]byte{}, DirectionRemains},                // DHCP broadcast packet
+	{"10.0.0.1", "10.0.0.2", 67, 68, UDP, [14]byte{}, DirectionReverts},                      // DHCP reply (unicast)
 	{"10.0.0.1", "4.5.6.7", 0, 53, UDP, [14]byte{}, DirectionRemains},                        // DNS request from NULLed ephemaral port
+	{"10.0.0.1", "4.5.6.7", 0, 53, TCP, [14]byte{}, DirectionRemains},                        // DNS request from NULLed ephemaral port
+	{"10.0.0.1", "4.5.6.7", 0, 80, TCP, [14]byte{}, DirectionRemains},                        // HTTP request from NULLed ephemaral port
+	{"10.0.0.1", "4.5.6.7", 0, 443, TCP, [14]byte{}, DirectionRemains},                       // HTTPS request from NULLed ephemaral port
 	{"2c04:4000::6ab", "2c04:4000::6ab", 33561, 33561, UDP, [14]byte{}, DirectionRemains},    // UDP packet from identical ephemaral ports (no change, have to assume this is the first packet)
-	{"2c04:4000::6ab", "2c04:4000::6ab", 443, 443, UDP, [14]byte{}, DirectionRemains},        // UDP packet from identical privileged ports (no change, have to assume this is the first packet)
+	{"2c04:4000::6ab", "2c04:4000::6ab", 444, 444, UDP, [14]byte{}, DirectionRemains},        // UDP packet from identical privileged ports (no change, have to assume this is the first packet)
 	{"2c04:4000::6ab", "2c04:4000::6ab", 0, 53, UDP, [14]byte{}, DirectionRemains},           // DNS request from NULLed ephemaral port
 }
 
@@ -70,10 +75,15 @@ func TestMaxEphemeralPort(t *testing.T) {
 
 func TestPortMergeLogic(t *testing.T) {
 	for i := uint16(0); i < 65535; i++ {
-		if i == 53 {
-			require.Falsef(t, isNotCommonPort(uint16ToPort(i)), "Port %d considered common port, adapt isNotCommonPort() accordingly !", i)
+		if i == 53 || i == 80 || i == 443 {
+			require.Truef(t, isCommonPort(uint16ToPort(i), TCP), "Port %d/TCP considered common port, adapt isNotCommonPort() accordingly !", i)
 		} else {
-			require.Truef(t, isNotCommonPort(uint16ToPort(i)), "Port %d not considered common port, adapt isNotCommonPort() accordingly !", i)
+			require.Falsef(t, isCommonPort(uint16ToPort(i), TCP), "Port %d/TCP not considered common port, adapt isNotCommonPort() accordingly !", i)
+		}
+		if i == 53 {
+			require.Truef(t, isCommonPort(uint16ToPort(i), UDP), "Port %d/UDP considered common port, adapt isNotCommonPort() accordingly !", i)
+		} else {
+			require.Falsef(t, isCommonPort(uint16ToPort(i), UDP), "Port %d/UDP not considered common port, adapt isNotCommonPort() accordingly !", i)
 		}
 	}
 }

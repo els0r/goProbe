@@ -113,11 +113,11 @@ func (p *GPPacket) Populate(pkt capture.Packet) error {
 			// into account. A major exception is traffic over port 53 as
 			// considering every single DNS request/response would
 			// significantly fill up the flow map
-			if isNotCommonPort(dport) {
+			if !isCommonPort(dport, protocol) {
 				copy(p.epHash[34:36], sport)
 				copy(p.epHashReverse[32:34], sport)
 			}
-			if isNotCommonPort(sport) {
+			if !isCommonPort(sport, protocol) {
 				copy(p.epHash[32:34], dport)
 				copy(p.epHashReverse[34:36], dport)
 			}
@@ -147,11 +147,11 @@ func (p *GPPacket) Populate(pkt capture.Packet) error {
 			// into account. A major exception is traffic over port 53 as
 			// considering every single DNS request/response would
 			// significantly fill up the flow map
-			if isNotCommonPort(dport) {
+			if !isCommonPort(dport, protocol) {
 				copy(p.epHash[34:36], sport)
 				copy(p.epHashReverse[32:34], sport)
 			}
-			if isNotCommonPort(sport) {
+			if !isCommonPort(sport, protocol) {
 				copy(p.epHash[32:34], dport)
 				copy(p.epHashReverse[34:36], dport)
 			}
@@ -169,14 +169,25 @@ func (p *GPPacket) Populate(pkt capture.Packet) error {
 	return nil
 }
 
-func isNotCommonPort(port []byte) bool {
-	return port[0] != 0 || // Certainly not interesting
-		port[1] != 53 // Not DNS
+func isCommonPort(port []byte, proto byte) bool {
 
-	// TODO: Potentially extend to more common ports?
-	// return port[0] > 1 || // Neither of the below
-	// 	port[0] == 0 && port[1] != 53 && port[1] != 80 || // DNS or HTTP
-	// 	port[1] != 187 // HTTPS
+	// Fast path for neither of the below
+	if port[0] > 1 {
+		return false
+	}
+
+	// TCP common ports
+	if proto == TCP {
+		return (port[0] == 0 && (port[1] == 53 || port[1] == 80)) || // DNS(TCP), HTTP
+			port[0] == 1 && port[1] == 187 // HTTPS
+	}
+
+	// UDP common ports
+	if proto == UDP {
+		return port[0] == 0 && port[1] == 53 // DNS(UDP)
+	}
+
+	return false
 }
 
 func (p *GPPacket) reset() {
