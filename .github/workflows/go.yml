@@ -22,20 +22,8 @@ jobs:
     - name: Check out code into the Go module directory
       uses: actions/checkout@v3
 
-    - name: Build for 386
-      run: GOOS=linux GOARCH=386 go build -v -a -x ./...
-
-    - name: Build for ARM
-      run: GOOS=linux GOARCH=arm go build -v -a -x ./...
-
-    - name: Build for ARM64
-      run: GOOS=linux GOARCH=arm64 go build -v -a -x ./...
-
     - name: Build for AMD64
       run: GOOS=linux GOARCH=amd64 go build -v -a -x ./...
-
-    - name: Build
-      run: go build -v -a -x ./...
 
     - name: Test
       run: go test -v ./...
