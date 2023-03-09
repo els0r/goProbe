@@ -80,7 +80,7 @@ func TestPortMergeLogic(t *testing.T) {
 		} else {
 			require.Falsef(t, isCommonPort(uint16ToPort(i), TCP), "Port %d/TCP not considered common port, adapt isNotCommonPort() accordingly !", i)
 		}
-		if i == 53 {
+		if i == 53 || i == 443 {
 			require.Truef(t, isCommonPort(uint16ToPort(i), UDP), "Port %d/UDP considered common port, adapt isNotCommonPort() accordingly !", i)
 		} else {
 			require.Falsef(t, isCommonPort(uint16ToPort(i), UDP), "Port %d/UDP not considered common port, adapt isNotCommonPort() accordingly !", i)

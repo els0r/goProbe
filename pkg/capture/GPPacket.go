@@ -179,12 +179,13 @@ func isCommonPort(port []byte, proto byte) bool {
 	// TCP common ports
 	if proto == TCP {
 		return (port[0] == 0 && (port[1] == 53 || port[1] == 80)) || // DNS(TCP), HTTP
-			port[0] == 1 && port[1] == 187 // HTTPS
+			(port[0] == 1 && port[1] == 187) // HTTPS
 	}
 
 	// UDP common ports
 	if proto == UDP {
-		return port[0] == 0 && port[1] == 53 // DNS(UDP)
+		return (port[0] == 0 && port[1] == 53 ) || // DNS(UDP)
+			(port[0] == 1 && port[1] == 187) // 443(UDP)
 	}
 
 	return false
