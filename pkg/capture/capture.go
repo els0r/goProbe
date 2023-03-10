@@ -180,7 +180,7 @@ func (cmd captureCommandRotate) execute(c *Capture) stateFn {
 	var result rotateResult
 
 	if c.flowLog.Len() == 0 {
-		logger.Infof("there are currently no flow records available on %s", c.iface)
+		logger.Debug("there are currently no flow records available")
 	} else {
 		c.inRotation <- struct{}{}
 
