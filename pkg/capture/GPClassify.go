@@ -76,7 +76,7 @@ const (
 func classifyTCP(packet *GPPacket) Direction {
 
 	// Use the TCP handshake to determine the direction
-	if tcpFlags := packet.transportLayer[13]; tcpFlags != 0x00 {
+	if tcpFlags := packet.auxInfo; tcpFlags != 0x00 {
 
 		// Handshake stage
 		if tcpFlags&tcpFlagSYN != 0 {
@@ -108,7 +108,7 @@ func classifyUDP(packet *GPPacket) Direction {
 func classifyICMPv4(packet *GPPacket) Direction {
 
 	// Check the ICMPv4 Type parameter
-	switch packet.transportLayer[0] {
+	switch packet.auxInfo {
 
 	// EchoReply, DestinationUnreachable, TimeExceeded, ParameterProblem, TimestampReply
 	case 0x00, 0x03, 0x0B, 0x0C, 0x0E:
@@ -131,7 +131,7 @@ func classifyICMPv6(packet *GPPacket) Direction {
 	}
 
 	// Check the ICMPv6 Type parameter
-	switch packet.transportLayer[0] {
+	switch packet.auxInfo {
 
 	// EchoReply, DestinationUnreachable, TimeExceeded, ParameterProblem
 	case 0x81, 0x01, 0x03, 0x04:

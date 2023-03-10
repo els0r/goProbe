@@ -22,11 +22,6 @@ import (
 	"golang.org/x/net/ipv6"
 )
 
-var (
-	emptyTransportLayer = [14]byte{}
-	emptyEPHash         = [37]byte{}
-)
-
 // Enumeration of the most common IP protocols
 const (
 	ICMP   byte = 0x01 //  1
@@ -34,14 +29,13 @@ const (
 	UDP         = 0x11 // 17
 	ESP         = 0x32 // 50
 	ICMPv6      = 0x3A // 58
+
+	ipLayerTypeV4 = 0x04 // 4
+	ipLayerTypeV6 = 0x06 // 6
 )
 
 // EPHash is a typedef that allows us to replace the type of hash
 type EPHash [37]byte
-
-// TransportLayer denotes the first n bytes of the transport layer populated
-// for further analysis
-type TransportLayer [14]byte
 
 // GPPacket stores all relevant packet details for a flow
 type GPPacket struct {
@@ -56,16 +50,17 @@ type GPPacket struct {
 	isIPv4 bool
 
 	// packet descriptors / hashes
-	epHash         EPHash
-	epHashReverse  EPHash
-	transportLayer TransportLayer
+	epHash        EPHash
+	epHashReverse EPHash
+
+	// Auxilliary data (protocol dependent) for further analysis
+	auxInfo byte
 }
 
 // Populate takes a raw packet and populates a GPPacket structure from it.
 func (p *GPPacket) Populate(pkt capture.Packet) error {
 
-	// first things first: reset packet from previous run
-	p.reset()
+	// Extract the IP layer of the packet
 	srcPacket := pkt.IPLayer()
 
 	// read the direction from which the packet entered the interface
@@ -73,7 +68,7 @@ func (p *GPPacket) Populate(pkt capture.Packet) error {
 	p.numBytes = pkt.TotalLen()
 	var protocol byte
 
-	if int(srcPacket[0]>>4) == 4 {
+	if ipLayerType := srcPacket.Type(); ipLayerType == ipLayerTypeV4 {
 
 		p.isIPv4 = true
 
@@ -121,12 +116,15 @@ func (p *GPPacket) Populate(pkt capture.Packet) error {
 				copy(p.epHash[32:34], dport)
 				copy(p.epHashReverse[34:36], dport)
 			}
+
+			if protocol == TCP {
+				p.auxInfo = srcPacket[ipv4.HeaderLen+13] // store TCP flags
+			}
+		} else if protocol == ICMP {
+			p.auxInfo = srcPacket[ipv4.HeaderLen] // store ICMP type
 		}
 
-		// Transfer the first bytes of the application layer (if present) for further analysis
-		copy(p.transportLayer[:], srcPacket[ipv4.HeaderLen:])
-
-	} else if int(srcPacket[0]>>4) == 6 {
+	} else if ipLayerType == ipLayerTypeV6 {
 
 		p.isIPv4 = false
 
@@ -137,7 +135,6 @@ func (p *GPPacket) Populate(pkt capture.Packet) error {
 		copy(p.epHashReverse[16:32], p.epHash[0:16])
 
 		protocol = srcPacket[6]
-
 		if protocol == TCP || protocol == UDP {
 
 			dport := srcPacket[ipv6.HeaderLen+2 : ipv6.HeaderLen+4]
@@ -155,10 +152,13 @@ func (p *GPPacket) Populate(pkt capture.Packet) error {
 				copy(p.epHash[32:34], dport)
 				copy(p.epHashReverse[34:36], dport)
 			}
-		}
 
-		// Transfer the first bytes of the application layer (if present) for further analysis
-		copy(p.transportLayer[:], srcPacket[ipv6.HeaderLen:])
+			if protocol == TCP {
+				p.auxInfo = srcPacket[ipv6.HeaderLen+13] // store TCP flags
+			}
+		} else if protocol == ICMPv6 {
+			p.auxInfo = srcPacket[ipv6.HeaderLen] // store ICMP type
+		}
 
 	} else {
 		return fmt.Errorf("received neither IPv4 nor IPv6 IP header: %v", srcPacket)
@@ -184,17 +184,9 @@ func isCommonPort(port []byte, proto byte) bool {
 
 	// UDP common ports
 	if proto == UDP {
-		return (port[0] == 0 && port[1] == 53 ) || // DNS(UDP)
+		return (port[0] == 0 && port[1] == 53) || // DNS(UDP)
 			(port[0] == 1 && port[1] == 187) // 443(UDP)
 	}
 
 	return false
-}
-
-func (p *GPPacket) reset() {
-	p.numBytes = 0
-	p.epHash = emptyEPHash
-	p.epHashReverse = emptyEPHash
-	p.transportLayer = emptyTransportLayer
-	p.dirInbound = false
 }

@@ -28,12 +28,12 @@ type testParams struct {
 	sip, dip          string
 	sport, dport      uint16
 	proto             byte
-	transportLayer    TransportLayer
+	auxInfo           byte
 	expectedDirection Direction
 }
 
 func (p testParams) String() string {
-	return fmt.Sprintf("%s:%d->%s:%d_%d_%x", p.sip, p.sport, p.dip, p.dport, p.proto, p.transportLayer)
+	return fmt.Sprintf("%s:%d->%s:%d_%d_%x", p.sip, p.sport, p.dip, p.dport, p.proto, p.auxInfo)
 }
 
 type testCase struct {
@@ -43,30 +43,32 @@ type testCase struct {
 }
 
 var testCases = []testParams{
-	{"2c04:4000::6ab", "2c01:2000::3", 0, 0, ICMPv6, [14]byte{0x80}, DirectionRemains},       // ICMPv6 echo request
-	{"2c01:2000::3", "2c04:4000::6ab", 0, 0, ICMPv6, [14]byte{0x81}, DirectionReverts},       // ICMPv6 echo reply
-	{"fe80::3df3:abbf:3d8d:7f03", "ff02::2", 0, 0, ICMPv6, [14]byte{0x86}, DirectionRemains}, // ICMPv6 router advertisement
-	{"10.0.0.1", "10.0.0.2", 0, 0, ICMP, [14]byte{0x08}, DirectionRemains},                   // ICMP echo request
-	{"10.0.0.2", "10.0.0.1", 0, 0, ICMP, [14]byte{0x00}, DirectionReverts},                   // ICMP echo reply
-	{"10.0.0.1", "10.0.0.2", 37485, 17500, TCP, [14]byte{}, DirectionRemains},                // TCP request to Dropbox LanSync from client on ephemeral port
-	{"10.0.0.2", "10.0.0.1", 17500, 34000, TCP, [14]byte{}, DirectionReverts},                // TCP response from Dropbox LanSync to client on ephemeral port
-	{"10.0.0.1", "4.5.6.7", 33561, 444, UDP, [14]byte{}, DirectionRemains},                   // UDP request from ephemaral port to privileged port
-	{"4.5.6.7", "10.0.0.1", 444, 33561, UDP, [14]byte{}, DirectionReverts},                   // UDP response from privileged port to ephemaral port
-	{"10.0.0.1", "4.5.6.7", 33561, 33560, UDP, [14]byte{}, DirectionRemains},                 // UDP request from higher ephemaral port to lower ephemaral port
-	{"4.5.6.7", "10.0.0.1", 33560, 33561, UDP, [14]byte{}, DirectionReverts},                 // UDP response from lower ephemaral port to higher ephemaral port
-	{"10.0.0.1", "4.5.6.7", 445, 444, UDP, [14]byte{}, DirectionRemains},                     // UDP request from higher privileged port to lower privileged port
-	{"4.5.6.7", "10.0.0.1", 444, 445, UDP, [14]byte{}, DirectionReverts},                     // UDP response from lower privileged port to higher privileged port
-	{"10.0.0.1", "4.5.6.7", 33561, 33561, UDP, [14]byte{}, DirectionRemains},                 // UDP packet from identical ephemaral ports (no change, have to assume this is the first packet)
-	{"10.0.0.1", "4.5.6.7", 444, 444, UDP, [14]byte{}, DirectionRemains},                     // UDP packet from identical privileged ports (no change, have to assume this is the first packet)
-	{"0.0.0.0", "255.255.255.255", 68, 67, UDP, [14]byte{}, DirectionRemains},                // DHCP broadcast packet
-	{"10.0.0.1", "10.0.0.2", 67, 68, UDP, [14]byte{}, DirectionReverts},                      // DHCP reply (unicast)
-	{"10.0.0.1", "4.5.6.7", 0, 53, UDP, [14]byte{}, DirectionRemains},                        // DNS request from NULLed ephemaral port
-	{"10.0.0.1", "4.5.6.7", 0, 53, TCP, [14]byte{}, DirectionRemains},                        // DNS request from NULLed ephemaral port
-	{"10.0.0.1", "4.5.6.7", 0, 80, TCP, [14]byte{}, DirectionRemains},                        // HTTP request from NULLed ephemaral port
-	{"10.0.0.1", "4.5.6.7", 0, 443, TCP, [14]byte{}, DirectionRemains},                       // HTTPS request from NULLed ephemaral port
-	{"2c04:4000::6ab", "2c04:4000::6ab", 33561, 33561, UDP, [14]byte{}, DirectionRemains},    // UDP packet from identical ephemaral ports (no change, have to assume this is the first packet)
-	{"2c04:4000::6ab", "2c04:4000::6ab", 444, 444, UDP, [14]byte{}, DirectionRemains},        // UDP packet from identical privileged ports (no change, have to assume this is the first packet)
-	{"2c04:4000::6ab", "2c04:4000::6ab", 0, 53, UDP, [14]byte{}, DirectionRemains},           // DNS request from NULLed ephemaral port
+	{"2c04:4000::6ab", "2c01:2000::3", 0, 0, ICMPv6, 0x80, DirectionRemains},       // ICMPv6 echo request
+	{"2c01:2000::3", "2c04:4000::6ab", 0, 0, ICMPv6, 0x81, DirectionReverts},       // ICMPv6 echo reply
+	{"fe80::3df3:abbf:3d8d:7f03", "ff02::2", 0, 0, ICMPv6, 0x86, DirectionRemains}, // ICMPv6 router advertisement
+	{"10.0.0.1", "10.0.0.2", 0, 0, ICMP, 0x08, DirectionRemains},                   // ICMP echo request
+	{"10.0.0.2", "10.0.0.1", 0, 0, ICMP, 0x00, DirectionReverts},                   // ICMP echo reply
+	{"10.0.0.1", "10.0.0.2", 37485, 17500, TCP, 0, DirectionRemains},               // TCP request to Dropbox LanSync from client on ephemeral port
+	{"10.0.0.2", "10.0.0.1", 17500, 34000, TCP, 0, DirectionReverts},               // TCP response from Dropbox LanSync to client on ephemeral port
+	{"2c04:4000::6ab", "2c01:2000::3", 37485, 17500, TCP, 0, DirectionRemains},     // TCP request to Dropbox LanSync from client on ephemeral port
+	{"2c01:2000::3", "2c04:4000::6ab", 17500, 34000, TCP, 0, DirectionReverts},     // TCP response from Dropbox LanSync to client on ephemeral port
+	{"10.0.0.1", "4.5.6.7", 33561, 444, UDP, 0, DirectionRemains},                  // UDP request from ephemaral port to privileged port
+	{"4.5.6.7", "10.0.0.1", 444, 33561, UDP, 0, DirectionReverts},                  // UDP response from privileged port to ephemaral port
+	{"10.0.0.1", "4.5.6.7", 33561, 33560, UDP, 0, DirectionRemains},                // UDP request from higher ephemaral port to lower ephemaral port
+	{"4.5.6.7", "10.0.0.1", 33560, 33561, UDP, 0, DirectionReverts},                // UDP response from lower ephemaral port to higher ephemaral port
+	{"10.0.0.1", "4.5.6.7", 445, 444, UDP, 0, DirectionRemains},                    // UDP request from higher privileged port to lower privileged port
+	{"4.5.6.7", "10.0.0.1", 444, 445, UDP, 0, DirectionReverts},                    // UDP response from lower privileged port to higher privileged port
+	{"10.0.0.1", "4.5.6.7", 33561, 33561, UDP, 0, DirectionRemains},                // UDP packet from identical ephemaral ports (no change, have to assume this is the first packet)
+	{"10.0.0.1", "4.5.6.7", 444, 444, UDP, 0, DirectionRemains},                    // UDP packet from identical privileged ports (no change, have to assume this is the first packet)
+	{"0.0.0.0", "255.255.255.255", 68, 67, UDP, 0, DirectionRemains},               // DHCP broadcast packet
+	{"10.0.0.1", "10.0.0.2", 67, 68, UDP, 0, DirectionReverts},                     // DHCP reply (unicast)
+	{"10.0.0.1", "4.5.6.7", 0, 53, UDP, 0, DirectionRemains},                       // DNS request from NULLed ephemaral port
+	{"10.0.0.1", "4.5.6.7", 0, 53, TCP, 0, DirectionRemains},                       // DNS request from NULLed ephemaral port
+	{"10.0.0.1", "4.5.6.7", 0, 80, TCP, 0, DirectionRemains},                       // HTTP request from NULLed ephemaral port
+	{"10.0.0.1", "4.5.6.7", 0, 443, TCP, 0, DirectionRemains},                      // HTTPS request from NULLed ephemaral port
+	{"2c04:4000::6ab", "2c04:4000::6ab", 33561, 33561, UDP, 0, DirectionRemains},   // UDP packet from identical ephemaral ports (no change, have to assume this is the first packet)
+	{"2c04:4000::6ab", "2c04:4000::6ab", 444, 444, UDP, 0, DirectionRemains},       // UDP packet from identical privileged ports (no change, have to assume this is the first packet)
+	{"2c04:4000::6ab", "2c04:4000::6ab", 0, 53, UDP, 0, DirectionRemains},          // DNS request from NULLed ephemaral port
 }
 
 func TestMaxEphemeralPort(t *testing.T) {
@@ -106,9 +108,9 @@ func TestClassification(t *testing.T) {
 		t.Run(params.String(), func(t *testing.T) {
 			testCase := params.genTestCase()
 			pkt := &GPPacket{
-				isIPv4:         testCase.isIPv4,
-				epHash:         testCase.epHash,
-				transportLayer: testCase.input.transportLayer,
+				isIPv4:  testCase.isIPv4,
+				epHash:  testCase.epHash,
+				auxInfo: testCase.input.auxInfo,
 			}
 			require.Equal(t, params.expectedDirection, ClassifyPacketDirection(pkt), "classification mismatch")
 		})
@@ -119,13 +121,13 @@ func BenchmarkPopulation(b *testing.B) {
 	for _, params := range testCases {
 		b.Run(params.String(), func(b *testing.B) {
 			testPacket := params.genDummyPacket(0)
-			var pkt GPPacket
 
 			b.ReportAllocs()
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				pkt.reset()
+				var pkt GPPacket
 				pkt.Populate(testPacket)
+				doSomethingWithPacket(&pkt)
 			}
 		})
 	}
@@ -136,9 +138,9 @@ func BenchmarkClassification(b *testing.B) {
 		b.Run(params.String(), func(b *testing.B) {
 			testCase := params.genTestCase()
 			pkt := &GPPacket{
-				isIPv4:         testCase.isIPv4,
-				epHash:         testCase.epHash,
-				transportLayer: testCase.input.transportLayer,
+				isIPv4:  testCase.isIPv4,
+				epHash:  testCase.epHash,
+				auxInfo: testCase.input.auxInfo,
 			}
 			b.ReportAllocs()
 			b.ResetTimer()
@@ -212,29 +214,27 @@ func (p testParams) genEPHash() (res EPHash, isIPv4 bool) {
 }
 
 func (p testParams) genDummyPacket(pktType capture.PacketType) capture.Packet {
-	var res = dummyPacket{
-		pktType: pktType,
-		data:    make([]byte, len(emptyEPHash)+len(emptyTransportLayer)),
-	}
 	epHash, isIPv4 := p.genEPHash()
+	data := make([]byte, len(EPHash{})+ipv6.HeaderLen)
+
 	if isIPv4 {
-		res.data[0] = (4 << 4)
-		res.data[9] = p.proto
-		copy(res.data[12:16], epHash[0:4])
-		copy(res.data[16:20], epHash[16:20])
-		copy(res.data[ipv4.HeaderLen:ipv4.HeaderLen+2], epHash[34:36])
-		copy(res.data[ipv4.HeaderLen+2:ipv4.HeaderLen+4], epHash[32:34])
+		data[0] = (4 << 4)
+		data[9] = p.proto
+		copy(data[12:16], epHash[0:4])
+		copy(data[16:20], epHash[16:20])
+		copy(data[ipv4.HeaderLen:ipv4.HeaderLen+2], epHash[34:36])
+		copy(data[ipv4.HeaderLen+2:ipv4.HeaderLen+4], epHash[32:34])
 
 	} else {
-		res.data[0] = (6 << 4)
-		res.data[6] = p.proto
-		copy(res.data[8:24], epHash[0:16])
-		copy(res.data[24:40], epHash[16:32])
-		copy(res.data[ipv6.HeaderLen:ipv6.HeaderLen+2], epHash[34:36])
-		copy(res.data[ipv6.HeaderLen+2:ipv6.HeaderLen+4], epHash[32:34])
+		data[0] = (6 << 4)
+		data[6] = p.proto
+		copy(data[8:24], epHash[0:16])
+		copy(data[24:40], epHash[16:32])
+		copy(data[ipv6.HeaderLen:ipv6.HeaderLen+2], epHash[34:36])
+		copy(data[ipv6.HeaderLen+2:ipv6.HeaderLen+4], epHash[32:34])
 	}
 
-	return &res
+	return capture.NewIPPacket(data, pktType, 128)
 }
 
 type dummyPacket struct {
@@ -271,4 +271,9 @@ func uint16ToPort(p uint16) (res []byte) {
 	res = make([]byte, 2)
 	binary.BigEndian.PutUint16(res, p)
 	return
+}
+
+// Stub to simulate operation in function
+func doSomethingWithPacket(pkt *GPPacket) {
+	_ = pkt
 }
