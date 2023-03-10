@@ -105,8 +105,8 @@ func dbData(iface string, timestamp int64, aggFlowMap *hashmap.AggFlowMap) ([typ
 	var summUpdate gpfile.Stats
 
 	v4List, v6List := aggFlowMap.Flatten()
-	v4List = v4List.Sort()
-	v6List = v6List.Sort()
+	v4List = v4List.SortForStorage()
+	v6List = v6List.SortForStorage()
 	for i := types.ColumnIndex(0); i < types.ColIdxAttributeCount; i++ {
 		columnSizeof := types.ColumnSizeofs[i]
 		if columnSizeof == types.IPSizeOf {

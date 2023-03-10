@@ -36,7 +36,11 @@ const (
 	BytesSentColIdx, _
 	PacketsRcvdColIdx, _
 	PacketsSentColIdx, _
-	ColIdxCount, _
+
+	// Additional (extended) columns only used for aggregation
+	IfaceColIdx, ColIdxCount
+	TimeColIdx, _
+	ExtColIdxCount, _
 )
 
 // Sizeof (entry) for all column types

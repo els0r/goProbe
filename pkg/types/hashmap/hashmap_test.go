@@ -69,6 +69,18 @@ func TestLinearHashMapOperations(t *testing.T) {
 	}
 }
 
+func TestSort(t *testing.T) {
+
+	testMap := New()
+	for i := 0; i < 10000; i++ {
+		temp := make([]byte, 8)
+		binary.BigEndian.PutUint64(temp, uint64(i))
+		testMap.Set(temp, types.Counters{BytesRcvd: uint64(i), BytesSent: 0, PacketsRcvd: 0, PacketsSent: 0})
+	}
+
+	// TODO
+}
+
 func TestJSONMarshalAggFlowMap(t *testing.T) {
 
 	var ip [16]byte

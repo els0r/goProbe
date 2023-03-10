@@ -71,26 +71,59 @@ func NewNamedAggFlowMapWithMetadata(names []string) (m NamedAggFlowMapWithMetada
 	return
 }
 
+// Flatten converts a flow map to a flat table / list
+func (n *NamedAggFlowMapWithMetadata) Flatten() (list AggregateList) {
+	if n == nil {
+		return
+	}
+
+	list = make(AggregateList, n.Len())
+	count := 0
+	for iface, m := range *n {
+		for it := m.Iter(); it.Next(); {
+			list[count] = AggregateItem{
+				Item: Item{ExtendedKey: it.Key(), Val: it.Val()},
+
+				// TODO: Avoid this duplication and wrap in metadata (would make sorting by iface easier as well maybe)
+				// Then we could also just use an Item / []Item instead of []AggregateItem
+				Iface: iface,
+			}
+			count++
+		}
+	}
+
+	return
+}
+
 // Len returns the number of entries in all maps
-func (n NamedAggFlowMapWithMetadata) Len() (l int) {
-	for _, v := range n {
+func (n *NamedAggFlowMapWithMetadata) Len() (l int) {
+	if n == nil {
+		return
+	}
+	for _, v := range *n {
 		l += v.Len()
 	}
 	return
 }
 
 // Clear frees as many resources as possible by making them eligible for GC
-func (n NamedAggFlowMapWithMetadata) Clear() {
-	for k, v := range n {
+func (n *NamedAggFlowMapWithMetadata) Clear() {
+	if n == nil {
+		return
+	}
+	for k, v := range *n {
 		v.Clear()
-		delete(n, k)
+		delete(*n, k)
 	}
 }
 
 // ClearFast nils all main resources, making them eligible for GC (but
 // probably not as effectively as Clear())
-func (n NamedAggFlowMapWithMetadata) ClearFast() {
-	for _, v := range n {
+func (n *NamedAggFlowMapWithMetadata) ClearFast() {
+	if n == nil {
+		return
+	}
+	for _, v := range *n {
 		v.ClearFast()
 	}
 }
