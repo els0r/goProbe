@@ -63,6 +63,10 @@ func testDeadlock(t *testing.T, maxPkts int) {
 
 func TestMockPacketCapturePerformance(t *testing.T) {
 
+	if testing.Short() {
+		t.SkipNow()
+	}
+
 	ctx := context.Background()
 	mockSrc := newMockCaptureSource(-1)
 	mockC := &Capture{
@@ -80,7 +84,7 @@ func TestMockPacketCapturePerformance(t *testing.T) {
 		captureHandle: mockSrc,
 	}
 
-	runtime := 1 * time.Second
+	runtime := 10 * time.Second
 	time.AfterFunc(runtime, func() {
 		mockSrc.Close()
 	})
