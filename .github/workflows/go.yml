@@ -27,5 +27,5 @@ jobs:
 
     - name: Test
       run: |
-        go test -race -v ./... -covermode=count -coverprofile=coverage.out
+        go test -race -v ./... -covermode=atomic -coverprofile=coverage.out
         go tool cover -func=coverage.out -o=coverage.out
