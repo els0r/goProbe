@@ -138,8 +138,8 @@ func testRoundtrip(t *testing.T, encType encoders.Type) {
 func TestInvalidMetadata(t *testing.T) {
 
 	require.Nil(t, os.RemoveAll("/tmp/test_db"))
-	require.Nil(t, os.MkdirAll("/tmp/test_db/0", 0755), "error creating test dir for reading")
-	require.Nil(t, os.WriteFile("/tmp/test_db/0/.blockmeta", []byte{0x1}, 0644), "error creating test metdadata for reading")
+	require.Nil(t, os.MkdirAll("/tmp/test_db/1970/01/0", 0755), "error creating test dir for reading")
+	require.Nil(t, os.WriteFile("/tmp/test_db/1970/01/0/.blockmeta", []byte{0x1}, 0644), "error creating test metdadata for reading")
 
 	testDir := NewDir("/tmp/test_db", 1000, ModeRead)
 	require.ErrorIs(t, testDir.Open(), ErrInputSizeTooSmall)
@@ -290,6 +290,29 @@ func TestBrokenWrite(t *testing.T) {
 		}
 	}
 	require.Nil(t, testDir.Close(), "error closing test dir")
+}
+
+func TestDailyDirectoryGeneration(t *testing.T) {
+	for year := 1970; year < 2200; year++ {
+		for month := time.January; month <= time.December; month++ {
+			for day := 1; day <= time.Date(year, month, 0, 0, 0, 0, 0, time.UTC).Day(); day++ {
+				require.Equal(t, time.Date(year, month, day, 0, 0, 0, 0, time.UTC).Unix(), DirTimestamp(time.Date(year, month, day, 0, 0, 0, 0, time.UTC).Unix()))
+				require.Equal(t, time.Date(year, month, day, 0, 0, 0, 0, time.UTC).Unix(), DirTimestamp(time.Date(year, month, day, 1, 0, 0, 0, time.UTC).Unix()))
+				require.Equal(t, time.Date(year, month, day, 0, 0, 0, 0, time.UTC).Unix(), DirTimestamp(time.Date(year, month, day, 23, 59, 59, 999999999, time.UTC).Unix()))
+			}
+		}
+	}
+}
+
+func TestDailyDirectoryPathLayers(t *testing.T) {
+	for year := 1970; year < 2200; year++ {
+		for month := time.January; month <= time.December; month++ {
+			for day := 1; day <= time.Date(year, month+1, 0, 0, 0, 0, 0, time.UTC).Day(); day++ {
+				gpDir := NewDir("/tmp/test_db", time.Date(year, month, day, 0, 0, 0, 0, time.UTC).Unix(), ModeRead)
+				require.Equal(t, gpDir.dirPath, filepath.Join("/tmp/test_db", fmt.Sprintf("%d", year), fmt.Sprintf("%02d", month), fmt.Sprintf("%d", DirTimestamp(time.Date(year, month, day, 0, 0, 0, 0, time.UTC).Unix()))))
+			}
+		}
+	}
 }
 
 func (g *GPFile) validateBlocks(nExpected int) error {

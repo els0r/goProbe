@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 	"github.com/els0r/goProbe/pkg/goDB/storage"
@@ -101,7 +102,6 @@ type GPDir struct {
 	basePath   string   // goDB base path (up to interface)
 	dirPath    string   // GPDir path (up to GPDir timestanp)
 	metaPath   string   // Full path to GPDir metadata
-	timestamp  int64    // Timestamp of GPDir
 	accessMode int      // Access mode (also forwarded to all GPFiles)
 
 	*Metadata
@@ -110,13 +110,15 @@ type GPDir struct {
 // NewDir instantiates a new directory (doesn't yet do anything)
 func NewDir(basePath string, timestamp int64, accessMode int, options ...Option) *GPDir {
 	obj := GPDir{
-		basePath: strings.TrimSuffix(basePath, "/"),
-
-		timestamp:  DirTimestamp(timestamp),
+		basePath:   strings.TrimSuffix(basePath, "/"),
 		accessMode: accessMode,
 		options:    options,
 	}
-	obj.dirPath = filepath.Join(basePath, strconv.Itoa(int(obj.timestamp)))
+
+	dayTimestamp := DirTimestamp(timestamp)
+	dayUnix := time.Unix(dayTimestamp, 0)
+
+	obj.dirPath = filepath.Join(basePath, strconv.Itoa(dayUnix.Year()), fmt.Sprintf("%02d", dayUnix.Month()), strconv.Itoa(int(dayTimestamp)))
 	obj.metaPath = filepath.Join(obj.dirPath, metadataFileName)
 	return &obj
 }
@@ -442,8 +444,7 @@ func (d *GPDir) Column(colIdx types.ColumnIndex) (*GPFile, error) {
 
 // createIfRequired created the underlying path structure (if missing)
 func (d *GPDir) createIfRequired() error {
-	return os.MkdirAll(filepath.Join(
-		d.basePath, fmt.Sprintf("%d", d.timestamp)), 0755)
+	return os.MkdirAll(d.dirPath, 0755)
 }
 
 func (d *GPDir) writeMetadataAtomic() error {
