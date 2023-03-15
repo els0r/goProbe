@@ -26,4 +26,6 @@ jobs:
       run: GOOS=linux GOARCH=amd64 go build -v -a -x ./...
 
     - name: Test
-      run: go test -v ./...
+      run: |
+        go test -race -v ./... -covermode=count -coverprofile=coverage.out
+        go tool cover -func=coverage.out -o=coverage.out
