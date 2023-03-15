@@ -428,7 +428,7 @@ func (c *Capture) reset() {
 	c.errMap = make(map[string]int)
 }
 
-func (c *Capture) capturePacket(pkt *afpacket.Packet, gppacket *GPPacket) (err error) {
+func (c *Capture) capturePacket(pkt capture.Packet) (err error) {
 	// Fetch the next packet form the wire
 	_, err = c.captureHandle.NextPacket(pkt)
 	if err != nil {
@@ -437,16 +437,20 @@ func (c *Capture) capturePacket(pkt *afpacket.Packet, gppacket *GPPacket) (err e
 	}
 
 	// Populate the GPPacket
-	err = gppacket.Populate(pkt)
-	if err == nil {
-		c.flowLog.Add(gppacket)
+	// Instead of reusing an instance of capture.Packet over and over again a new
+	// one is allocated for each run on capturePacket(). Since it does not escape it is
+	// allocated on the stack and hence does not cause any GC overhead (and allocating is
+	// actually faster than resetting its fields, plus in that case it escapes to the heap)
+	var gppacket GPPacket
+	if err = gppacket.Populate(pkt); err == nil {
+		c.flowLog.Add(&gppacket)
 		c.errCount = 0
 		c.packetsLogged++
 	} else {
 		c.errCount++
 		c.errMap[err.Error()]++
 
-		// shut down the interface thread if too many consecutive decoding failures
+		// Shut down the interface thread if too many consecutive decoding failures
 		// have been encountered
 		if c.errCount > ErrorThreshold {
 			return fmt.Errorf("the last %d packets could not be decoded: [%s]",
@@ -469,8 +473,8 @@ func (c *Capture) process() {
 
 	c.errCount = 0
 
-	gppacket := &GPPacket{}
-	pkt := make(afpacket.Packet, Snaplen+6)
+	// Reusable packet buffer for in-place population
+	pkt := make(capture.Packet, Snaplen+6)
 
 	// this is the main packet capture loop which an interface should be in most of the time
 	for {
@@ -486,7 +490,7 @@ func (c *Capture) process() {
 				return
 			}
 		default:
-			err := c.capturePacket(&pkt, gppacket)
+			err := c.capturePacket(pkt)
 			if err != nil {
 				if errors.Is(err, capture.ErrCaptureStopped) { // capture stopped gracefully
 					if fErr := c.captureHandle.Free(); fErr != nil {

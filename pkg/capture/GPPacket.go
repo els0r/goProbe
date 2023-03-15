@@ -22,15 +22,16 @@ import (
 	"golang.org/x/net/ipv6"
 )
 
-var (
-	byteArray37Zeros = [37]byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
-)
-
 // Enumeration of the most common IP protocols
 const (
-	TCP byte = 6
-	UDP      = 17
-	ESP      = 50
+	ICMP   byte = 0x01 //  1
+	TCP         = 0x06 //  6
+	UDP         = 0x11 // 17
+	ESP         = 0x32 // 50
+	ICMPv6      = 0x3A // 58
+
+	ipLayerTypeV4 = 0x04 // 4
+	ipLayerTypeV6 = 0x06 // 6
 )
 
 // EPHash is a typedef that allows us to replace the type of hash
@@ -40,10 +41,7 @@ type EPHash [37]byte
 type GPPacket struct {
 
 	// packet size
-	numBytes uint16
-
-	// direction indicator fields
-	tcpFlags byte
+	numBytes uint32
 
 	// packet inbound or outbound on interface
 	dirInbound bool
@@ -54,21 +52,23 @@ type GPPacket struct {
 	// packet descriptors / hashes
 	epHash        EPHash
 	epHashReverse EPHash
+
+	// Auxilliary data (protocol dependent) for further analysis
+	auxInfo byte
 }
 
 // Populate takes a raw packet and populates a GPPacket structure from it.
 func (p *GPPacket) Populate(pkt capture.Packet) error {
 
-	// first things first: reset packet from previous run
-	p.reset()
+	// Extract the IP layer of the packet
 	srcPacket := pkt.IPLayer()
 
 	// read the direction from which the packet entered the interface
 	p.dirInbound = pkt.Type() == 0
-	p.numBytes = uint16(pkt.TotalLen())
+	p.numBytes = pkt.TotalLen()
 	var protocol byte
 
-	if int(srcPacket[0]>>4) == 4 {
+	if ipLayerType := srcPacket.Type(); ipLayerType == ipLayerTypeV4 {
 
 		p.isIPv4 = true
 
@@ -104,19 +104,27 @@ func (p *GPPacket) Populate(pkt capture.Packet) error {
 			dport := srcPacket[ipv4.HeaderLen+2 : ipv4.HeaderLen+4]
 			sport := srcPacket[ipv4.HeaderLen : ipv4.HeaderLen+2]
 
-			copy(p.epHash[32:34], dport)
-			copy(p.epHashReverse[32:34], sport)
-
 			// If session based traffic is observed, the source port is taken
 			// into account. A major exception is traffic over port 53 as
 			// considering every single DNS request/response would
 			// significantly fill up the flow map
-			if protocol == TCP && (dport[0] != 0 || dport[1] != 53) && (sport[0] != 0 || sport[1] != 53) {
+			if !isCommonPort(dport, protocol) {
 				copy(p.epHash[34:36], sport)
+				copy(p.epHashReverse[32:34], sport)
+			}
+			if !isCommonPort(sport, protocol) {
+				copy(p.epHash[32:34], dport)
 				copy(p.epHashReverse[34:36], dport)
 			}
+
+			if protocol == TCP {
+				p.auxInfo = srcPacket[ipv4.HeaderLen+13] // store TCP flags
+			}
+		} else if protocol == ICMP {
+			p.auxInfo = srcPacket[ipv4.HeaderLen] // store ICMP type
 		}
-	} else if int(srcPacket[0]>>4) == 6 {
+
+	} else if ipLayerType == ipLayerTypeV6 {
 
 		p.isIPv4 = false
 
@@ -127,28 +135,31 @@ func (p *GPPacket) Populate(pkt capture.Packet) error {
 		copy(p.epHashReverse[16:32], p.epHash[0:16])
 
 		protocol = srcPacket[6]
-
 		if protocol == TCP || protocol == UDP {
 
 			dport := srcPacket[ipv6.HeaderLen+2 : ipv6.HeaderLen+4]
 			sport := srcPacket[ipv6.HeaderLen : ipv6.HeaderLen+2]
 
-			copy(p.epHash[32:34], dport)
-			copy(p.epHashReverse[32:34], sport)
-
 			// If session based traffic is observed, the source port is taken
 			// into account. A major exception is traffic over port 53 as
 			// considering every single DNS request/response would
 			// significantly fill up the flow map
-			if protocol == TCP && (dport[0] != 0 || dport[1] != 53) && (sport[0] != 0 || sport[1] != 53) {
+			if !isCommonPort(dport, protocol) {
 				copy(p.epHash[34:36], sport)
+				copy(p.epHashReverse[32:34], sport)
+			}
+			if !isCommonPort(sport, protocol) {
+				copy(p.epHash[32:34], dport)
 				copy(p.epHashReverse[34:36], dport)
 			}
 
 			if protocol == TCP {
-				p.tcpFlags = srcPacket[ipv6.HeaderLen+13]
+				p.auxInfo = srcPacket[ipv6.HeaderLen+13] // store TCP flags
 			}
+		} else if protocol == ICMPv6 {
+			p.auxInfo = srcPacket[ipv6.HeaderLen] // store ICMP type
 		}
+
 	} else {
 		return fmt.Errorf("received neither IPv4 nor IPv6 IP header: %v", srcPacket)
 	}
@@ -158,10 +169,24 @@ func (p *GPPacket) Populate(pkt capture.Packet) error {
 	return nil
 }
 
-func (p *GPPacket) reset() {
-	p.numBytes = uint16(0)
-	p.tcpFlags = 0
-	p.epHash = byteArray37Zeros
-	p.epHashReverse = byteArray37Zeros
-	p.dirInbound = false
+func isCommonPort(port []byte, proto byte) bool {
+
+	// Fast path for neither of the below
+	if port[0] > 1 {
+		return false
+	}
+
+	// TCP common ports
+	if proto == TCP {
+		return (port[0] == 0 && (port[1] == 53 || port[1] == 80)) || // DNS(TCP), HTTP
+			(port[0] == 1 && port[1] == 187) // HTTPS
+	}
+
+	// UDP common ports
+	if proto == UDP {
+		return (port[0] == 0 && port[1] == 53) || // DNS(UDP)
+			(port[0] == 1 && port[1] == 187) // 443(UDP)
+	}
+
+	return false
 }

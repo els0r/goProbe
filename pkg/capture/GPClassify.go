@@ -13,34 +13,21 @@
 
 package capture
 
+type Direction uint8
+
 // Direction detection states
 const (
-	Unknown uint8 = iota
+	Unknown Direction = iota
 	DirectionRemains
 	DirectionReverts
+	DirectionMaybeRemains
+	DirectionMaybeReverts
 )
 
-/*
-const multicastRangeIPv4 [3]byte = [3]byte{244, 0, 0}
-const broadcastIPv4      [4]byte = [4]byte{255, 255, 255, 255}
-const ssdpAddressIPv4    [4]byte = [4]byte{239, 255, 255, 250}
-*/
-
-// Lookup table storing frequently used destination ports which fall outside of the service
-// port range 1-1023. These are explicit exceptions to the direction heuristic below
-var specialPortsLoookupTable = [65536]bool{
-	1352:  true, // Lotus Notes
-	2049:  true, // NFS
-	5222:  true, // XMPP, iMessage
-	5353:  true, // DNS
-	8080:  true, // Proxy
-	8612:  true, // Canon BJNP
-	17500: true, // Dropbox LanSync
-}
-
-// IsSpecialPort checks whether port is a well-known high port
-func IsSpecialPort(port uint16) bool {
-	return specialPortsLoookupTable[port]
+// IsConfidenceHigh returns if the heuristic was successful in determining the flow direction
+// with high confidence (i.e. we trust the assessment and won't perform any further analysis)
+func (d Direction) IsConfidenceHigh() bool {
+	return d == DirectionRemains || d == DirectionReverts
 }
 
 // ClassifyPacketDirection is responsible for running a variety of heuristics on the packet
@@ -54,77 +41,186 @@ func IsSpecialPort(port uint16) bool {
 // Return value: according to above enumeration
 //
 //	0: if no classification possible
-//	1: if packet direction is "request"
-//	2: if packet direction is "response"
-func ClassifyPacketDirection(packet *GPPacket) uint8 {
+//	1: if packet direction is "request" (with high confidence)
+//	2: if packet direction is "response" (with high confidence)
+//	3: if packet direction is "request" (with low confidence -> continue to assess)
+//	4: if packet direction is "response" (with low confidence -> continue to assess)
+func ClassifyPacketDirection(packet *GPPacket) Direction {
+
+	// Check IP protocol
+	switch packet.epHash[36] {
+	case TCP:
+		return classifyTCP(packet)
+
+	case UDP:
+		return classifyUDP(packet)
+
+	case ICMP:
+		return classifyICMPv4(packet)
+
+	case ICMPv6:
+		return classifyICMPv6(packet)
+
+	default:
+	}
+
+	// if there is no verdict, return "Unknown"
+	return Unknown
+}
+
+const (
+	tcpFlagSYN = 0x02
+	tcpFlagACK = 0x10
+)
+
+func classifyTCP(packet *GPPacket) Direction {
+
+	// Use the TCP handshake to determine the direction
+	if tcpFlags := packet.auxInfo; tcpFlags != 0x00 {
+
+		// Handshake stage
+		if tcpFlags&tcpFlagSYN != 0 {
+			if tcpFlags&tcpFlagACK != 0 {
+
+				// SYN-ACK
+				return DirectionReverts
+			}
+
+			// SYN
+			return DirectionRemains
+		}
+	}
+
+	return classifyByPorts(packet)
+}
+
+func classifyUDP(packet *GPPacket) Direction {
+
+	// handle broadcast / multicast addresses (we do not need to check the
+	// inverse direction because it won't be in multicast format)
+	if isBroadcastMulticast(packet.epHash[16:32], packet.isIPv4) {
+		return DirectionRemains
+	}
+
+	return classifyByPorts(packet)
+}
+
+func classifyICMPv4(packet *GPPacket) Direction {
+
+	// Check the ICMPv4 Type parameter
+	switch packet.auxInfo {
+
+	// EchoReply, DestinationUnreachable, TimeExceeded, ParameterProblem, TimestampReply
+	case 0x00, 0x03, 0x0B, 0x0C, 0x0E:
+		return DirectionReverts
+
+	// EchoRrequest, TimestampRequest
+	case 0x08, 0x0D:
+		return DirectionRemains
+	}
+
+	return Unknown
+}
+
+func classifyICMPv6(packet *GPPacket) Direction {
+
+	// handle broadcast / multicast addresses (we do not need to check the
+	// inverse direction because it won't be in multicast format)
+	if isBroadcastMulticast(packet.epHash[16:32], packet.isIPv4) {
+		return DirectionRemains
+	}
+
+	// Check the ICMPv6 Type parameter
+	switch packet.auxInfo {
+
+	// EchoReply, DestinationUnreachable, TimeExceeded, ParameterProblem
+	case 0x81, 0x01, 0x03, 0x04:
+		return DirectionReverts
+
+	// EchoRequest
+	case 0x80:
+		return DirectionRemains
+	}
+
+	return Unknown
+}
+
+func classifyByPorts(packet *GPPacket) Direction {
 
 	sport := uint16(packet.epHash[34])<<8 | uint16(packet.epHash[35])
 	dport := uint16(packet.epHash[32])<<8 | uint16(packet.epHash[33])
 
-	// first, check the TCP flags availability
-	TCPflags := packet.tcpFlags
-	if TCPflags != 0x00 {
-		// process the TCP handshake flags to decide the direction.
-		switch TCPflags {
-		case 0x02: // SYN
+	// Source port is ephemeral
+	if isEphemeralPort(sport) {
+
+		// Destination port is not ephemeral -> Probably this is client -> server
+		if !isEphemeralPort(dport) {
 			return DirectionRemains
-		case 0x12: // SYN-ACK
+
+			// Destination port is ephemeral as well
+		} else {
+
+			// If destination port is smaller than the source port -> Probably this is client -> server
+			if dport < sport {
+				return DirectionRemains
+
+				// If source port is smaller than the destination port -> Probably this is server -> client
+			} else if sport < dport {
+				return DirectionReverts
+			}
+		}
+
+		// Source port is not ephemeral
+	} else {
+
+		// Destination port is ephemeral -> Probably this is server -> client
+		if isEphemeralPort(dport) {
 			return DirectionReverts
-		case 0x01: // FIN
-			return DirectionRemains
-		case 0x11: // FIN-ACK
-			return DirectionReverts
+
+			// Destination port is not ephemeral either
+		} else {
+
+			// If source port is smaller than the destination port -> Probably this is server -> client
+			if sport < dport {
+				return DirectionReverts
+
+				// If destination port is smaller than the source  port -> Probably this is client -> server
+			} else if dport < sport {
+				return DirectionRemains
+			}
 		}
 	}
 
-	// handle multicast addresses
-	if (packet.epHash[16] == 224 && packet.epHash[17] == 0) && (packet.epHash[18] == 0 || packet.epHash[18] == 1) {
-		return DirectionRemains
+	// Ports are identical, we have nothing to go by and can only assume this is the first packet
+	return DirectionRemains
+}
+
+// Ephemeral ports as union of:
+// -> suggested by IANA / RFC6335 (49152–65535)
+// -> used by most Linux kernels (32768–60999)
+const (
+	minEphemeralPort uint16 = 32768
+	maxEphemeralPort uint16 = 65535
+)
+
+func isEphemeralPort(port uint16) bool {
+	return port >= minEphemeralPort || // Since maxEphemeralPort is 65535 we don't need to check the upper bound
+		port == 0 // We consider an empty port to be ephemaral (because it indicates that the source port was disregarded)
+}
+
+func isBroadcastMulticast(destinationIP []byte, isIPv4 bool) bool {
+
+	if isIPv4 {
+		// These comparisons are more clumsy than using e.g. bytes.Equal, but they are faster
+		return (destinationIP[0] == 0xFF && destinationIP[1] == 0xFF && destinationIP[2] == 0xFF && destinationIP[3] == 0xFF) ||
+			((destinationIP[0] == 0xE0 && destinationIP[1] == 0x00) && (destinationIP[2] == 0x00 || destinationIP[2] == 0x01))
 	}
 
-	// handle broadcast address
-	if packet.epHash[16] == 255 && packet.epHash[17] == 255 && packet.epHash[18] == 255 && packet.epHash[19] == 255 {
-		return DirectionRemains
-	}
-
-	// handle TCP and UDP
-	if packet.epHash[36] == 6 || packet.epHash[36] == 17 {
-		// non-TCP-handshake packet encountered, but port information available
-
-		// check for DHCP messages
-		if dport == 67 && sport == 68 {
-			return DirectionRemains
-		}
-
-		if dport == 68 && sport == 67 {
-			return DirectionReverts
-		}
-
-		// according to RFC 6056, look for ephemeral ports in the range of 49152
-		// through 65535
-		if (dport < 1024 || IsSpecialPort(dport)) && sport > 20000 {
-			return DirectionRemains
-		}
-
-		if (sport < 1024 || IsSpecialPort(sport)) && dport > 20000 {
-			return DirectionReverts
-		}
-	}
-
-	/* disregarded until further notice
-	   if packet.ICMPtypeCode != 0xffff {
-	       // try ICMP codes if protocol field matches. Echo request and reply can shed
-	       // light on the situation. Other codes may help too
-	       switch packet.ICMPtypeCode {
-	       case 0x0000: // echo reply
-	           return DirectionRemains
-	       case 0x0800: // echo request
-	           return DirectionReverts
-	       }
-
-	   }
-	*/
-
-	// if there is yet no verdict, return "Unknown"
-	return Unknown
+	// IPv6 only has the concept of multicast addresses (there are no "broadcasts")
+	// According to RFC4291:
+	// IPv6 multicast addresses are distinguished from unicast addresses by the
+	// value of the high-order octet of the addresses: a value of 0xFF (binary
+	// 11111111) identifies an address as a multicast address; any other value
+	// identifies an address as a unicast address.
+	return destinationIP[0] == 0xFF
 }
