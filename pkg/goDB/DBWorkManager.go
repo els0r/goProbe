@@ -66,6 +66,12 @@ type DBWorkManager struct {
 
 // NewDBWorkManager sets up a new work manager for executing queries
 func NewDBWorkManager(dbpath string, iface string, numProcessingUnits int) (*DBWorkManager, error) {
+
+	// Explicitly handle invalid number of processing units (to avoid deadlock)
+	if numProcessingUnits <= 0 {
+		return nil, fmt.Errorf("invalid number of processing units: %d", numProcessingUnits)
+	}
+
 	return &DBWorkManager{
 		dbIfaceDir:         filepath.Join(dbpath, iface),
 		iface:              iface,
