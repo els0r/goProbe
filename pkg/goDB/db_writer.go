@@ -35,10 +35,6 @@ func NewDBWriter(dbpath string, iface string, encoderType encoders.Type) (w *DBW
 	return &DBWriter{dbpath, iface, 0, encoderType}
 }
 
-func (w *DBWriter) dailyDir(timestamp int64) string {
-	return filepath.Join(w.dbpath, w.iface, fmt.Sprintf("%d", timestamp))
-}
-
 // Write takes an aggregated flow map and its metadata and writes it to disk for a given timestamp
 func (w *DBWriter) Write(flowmap *hashmap.AggFlowMap, captureMeta CaptureMetadata, timestamp int64) error {
 	var (

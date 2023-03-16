@@ -66,6 +66,12 @@ type DBWorkManager struct {
 
 // NewDBWorkManager sets up a new work manager for executing queries
 func NewDBWorkManager(dbpath string, iface string, numProcessingUnits int) (*DBWorkManager, error) {
+
+	// Explicitly handle invalid number of processing units (to avoid deadlock)
+	if numProcessingUnits <= 0 {
+		return nil, fmt.Errorf("invalid number of processing units: %d", numProcessingUnits)
+	}
+
 	return &DBWorkManager{
 		dbIfaceDir:         filepath.Join(dbpath, iface),
 		iface:              iface,
@@ -91,16 +97,16 @@ func (w *DBWorkManager) CreateWorkerJobs(tfirst int64, tlast int64, query *Query
 	// ensure graceful termination of all workers
 	defer close(w.workloadChan)
 
-	// Get list of files in directory (ordered by file name, i.e. time)
-	dirList, err := os.ReadDir(w.dbIfaceDir)
+	// Get list of years in main directory (ordered by directory name, i.e. time)
+	yearList, err := os.ReadDir(w.dbIfaceDir)
 	if err != nil {
 		return false, err
 	}
 
 	// loop over directory list in order to create the timestamp pairs
 	var (
-		gpFileOptions []gpfile.Option
-		dirName       string
+		gpFileOptions       []gpfile.Option
+		unixFirst, unixLast = time.Unix(tfirst, 0), time.Unix(tlast+DBWriteInterval, 0)
 	)
 	if !query.lowMem {
 		w.memPool = gpfile.NewMemPool(w.numProcessingUnits * len(query.columnIndices))
@@ -115,42 +121,87 @@ func (w *DBWorkManager) CreateWorkerJobs(tfirst int64, tlast int64, query *Query
 		curDir  *gpfile.GPDir
 	)
 	workloadBulk := make([]*gpfile.GPDir, 0, WorkBulkSize)
-	for _, file := range dirList {
-		if file.IsDir() && (file.Name() != "./" || file.Name() != "../") {
-			dirName = file.Name()
-			tempdirTstamp, err := strconv.ParseInt(dirName, 10, 64)
-			if err != nil {
-				return false, fmt.Errorf("failed to parse timestamp from directory `%s`: %w", dirName, err)
+	for _, year := range yearList {
+
+		// Skip obvious non-matching entries
+		if !year.IsDir() || year.Name() == "./" || year.Name() == "../" {
+			continue
+		}
+
+		// Skip if outside of annual range
+		yearTimestamp, err := strconv.ParseInt(year.Name(), 10, 64)
+		if err != nil {
+			return false, fmt.Errorf("failed to parse year from directory `%s`: %w", year.Name(), err)
+		}
+		if int(yearTimestamp) < unixFirst.Year() || int(yearTimestamp) > unixLast.Year() {
+			continue
+		}
+
+		// Get list of months in year directory (ordered by directory name, i.e. time)
+		monthList, err := os.ReadDir(filepath.Join(w.dbIfaceDir, year.Name()))
+		if err != nil {
+			return false, err
+		}
+		for _, month := range monthList {
+
+			// Skip obvious non-matching entries
+			if !month.IsDir() || month.Name() == "./" || month.Name() == "../" {
+				continue
 			}
 
-			// check if the directory is within time frame of interest
-			if tfirst < tempdirTstamp+gpfile.EpochDay && tempdirTstamp < tlast+DBWriteInterval {
-				curDir = gpfile.NewDir(w.dbIfaceDir, tempdirTstamp, gpfile.ModeRead, gpFileOptions...)
+			// Skip if outside of month range (only considering the "edge" years)
+			monthTimestamp, err := strconv.ParseInt(month.Name(), 10, 64)
+			if err != nil {
+				return false, fmt.Errorf("failed to parse month from directory `%s`: %w", year.Name(), err)
+			}
+			if (int(yearTimestamp) == unixFirst.Year() && time.Month(monthTimestamp) < unixFirst.Month()) ||
+				(int(yearTimestamp) == unixLast.Year() && time.Month(monthTimestamp) > unixLast.Month()) {
+				continue
+			}
 
-				// For the first and last item, check out the GPDir metadata for the actual first and
-				// last block timestamp to cover (and adapt variables accordingly)
-				// We will grab the timestamp from the first visited / valid directory that fulfils
-				// the timestamp condition on directory level
-				if numDirs == 0 {
-					if err := curDir.Open(); err != nil {
-						return false, fmt.Errorf("failed to open first GPDir %s to ascertain query block timing: %w", curDir.Path(), err)
-					}
-					dirFirst, _ := curDir.TimeRange()
-					if tfirst < dirFirst {
-						w.tFirstCovered = dirFirst
-					}
-					if err := curDir.Close(); err != nil {
-						return false, fmt.Errorf("failed to close first GPDir %s after ascertaining query block timing: %w", curDir.Path(), err)
-					}
-				}
-				numDirs++
+			// Get list of days in month directory (ordered by directory name, i.e. time)
+			dirList, err := os.ReadDir(filepath.Join(w.dbIfaceDir, year.Name(), month.Name()))
+			if err != nil {
+				return false, err
+			}
 
-				// create new workload for the directory
-				workloadBulk = append(workloadBulk, curDir)
-				if len(workloadBulk) == WorkBulkSize {
-					w.workloadChan <- DBWorkload{query: query, workDirs: workloadBulk}
-					w.nWorkloads++
-					workloadBulk = make([]*gpfile.GPDir, 0, WorkBulkSize)
+			for _, file := range dirList {
+				if file.IsDir() && (file.Name() != "./" || file.Name() != "../") {
+					dayTimestamp, err := strconv.ParseInt(file.Name(), 10, 64)
+					if err != nil {
+						return false, fmt.Errorf("failed to parse epoch timestamp from directory `%s`: %w", file.Name(), err)
+					}
+
+					// check if the directory is within time frame of interest
+					if tfirst < dayTimestamp+gpfile.EpochDay && dayTimestamp < tlast+DBWriteInterval {
+						curDir = gpfile.NewDir(w.dbIfaceDir, dayTimestamp, gpfile.ModeRead, gpFileOptions...)
+
+						// For the first and last item, check out the GPDir metadata for the actual first and
+						// last block timestamp to cover (and adapt variables accordingly)
+						// We will grab the timestamp from the first visited / valid directory that fulfils
+						// the timestamp condition on directory level
+						if numDirs == 0 {
+							if err := curDir.Open(); err != nil {
+								return false, fmt.Errorf("failed to open first GPDir %s to ascertain query block timing: %w", curDir.Path(), err)
+							}
+							dirFirst, _ := curDir.TimeRange()
+							if tfirst < dirFirst {
+								w.tFirstCovered = dirFirst
+							}
+							if err := curDir.Close(); err != nil {
+								return false, fmt.Errorf("failed to close first GPDir %s after ascertaining query block timing: %w", curDir.Path(), err)
+							}
+						}
+						numDirs++
+
+						// create new workload for the directory
+						workloadBulk = append(workloadBulk, curDir)
+						if len(workloadBulk) == WorkBulkSize {
+							w.workloadChan <- DBWorkload{query: query, workDirs: workloadBulk}
+							w.nWorkloads++
+							workloadBulk = make([]*gpfile.GPDir, 0, WorkBulkSize)
+						}
+					}
 				}
 			}
 		}
