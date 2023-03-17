@@ -1,4 +1,4 @@
-name: build-deb
+name: build-packages
 
 on:
   - push
@@ -7,7 +7,7 @@ on:
 #      - 'v*.*.*'
 
 jobs:
-  build:
+  build-deb:
     runs-on: ubuntu-latest
     steps:
 
@@ -55,3 +55,9 @@ jobs:
           arch: 'amd64'
           depends: 'liblz4, libzstd'
           desc: 'goProbe Network Traffic Monitoring'
+
+      - name: Store artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: Debian Package
+          path: *.deb
