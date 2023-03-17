@@ -27,14 +27,12 @@ jobs:
 
       - name: deploy artifacts
         run: |
-          pwd
-          ls
           mkdir -p .debpkg/usr/local/bin
           mkdir -p .debpkg/etc/systemd/system
 
           # Binaries
-          cp goProbe .debpkg/usr/bin/goProbe
-          cp goQuery .debpkg/usr/bin/goQuery
+          cp goProbe .debpkg/usr/local/bin/goProbe
+          cp goQuery .debpkg/usr/local/bin/goQuery
 
           # Config
           cp addon/goprobe.service .debpkg/etc/systemd/system/goprobe.service
