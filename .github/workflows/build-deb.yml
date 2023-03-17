@@ -25,7 +25,7 @@ jobs:
           GOOS=linux GOARCH=amd64 go build -a -o goProbe ./cmd/goProbe
           GOOS=linux GOARCH=amd64 go build -a -o goQuery ./cmd/goQuery
 
-      - name: deploy artifacts
+      - name: Deploy artifacts
         run: |
           mkdir -p .debpkg/usr/local/bin
           mkdir -p .debpkg/etc/systemd/system
@@ -50,7 +50,8 @@ jobs:
           package: goprobe
           package_root: .debpkg
           maintainer: fako1024
-          version: ${{ github.ref }}
+          #version: ${{ github.ref }}
+          version: refs/tags/v0.0.1
           arch: 'amd64'
           depends: 'liblz4, libzstd'
           desc: 'goProbe Network Traffic Monitoring'
