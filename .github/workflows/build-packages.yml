@@ -17,6 +17,10 @@ jobs:
           go-version: ^1.18
         id: go
 
+      - name: Set environment
+        #run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/v}" >> $GITHUB_ENV
+        run: echo "RELEASE_VERSION=0.0.1" >> $GITHUB_ENV
+
       - name: Check out code into the Go module directory
         uses: actions/checkout@v3
 
@@ -53,11 +57,16 @@ jobs:
           #version: ${{ github.ref }}
           version: refs/tags/v0.0.1
           arch: 'amd64'
-          depends: 'liblz4, libzstd'
+          depends: 'liblz4-1, libzstd1'
           desc: 'goProbe Network Traffic Monitoring'
 
       - name: Store artifacts
         uses: actions/upload-artifact@v3
         with:
           name: Debian Package
-          path: ./*.deb
+          path: ./goprobe_${{ env.RELEASE_VERSION }}_amd64.deb
+
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: goprobe_${{ env.RELEASE_VERSION }}_amd64.deb
