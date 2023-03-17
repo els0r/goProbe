@@ -1,0 +1,54 @@
+name: build-deb
+
+on:
+  - push
+#  push:
+#    tags:
+#      - 'v*.*.*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: ^1.18
+        id: go
+
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v3
+
+      - name: Build for AMD64
+        run: GOOS=linux GOARCH=amd64 go build -a ./...
+
+      - name: deploy artifacts
+        run: |
+          mkdir -p .debpkg/usr/local/bin
+          mkdir -p .debpkg/etc/systemd/system
+
+          # Binaries
+          cp cmd/goProbe/goProbe .debpkg/usr/bin/goProbe
+          cp cmd/goQuery/goQuery .debpkg/usr/bin/goQuery
+
+          # Config
+          cp addon/goprobe.service .debpkg/etc/systemd/system/goprobe.service
+
+          # pre/post/rm scripts
+          mkdir -p .debpkg/DEBIAN
+          echo -e "systemctl daemon-reload" > .debpkg/DEBIAN/postinst
+          chmod +x .debpkg/DEBIAN/postinst
+          echo -e "systemctl daemon-reload" > .debpkg/DEBIAN/postrm
+          chmod +x .debpkg/DEBIAN/postrm
+          echo -e "mkdir -p /usr/local/goprobe" > .debpkg/DEBIAN/preinst
+          chmod +x .debpkg/DEBIAN/preinst
+      - uses: jiro4989/build-deb-action@v2
+        with:
+          package: goprobe
+          package_root: .debpkg
+          maintainer: fako1024
+          version: ${{ github.ref }}
+          arch: 'amd64'
+          depends: 'liblz4, libzstd'
+          desc: 'goProbe Network Traffic Monitoring'

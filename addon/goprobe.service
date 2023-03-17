@@ -4,7 +4,7 @@ After=network-online.target syslog.target
 
 [Service]
 Type=simple
-ExecStart=/bin/goProbe -config /etc/goprobe.conf
+ExecStart=/usr/local/bin/goProbe -config /etc/goprobe.conf
 StandardOutput=syslog
 Restart=on-failure
 RestartSec=10
