@@ -1,7 +1,6 @@
 module github.com/els0r/goProbe
 
 require (
-	github.com/denisbrodbeck/machineid v1.0.1
 	github.com/els0r/status v1.0.0
 	github.com/fako1024/slimcap v0.0.0-20230310110256-894431fb9e95
 	github.com/go-chi/chi/v5 v5.0.7

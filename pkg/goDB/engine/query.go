@@ -82,7 +82,7 @@ func (qr *QueryRunner) Run(ctx context.Context, stmt *query.Statement) (res []*r
 	if err != nil {
 		return nil, fmt.Errorf("failed to get system hostname: %w", err)
 	}
-	hostID := info.GetHostID()
+	hostID := info.GetHostID(stmt.DBPath)
 
 	// start ticker to check memory consumption every second
 	heapWatchCtx, cancelHeapWatch := context.WithCancel(ctx)
