@@ -1,10 +1,9 @@
 name: build-packages
 
 on:
-  - push
-#  push:
-#    tags:
-#      - 'v*.*.*'
+  push:
+    tags:
+      - 'v*.*.*'
 
 jobs:
   build-deb:
@@ -18,8 +17,7 @@ jobs:
         id: go
 
       - name: Set environment
-        #run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/v}" >> $GITHUB_ENV
-        run: echo "RELEASE_VERSION=0.0.1" >> $GITHUB_ENV
+        run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/v}" >> $GITHUB_ENV
 
       - name: Check out code into the Go module directory
         uses: actions/checkout@v3
@@ -39,6 +37,7 @@ jobs:
           cp goQuery .debpkg/usr/local/bin/goQuery
 
           # Config
+          cp addon/goprobe.conf.example .debpkg/etc/goprobe.conf.example
           cp addon/goprobe.service .debpkg/etc/systemd/system/goprobe.service
 
           # pre/post/rm scripts
@@ -54,8 +53,7 @@ jobs:
           package: goprobe
           package_root: .debpkg
           maintainer: fako1024
-          #version: ${{ github.ref }}
-          version: refs/tags/v0.0.1
+          version: ${{ github.ref }}
           arch: 'amd64'
           depends: 'liblz4-1, libzstd1'
           desc: 'goProbe Network Traffic Monitoring'
