@@ -95,6 +95,22 @@ func (e ErrorMap) String() string {
 	return strings.Join(errs, "; ")
 }
 
+// ////////////////////// rotation state machine ////////////////////////
+
+type rotationState struct {
+	request chan struct{}
+	confirm chan struct{}
+	done    chan struct{}
+}
+
+func newRotationState() *rotationState {
+	return &rotationState{
+		request: make(chan struct{}, 1),
+		confirm: make(chan struct{}),
+		done:    make(chan struct{}),
+	}
+}
+
 //////////////////////// capture commands ////////////////////////
 
 // captureCommand is an interface implemented by (you guessed it...)
@@ -182,12 +198,24 @@ func (cmd captureCommandRotate) execute(c *Capture) stateFn {
 	if c.flowLog.Len() == 0 {
 		logger.Debug("there are currently no flow records available")
 	} else {
-		c.inRotation <- struct{}{}
 
-		// map access needs to be synchronized
+		// Notify the capture that a rotation is about to begin, then unblock
+		// the capture potentially being in a blocking PPOLL syscall
+		// Channel has a depth of one and hence this push is non-blocking. Since
+		// we wait for confirmation there is no possibility of repeated attempts
+		// or race conditions
+		c.rotationState.request <- struct{}{}
+		if err := c.captureHandle.Unblock(); err != nil {
+			logger.Fatalf("unexpectedly failed to unblock capture handle, deadlock likely: %w", err)
+		}
+
+		// Wait for confirmation of reception from the processing routine, then
+		// commit the rotation
+		<-c.rotationState.confirm
 		result.agg = c.flowLog.Rotate()
 
-		c.rotationDone <- struct{}{}
+		// Signal that the rotation is complete, releasing the processing routine
+		c.rotationState.done <- struct{}{}
 
 		stats := c.tryGetCaptureStats()
 		lastRotationStats := *stats
@@ -239,9 +267,8 @@ type Capture struct {
 	// stats from the last rotation or reset (needed for Status)
 	lastRotationStats Stats
 
-	// rotation synchronization
-	inRotation   chan struct{}
-	rotationDone chan struct{}
+	// Rotation state synchronization
+	rotationState *rotationState
 
 	// Counts the total number of logged packets (since the creation of the
 	// Capture)
@@ -277,11 +304,10 @@ func NewCapture(ctx context.Context, iface string, config config.CaptureConfig) 
 		lastRotationStats: Stats{
 			CaptureStats: &CaptureStats{},
 		},
-		inRotation:   make(chan struct{}),
-		rotationDone: make(chan struct{}),
-		flowLog:      NewFlowLog(),
-		errMap:       make(map[string]int),
-		ctx:          capCtx,
+		rotationState: newRotationState(),
+		flowLog:       NewFlowLog(),
+		errMap:        make(map[string]int),
+		ctx:           capCtx,
 	}
 }
 
@@ -432,7 +458,9 @@ func (c *Capture) capturePacket(pkt capture.Packet) (err error) {
 	// Fetch the next packet form the wire
 	_, err = c.captureHandle.NextPacket(pkt)
 	if err != nil {
-		// NextPacket should return a ErrorCaptureClosed in case the handle is closed
+
+		// NextPacket should return a ErrCaptureStopped in case the handle is closed or
+		// ErrCaptureUnblock in case the PPOLL was unblocked
 		return fmt.Errorf("capture error: %w", err)
 	}
 
@@ -476,22 +504,31 @@ func (c *Capture) process() {
 	// Reusable packet buffer for in-place population
 	pkt := make(capture.Packet, Snaplen+6)
 
-	// this is the main packet capture loop which an interface should be in most of the time
+	// Main packet capture loop which an interface should be in most of the time
 	for {
+
 		// map access needs to be synchronized. This will incur a performance hit, but less so
-		// than locking the data structure itself
+		// than locking the data structure itself (mutex causes about 40% drop in throughput)
 		select {
-		case <-c.inRotation:
+
+		// Rotation state synchronization
+		case <-c.rotationState.request:
+			c.rotationState.confirm <- struct{}{} // Confirm that process() is not processing
 			select {
-			case <-c.rotationDone:
+			case <-c.rotationState.done: // Rotation is done, continue with processing
 				continue
 			case <-c.ctx.Done():
 				logger.Debug("context cancelled during rotation. Exiting")
 				return
 			}
+
+		// Normal processing
 		default:
 			err := c.capturePacket(pkt)
 			if err != nil {
+				if errors.Is(err, capture.ErrCaptureUnblock) {
+					continue
+				}
 				if errors.Is(err, capture.ErrCaptureStopped) { // capture stopped gracefully
 					if fErr := c.captureHandle.Free(); fErr != nil {
 						logger.Errorf("failed to free capture resources: %s", fErr)
