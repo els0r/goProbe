@@ -129,11 +129,11 @@ func (w *DBWorkManager) CreateWorkerJobs(tfirst int64, tlast int64, query *Query
 		}
 
 		// Skip if outside of annual range
-		yearTimestamp, err := strconv.ParseInt(year.Name(), 10, 64)
+		yearTimestamp, err := strconv.Atoi(year.Name())
 		if err != nil {
 			return false, fmt.Errorf("failed to parse year from directory `%s`: %w", year.Name(), err)
 		}
-		if int(yearTimestamp) < unixFirst.Year() || int(yearTimestamp) > unixLast.Year() {
+		if yearTimestamp < unixFirst.Year() || yearTimestamp > unixLast.Year() {
 			continue
 		}
 
@@ -150,12 +150,12 @@ func (w *DBWorkManager) CreateWorkerJobs(tfirst int64, tlast int64, query *Query
 			}
 
 			// Skip if outside of month range (only considering the "edge" years)
-			monthTimestamp, err := strconv.ParseInt(month.Name(), 10, 64)
+			monthTimestamp, err := strconv.Atoi(month.Name())
 			if err != nil {
 				return false, fmt.Errorf("failed to parse month from directory `%s`: %w", year.Name(), err)
 			}
-			if (int(yearTimestamp) == unixFirst.Year() && time.Month(monthTimestamp) < unixFirst.Month()) ||
-				(int(yearTimestamp) == unixLast.Year() && time.Month(monthTimestamp) > unixLast.Month()) {
+			if (yearTimestamp == unixFirst.Year() && time.Month(monthTimestamp) < unixFirst.Month()) ||
+				(yearTimestamp == unixLast.Year() && time.Month(monthTimestamp) > unixLast.Month()) {
 				continue
 			}
 
