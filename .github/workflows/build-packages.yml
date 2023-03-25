@@ -1,0 +1,70 @@
+name: build-packages
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  build-deb:
+    runs-on: ubuntu-latest
+    steps:
+
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: ^1.18
+        id: go
+
+      - name: Set environment
+        run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/v}" >> $GITHUB_ENV
+
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v3
+
+      - name: Build for AMD64
+        run: |
+          GOOS=linux GOARCH=amd64 go build -a -o goProbe ./cmd/goProbe
+          GOOS=linux GOARCH=amd64 go build -a -o goQuery ./cmd/goQuery
+
+      - name: Deploy artifacts
+        run: |
+          mkdir -p .debpkg/usr/local/bin
+          mkdir -p .debpkg/etc/systemd/system
+
+          # Binaries
+          cp goProbe .debpkg/usr/local/bin/goProbe
+          cp goQuery .debpkg/usr/local/bin/goQuery
+
+          # Config
+          cp addon/goprobe.conf.example .debpkg/etc/goprobe.conf.example
+          cp addon/goprobe.service .debpkg/etc/systemd/system/goprobe.service
+
+          # pre/post/rm scripts
+          mkdir -p .debpkg/DEBIAN
+          echo -e "systemctl daemon-reload" > .debpkg/DEBIAN/postinst
+          chmod +x .debpkg/DEBIAN/postinst
+          echo -e "systemctl daemon-reload" > .debpkg/DEBIAN/postrm
+          chmod +x .debpkg/DEBIAN/postrm
+          echo -e "mkdir -p /usr/local/goprobe" > .debpkg/DEBIAN/preinst
+          chmod +x .debpkg/DEBIAN/preinst
+      - uses: jiro4989/build-deb-action@v2
+        with:
+          package: goprobe
+          package_root: .debpkg
+          maintainer: fako1024
+          version: ${{ github.ref }}
+          arch: 'amd64'
+          depends: 'liblz4-1, libzstd1'
+          desc: 'goProbe Network Traffic Monitoring'
+
+      - name: Store artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: Debian Package
+          path: ./goprobe_${{ env.RELEASE_VERSION }}_amd64.deb
+
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: goprobe_${{ env.RELEASE_VERSION }}_amd64.deb

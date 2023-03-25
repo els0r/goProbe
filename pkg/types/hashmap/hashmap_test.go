@@ -9,43 +9,74 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestSeedRandomness(t *testing.T) {
+	var lastSeed uint64
+	for i := 0; i < 1000; i++ {
+		testMap := New()
+		require.NotEqual(t, 0, testMap.seed)
+		require.NotEqual(t, lastSeed, testMap.seed)
+		lastSeed = testMap.seed
+	}
+}
+
 func TestSimpleHashMapOperations(t *testing.T) {
 
 	testMap := New()
-	testMap.Set([]byte("a"), types.Counters{BytesRcvd: 0, BytesSent: 1, PacketsRcvd: 0, PacketsSent: 0})
+	testMap.Set([]byte("a"), types.Counters{BytesRcvd: 0, BytesSent: uint64([]byte("a")[0]), PacketsRcvd: 0, PacketsSent: 0})
+	testMap.Set([]byte("b"), types.Counters{BytesRcvd: 0, BytesSent: uint64([]byte("b")[0]), PacketsRcvd: 0, PacketsSent: 0})
+	testMap.Set([]byte("c"), types.Counters{BytesRcvd: 0, BytesSent: uint64([]byte("c")[0]), PacketsRcvd: 0, PacketsSent: 0})
 
 	val, exists := testMap.Get([]byte("a"))
 	require.True(t, exists)
-	require.Equal(t, types.Counters{BytesRcvd: 0, BytesSent: 1, PacketsRcvd: 0, PacketsSent: 0}, val)
-
+	require.Equal(t, types.Counters{BytesRcvd: 0, BytesSent: uint64([]byte("a")[0]), PacketsRcvd: 0, PacketsSent: 0}, val)
 	val, exists = testMap.Get([]byte("b"))
+	require.True(t, exists)
+	require.Equal(t, types.Counters{BytesRcvd: 0, BytesSent: uint64([]byte("b")[0]), PacketsRcvd: 0, PacketsSent: 0}, val)
+	val, exists = testMap.Get([]byte("c"))
+	require.True(t, exists)
+	require.Equal(t, types.Counters{BytesRcvd: 0, BytesSent: uint64([]byte("c")[0]), PacketsRcvd: 0, PacketsSent: 0}, val)
+
+	val, exists = testMap.Get([]byte("d"))
 	require.False(t, exists)
 	require.Equal(t, types.Counters{BytesRcvd: 0, BytesSent: 0, PacketsRcvd: 0, PacketsSent: 0}, val)
 
+	var count int
 	for i := testMap.Iter(); i.Next(); {
-		t.Log(i.Key(), i.Val())
+		count++
+		require.Equal(t, uint64(i.Key()[0]), i.Val().BytesSent)
 	}
+	require.Equal(t, count, testMap.Len())
 }
 
 func TestHashMapSetOrUpdate(t *testing.T) {
 
 	testMap := New()
-	testMap.Set([]byte("a"), types.Counters{BytesRcvd: 0, BytesSent: 1, PacketsRcvd: 0, PacketsSent: 0})
+	testMap.Set([]byte("a"), types.Counters{BytesRcvd: 0, BytesSent: uint64([]byte("a")[0]), PacketsRcvd: 0, PacketsSent: 0})
+	testMap.Set([]byte("b"), types.Counters{BytesRcvd: 0, BytesSent: uint64([]byte("b")[0]), PacketsRcvd: 0, PacketsSent: 0})
+	testMap.Set([]byte("c"), types.Counters{BytesRcvd: 0, BytesSent: uint64([]byte("c")[0]), PacketsRcvd: 0, PacketsSent: 0})
 
 	val, exists := testMap.Get([]byte("a"))
 	require.True(t, exists)
-	require.Equal(t, types.Counters{BytesRcvd: 0, BytesSent: 1, PacketsRcvd: 0, PacketsSent: 0}, val)
+	require.Equal(t, types.Counters{BytesRcvd: 0, BytesSent: uint64([]byte("a")[0]), PacketsRcvd: 0, PacketsSent: 0}, val)
 
 	testMap.SetOrUpdate([]byte("a"), 0, 2, 0, 1)
+	testMap.SetOrUpdate([]byte("b"), 0, 10000, 10, 1)
 
 	val, exists = testMap.Get([]byte("a"))
 	require.True(t, exists)
-	require.Equal(t, types.Counters{BytesRcvd: 0, BytesSent: 3, PacketsRcvd: 0, PacketsSent: 1}, val)
+	require.Equal(t, types.Counters{BytesRcvd: 0, BytesSent: uint64([]byte("a")[0]) + 2, PacketsRcvd: 0, PacketsSent: 1}, val)
+	val, exists = testMap.Get([]byte("b"))
+	require.True(t, exists)
+	require.Equal(t, types.Counters{BytesRcvd: 0, BytesSent: uint64([]byte("b")[0]) + 10000, PacketsRcvd: 10, PacketsSent: 1}, val)
+	val, exists = testMap.Get([]byte("c"))
+	require.True(t, exists)
+	require.Equal(t, types.Counters{BytesRcvd: 0, BytesSent: uint64([]byte("c")[0]), PacketsRcvd: 0, PacketsSent: 0}, val)
 
+	var count int
 	for i := testMap.Iter(); i.Next(); {
-		t.Log(i.Key(), i.Val())
+		count++
 	}
-
+	require.Equal(t, count, testMap.Len())
 }
 
 func TestLinearHashMapOperations(t *testing.T) {
@@ -65,8 +96,42 @@ func TestLinearHashMapOperations(t *testing.T) {
 		val, exists := testMap.Get(temp)
 		require.True(t, exists)
 		require.Equal(t, types.Counters{BytesRcvd: uint64(i), BytesSent: 0, PacketsRcvd: 0, PacketsSent: 0}, val)
-
 	}
+}
+
+func TestMerge(t *testing.T) {
+
+	testMap, testMap2 := New(), New(100000)
+	for i := 0; i < 110000; i++ {
+		temp := make([]byte, 8)
+		binary.BigEndian.PutUint64(temp, uint64(i))
+		if i < 100000 {
+			testMap.Set(temp, types.Counters{BytesRcvd: uint64(i), BytesSent: 0, PacketsRcvd: 0, PacketsSent: 0})
+		}
+		if i >= 50000 {
+			testMap2.Set(temp, types.Counters{BytesRcvd: uint64(i), BytesSent: 0, PacketsRcvd: 0, PacketsSent: 0})
+		}
+	}
+
+	require.Equal(t, 100000, int(testMap.Len()))
+	require.Equal(t, 60000, int(testMap2.Len()))
+
+	var (
+		mergeMap = New()
+		totals   Val
+	)
+
+	mergeMap.Merge(testMap, &totals)
+
+	require.Equal(t, int(testMap.Len()), int(mergeMap.Len()))
+	require.Equal(t, 100000, int(testMap.Len()))
+	require.Equal(t, 60000, int(testMap2.Len()))
+
+	mergeMap.Merge(testMap2, &totals)
+
+	require.Equal(t, 110000, int(mergeMap.Len()))
+	require.Equal(t, 100000, int(testMap.Len()))
+	require.Equal(t, 60000, int(testMap2.Len()))
 }
 
 func TestJSONMarshalAggFlowMap(t *testing.T) {
@@ -81,130 +146,6 @@ func TestJSONMarshalAggFlowMap(t *testing.T) {
 		t.Fatalf("failed to marshal aggregated flow map: %s", err)
 	}
 	_ = b
-}
-
-func BenchmarkNativeMapAccess(b *testing.B) {
-
-	testMap := New()
-	for i := 0; i < 1000000; i++ {
-		var ip [16]byte
-		binary.BigEndian.PutUint64(ip[:], uint64(i))
-
-		testMap.Set(types.NewKey(ip[:], ip[:], []byte{0, 0}, 0), types.Counters{
-			BytesRcvd:   uint64(i),
-			BytesSent:   uint64(i),
-			PacketsRcvd: uint64(i),
-			PacketsSent: uint64(i),
-		})
-	}
-
-	b.ReportAllocs()
-	b.ResetTimer()
-
-	checkKey := types.Key{}
-
-	for i := 0; i < b.N; i++ {
-		_, _ = testMap.Get(checkKey)
-	}
-}
-
-type flatByteArrayKey [35]byte
-
-func BenchmarkByteArrayMapAccess(b *testing.B) {
-
-	testMap := make(map[flatByteArrayKey]*types.Counters)
-	for i := 0; i < 1000000; i++ {
-		var key flatByteArrayKey
-		binary.BigEndian.PutUint64(key[:8], uint64(i))
-		binary.BigEndian.PutUint64(key[8:16], uint64(i))
-
-		testMap[key] = &types.Counters{
-			BytesRcvd:   uint64(i),
-			BytesSent:   uint64(i),
-			PacketsRcvd: uint64(i),
-			PacketsSent: uint64(i),
-		}
-	}
-
-	b.ReportAllocs()
-	b.ResetTimer()
-
-	checkKey := flatByteArrayKey{}
-
-	for i := 0; i < b.N; i++ {
-		_ = testMap[checkKey]
-	}
-}
-
-func BenchmarkStringedByteArrayMapAccess(b *testing.B) {
-
-	testMap := make(map[string]*types.Counters)
-	for i := 0; i < 1000000; i++ {
-		var key flatByteArrayKey
-		binary.BigEndian.PutUint64(key[:8], uint64(i))
-		binary.BigEndian.PutUint64(key[8:16], uint64(i))
-
-		testMap[string(key[:])] = &types.Counters{
-			BytesRcvd:   uint64(i),
-			BytesSent:   uint64(i),
-			PacketsRcvd: uint64(i),
-			PacketsSent: uint64(i),
-		}
-	}
-
-	b.ReportAllocs()
-	b.ResetTimer()
-
-	checkKey := flatByteArrayKey{}
-
-	for i := 0; i < b.N; i++ {
-		_ = testMap[string(checkKey[:])]
-	}
-}
-
-func BenchmarkStringedByteSliceMapAccess(b *testing.B) {
-
-	testMap := make(map[string]*types.Counters)
-	for i := 0; i < 1000000; i++ {
-		var key = make([]byte, 35)
-		binary.BigEndian.PutUint64(key[:8], uint64(i))
-		binary.BigEndian.PutUint64(key[8:16], uint64(i))
-
-		testMap[string(key)] = &types.Counters{
-			BytesRcvd:   uint64(i),
-			BytesSent:   uint64(i),
-			PacketsRcvd: uint64(i),
-			PacketsSent: uint64(i),
-		}
-	}
-
-	b.ReportAllocs()
-	b.ResetTimer()
-
-	checkKey := make([]byte, 35)
-
-	for i := 0; i < b.N; i++ {
-		_ = testMap[string(checkKey)]
-	}
-}
-
-func BenchmarkHashMapIterator(b *testing.B) {
-
-	testMap := New()
-	for i := 0; i < 100000; i++ {
-		temp := make([]byte, 8)
-		binary.BigEndian.PutUint64(temp, uint64(i))
-		testMap.Set(temp, types.Counters{BytesRcvd: uint64(i), BytesSent: 0, PacketsRcvd: 0, PacketsSent: 0})
-	}
-
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		for it := testMap.Iter(); it.Next(); {
-			_ = it.Key()
-			_ = it.Val()
-		}
-	}
 }
 
 func BenchmarkHashMapAccesses(b *testing.B) {
@@ -258,7 +199,26 @@ func BenchmarkHashMapMisses(b *testing.B) {
 
 }
 
-func BenchmarkHashMapNativeAccesses(b *testing.B) {
+func BenchmarkHashMapIterator(b *testing.B) {
+
+	testMap := New()
+	for i := 0; i < 100000; i++ {
+		temp := make([]byte, 8)
+		binary.BigEndian.PutUint64(temp, uint64(i))
+		testMap.Set(temp, types.Counters{BytesRcvd: uint64(i), BytesSent: 0, PacketsRcvd: 0, PacketsSent: 0})
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		for it := testMap.Iter(); it.Next(); {
+			_ = it.Key()
+			_ = it.Val()
+		}
+	}
+}
+
+func BenchmarkNativeMapAccesses(b *testing.B) {
 
 	testMap := make(map[string]types.Counters)
 	for i := 0; i < 100000; i++ {
@@ -283,7 +243,7 @@ func BenchmarkHashMapNativeAccesses(b *testing.B) {
 	}
 }
 
-func BenchmarkHashMapNativeMisses(b *testing.B) {
+func BenchmarkNativeMapMisses(b *testing.B) {
 
 	testMap := make(map[string]types.Counters)
 	for i := 0; i < 100000; i++ {
@@ -305,5 +265,24 @@ func BenchmarkHashMapNativeMisses(b *testing.B) {
 		ex = exists
 		_ = res
 		_ = ex
+	}
+}
+
+func BenchmarkNativeMapIterator(b *testing.B) {
+
+	testMap := make(map[string]types.Counters)
+	for i := 0; i < 100000; i++ {
+		temp := make([]byte, 8)
+		binary.BigEndian.PutUint64(temp, uint64(i))
+		testMap[string(temp)] = types.Counters{BytesRcvd: uint64(i), BytesSent: 0, PacketsRcvd: 0, PacketsSent: 0}
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		for k, v := range testMap {
+			_ = k
+			_ = v
+		}
 	}
 }

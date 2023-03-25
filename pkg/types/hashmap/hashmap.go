@@ -4,7 +4,15 @@ package hashmap
 
 import (
 	"github.com/zeebo/xxh3"
+
+	_ "unsafe"
 )
+
+// Use the same PRNG as the native map implementation in map.go by linking it
+// directly from runtime
+//
+//go:linkname runtime_fastrand64 runtime.fastrand64
+func runtime_fastrand64() uint64
 
 const (
 	// Maximum number of key/val pairs a bucket can hold.
@@ -57,6 +65,7 @@ type Map struct {
 	keyDataPos int
 
 	nEvacuate int
+	seed      uint64
 }
 
 type bucket struct {
@@ -72,7 +81,7 @@ type bucket struct {
 // will be inserted.
 func NewHint(hint int) *Map {
 	if hint <= 0 {
-		return &Map{keyData: make([]byte, 65536)} // 64kiB is relatively arbitrary (sparse space / allocation amortization)
+		return &Map{keyData: make([]byte, 65536), seed: generateSeed()} // 64kiB is relatively arbitrary (sparse space / allocation amortization)
 	}
 	nBuckets := 1
 	for loadFactor(hint, nBuckets) {
@@ -82,7 +91,7 @@ func NewHint(hint int) *Map {
 
 	// We do not attempt to calculate any space allocation for the keyData and instead let it grow dynamically
 	// in order to avoid overuse / waste of resources
-	return &Map{buckets: buckets, nextOverflow: len(buckets), keyData: make([]byte, 65536)}
+	return &Map{buckets: buckets, nextOverflow: len(buckets), keyData: make([]byte, 65536), seed: generateSeed()}
 }
 
 // Len returns the number of valents in the map
@@ -109,7 +118,7 @@ func (m *Map) Set(key Key, val Val) {
 	if m == nil {
 		panic("Set called on nil map")
 	}
-	hash := xxh3.Hash(key)
+	hash := xxh3.HashSeed(key, m.seed)
 
 	if m.buckets == nil {
 		m.buckets = make([]bucket, 1)
@@ -189,7 +198,7 @@ func (m *Map) SetOrUpdate(key Key, eA, eB, eC, eD uint64) {
 	if m == nil {
 		panic("SetOrUpdate called on nil map")
 	}
-	hash := xxh3.Hash(key)
+	hash := xxh3.HashSeed(key, m.seed)
 
 	if m.buckets == nil {
 		m.buckets = make([]bucket, 1)
@@ -328,7 +337,7 @@ next:
 		}
 		k := b.keys[offi]
 		if checkBucket != noBucket && !m2.sameSizeGrow() {
-			hash := xxh3.Hash(k)
+			hash := xxh3.HashSeed(k, m.seed)
 			if int(hash&m2.bucketMask()) != checkBucket {
 				continue
 			}
@@ -417,7 +426,7 @@ func (m *Map) mapaccessK(key Key) (*Key, *Val) {
 		return nil, nil
 	}
 
-	hash := xxh3.Hash(key)
+	hash := xxh3.HashSeed(key, m.seed)
 	mask := m.bucketMask()
 	b := &m.buckets[int(hash&mask)]
 	if c := m.oldBuckets; c != nil {
@@ -538,7 +547,7 @@ func (m *Map) evacuate(oldBucket int) {
 				}
 				var useY uint8
 				if !m.sameSizeGrow() {
-					hash := xxh3.Hash(b.keys[i])
+					hash := xxh3.HashSeed(b.keys[i], m.seed)
 					if hash&uint64(newBit) != 0 {
 						useY = 1
 					}
@@ -634,4 +643,16 @@ func tooManyOverflowBuckets(nOverflow uint32, nBuckets int) bool {
 
 func isEmpty(x uint8) bool {
 	return x <= emptyOne
+}
+
+func generateSeed() uint64 {
+	var s uint64
+	for {
+		s = runtime_fastrand64()
+		// Ensure the seed isn't zero
+		if s != 0 {
+			break
+		}
+	}
+	return s
 }

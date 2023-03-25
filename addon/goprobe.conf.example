@@ -1,10 +1,12 @@
 {
-  "db_path": "/tmp/goProbe/db",
+  "db": {
+    "path": "/tmp/goProbe/db"
+  },
   "interfaces": {
     "eth0": {
-      "bpf_filter": "not arp and not icmp",
-      "buf_size": 2097152,
-      "promisc": false
+      "promisc": false,
+      "ring_buffer_block_size": 1048576,
+      "ring_buffer_num_blocks": 4
     }
   },
   "logging": {
