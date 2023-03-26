@@ -56,7 +56,7 @@ func Init(version, logLevel, encoding string, opts ...Option) error {
 			a.Key = "ts"
 		case slog.LevelKey:
 			// lowercase the level
-			a.Value = slog.StringValue(strings.ToLower(a.String()))
+			a.Value = slog.StringValue(strings.ToLower(a.Value.String()))
 		case slog.SourceKey:
 			a.Key = "caller"
 
