@@ -8,133 +8,97 @@ package logging
 import (
 	"context"
 	"fmt"
+	"io"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
-	"time"
 
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
-
-	_ "github.com/jsternberg/zap-logfmt"
+	"golang.org/x/exp/slog"
 )
 
 type loggingConfig struct {
-	*zap.Config
+	enableCaller bool
+	output       io.Writer
 }
 
 type Option func(*loggingConfig)
 
-// WithDevelopmentMode enables/disables a logger suitable for DEV environments where
-// stacktraces are added more liberally
-func WithDevelopmentMode(b bool) Option {
+// WithOutput sets the log output
+func WithOutput(w io.Writer) Option {
 	return func(lc *loggingConfig) {
-		lc.Config.Development = b
+		lc.output = w
 	}
 }
 
-// WithStackTraces enables/disables stacktraces logged under the "stacktraces" key
-func WithStackTraces(b bool) Option {
+// WithCaller sets whether the calling source should be logged, since the operation is
+// computationally expensive
+func WithCaller(b bool) Option {
 	return func(lc *loggingConfig) {
-		lc.Config.DisableStacktrace = !b
-	}
-}
-
-// WithOutputPaths sets to which paths level "info" and above shall be sent. Treats "stdout" and "stderr" as
-// special paths
-func WithOutputPaths(paths []string) Option {
-	return func(lc *loggingConfig) {
-		lc.Config.OutputPaths = paths
-	}
-}
-
-// WithErrorPaths sets to which paths level "error" and below shall be sent. Treats "stdout" and "stderr" as
-// special paths
-func WithErrorPaths(paths []string) Option {
-	return func(lc *loggingConfig) {
-		lc.Config.ErrorOutputPaths = paths
+		lc.enableCaller = b
 	}
 }
 
 // Init initializes the global logger. The `encoding` variable sets whether content should
 // be printed for console output or in JSON (for machine consumption)
-func Init(appName, appVersion, logLevel, encoding string, opts ...Option) error {
+func Init(version, logLevel, encoding string, opts ...Option) error {
+	var level = new(slog.Level)
+	err := level.UnmarshalText([]byte(logLevel))
+	if err != nil {
+		return fmt.Errorf("unsupported log level %q: %w", logLevel, err)
+	}
+
+	replaceFunc := func(groups []string, a slog.Attr) slog.Attr {
+		// write time as ts
+		switch a.Key {
+		case slog.TimeKey:
+			a.Key = "ts"
+		case slog.LevelKey:
+			// lowercase the level
+			a.Value = slog.StringValue(strings.ToLower(a.String()))
+		case slog.SourceKey:
+			a.Key = "caller"
+
+			// only returns the pkg name, file and line number
+			dir, file := filepath.Split(a.Value.String())
+			a.Value = slog.StringValue(filepath.Join(filepath.Base(dir), file))
+		}
+		return a
+	}
+
+	cfg := &loggingConfig{
+		enableCaller: true,
+		output:       os.Stdout,
+	}
+	for _, opt := range opts {
+		opt(cfg)
+	}
+
+	hopts := slog.HandlerOptions{
+		Level:       level,
+		AddSource:   cfg.enableCaller,
+		ReplaceAttr: replaceFunc,
+	}
+	var th slog.Handler
 	switch strings.ToLower(encoding) {
-	case "json", "console", "logfmt":
+	case "json":
+		th = hopts.NewJSONHandler(cfg.output)
+	case "logfmt":
+		th = hopts.NewTextHandler(cfg.output)
 	default:
 		return fmt.Errorf("unknown encoding %q", encoding)
 	}
 
-	var level zap.AtomicLevel
-	switch strings.ToLower(logLevel) {
-	case "debug":
-		level = zap.NewAtomicLevelAt(zapcore.DebugLevel)
-	case "info":
-		level = zap.NewAtomicLevelAt(zapcore.InfoLevel)
-	case "warn":
-		level = zap.NewAtomicLevelAt(zapcore.WarnLevel)
-	case "error":
-		level = zap.NewAtomicLevelAt(zapcore.ErrorLevel)
-	case "fatal":
-		level = zap.NewAtomicLevelAt(zapcore.FatalLevel)
-	case "panic":
-		level = zap.NewAtomicLevelAt(zapcore.PanicLevel)
-	default:
-		return fmt.Errorf("unsupported log level %q", logLevel)
-	}
-
-	zapEncoderConfig := zapcore.EncoderConfig{
-		TimeKey:        "ts",
-		LevelKey:       "level",
-		NameKey:        "logger",
-		CallerKey:      "caller",
-		MessageKey:     "msg",
-		StacktraceKey:  "stacktrace",
-		LineEnding:     zapcore.DefaultLineEnding,
-		EncodeLevel:    zapcore.LowercaseLevelEncoder,
-		EncodeTime:     zapcore.ISO8601TimeEncoder,
-		EncodeDuration: zapcore.MillisDurationEncoder,
-		EncodeCaller:   zapcore.ShortCallerEncoder,
-	}
-
-	// registering the encoder is taken care of the by teh zaplogfmt library itself
-	if encoding == "logfmt" {
-		zapEncoderConfig.EncodeTime = func(ts time.Time, encoder zapcore.PrimitiveArrayEncoder) {
-			encoder.AppendString(ts.UTC().Format(time.RFC3339))
-		}
-	}
-
-	cfg := zap.Config{
-		Level: level,
-		InitialFields: map[string]interface{}{
-			"app_name":    appName,
-			"app_version": appVersion,
-		},
-		Encoding:         encoding,
-		EncoderConfig:    zapEncoderConfig,
-		OutputPaths:      []string{"stdout"},
-		ErrorOutputPaths: []string{"stderr"},
-	}
-
-	// apply functional options
-	lcfg := &loggingConfig{Config: &cfg}
-	for _, opt := range opts {
-		opt(lcfg)
-	}
-
-	logger, err := lcfg.Config.Build()
-	if err != nil {
-		return err
-	}
-	_ = zap.ReplaceGlobals(logger)
+	logger := slog.New(th.WithAttrs([]slog.Attr{slog.String("version", version)}))
+	slog.SetDefault(logger)
 
 	return nil
 }
 
-// Logger returns a low allocation logger for performance
-// critical sections
-func Logger() *zap.SugaredLogger {
-	return zap.S()
+// Logger returns a low allocation logger for performance critical sections
+func Logger() *slog.Logger {
+	return slog.Default()
 }
 
 type loggerKeyType int
@@ -204,7 +168,7 @@ func NewContext(ctx context.Context, fields ...interface{}) context.Context {
 }
 
 // WithContext returns a sugared zap logger which has as much context set as possible
-func WithContext(ctx context.Context) *zap.SugaredLogger {
+func WithContext(ctx context.Context) *slog.Logger {
 	if ctx == nil {
 		return Logger()
 	}
