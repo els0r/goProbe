@@ -8,7 +8,9 @@ package logging
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"go.uber.org/zap"
@@ -138,10 +140,25 @@ func Logger() *zap.SugaredLogger {
 type loggerKeyType int
 
 const (
-	loggerFieldsKey loggerKeyType = iota
+	fieldsKey loggerKeyType = iota
 )
 
-type loggerFields map[string]interface{}
+type loggerFields struct {
+	mu     *sync.RWMutex
+	fields map[string]interface{}
+}
+
+func newLoggerFields() loggerFields {
+	return loggerFields{
+		mu:     &sync.RWMutex{},
+		fields: make(map[string]interface{}),
+	}
+}
+
+func getFields(ctx context.Context) (loggerFields, bool) {
+	lf, ok := ctx.Value(fieldsKey).(loggerFields)
+	return lf, ok
+}
 
 // NewContext returns a context that has extra fields added.
 //
@@ -151,7 +168,7 @@ type loggerFields map[string]interface{}
 // The strength of this approach is that labels set in parent context are accessible
 func NewContext(ctx context.Context, fields ...interface{}) context.Context {
 	var (
-		newFields loggerFields
+		newFields loggerFields    = newLoggerFields()
 		logCtx    context.Context = ctx
 	)
 
@@ -164,11 +181,11 @@ func NewContext(ctx context.Context, fields ...interface{}) context.Context {
 		return logCtx
 	}
 
-	lf, ok := ctx.Value(loggerFieldsKey).(loggerFields)
+	lf, ok := getFields(ctx)
 	if ok {
-		newFields = lf
-	} else {
-		newFields = make(loggerFields)
+		lf.mu.RLock()
+		copyMap(lf.fields, newFields.fields)
+		lf.mu.RUnlock()
 	}
 
 	// de-duplicate fields and add any that aren't present in the fields map yet
@@ -181,9 +198,9 @@ func NewContext(ctx context.Context, fields ...interface{}) context.Context {
 		}
 
 		// either the key doesn't exist yet or it is overwritten
-		newFields[keyStr] = fields[i]
+		newFields.fields[keyStr] = fields[i]
 	}
-	return context.WithValue(logCtx, loggerFieldsKey, newFields)
+	return context.WithValue(logCtx, fieldsKey, newFields)
 }
 
 // WithContext returns a sugared zap logger which has as much context set as possible
@@ -191,14 +208,32 @@ func WithContext(ctx context.Context) *zap.SugaredLogger {
 	if ctx == nil {
 		return Logger()
 	}
-	ctxLoggerFields, ok := ctx.Value(loggerFieldsKey).(loggerFields)
+	ctxLoggerFields, ok := getFields(ctx)
 	if ok {
-		// construct the logger
 		var fields []interface{}
-		for k, v := range ctxLoggerFields {
-			fields = append(fields, k, v)
+
+		ctxLoggerFields.mu.RLock()
+
+		// construct the fields for the logger
+		keys := make([]string, len(ctxLoggerFields.fields))
+		i := 0
+		for k := range ctxLoggerFields.fields {
+			keys[i] = k
+			i++
 		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			fields = append(fields, k, ctxLoggerFields.fields[k])
+		}
+		ctxLoggerFields.mu.RUnlock()
+
 		return Logger().With(fields...)
 	}
 	return Logger()
+}
+
+func copyMap(in, out map[string]interface{}) {
+	for k, v := range in {
+		out[k] = v
+	}
 }
