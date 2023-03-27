@@ -68,3 +68,4 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: goprobe_${{ env.RELEASE_VERSION }}_amd64.deb
+          generate_release_notes: true
