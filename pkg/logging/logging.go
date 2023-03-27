@@ -55,8 +55,23 @@ func Init(version, logLevel, encoding string, opts ...Option) error {
 		case slog.TimeKey:
 			a.Key = "ts"
 		case slog.LevelKey:
-			// lowercase the level
-			a.Value = slog.StringValue(strings.ToLower(a.Value.String()))
+			// Handle custom level values
+			level := a.Value.Any().(slog.Level)
+
+			switch {
+			case level < LevelInfo:
+				a.Value = slog.StringValue(debugLevel)
+			case level < LevelWarn:
+				a.Value = slog.StringValue(infoLevel)
+			case level < LevelError:
+				a.Value = slog.StringValue(warnLevel)
+			case level < LevelFatal:
+				a.Value = slog.StringValue(errorLevel)
+			case level < LevelPanic:
+				a.Value = slog.StringValue(fatalLevel)
+			default:
+				a.Value = slog.StringValue(panicLevel)
+			}
 		case slog.SourceKey:
 			a.Key = "caller"
 
@@ -97,8 +112,8 @@ func Init(version, logLevel, encoding string, opts ...Option) error {
 }
 
 // Logger returns a low allocation logger for performance critical sections
-func Logger() *slog.Logger {
-	return slog.Default()
+func Logger() *L {
+	return newL(slog.Default())
 }
 
 type loggerKeyType int
@@ -168,7 +183,7 @@ func NewContext(ctx context.Context, fields ...interface{}) context.Context {
 }
 
 // WithContext returns a sugared zap logger which has as much context set as possible
-func WithContext(ctx context.Context) *slog.Logger {
+func WithContext(ctx context.Context) *L {
 	if ctx == nil {
 		return Logger()
 	}
@@ -191,7 +206,7 @@ func WithContext(ctx context.Context) *slog.Logger {
 		}
 		ctxLoggerFields.mu.RUnlock()
 
-		return Logger().With(fields...)
+		return newL(Logger().Logger.With(fields...))
 	}
 	return Logger()
 }

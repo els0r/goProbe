@@ -2,7 +2,6 @@ package logging
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -40,12 +39,61 @@ func TestLogConcurrent(t *testing.T) {
 
 				f1ctx := NewContext(ctx, "fval", n)
 				l2 := WithContext(f1ctx)
-				l2.Info(fmt.Sprintf("from f%d", n))
+				l2.Infof("f%d", n)
 			}(i, ctx)
 		}
 		wg.Wait()
 
 		logger = WithContext(ctx)
-		logger.Info("after go-routines")
+		logger.Infof("after %d go-routines", numConcurrent)
+	})
+}
+
+type mockExiter struct {
+	t *testing.T
+}
+
+func (m mockExiter) Exit(code int) {
+	m.t.Logf("mocking exit with code: %d", code)
+}
+
+type mockPanicker struct {
+	t *testing.T
+}
+
+func (m mockPanicker) Panic(msg string) {
+	m.t.Logf("mocking panic with message: %s", msg)
+}
+
+func TestCustomLogMessages(t *testing.T) {
+	err := Init("snapshot", "info", "logfmt", WithOutput(&testLogger{t}))
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+
+	t.Run("testformatting", func(t *testing.T) {
+		logger := WithContext(nil)
+		// the next two lines shouldn't show up due to level "info" in init
+		logger.Debug("f", "hello", "world")
+		logger.Debugf("f%d", LevelDebug)
+
+		logger.Info("f", "level_num", LevelInfo)
+		logger.Infof("f%d", LevelInfo)
+		logger.Warn("f", "level_num", LevelWarn)
+		logger.Warnf("f%d", LevelWarn)
+		logger.Error("f", LevelError, "level_num", LevelError)
+		logger.Errorf("f%d", LevelError)
+	})
+
+	t.Run("panic", func(t *testing.T) {
+		logger := WithContext(nil).panicker(mockPanicker{t})
+		logger.Panic("this my dearest friends, is where I leave you", "friends_left", 42)
+		logger.Panicf("this my dearest friends, is where I leave %s", "you")
+	})
+
+	t.Run("fatal", func(t *testing.T) {
+		logger := WithContext(nil).exiter(mockExiter{t})
+		logger.Fatal("this my dearest friends, is where I leave you", "friends_left", 24)
+		logger.Fatalf("this my dearest friends, is where I leave %s", "you")
 	})
 }
