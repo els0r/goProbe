@@ -26,15 +26,18 @@ jobs:
         run: |
           GOOS=linux GOARCH=amd64 go build -a -o goProbe ./cmd/goProbe
           GOOS=linux GOARCH=amd64 go build -a -o goQuery ./cmd/goQuery
+          GOOS=linux GOARCH=amd64 go build -a -o goConvert ./cmd/goConvert
 
       - name: Deploy artifacts
         run: |
           mkdir -p .debpkg/usr/local/bin
           mkdir -p .debpkg/etc/systemd/system
 
-          # Binaries
+          # Binaries / Tarball
           cp goProbe .debpkg/usr/local/bin/goProbe
           cp goQuery .debpkg/usr/local/bin/goQuery
+          cp goConvert .debpkg/usr/local/bin/goConvert
+          tar czf goprobe_${{ env.RELEASE_VERSION }}_debian_amd64.tar.gz goProbe goQuery goConvert
 
           # Config
           cp addon/goprobe.conf.example .debpkg/etc/goprobe.conf.example
@@ -62,10 +65,14 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: Debian Package
-          path: ./goprobe_${{ env.RELEASE_VERSION }}_amd64.deb
+          path: |
+            ./goprobe_${{ env.RELEASE_VERSION }}_amd64.deb
+            ./goprobe_${{ env.RELEASE_VERSION }}_debian_amd64.tar.gz
 
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
-          files: goprobe_${{ env.RELEASE_VERSION }}_amd64.deb
+          files: |
+            goprobe_${{ env.RELEASE_VERSION }}_amd64.deb
+            goprobe_${{ env.RELEASE_VERSION }}_debian_amd64.tar.gz
           generate_release_notes: true
