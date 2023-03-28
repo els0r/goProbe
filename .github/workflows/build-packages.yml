@@ -73,7 +73,8 @@ jobs:
             ./goprobe_${{ env.RELEASE_VERSION }}_debian_amd64.tar.gz
 
   build-rpm:
-    runs-on: fedora-latest
+    runs-on: ubuntu-latest
+    container: fedora:37
     steps:
 
       - name: Set up Go
