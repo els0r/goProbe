@@ -1,9 +1,10 @@
 name: build-packages
 
 on:
-  push:
-    tags:
-      - 'v*.*.*'
+  - push
+#  push:
+#    tags:
+#      - 'v*.*.*'
 
 jobs:
   build-deb:
@@ -69,10 +70,74 @@ jobs:
             ./goprobe_${{ env.RELEASE_VERSION }}_amd64.deb
             ./goprobe_${{ env.RELEASE_VERSION }}_debian_amd64.tar.gz
 
+  build-rpm:
+    runs-on: fedora-latest
+    steps:
+
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: ^1.18
+        id: go
+
+      - name: Set environment
+        run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/v}" >> $GITHUB_ENV
+
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v3
+
+      - name: Build for AMD64
+        run: |
+          GOOS=linux GOARCH=amd64 go build -a -o goProbe ./cmd/goProbe
+          GOOS=linux GOARCH=amd64 go build -a -o goQuery ./cmd/goQuery
+          GOOS=linux GOARCH=amd64 go build -a -o goConvert ./cmd/goConvert
+
+      - name: Deploy artifacts
+        run: |
+          mkdir -p .rpmpkg/usr/local/bin
+          mkdir -p .rpmpkg/etc/systemd/system
+
+          # Binaries / Tarball
+          cp goProbe .rpmpkg/usr/local/bin/goProbe
+          cp goQuery .rpmpkg/usr/local/bin/goQuery
+          cp goConvert .rpmpkg/usr/local/bin/goConvert
+          tar czf goprobe_${{ env.RELEASE_VERSION }}_fedora_x86_64.tar.gz goProbe goQuery goConvert
+
+          # Config
+          cp addon/goprobe.conf.example .rpmpkg/etc/goprobe.conf.example
+          cp addon/goprobe.service .rpmpkg/etc/systemd/system/goprobe.service
+      - uses: jiro4989/build-rpm-action@v2
+        with:
+          package: goprobe
+          package_root: .rpmpkg
+          maintainer: fako1024
+          version: ${{ github.ref }}
+          arch: 'x86_64'
+          desc: 'goProbe Network Traffic Monitoring'
+
+      - name: Store artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: Fedora Package
+          path: |
+            ./goprobe_${{ env.RELEASE_VERSION }}_x86_64.rpm
+            ./goprobe_${{ env.RELEASE_VERSION }}_fedora_x86_64.tar.gz
+
+  release:
+    runs-on: ubuntu-latest
+    needs: [build-deb, build-rpm]
+    steps:
+
+      - uses: actions/download-artifact@v3
+        with:
+          path: downloaded-artifacts
+
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            goprobe_${{ env.RELEASE_VERSION }}_amd64.deb
-            goprobe_${{ env.RELEASE_VERSION }}_debian_amd64.tar.gz
+            downloaded-artifacts/goprobe_${{ env.RELEASE_VERSION }}_amd64.deb
+            downloaded-artifacts/goprobe_${{ env.RELEASE_VERSION }}_debian_amd64.tar.gz
+            downloaded-artifacts/goprobe_${{ env.RELEASE_VERSION }}_x86_64.rpm
+            downloaded-artifacts/goprobe_${{ env.RELEASE_VERSION }}_fedora_x86_64.tar.gz 
           generate_release_notes: true
