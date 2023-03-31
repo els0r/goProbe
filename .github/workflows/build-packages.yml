@@ -128,7 +128,7 @@ jobs:
         with:
           name: Fedora Package
           path: |
-            ./goprobe_${{ env.RELEASE_VERSION }}_x86_64.rpm
+            ./goprobe-${{ env.RELEASE_VERSION }}*x86_64.rpm
             ./goprobe_${{ env.RELEASE_VERSION }}_fedora_x86_64.tar.gz
 
   release:
@@ -140,12 +140,15 @@ jobs:
         with:
           path: downloaded-artifacts
 
+      - name: List artifacts
+        run: ls -al downloaded-artifacts
+
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
           files: |
             downloaded-artifacts/goprobe_${{ env.RELEASE_VERSION }}_amd64.deb
             downloaded-artifacts/goprobe_${{ env.RELEASE_VERSION }}_debian_amd64.tar.gz
-            downloaded-artifacts/goprobe_${{ env.RELEASE_VERSION }}_x86_64.rpm
+            downloaded-artifacts/goprobe-${{ env.RELEASE_VERSION }}*x86_64.rpm
             downloaded-artifacts/goprobe_${{ env.RELEASE_VERSION }}_fedora_x86_64.tar.gz 
           generate_release_notes: true
