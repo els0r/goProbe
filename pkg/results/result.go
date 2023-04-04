@@ -4,7 +4,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/netip"
+	"sort"
+	"strings"
+	"text/tabwriter"
 	"time"
 
 	"github.com/els0r/goProbe/pkg/types"
@@ -16,8 +20,7 @@ var (
 
 // Result bundles the data rows returned and the query meta information
 type Result struct {
-	Status        types.Status `json:"status"`
-	StatusMessage string       `json:"status_message,omitempty"`
+	Status Status `json:"status"`
 
 	Summary Summary `json:"summary"`
 	Query   Query   `json:"query"`
@@ -34,11 +37,61 @@ type Query struct {
 // queried range and the interfaces that were queried
 type Summary struct {
 	Interfaces []string       `json:"interfaces"`
+	Hosts      []string       `json:"hosts"`
 	TimeFirst  time.Time      `json:"time_first"`
 	TimeLast   time.Time      `json:"time_last"`
 	Totals     types.Counters `json:"totals"`
 	Timings    Timings        `json:"timings"`
 	Hits       Hits           `json:"hits"`
+}
+
+type Status struct {
+	Code    types.Status `json:"code"`
+	Message string       `json:"message,omitempty"`
+}
+
+// HostsStatus captures the query status for every host queried
+type HostsStatuses map[string]Status
+
+func (hs HostsStatuses) PrintErrorHosts(w io.Writer) {
+	var errHosts []struct {
+		host string
+		Status
+	}
+
+	for host, status := range hs {
+		if status.Code != types.StatusOK {
+			errHosts = append(errHosts, struct {
+				host string
+				Status
+			}{host: host, Status: status})
+		}
+	}
+
+	if len(errHosts) == 0 {
+		return
+	}
+
+	sort.SliceStable(errHosts, func(i, j int) bool {
+		return errHosts[i].host < errHosts[j].host
+	})
+
+	tw := tabwriter.NewWriter(w, 0, 0, 4, ' ', tabwriter.AlignRight)
+
+	sep := "\t"
+
+	header := []string{"#", "host", "status", "message"}
+	fmtStr := sep + strings.Join([]string{"%d", "%s", "%s", "%s"}, sep) + sep + "\n"
+
+	fmt.Fprintf(w, "Hosts with errors: %d\n\n", len(errHosts))
+
+	fmt.Fprintln(tw, sep+strings.Join(header, sep)+sep)
+	fmt.Fprintln(tw, sep+strings.Repeat(sep, len(header))+sep)
+
+	for i, errHost := range errHosts {
+		fmt.Fprintf(tw, fmtStr, i+1, errHost.host, errHost.Code, errHost.Message)
+	}
+	tw.Flush()
 }
 
 // Timinigs summarizes query runtimes
