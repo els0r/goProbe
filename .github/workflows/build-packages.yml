@@ -64,7 +64,7 @@ jobs:
       - name: Store artifacts
         uses: actions/upload-artifact@v3
         with:
-          name: Debian Package
+          name: Debian
           path: |
             ./goprobe_${{ env.RELEASE_VERSION }}_amd64.deb
             ./goprobe_${{ env.RELEASE_VERSION }}_debian_amd64.tar.gz
@@ -121,7 +121,7 @@ jobs:
       - name: Store artifacts
         uses: actions/upload-artifact@v3
         with:
-          name: Fedora Package
+          name: Fedora
           path: |
             ./goprobe-${{ env.RELEASE_VERSION }}*x86_64.rpm
             ./goprobe_${{ env.RELEASE_VERSION }}_fedora_x86_64.tar.gz
@@ -136,14 +136,14 @@ jobs:
           path: downloaded-artifacts
 
       - name: List artifacts
-        run: ls -al downloaded-artifacts
+        run: find downloaded-artifacts
 
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            downloaded-artifacts/goprobe_${{ env.RELEASE_VERSION }}_amd64.deb
-            downloaded-artifacts/goprobe_${{ env.RELEASE_VERSION }}_debian_amd64.tar.gz
-            downloaded-artifacts/goprobe-${{ env.RELEASE_VERSION }}*x86_64.rpm
-            downloaded-artifacts/goprobe_${{ env.RELEASE_VERSION }}_fedora_x86_64.tar.gz 
+            downloaded-artifacts/Debian/goprobe_${{ env.RELEASE_VERSION }}_amd64.deb
+            downloaded-artifacts/Debian/goprobe_${{ env.RELEASE_VERSION }}_debian_amd64.tar.gz
+            downloaded-artifacts/Fedora/goprobe-${{ env.RELEASE_VERSION }}*x86_64.rpm
+            downloaded-artifacts/Fedora/goprobe_${{ env.RELEASE_VERSION }}_fedora_x86_64.tar.gz 
           generate_release_notes: true
