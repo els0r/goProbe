@@ -1,8 +1,4 @@
 // Package logging supplies a global, structured logger
-//
-// It uses the [zap](https://github.com/uber-go/zap) logging library and its loggers are type
-// `*zap.SugaredLogger` for ease-of-use or `*zap.Logger` for
-// low-allocation logging (better performance)
 package logging
 
 import (
@@ -182,7 +178,7 @@ func NewContext(ctx context.Context, fields ...interface{}) context.Context {
 	return context.WithValue(logCtx, fieldsKey, newFields)
 }
 
-// WithContext returns a sugared zap logger which has as much context set as possible
+// WithContext returns a logger which has as much context set as possible
 func WithContext(ctx context.Context) *L {
 	if ctx == nil {
 		return Logger()

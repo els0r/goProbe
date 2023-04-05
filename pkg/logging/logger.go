@@ -28,6 +28,14 @@ type L struct {
 	*formatter
 }
 
+// With attaches the newly created slog Logger to the formatter as well
+// and returns a new compound logger
+func (l *L) With(args ...interface{}) *L {
+	return newL(l.Logger.With(args...)).
+		exiter(l.formatter.exiter).
+		panicker(l.formatter.panicker)
+}
+
 func newL(logger *slog.Logger) *L {
 	return &L{
 		Logger: logger,

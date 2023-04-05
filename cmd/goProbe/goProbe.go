@@ -60,7 +60,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	appName := filepath.Base(os.Args[0])
 	appVersion := version.GitSHA[0:8]
 
 	if flags.CmdLine.Version {
@@ -103,11 +102,8 @@ func main() {
 	}
 
 	// Initialize logger
-	var logOpts = []logging.Option{
-		logging.WithDevelopmentMode(config.Logging.DevelopmentMode),
-		logging.WithStackTraces(config.Logging.StackTraces),
-	}
-	err = logging.Init(appName, appVersion, config.Logging.Level, config.Logging.Encoding, logOpts...)
+	var logOpts = []logging.Option{}
+	err = logging.Init(appVersion, config.Logging.Level, config.Logging.Encoding, logOpts...)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to initialize logger: %v\n", err)
 		os.Exit(1)

@@ -33,7 +33,7 @@ func (a *API) handleReload(w http.ResponseWriter, r *http.Request) {
 
 	cfg, err := reloadConfig()
 	if err != nil {
-		logger.Error(err)
+		logger.Error(err.Error())
 		if pp {
 			status.Fail(err.Error())
 		} else {

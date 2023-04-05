@@ -387,7 +387,7 @@ func capturing(c *Capture) stateFn {
 				}
 			}
 		case err := <-c.captureErrors:
-			logger.Error(err)
+			logger.Error(err.Error())
 			return inError
 		}
 	}
@@ -440,7 +440,7 @@ func (c *Capture) reset() {
 		if err != nil {
 			// for now, just log. We may want to add some additional logic if the close
 			// didn't work (which it really shouldn't)
-			logger.Error(err)
+			logger.Error(err.Error())
 		}
 	}
 
