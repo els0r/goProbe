@@ -339,7 +339,7 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workDir *gpfile.GPDir, query *Quer
 			// Read the block from the file
 			if blocks[colIdx], err = workDir.ReadBlockAtIndex(colIdx, b); err != nil {
 				blockBroken = true
-				logger.Warnf("[D %s; B %d] Failed to read column %s: %s", workDir, block.Timestamp, types.ColumnFileNames[colIdx], err)
+				logger.With("day", workDir, "block", block.Timestamp, "column", types.ColumnFileNames[colIdx]).Warnf("Failed to read column: %s", err)
 				break
 			}
 		}
@@ -352,25 +352,25 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workDir *gpfile.GPDir, query *Quer
 			if colIdx.IsCounterCol() {
 				if bitpack.Len(blocks[colIdx]) != numEntries {
 					blockBroken = true
-					logger.Warnf("[Bl %d] Incorrect number of entries in file [%s.gpf]. Expected %d, found %d", b, types.ColumnFileNames[colIdx], numEntries, bitpack.Len(blocks[colIdx]))
+					logger.With("block", b, "column", types.ColumnFileNames[colIdx]).Warnf("Incorrect number of entries in column file. Expected %d, found %d", numEntries, bitpack.Len(blocks[colIdx]))
 					break
 				}
 			} else {
 				if types.ColumnSizeofs[colIdx] == types.IPSizeOf {
 					if l != (numEntries-int(numV4Entries))*types.IPv6Width+int(numV4Entries)*types.IPv4Width {
 						blockBroken = true
-						logger.Warnf("[Bl %d] Incorrect number of entries in variable block size file [%s.gpf]. Expected file length %d, have %d", b, types.ColumnFileNames[colIdx], (numEntries-int(numV4Entries))*types.IPv6Width+int(numV4Entries)*types.IPv4Width, l)
+						logger.With("block", b, "column", types.ColumnFileNames[colIdx]).Warnf("Incorrect number of entries in variable block size file. Expected file length %d, have %d", (numEntries-int(numV4Entries))*types.IPv6Width+int(numV4Entries)*types.IPv4Width, l)
 						break
 					}
 				} else {
 					if l/types.ColumnSizeofs[colIdx] != numEntries {
 						blockBroken = true
-						logger.Warnf("[Bl %d] Incorrect number of entries in column [%s.gpf]. Expected %d, found %d", b, types.ColumnFileNames[colIdx], numEntries, l/types.ColumnSizeofs[colIdx])
+						logger.With("block", b, "column", types.ColumnFileNames[colIdx]).Warnf("Incorrect number of entries in column file. Expected %d, found %d", numEntries, l/types.ColumnSizeofs[colIdx])
 						break
 					}
 					if l%types.ColumnSizeofs[colIdx] != 0 {
 						blockBroken = true
-						logger.Warnf("[Bl %d] Entry size does not evenly divide block size in file [%s.gpf]", b, types.ColumnFileNames[colIdx])
+						logger.With("block", b, "column", types.ColumnFileNames[colIdx]).Warn("Entry size does not evenly divide block size in column file")
 						break
 					}
 				}
