@@ -211,11 +211,20 @@ func entrypoint(cmd *cobra.Command, args []string) error {
 	// empty results should be handled here exclusively
 	if len(res) == 0 {
 		res = []*results.Result{
-			{Status: types.StatusEmpty, StatusMessage: results.ErrorNoResults.Error()},
+			{
+				Status: results.Status{
+					Code:    types.StatusEmpty,
+					Message: results.ErrorNoResults.Error(),
+				},
+			},
 		}
 	} else if len(res) > 1 {
 		res = []*results.Result{
-			{Status: types.StatusError, StatusMessage: fmt.Sprintf("unexpected number of results encountered (%d)", len(res))},
+			{
+				Status: results.Status{
+					Code: types.StatusError, Message: fmt.Sprintf("unexpected number of results encountered (%d)", len(res)),
+				},
+			},
 		}
 	}
 
@@ -229,8 +238,8 @@ func entrypoint(cmd *cobra.Command, args []string) error {
 
 	// when running against a local goDB, there should be exactly one result
 	result = res[0]
-	if result.Status != types.StatusOK {
-		fmt.Fprintf(stmt.Output, "Status %q: %s\n", result.Status, result.StatusMessage)
+	if result.Status.Code != types.StatusOK {
+		fmt.Fprintf(stmt.Output, "Status %q: %s\n", result.Status.Code, result.Status.Message)
 		return nil
 	}
 

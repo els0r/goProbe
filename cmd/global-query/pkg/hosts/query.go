@@ -122,14 +122,15 @@ func RunQueries(ctx context.Context, numRunners int, workloads <-chan *QueryWork
 					res, err := wl.Runner.Run(ctx, wl.Stmt)
 					if err != nil {
 						err = fmt.Errorf("failed to run query: %w", err)
-					}
-					if len(res) > 1 {
-						err = fmt.Errorf("unexpected number of results: %d", len(res))
-					}
-					if len(res) == 0 {
-						err = ErrorNoDataReturned
 					} else {
-						wl.Result = &(res[0])
+						if len(res) > 1 {
+							err = fmt.Errorf("unexpected number of results: %d", len(res))
+						}
+						if len(res) == 0 {
+							err = ErrorNoDataReturned
+						} else {
+							wl.Result = &(res[0])
+						}
 					}
 					wl.Err = err
 

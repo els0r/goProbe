@@ -35,13 +35,15 @@ const (
 	queryPath = apiPath + "/_query"
 )
 
+const defaultRequestTimeout = 30 * time.Second
+
 // New creates a new goProbe API client
 func New() *Client {
 	return &Client{
 		client:   http.DefaultClient,
 		scheme:   "http",
 		hostAddr: "localhost:6061",
-		timeout:  30 * time.Second,
+		timeout:  defaultRequestTimeout,
 	}
 }
 
@@ -70,7 +72,9 @@ func (c *Client) LogRequests(b bool) *Client {
 
 // RequestTimeout sets the request timeout
 func (c *Client) RequestTimeout(timeout time.Duration) *Client {
-	c.timeout = timeout
+	if timeout > 0 {
+		c.timeout = timeout
+	}
 	return c
 }
 

@@ -4,4 +4,5 @@ a:
   log: true
 b:
   addr: "192.168.1.1:6061"
-  timeout: 10s
+  timeout: 15s
+  log: true
