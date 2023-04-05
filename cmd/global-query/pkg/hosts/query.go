@@ -73,6 +73,8 @@ func (a *APIClientQuerier) CreateQueryWorkload(ctx context.Context, host string,
 	return qw, nil
 }
 
+// PrepareQueries creates query workloads for all hosts in the host list and returns the channel it sends the
+// workloads on
 func PrepareQueries(ctx context.Context, querier Querier, hostList Hosts, stmt *query.Statement) <-chan *QueryWorkload {
 	workloads := make(chan *QueryWorkload)
 
@@ -97,6 +99,8 @@ var (
 	ErrorNoDataReturned = errors.New("no data returned")
 )
 
+// RunQueries takes query workloads from the workloads channel, runs them, and returns a channel from which
+// the results can be read
 func RunQueries(ctx context.Context, numRunners int, workloads <-chan *QueryWorkload) <-chan *QueryWorkload {
 	out := make(chan *QueryWorkload, numRunners)
 
@@ -122,16 +126,8 @@ func RunQueries(ctx context.Context, numRunners int, workloads <-chan *QueryWork
 					res, err := wl.Runner.Run(ctx, wl.Stmt)
 					if err != nil {
 						err = fmt.Errorf("failed to run query: %w", err)
-					} else {
-						if len(res) > 1 {
-							err = fmt.Errorf("unexpected number of results: %d", len(res))
-						}
-						if len(res) == 0 {
-							err = ErrorNoDataReturned
-						} else {
-							wl.Result = &(res[0])
-						}
 					}
+					wl.Result = res
 					wl.Err = err
 
 					out <- wl
@@ -146,6 +142,8 @@ func RunQueries(ctx context.Context, numRunners int, workloads <-chan *QueryWork
 	return out
 }
 
+// AggregateResults takes finished query workloads from the workloads channel, aggregates the result by merging the rows and summaries,
+// and returns the final result. The `tracker` variable provides information about potential Run failures for individual hosts
 func AggregateResults(ctx context.Context, stmt *query.Statement, workloads <-chan *QueryWorkload) (finalResult *results.Result, tracker results.HostsStatuses) {
 	// aggregation
 	finalResult = &results.Result{

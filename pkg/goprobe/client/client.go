@@ -144,12 +144,12 @@ func (c *Client) newAuthorizedRequest(ctx context.Context, method, path string, 
 }
 
 // Run implements the query.Runner interface
-func (c *Client) Run(ctx context.Context, stmt *query.Statement) ([]results.Result, error) {
+func (c *Client) Run(ctx context.Context, stmt *query.Statement) (*results.Result, error) {
 	return c.Query(ctx, stmt)
 }
 
 // Query runs a query on the API endpoint
-func (c *Client) Query(ctx context.Context, stmt *query.Statement) ([]results.Result, error) {
+func (c *Client) Query(ctx context.Context, stmt *query.Statement) (*results.Result, error) {
 	var buf = new(bytes.Buffer)
 	err := json.NewEncoder(buf).Encode(stmt)
 	if err != nil {
@@ -164,7 +164,7 @@ func (c *Client) Query(ctx context.Context, stmt *query.Statement) ([]results.Re
 		return nil, err
 	}
 
-	var res []results.Result
+	var res *results.Result
 	for {
 		resp, err := c.client.Do(req)
 		if err != nil {

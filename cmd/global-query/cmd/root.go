@@ -226,6 +226,7 @@ func entrypoint(cmd *cobra.Command, args []string) error {
 	}
 
 	// query pipeline setup
+	// sets up a fan-out, fan-in query processing pipeline
 	numRunners := len(hostList)
 
 	finalResult, statusTracker := hosts.AggregateResults(ctx, stmt,

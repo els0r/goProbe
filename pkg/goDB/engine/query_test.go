@@ -48,13 +48,9 @@ func TestEmptyOutput(t *testing.T) {
 				t.Fatalf("execute query: %s", err)
 			}
 
-			if len(res) != 1 {
-				t.Fatalf("expected exactly one result")
-			}
-
-			result := res[0]
-			if result.Status != types.StatusEmpty {
-				t.Fatalf("unexpected status %q: %s", result.Status, result.StatusMessage)
+			result := res
+			if result.Status.Code != types.StatusEmpty {
+				t.Fatalf("unexpected status %q: %s", result.Status.Code, result.Status.Message)
 			}
 		})
 	}

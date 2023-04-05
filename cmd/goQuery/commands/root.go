@@ -208,25 +208,6 @@ func entrypoint(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to execute query %s: %w", stmt, err)
 	}
-	// empty results should be handled here exclusively
-	if len(res) == 0 {
-		res = []*results.Result{
-			{
-				Status: results.Status{
-					Code:    types.StatusEmpty,
-					Message: results.ErrorNoResults.Error(),
-				},
-			},
-		}
-	} else if len(res) > 1 {
-		res = []*results.Result{
-			{
-				Status: results.Status{
-					Code: types.StatusError, Message: fmt.Sprintf("unexpected number of results encountered (%d)", len(res)),
-				},
-			},
-		}
-	}
 
 	// serialize raw results array if json is selected
 	if stmt.Format == "json" {
@@ -237,7 +218,7 @@ func entrypoint(cmd *cobra.Command, args []string) error {
 	}
 
 	// when running against a local goDB, there should be exactly one result
-	result = res[0]
+	result = res
 	if result.Status.Code != types.StatusOK {
 		fmt.Fprintf(stmt.Output, "Status %q: %s\n", result.Status.Code, result.Status.Message)
 		return nil

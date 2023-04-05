@@ -31,9 +31,11 @@ func NewQueryRunner() *QueryRunner {
 }
 
 // Execute runs the query with the provided parameters
-func (qr *QueryRunner) Run(ctx context.Context, stmt *query.Statement) (res []*results.Result, err error) {
+func (qr *QueryRunner) Run(ctx context.Context, stmt *query.Statement) (res *results.Result, err error) {
 	result := &results.Result{
-		Status: types.StatusOK,
+		Status: results.Status{
+			Code: types.StatusOK,
+		},
 		Summary: results.Summary{
 			Timings: results.Timings{
 				// Start timing
@@ -271,12 +273,12 @@ func (qr *QueryRunner) Run(ctx context.Context, stmt *query.Statement) (res []*r
 
 	// set status and error message in case the query returned no results
 	if len(result.Rows) == 0 {
-		result.Status = types.StatusEmpty
-		result.StatusMessage = results.ErrorNoResults.Error()
+		result.Status.Code = types.StatusEmpty
+		result.Status.Message = results.ErrorNoResults.Error()
 	}
 
 	// assign the result
-	res = []*results.Result{result}
+	res = result
 
 	return res, nil
 }

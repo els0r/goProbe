@@ -49,7 +49,7 @@ func (a *API) handleQuery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result := res[0]
+	result := res
 	if stmt.Format == "json" {
 		err = jsoniter.NewEncoder(w).Encode(result)
 		if err != nil {
@@ -60,7 +60,7 @@ func (a *API) handleQuery(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// when running against a local goDB, there should be exactly one result
-	result = res[0]
+	result = res
 
 	statusCode := http.StatusInternalServerError
 	switch result.Status.Code {
