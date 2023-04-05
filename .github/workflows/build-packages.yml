@@ -142,8 +142,8 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            downloaded-artifacts/Debian/goprobe_${{ env.RELEASE_VERSION }}_amd64.deb
-            downloaded-artifacts/Debian/goprobe_${{ env.RELEASE_VERSION }}_debian_amd64.tar.gz
-            downloaded-artifacts/Fedora/goprobe-${{ env.RELEASE_VERSION }}*x86_64.rpm
-            downloaded-artifacts/Fedora/goprobe_${{ env.RELEASE_VERSION }}_fedora_x86_64.tar.gz 
+            downloaded-artifacts/Debian/goprobe*.deb
+            downloaded-artifacts/Debian/goprobe*.tar.gz
+            downloaded-artifacts/Fedora/goprobe*.rpm
+            downloaded-artifacts/Fedora/goprobe*.tar.gz 
           generate_release_notes: true
