@@ -35,7 +35,9 @@ var logger *logging.L
 
 func main() {
 
-	err := logging.Init(version.Short(), "info", "logfmt")
+	err := logging.Init(logging.LevelInfo, logging.EncodingLogfmt,
+		logging.WithVersion(version.Short()),
+	)
 	if err != nil {
 		fmt.Printf("failed to instantiate logger: %s\n", err)
 		os.Exit(1)

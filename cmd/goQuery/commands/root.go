@@ -97,7 +97,8 @@ func init() {
 func initLogger() {
 	// since this is a command line tool, only warnings and errors should be printed and they
 	// shouldn't go to a dedicated file
-	err := logging.Init(version.Short(), "warn", "logfmt",
+	err := logging.Init(logging.LevelWarn, logging.EncodingLogfmt,
+		logging.WithVersion(version.Short()),
 		logging.WithOutput(os.Stderr),
 	)
 	if err != nil {

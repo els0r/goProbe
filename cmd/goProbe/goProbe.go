@@ -102,8 +102,9 @@ func main() {
 	}
 
 	// Initialize logger
-	var logOpts = []logging.Option{}
-	err = logging.Init(appVersion, config.Logging.Level, config.Logging.Encoding, logOpts...)
+	err = logging.Init(logging.LevelFromString(config.Logging.Level), logging.Encoding(config.Logging.Encoding),
+		logging.WithVersion(appVersion),
+	)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to initialize logger: %v\n", err)
 		os.Exit(1)
