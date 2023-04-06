@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"sync"
 	"testing"
@@ -289,4 +290,80 @@ func TestNewContext(t *testing.T) {
 
 	ctx = NewContext(nil, 3, "hello")
 	require.NotNil(t, ctx)
+}
+
+func BenchmarkSimpleLogging(b *testing.B) {
+	err := Init(LevelFromString("info"), EncodingLogfmt, WithOutput(io.Discard))
+	if err != nil {
+		b.Fatalf("failed to set up logger: %s", err)
+	}
+
+	logger := Logger()
+
+	for n := 0; n < b.N; n++ {
+		logger.Info("yeeeeeeeha!")
+	}
+
+	_ = logger
+}
+
+func BenchmarkSimpleLoggingWithoutCaller(b *testing.B) {
+	err := Init(LevelFromString("info"), EncodingLogfmt,
+		WithCaller(false),
+		WithOutput(io.Discard),
+	)
+	if err != nil {
+		b.Fatalf("failed to set up logger: %s", err)
+	}
+
+	logger := Logger()
+
+	for n := 0; n < b.N; n++ {
+		logger.Info("yeeeeeeeha!")
+	}
+
+	_ = logger
+}
+
+func BenchmarkJsonEncoding(b *testing.B) {
+	err := Init(LevelFromString("info"), EncodingJSON, WithOutput(io.Discard))
+	if err != nil {
+		b.Fatalf("failed to set up logger: %s", err)
+	}
+
+	logger := Logger()
+
+	for n := 0; n < b.N; n++ {
+		logger.Info("yeeeeeeeha!")
+	}
+
+	_ = logger
+}
+
+func BenchmarkIgnoredLevel(b *testing.B) {
+	err := Init(LevelFromString("info"), EncodingLogfmt, WithOutput(io.Discard))
+	if err != nil {
+		b.Fatalf("failed to set up logger: %s", err)
+	}
+	logger := Logger()
+
+	for n := 0; n < b.N; n++ {
+		logger.Debug("yeeeeeeeha!")
+	}
+
+	_ = logger
+}
+
+func BenchmarkWithAttributes(b *testing.B) {
+	err := Init(LevelFromString("info"), EncodingLogfmt, WithOutput(io.Discard))
+	if err != nil {
+		b.Fatalf("failed to set up logger: %s", err)
+	}
+	logger := Logger()
+
+	for n := 0; n < b.N; n++ {
+		logger.With("leroy", "jenkins").Info("yeeeeeeeha!")
+	}
+
+	_ = logger
 }
