@@ -48,7 +48,6 @@ func (w *DBWriter) Write(flowmap *hashmap.AggFlowMap, captureMeta CaptureMetadat
 		err = fmt.Errorf("Could not create / open daily directory: %w", err)
 		return err
 	}
-	defer dir.Close()
 
 	data, update = dbData(w.iface, timestamp, flowmap)
 	if err := dir.WriteBlocks(timestamp, gpfile.TrafficMetadata{
@@ -59,9 +58,10 @@ func (w *DBWriter) Write(flowmap *hashmap.AggFlowMap, captureMeta CaptureMetadat
 		return err
 	}
 
-	return err
+	return dir.Close()
 }
 
+// BulkWorkload denotes a set of workloads / writes to perform during WriteBulk()
 type BulkWorkload struct {
 	FlowMap     *hashmap.AggFlowMap
 	CaptureMeta CaptureMetadata
@@ -80,7 +80,6 @@ func (w *DBWriter) WriteBulk(workloads []BulkWorkload, dirTimestamp int64) (err 
 		err = fmt.Errorf("Could not create / open daily directory: %w", err)
 		return err
 	}
-	defer dir.Close()
 
 	for _, workload := range workloads {
 		data, update = dbData(w.iface, workload.Timestamp, workload.FlowMap)
@@ -93,7 +92,7 @@ func (w *DBWriter) WriteBulk(workloads []BulkWorkload, dirTimestamp int64) (err 
 		}
 	}
 
-	return nil
+	return dir.Close()
 }
 
 func dbData(iface string, timestamp int64, aggFlowMap *hashmap.AggFlowMap) ([types.ColIdxCount][]byte, gpfile.Stats) {
