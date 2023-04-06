@@ -38,9 +38,6 @@ func WithExternal() Option { return func(a *Args) { a.External = true } }
 // WithSortAscending sorts rows ascending
 func WithSortAscending() Option { return func(a *Args) { a.SortAscending = true } }
 
-// WithOutput sets the output to (a) file(s) other than stdout
-func WithOutput(o string) Option { return func(a *Args) { a.Output = o } }
-
 // WithList sets the list parameter (only lists interfaces)
 func WithList() Option { return func(a *Args) { a.List = true } }
 

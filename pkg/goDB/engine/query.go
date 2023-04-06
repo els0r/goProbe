@@ -30,8 +30,17 @@ func NewQueryRunner() *QueryRunner {
 	return &QueryRunner{}
 }
 
+func (qr *QueryRunner) Run(ctx context.Context, args *query.Args) (res *results.Result, err error) {
+	stmt, err := args.Prepare()
+	if err != nil {
+		return nil, fmt.Errorf("failed to prepare query statement: %w", err)
+	}
+	return qr.RunStatement(ctx, stmt)
+}
+
 // Execute runs the query with the provided parameters
-func (qr *QueryRunner) Run(ctx context.Context, stmt *query.Statement) (res *results.Result, err error) {
+func (qr *QueryRunner) RunStatement(ctx context.Context, stmt *query.Statement) (res *results.Result, err error) {
+
 	result := &results.Result{
 		Status: results.Status{
 			Code: types.StatusOK,

@@ -144,14 +144,14 @@ func (c *Client) newAuthorizedRequest(ctx context.Context, method, path string, 
 }
 
 // Run implements the query.Runner interface
-func (c *Client) Run(ctx context.Context, stmt *query.Statement) (*results.Result, error) {
-	return c.Query(ctx, stmt)
+func (c *Client) Run(ctx context.Context, args *query.Args) (*results.Result, error) {
+	return c.Query(ctx, args)
 }
 
 // Query runs a query on the API endpoint
-func (c *Client) Query(ctx context.Context, stmt *query.Statement) (*results.Result, error) {
+func (c *Client) Query(ctx context.Context, args *query.Args) (*results.Result, error) {
 	var buf = new(bytes.Buffer)
-	err := json.NewEncoder(buf).Encode(stmt)
+	err := json.NewEncoder(buf).Encode(args)
 	if err != nil {
 		return nil, fmt.Errorf("failed to serialize query statement: %w", err)
 	}

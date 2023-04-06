@@ -22,14 +22,14 @@ const (
 )
 
 type Querier interface {
-	CreateQueryWorkload(ctx context.Context, host string, stmt *query.Statement) (*QueryWorkload, error)
+	CreateQueryWorkload(ctx context.Context, host string, args *query.Args) (*QueryWorkload, error)
 }
 
 type QueryWorkload struct {
 	Host string
-	Stmt *query.Statement
 
 	Runner query.Runner
+	Args   *query.Args
 
 	Result *results.Result
 	Err    error
@@ -58,10 +58,10 @@ func NewAPIClientQuerier(cfgPath string) (*APIClientQuerier, error) {
 	return a, nil
 }
 
-func (a *APIClientQuerier) CreateQueryWorkload(ctx context.Context, host string, stmt *query.Statement) (*QueryWorkload, error) {
+func (a *APIClientQuerier) CreateQueryWorkload(ctx context.Context, host string, args *query.Args) (*QueryWorkload, error) {
 	qw := &QueryWorkload{
 		Host: host,
-		Stmt: stmt,
+		Args: args,
 	}
 	// create the api client runner by looking up the endpoint config for the given host
 	cfg, exists := a.apiEndpoints[host]
@@ -75,14 +75,14 @@ func (a *APIClientQuerier) CreateQueryWorkload(ctx context.Context, host string,
 
 // PrepareQueries creates query workloads for all hosts in the host list and returns the channel it sends the
 // workloads on
-func PrepareQueries(ctx context.Context, querier Querier, hostList Hosts, stmt *query.Statement) <-chan *QueryWorkload {
+func PrepareQueries(ctx context.Context, querier Querier, hostList Hosts, args *query.Args) <-chan *QueryWorkload {
 	workloads := make(chan *QueryWorkload)
 
 	go func(ctx context.Context) {
 		logger := logging.WithContext(ctx)
 
 		for _, host := range hostList {
-			wl, err := querier.CreateQueryWorkload(ctx, host, stmt)
+			wl, err := querier.CreateQueryWorkload(ctx, host, args)
 			if err != nil {
 				logger.With("host", host).Errorf("failed to create workload: %v", err)
 				continue
@@ -123,7 +123,7 @@ func RunQueries(ctx context.Context, numRunners int, workloads <-chan *QueryWork
 					logger := logging.WithContext(ctx)
 					logger.Debugf("running query")
 
-					res, err := wl.Runner.Run(ctx, wl.Stmt)
+					res, err := wl.Runner.Run(ctx, wl.Args)
 					if err != nil {
 						err = fmt.Errorf("failed to run query: %w", err)
 					}

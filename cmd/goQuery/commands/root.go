@@ -79,7 +79,6 @@ func init() {
 	rootCmd.Flags().StringVarP(&cmdLineParams.Format, "format", "e", query.DefaultFormat, helpMap["Format"])
 	rootCmd.Flags().StringVarP(&cmdLineParams.Ifaces, "ifaces", "i", "", helpMap["Ifaces"])
 	rootCmd.Flags().StringVarP(&cmdLineParams.Last, "last", "l", time.Now().Format(time.ANSIC), "Show flows no later than --last. See help for --first for more info\n")
-	rootCmd.Flags().StringVarP(&cmdLineParams.Output, "set-output", "o", "", helpMap["Output"])
 	rootCmd.Flags().StringVarP(&argsLocation, "stored-query", "", "", "Load JSON serialized query arguments from disk and run them")
 	rootCmd.Flags().StringVarP(&cmdLineParams.SortBy, "sort-by", "s", query.DefaultSortBy, helpMap["SortBy"])
 
@@ -204,7 +203,7 @@ func entrypoint(cmd *cobra.Command, args []string) error {
 	// run the query
 	var result *results.Result
 
-	res, err := engine.NewQueryRunner().Run(ctx, stmt)
+	res, err := engine.NewQueryRunner().Run(ctx, &queryArgs)
 	if err != nil {
 		return fmt.Errorf("failed to execute query %s: %w", stmt, err)
 	}

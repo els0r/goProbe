@@ -131,14 +131,9 @@ func benchQuery(b *testing.B, buf *bytes.Buffer, flushFunc func(), iface, queryS
 	for n := 0; n < b.N; n++ {
 
 		// prepare query
-		args := query.NewArgs(queryStr, iface, opts...)
-		stmt, err := args.Prepare(buf)
-		if err != nil {
-			b.Fatalf("error during prepare: ` + "%%s" + `", err)
-		}
-
+		args := query.NewArgs(queryStr, iface, opts...).AddOutputs(buf)
 		// run query
-		_, err = NewQueryRunner().Run(context.Background(), stmt)
+		_, err := NewQueryRunner().Run(context.Background(), args)
 		if err != nil {
 			b.Fatalf("error during execute: ` + "%%s" + `", err)
 		}

@@ -22,35 +22,36 @@ func (a *API) handleQuery(w http.ResponseWriter, r *http.Request) {
 	callerString := fmt.Sprintf("goProbe-API/%s", a.Version())
 
 	// the default format is json
-	var stmt = new(query.Statement)
-	stmt.Format = "json"
-	stmt.Output = w
+	args := query.NewArgs("", "")
+	args.Format = "json"
 
 	// make sure that the caller variable is always the API
-	stmt.Caller = callerString
+	args.Caller = callerString
 
 	// parse additional arguments from command line
-	if err := json.Parse(r, stmt); err != nil {
-		a.errorHandler.Handle(ctx, w, http.StatusBadRequest, err, "failed to decode query statement")
+	if err := json.Parse(r, &args); err != nil {
+		a.errorHandler.Handle(ctx, w, http.StatusBadRequest, err, "failed to decode query args")
 		return
 	}
+
+	args = args.AddOutputs(w)
 
 	// do not allow the caller to set more than the default
 	// maximum memory use. The API should not be an entrypoint
 	// to exhaust host resources
-	if stmt.MaxMemPct > query.DefaultMaxMemPct {
-		stmt.MaxMemPct = query.DefaultMaxMemPct
+	if args.MaxMemPct > query.DefaultMaxMemPct {
+		args.MaxMemPct = query.DefaultMaxMemPct
 	}
 
 	// execute query
-	res, err := engine.NewQueryRunner().Run(ctx, stmt)
+	res, err := engine.NewQueryRunner().Run(ctx, args)
 	if err != nil {
 		a.errorHandler.Handle(ctx, w, http.StatusInternalServerError, err, "failed to execute query")
 		return
 	}
 
 	result := res
-	if stmt.Format == "json" {
+	if args.Format == "json" {
 		err = jsoniter.NewEncoder(w).Encode(result)
 		if err != nil {
 			a.errorHandler.Handle(ctx, w, http.StatusInternalServerError, err, "failed to JSON serialize results")
@@ -65,6 +66,8 @@ func (a *API) handleQuery(w http.ResponseWriter, r *http.Request) {
 	statusCode := http.StatusInternalServerError
 	switch result.Status.Code {
 	case types.StatusOK:
+		stmt, _ := args.Prepare() // we don't need to check the error for prepare here. The query was run already
+
 		err = stmt.Print(ctx, result)
 		if err != nil {
 			a.errorHandler.Handle(ctx, w, http.StatusInternalServerError, err, "failed to write results")

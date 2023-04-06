@@ -305,8 +305,6 @@ different when the packets were captured.
 `,
 	"ResolveTimeout": `Timeout in seconds for (reverse) DNS lookups
 `,
-	"Output": `Set the output to path (file). By default, results are written to stdout.
-`,
 	"MaxMemPct": `Maximum amount of memory that can be used for the query
 (in % of available memory)
 `,

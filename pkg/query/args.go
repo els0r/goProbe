@@ -30,11 +30,7 @@ func NewArgs(query, ifaces string, opts ...Option) *Args {
 		MaxMemPct:  DefaultMaxMemPct,
 		NumResults: DefaultNumResults,
 		Out:        DefaultOut,
-		DNSResolution: struct {
-			Enabled bool
-			Timeout time.Duration
-			MaxRows int
-		}{
+		DNSResolution: DNSResolution{
 			MaxRows: DefaultResolveRows,
 			Timeout: DefaultResolveTimeout,
 		},
@@ -51,53 +47,64 @@ func NewArgs(query, ifaces string, opts ...Option) *Args {
 // Args bundles the command line/HTTP parameters required to prepare a query statement
 type Args struct {
 	// required
-	Query  string // the query type such as sip,dip
-	Ifaces string
+	Query  string `json:"query" yaml:"query"` // the query type such as sip,dip
+	Ifaces string `json:"ifaces" yaml:"ifaces"`
 
-	Hostname string
-	HostID   uint
+	Hostname string `json:"hostname,omitempty" yaml:"hostname,omitempty"`
+	HostID   uint   `json:"host_id,omitempty" yaml:"host_id,omitempty"`
 
 	// data filtering
-	Condition string
+	Condition string `json:"condition,omitempty" yaml:"condition,omitempty"`
 
 	// counter addition
-	In  bool
-	Out bool
-	Sum bool
+	In  bool `json:"in,omitempty" yaml:"in,omitempty"`
+	Out bool `json:"out,omitempty" yaml:"out,omitempty"`
+	Sum bool `json:"sum,omitempty" yaml:"sum,omitempty"`
 
 	// time selection
-	First string
-	Last  string
+	First string `json:"first,omitempty" yaml:"first,omitempty"`
+	Last  string `json:"last,omitempty" yaml:"last,omitempty"`
 
 	// formatting
-	Format        string
-	SortBy        string // column to sort by (packets or bytes)
-	NumResults    int
-	External      bool
-	SortAscending bool
-	Output        string
+	Format        string `json:"format,omitempty" yaml:"format,omitempty"`
+	SortBy        string `json:"sort_by,omitempty" yaml:"sort_by,omitempty"` // column to sort by (packets or bytes)
+	NumResults    int    `json:"num_results,omitempty" yaml:"num_results,omitempty"`
+	SortAscending bool   `json:"sort_ascending,omitempty" yaml:"sort_ascending,omitempty"`
+	External      bool   `json:"external,omitempty" yaml:"external,omitempty"`
 
 	// do-and-exit arguments
-	List    bool
-	Version bool
+	List    bool `json:"list,omitempty" yaml:"list,omitempty"`
+	Version bool `json:"version,omitempty" yaml:"version,omitempty"`
 
 	// resolution
-	DNSResolution struct {
-		Enabled bool
-		Timeout time.Duration
-		MaxRows int
-	}
+	DNSResolution DNSResolution `json:"dns_resolution,omitempty" yaml:"dns_resolution,omitempty"`
 
 	// file system
-	DBPath    string
-	MaxMemPct int
-	LowMem    bool
+	DBPath    string `json:"db_path" yaml:"db_path"`
+	MaxMemPct int    `json:"max_mem_pct,omitempty" yaml:"max_mem_pct,omitempty"`
+	LowMem    bool   `json:"low_mem,omitempty" yaml:"low_mem,omitempty"`
 
 	// stores who produced these args (caller)
-	Caller string
+	Caller string `json:"caller,omitempty" yaml:"caller,omitempty"`
 
 	// query is aborted after timeout expires
-	QueryTimeout time.Duration
+	QueryTimeout time.Duration `json:"query_timeout,omitempty" yaml:"query_timeout,omitempty"`
+
+	// outputs is unexported
+	outputs []io.Writer
+}
+
+type DNSResolution struct {
+	Enabled bool          `json:"enabled" yaml:"enabled"`
+	Timeout time.Duration `json:"timeout,omitempty" yaml:"timeout,omitempty"`
+	MaxRows int           `json:"max_rows,omitempty" yaml:"max_rows,omitempty"`
+}
+
+// AddOutputs allows more control over to which outputs the
+// query results are written
+func (a *Args) AddOutputs(outputs ...io.Writer) *Args {
+	a.outputs = outputs
+	return a
 }
 
 // String formats aruguments in human-readable form
@@ -255,22 +262,8 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 	}
 	s.NumResults = a.NumResults
 
-	// handling of the output field
-	if a.Output != "" {
-		// check if multiple files were specified
-		outputs := strings.Split(a.Output, ",")
-
-		for _, output := range outputs {
-			// open file to write to
-			queryFile, err := os.OpenFile(output, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0755)
-			if err != nil {
-				return s, fmt.Errorf("failed to open output file: %s", err)
-			}
-			writers = append(writers, queryFile)
-		}
-	}
-
 	// fan-out query results in case multiple writers were supplied
+	writers = append(writers, a.outputs...)
 	if len(writers) > 0 {
 		s.Output = io.MultiWriter(writers...)
 	}

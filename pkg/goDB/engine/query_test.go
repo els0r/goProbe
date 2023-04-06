@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"io"
 	"testing"
 
 	"github.com/els0r/goProbe/pkg/query"
@@ -36,14 +37,8 @@ func TestEmptyOutput(t *testing.T) {
 			// create args
 			a := query.NewArgs(test.query, test.iface, test.opts...)
 
-			// prepare query
-			stmt, err := a.Prepare()
-			if err != nil {
-				t.Fatalf("prepare query: %s; args: %s", err, a)
-			}
-
 			// execute query
-			res, err := NewQueryRunner().Run(context.Background(), stmt)
+			res, err := NewQueryRunner().Run(context.Background(), a)
 			if err != nil {
 				t.Fatalf("execute query: %s", err)
 			}
@@ -78,19 +73,13 @@ func TestSimpleQuery(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			// append output capture (to dev null, since this test only checks if the query
 			// can be exectued
-			test.opts = append(test.opts, query.WithOutput("/dev/null"))
+			test.opts = append(test.opts)
 
 			// create args
-			a := query.NewArgs(test.query, test.iface, test.opts...)
-
-			// prepare query
-			stmt, err := a.Prepare()
-			if err != nil {
-				t.Fatalf("prepare query: %s", err)
-			}
+			a := query.NewArgs(test.query, test.iface, test.opts...).AddOutputs(io.Discard)
 
 			// execute query
-			_, err = NewQueryRunner().Run(context.Background(), stmt)
+			_, err := NewQueryRunner().Run(context.Background(), a)
 			if err != nil {
 				t.Fatalf("execute query: %s", err)
 			}
