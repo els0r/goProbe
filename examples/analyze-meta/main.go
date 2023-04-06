@@ -41,7 +41,7 @@ func main() {
 	if err != nil {
 		logger.Fatalf("failed to extract timestamp: %s", err)
 	}
-	baseDirPath := filepath.Dir(dirPath)
+	baseDirPath := filepath.Dir(filepath.Dir(filepath.Dir(dirPath)))
 
 	gpDir := gpfile.NewDir(baseDirPath, timestamp, gpfile.ModeRead)
 	if err := gpDir.Open(); err != nil {

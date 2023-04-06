@@ -103,7 +103,7 @@ func (k Key) IsIPv4() bool {
 	if len(k) == KeyWidthIPv6 {
 		return false
 	}
-	panic("key is neither ipv4 nor ipv6")
+	panic(fmt.Sprintf("key `%v` is neither ipv4 nor ipv6", []byte(k)))
 }
 
 // Len returns the length of the key (e.g. to determine the IP version)
@@ -230,7 +230,7 @@ func (e ExtendedKey) IsIPv4() bool {
 	if len(e) == KeyWidthIPv6 || len(e) == KeyWidthIPv6+TimestampWidth {
 		return false
 	}
-	panic("extended key is neither ipv4 nor ipv6")
+	panic(fmt.Sprintf("extended key `%v` is neither ipv4 nor ipv6", []byte(e)))
 }
 
 // PutSip stores a source IP in the key
