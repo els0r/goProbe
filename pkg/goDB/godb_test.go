@@ -26,7 +26,7 @@ type testCase struct {
 	iface                string
 	queryStart, queryEnd time.Time
 	numWorkers           int
-	nExpectedWorkloads   int
+	nExpectedWorkloads   uint64
 	nExpectedDays        int
 
 	expectedErr error
@@ -202,7 +202,7 @@ func testWorkload(t *testing.T, c testCase, dryRun bool) {
 
 		if dryRun {
 			var numDirs int
-			for i := 0; i < workMgr.nWorkloads; i++ {
+			for i := uint64(0); i < workMgr.nWorkloads; i++ {
 				workload := <-workMgr.workloadChan
 				numDirs += len(workload.workDirs)
 			}
@@ -215,7 +215,7 @@ func testWorkload(t *testing.T, c testCase, dryRun bool) {
 			close(mapChan)
 
 			// Perform sanity checks on aggregated data
-			require.Equal(t, c.nExpectedWorkloads, len(mapChan))
+			require.Equal(t, int(c.nExpectedWorkloads), len(mapChan))
 			for aggMap := range mapChan {
 				require.Equal(t, testNv4, aggMap.V4Map.Len())
 				require.Equal(t, testNv6, aggMap.V6Map.Len())
