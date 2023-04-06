@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/els0r/goProbe/pkg/goDB/encoder"
@@ -59,8 +60,8 @@ type DBWorkManager struct {
 
 	tFirstCovered, tLastCovered int64
 
-	nWorkloads          int
-	nWorkloadsProcessed int
+	nWorkloads          uint64
+	nWorkloadsProcessed uint64
 	memPool             gpfile.MemPoolGCable
 }
 
@@ -81,7 +82,7 @@ func NewDBWorkManager(dbpath string, iface string, numProcessingUnits int) (*DBW
 }
 
 // GetNumWorkers returns the number of workloads available to the outside world for loop bounds etc.
-func (w *DBWorkManager) GetNumWorkers() int {
+func (w *DBWorkManager) GetNumWorkers() uint64 {
 	return w.nWorkloads
 }
 
@@ -253,7 +254,7 @@ func (w *DBWorkManager) grabAndProcessWorkload(ctx context.Context, wg *sync.Wai
 			select {
 			case <-ctx.Done():
 				// query was cancelled, exit
-				logger.Infof("Query cancelled (workload %d / %d)...", w.nWorkloadsProcessed, w.nWorkloads)
+				logger.Infof("Query cancelled (workload %d / %d)...", atomic.LoadUint64(&w.nWorkloadsProcessed), w.nWorkloads)
 				return
 			case workload, chanOpen = <-workloadChan:
 				if chanOpen {
@@ -270,14 +271,13 @@ func (w *DBWorkManager) grabAndProcessWorkload(ctx context.Context, wg *sync.Wai
 					}
 
 					// Workload is counted, but we only add it to the final result if we got any entries
-					w.nWorkloadsProcessed++
+					atomic.AddUint64(&w.nWorkloadsProcessed, 1)
 					if resultMap.Len() > 0 {
 						mapChan <- resultMap
 					}
 				}
 			}
 		}
-		return
 	}()
 }
 
