@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 	"sync"
 
 	"golang.org/x/exp/slog"
@@ -17,7 +16,13 @@ import (
 type loggingConfig struct {
 	enableCaller bool
 	output       io.Writer
+	initialAttr  map[string]slog.Attr
 }
+
+const (
+	initKeyName    = "name"
+	initKeyVersion = "version"
+)
 
 type Option func(*loggingConfig)
 
@@ -36,13 +41,25 @@ func WithCaller(b bool) Option {
 	}
 }
 
+// WithName sets the application name as initial field present in all log messages
+func WithName(name string) Option {
+	return func(lc *loggingConfig) {
+		lc.initialAttr[initKeyName] = slog.String(initKeyName, name)
+	}
+}
+
+// WithVersion sets the application version as initial field present in all log messages
+func WithVersion(version string) Option {
+	return func(lc *loggingConfig) {
+		lc.initialAttr[initKeyVersion] = slog.String(initKeyVersion, version)
+	}
+}
+
 // Init initializes the global logger. The `encoding` variable sets whether content should
 // be printed for console output or in JSON (for machine consumption)
-func Init(version, logLevel, encoding string, opts ...Option) error {
-	var level = new(slog.Level)
-	err := level.UnmarshalText([]byte(logLevel))
-	if err != nil {
-		return fmt.Errorf("unsupported log level %q: %w", logLevel, err)
+func Init(level slog.Level, encoding Encoding, opts ...Option) error {
+	if level == LevelUnknown {
+		return fmt.Errorf("unknown log level provided: %s", level)
 	}
 
 	replaceFunc := func(groups []string, a slog.Attr) slog.Attr {
@@ -81,6 +98,7 @@ func Init(version, logLevel, encoding string, opts ...Option) error {
 	cfg := &loggingConfig{
 		enableCaller: true,
 		output:       os.Stdout,
+		initialAttr:  make(map[string]slog.Attr),
 	}
 	for _, opt := range opts {
 		opt(cfg)
@@ -92,20 +110,46 @@ func Init(version, logLevel, encoding string, opts ...Option) error {
 		ReplaceAttr: replaceFunc,
 	}
 	var th slog.Handler
-	switch strings.ToLower(encoding) {
-	case "json":
+	switch encoding {
+	case EncodingJSON:
 		th = hopts.NewJSONHandler(cfg.output)
-	case "logfmt":
+	case EncodingLogfmt:
 		th = hopts.NewTextHandler(cfg.output)
 	default:
 		return fmt.Errorf("unknown encoding %q", encoding)
 	}
 
-	logger := slog.New(th.WithAttrs([]slog.Attr{slog.String("version", version)}))
+	// set package var addSource to the configured option
+	var once sync.Once
+	once.Do(func() {
+		addSource = cfg.enableCaller
+	})
+
+	// assign initial attributes if there are any
+	var attrs []slog.Attr
+	for _, attr := range cfg.initialAttr {
+		attrs = append(attrs, attr)
+	}
+
+	if len(attrs) > 0 {
+		sort.SliceStable(attrs, func(i, j int) bool {
+			return attrs[i].Key < attrs[j].Key
+		})
+		th = th.WithAttrs(attrs)
+	}
+
+	logger := slog.New(th)
 	slog.SetDefault(logger)
 
 	return nil
 }
+
+// addSource tracks whether the caller should be determined in the functions from
+// the formatter.
+// TODO: It feels dirty, and probably is, but the Handler() interface
+// unfortunately doesn't expose this info after it's been initialized with its options,
+// so this will have to do for now
+var addSource bool
 
 // Logger returns a low allocation logger for performance critical sections
 func Logger() *L {
@@ -143,17 +187,16 @@ func getFields(ctx context.Context) (loggerFields, bool) {
 // The strength of this approach is that labels set in parent context are accessible
 func NewContext(ctx context.Context, fields ...interface{}) context.Context {
 	var (
-		newFields loggerFields    = newLoggerFields()
-		logCtx    context.Context = ctx
+		newFields loggerFields = newLoggerFields()
 	)
 
 	if ctx == nil {
-		logCtx = context.Background()
+		ctx = context.Background()
 	}
 
 	// ignore malformed fields as the logging implementation wouldn't accept them anyhow
 	if !(len(fields) >= 2 && (len(fields)%2 == 0)) {
-		return logCtx
+		return ctx
 	}
 
 	lf, ok := getFields(ctx)
@@ -175,7 +218,7 @@ func NewContext(ctx context.Context, fields ...interface{}) context.Context {
 		// either the key doesn't exist yet or it is overwritten
 		newFields.fields[keyStr] = fields[i]
 	}
-	return context.WithValue(logCtx, fieldsKey, newFields)
+	return context.WithValue(ctx, fieldsKey, newFields)
 }
 
 // WithContext returns a logger which has as much context set as possible
@@ -202,7 +245,7 @@ func WithContext(ctx context.Context) *L {
 		}
 		ctxLoggerFields.mu.RUnlock()
 
-		return newL(Logger().Logger.With(fields...))
+		return Logger().With(fields...)
 	}
 	return Logger()
 }

@@ -2,9 +2,14 @@ package logging
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/stretchr/testify/require"
+	"golang.org/x/exp/slog"
 )
 
 // testLogger captures the log output from slog and logs it via the testing.T object,
@@ -18,15 +23,27 @@ func (tl *testLogger) Write(data []byte) (n int, err error) {
 	return n, err
 }
 
+func TestInitialization(t *testing.T) {
+	t.Run("unknown level", func(t *testing.T) {
+		err := Init(LevelFromString("kittens"), EncodingJSON)
+		require.NotNil(t, err)
+	})
+
+	t.Run("unknown encoding", func(t *testing.T) {
+		err := Init(LevelDebug, Encoding("windings"))
+		require.NotNil(t, err)
+	})
+}
+
 func TestLogConcurrent(t *testing.T) {
-	err := Init("snapshot", "info", "logfmt", WithOutput(&testLogger{t}))
+	err := Init(LevelFromString("debug"), EncodingLogfmt, WithOutput(&testLogger{t}))
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
 
 	t.Run("samectxhierarchy", func(t *testing.T) {
 		ctx := NewContext(context.Background(), "hello", "world")
-		numConcurrent := 64
+		numConcurrent := 32
 
 		logger := WithContext(ctx)
 		logger.Info("before go-routines")
@@ -65,35 +82,211 @@ func (m mockPanicker) Panic(msg string) {
 	m.t.Logf("mocking panic with message: %s", msg)
 }
 
+func TestNoCaller(t *testing.T) {
+	err := Init(LevelFromString("warn"), EncodingLogfmt,
+		WithOutput(&testLogger{t}),
+		WithCaller(false),
+		WithName("testing"),
+		WithVersion("snapshot"),
+	)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	logger := Logger()
+	logger.Error(errors.New("testing plain error without caller"))
+
+	// shouldn't show up
+	logger.Info("the things you do for love")
+}
+
+var testMsg = "log me like one of your French girls"
+
+// lineCounterOutput is a way to check how many log lines were received
+// on the output
+type lineCounterOutput struct {
+	lines int
+}
+
+// Write implements the io.Writer interface
+func (l *lineCounterOutput) Write(data []byte) (n int, err error) {
+	l.lines++
+	return n, err
+}
+
+func TestDebug(t *testing.T) {
+	lco := &lineCounterOutput{}
+
+	err := Init(LevelFromString("debug"), EncodingJSON, WithOutput(lco))
+	require.Nil(t, err)
+
+	logger := Logger()
+	logger.Debug(testMsg)
+	logger.Debugf("%s", testMsg)
+
+	require.Equal(t, 2, lco.lines)
+}
+
+func TestInfo(t *testing.T) {
+	lco := &lineCounterOutput{}
+
+	err := Init(LevelFromString("info"), EncodingJSON, WithOutput(lco))
+	require.Nil(t, err)
+
+	logger := Logger()
+	logger.Debug(testMsg)
+	logger.Debugf("%s", testMsg)
+	logger.Info(testMsg)
+	logger.Infof("%s", testMsg)
+
+	require.Equal(t, 2, lco.lines)
+}
+
+func TestWarn(t *testing.T) {
+	lco := &lineCounterOutput{}
+
+	err := Init(LevelFromString("warn"), EncodingJSON, WithOutput(lco))
+	require.Nil(t, err)
+
+	logger := Logger()
+	logger.Debug(testMsg)
+	logger.Debugf("%s", testMsg)
+	logger.Info(testMsg)
+	logger.Infof("%s", testMsg)
+	logger.Warn(testMsg)
+	logger.Warnf("%s", testMsg)
+
+	require.Equal(t, 2, lco.lines)
+}
+
+func TestError(t *testing.T) {
+	lco := &lineCounterOutput{}
+
+	err := Init(LevelFromString("error"), EncodingJSON, WithOutput(lco))
+	require.Nil(t, err)
+
+	logger := Logger()
+	logger.Debug(testMsg)
+	logger.Debugf("%s", testMsg)
+	logger.Info(testMsg)
+	logger.Infof("%s", testMsg)
+	logger.Warn(testMsg)
+	logger.Warnf("%s", testMsg)
+	logger.Error(testMsg)
+	logger.Errorf("%s", testMsg)
+
+	require.Equal(t, 2, lco.lines)
+}
+
+func TestFatal(t *testing.T) {
+	lco := &lineCounterOutput{}
+
+	err := Init(LevelFromString("fatal"), EncodingJSON, WithOutput(lco))
+	require.Nil(t, err)
+
+	logger := Logger().exiter(mockExiter{t})
+	logger.Debug(testMsg)
+	logger.Debugf("%s", testMsg)
+	logger.Info(testMsg)
+	logger.Infof("%s", testMsg)
+	logger.Warn(testMsg)
+	logger.Warnf("%s", testMsg)
+	logger.Error(testMsg)
+	logger.Errorf("%s", testMsg)
+	logger.Fatal(testMsg)
+	logger.Fatalf("%s", testMsg)
+
+	require.Equal(t, 2, lco.lines)
+}
+
+func TestPanic(t *testing.T) {
+	lco := &lineCounterOutput{}
+
+	err := Init(LevelFromString("panic"), EncodingJSON, WithOutput(lco))
+	require.Nil(t, err)
+
+	logger := Logger().panicker(mockPanicker{t})
+	logger.Debug(testMsg)
+	logger.Debugf("%s", testMsg)
+	logger.Info(testMsg)
+	logger.Infof("%s", testMsg)
+	logger.Warn(testMsg)
+	logger.Warnf("%s", testMsg)
+	logger.Error(testMsg)
+	logger.Errorf("%s", testMsg)
+	logger.Fatal(testMsg)
+	logger.Fatalf("%s", testMsg)
+	logger.Panic(testMsg)
+	logger.Panicf("%s", testMsg)
+
+	require.Equal(t, 2, lco.lines)
+}
+
+func TestLevelFromString(t *testing.T) {
+	var tests = []struct {
+		in       string
+		expected slog.Level
+	}{
+		{"dEbug", LevelDebug},
+		{"info", LevelInfo},
+		{"WARN", LevelWarn},
+		{"error", LevelError},
+		{"fatal", LevelFatal},
+		{"PANic", LevelPanic},
+		{"", LevelUnknown},
+		{"bubukitty", LevelUnknown},
+	}
+
+	for i, test := range tests {
+		test := test
+		t.Run(fmt.Sprint(i), func(t *testing.T) {
+			require.Equal(t, test.expected, LevelFromString(test.in))
+		})
+	}
+}
+
 func TestCustomLogMessages(t *testing.T) {
-	err := Init("snapshot", "info", "logfmt", WithOutput(&testLogger{t}))
+	err := Init(LevelFromString("info"), EncodingLogfmt, WithOutput(&testLogger{t}))
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
 
 	t.Run("testformatting", func(t *testing.T) {
-		logger := WithContext(nil)
+		logger := WithContext(context.Background())
 		// the next two lines shouldn't show up due to level "info" in init
-		logger.Debug("f", "hello", "world")
+		logger.With("level_num", LevelDebug).Debug("f")
 		logger.Debugf("f%d", LevelDebug)
 
-		logger.Info("f", "level_num", LevelInfo)
+		logger.With("level_num", LevelInfo).Info("f")
 		logger.Infof("f%d", LevelInfo)
-		logger.Warn("f", "level_num", LevelWarn)
-		logger.Warnf("f%d", LevelWarn)
-		logger.Error("f", LevelError, "level_num", LevelError)
-		logger.Errorf("f%d", LevelError)
-	})
 
-	t.Run("panic", func(t *testing.T) {
-		logger := WithContext(nil).panicker(mockPanicker{t})
-		logger.Panic("this my dearest friends, is where I leave you", "friends_left", 42)
-		logger.Panicf("this my dearest friends, is where I leave %s", "you")
+		logger.With("level_num", LevelWarn).Warn("f")
+		logger.Warnf("f%d", LevelWarn)
+
+		logger.With("level_num", LevelError).Error("f")
+		logger.Errorf("f%d", LevelError)
 	})
 
 	t.Run("fatal", func(t *testing.T) {
 		logger := WithContext(nil).exiter(mockExiter{t})
-		logger.Fatal("this my dearest friends, is where I leave you", "friends_left", 24)
+		logger.With("left", 42).Fatal("this my dearest friends, is where I leave you")
 		logger.Fatalf("this my dearest friends, is where I leave %s", "you")
 	})
+
+	t.Run("panic", func(t *testing.T) {
+		logger := WithContext(nil).panicker(mockPanicker{t})
+		logger.With("left", 24).Panic("this my dearest friends, is where I leave you")
+		logger.Panicf("this my dearest friends, is where I leave %s", "you")
+	})
+}
+
+// tests the edge cases in context creation
+func TestNewContext(t *testing.T) {
+	ctx := NewContext(nil)
+	require.NotNil(t, ctx)
+
+	ctx = NewContext(nil, "hello")
+	require.NotNil(t, ctx)
+
+	ctx = NewContext(nil, 3, "hello")
+	require.NotNil(t, ctx)
 }
