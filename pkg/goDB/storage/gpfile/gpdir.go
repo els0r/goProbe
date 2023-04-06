@@ -88,7 +88,8 @@ func newMetadata() *Metadata {
 	}
 	for i := 0; i < int(types.ColIdxCount); i++ {
 		m.BlockMetadata[i] = &storage.BlockHeader{
-			BlockList: make([]storage.BlockAtTime, 0),
+			CurrentOffset: 0,
+			BlockList:     make([]storage.BlockAtTime, 0),
 		}
 	}
 	return &m
