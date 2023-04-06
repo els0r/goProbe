@@ -16,7 +16,7 @@ import (
 
 func TestPanicDuringWrite(t *testing.T) {
 
-	// Create a temporary file (in the destinantion directory to avoid moving accross the FS barrier)
+	// Setup a temporary directory for the test DB
 	tempDir, err := os.MkdirTemp(os.TempDir(), "dbwrite_test")
 	require.Nil(t, err)
 	defer require.Nil(t, os.RemoveAll(tempDir))
