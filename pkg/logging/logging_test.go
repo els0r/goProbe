@@ -292,14 +292,19 @@ func TestNewContext(t *testing.T) {
 	require.NotNil(t, ctx)
 }
 
-func BenchmarkSimpleLogging(b *testing.B) {
-	err := Init(LevelFromString("info"), EncodingLogfmt, WithOutput(io.Discard))
+func BenchmarkSimpleLoggingWithCaller(b *testing.B) {
+	err := Init(LevelFromString("info"), EncodingLogfmt,
+		WithCaller(true),
+		WithOutput(io.Discard),
+	)
 	if err != nil {
 		b.Fatalf("failed to set up logger: %s", err)
 	}
 
 	logger := Logger()
 
+	b.ReportAllocs()
+	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
 		logger.Info("yeeeeeeeha!")
 	}
@@ -318,6 +323,8 @@ func BenchmarkSimpleLoggingWithoutCaller(b *testing.B) {
 
 	logger := Logger()
 
+	b.ReportAllocs()
+	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
 		logger.Info("yeeeeeeeha!")
 	}
@@ -333,6 +340,8 @@ func BenchmarkJsonEncoding(b *testing.B) {
 
 	logger := Logger()
 
+	b.ReportAllocs()
+	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
 		logger.Info("yeeeeeeeha!")
 	}
@@ -347,6 +356,8 @@ func BenchmarkIgnoredLevel(b *testing.B) {
 	}
 	logger := Logger()
 
+	b.ReportAllocs()
+	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
 		logger.Debug("yeeeeeeeha!")
 	}
@@ -361,6 +372,8 @@ func BenchmarkWithAttributes(b *testing.B) {
 	}
 	logger := Logger()
 
+	b.ReportAllocs()
+	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
 		logger.With("leroy", "jenkins").Info("yeeeeeeeha!")
 	}
