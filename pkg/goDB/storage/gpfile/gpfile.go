@@ -304,7 +304,7 @@ func (g *GPFile) open(flags int) (err error) {
 		// Ensure that the file is loaded at the position of the last known successful write
 		// The bufio.Writer will honor that position, even after a Reset()
 		if _, err = g.file.Seek(g.header.CurrentOffset, 0); err != nil {
-			return
+			return fmt.Errorf("seek to %d failed: %w", g.header.CurrentOffset, err)
 		}
 		g.fileWriteBuffer = bufio.NewWriter(g.file)
 	}
