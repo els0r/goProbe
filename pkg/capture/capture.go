@@ -424,6 +424,12 @@ func closing(c *Capture) stateFn {
 	close(c.cmdChan)
 	c.closed = true
 
+	// free resources of the capture handle
+	if err := c.captureHandle.Free(); err != nil {
+		logging.WithContext(c.ctx).Errorf("failed to free capture resources: %s", err)
+	}
+	c.captureHandle = nil
+
 	// exit the state machine
 	return nil
 }
@@ -526,16 +532,13 @@ func (c *Capture) process() {
 		default:
 			err := c.capturePacket(pkt)
 			if err != nil {
-				if errors.Is(err, capture.ErrCaptureUnblock) {
+				if errors.Is(err, capture.ErrCaptureUnblock) { // capture unblocked (e.g. during rotation)
 					continue
 				}
 				if errors.Is(err, capture.ErrCaptureStopped) { // capture stopped gracefully
-					if fErr := c.captureHandle.Free(); fErr != nil {
-						logger.Errorf("failed to free capture resources: %s", fErr)
-					}
-					c.captureHandle = nil
 					return
 				}
+
 				c.captureErrors <- err
 				return
 			}
