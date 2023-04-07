@@ -30,6 +30,7 @@ func NewQueryRunner() *QueryRunner {
 	return &QueryRunner{}
 }
 
+// Run
 func (qr *QueryRunner) Run(ctx context.Context, args *query.Args) (res *results.Result, err error) {
 	stmt, err := args.Prepare()
 	if err != nil {
@@ -38,20 +39,10 @@ func (qr *QueryRunner) Run(ctx context.Context, args *query.Args) (res *results.
 	return qr.RunStatement(ctx, stmt)
 }
 
-// Execute runs the query with the provided parameters
 func (qr *QueryRunner) RunStatement(ctx context.Context, stmt *query.Statement) (res *results.Result, err error) {
+	result := results.New()
+	result.Start()
 
-	result := &results.Result{
-		Status: results.Status{
-			Code: types.StatusOK,
-		},
-		Summary: results.Summary{
-			Timings: results.Timings{
-				// Start timing
-				QueryStart: time.Now(),
-			},
-		},
-	}
 	// cross-check parameters
 	if len(stmt.Ifaces) == 0 {
 		return res, fmt.Errorf("no interfaces provided")
@@ -94,6 +85,9 @@ func (qr *QueryRunner) RunStatement(ctx context.Context, stmt *query.Statement) 
 		return nil, fmt.Errorf("failed to get system hostname: %w", err)
 	}
 	hostID := info.GetHostID(stmt.DBPath)
+
+	// assign the hostname to the list of hosts handled in this query. Here, the only one
+	result.Summary.Hosts = []string{hostname}
 
 	// start ticker to check memory consumption every second
 	heapWatchCtx, cancelHeapWatch := context.WithCancel(ctx)
@@ -271,7 +265,7 @@ func (qr *QueryRunner) RunStatement(ctx context.Context, stmt *query.Statement) 
 	results.By(stmt.SortBy, stmt.Direction, stmt.SortAscending).Sort(rs)
 
 	// stop timing everything related to the query and store the hits
-	result.Summary.Timings.QueryDuration = time.Since(result.Summary.Timings.QueryStart)
+	result.End()
 	result.Summary.Hits.Total = len(rs)
 
 	if stmt.NumResults < len(rs) {

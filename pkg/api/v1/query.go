@@ -43,6 +43,9 @@ func (a *API) handleQuery(w http.ResponseWriter, r *http.Request) {
 		args.MaxMemPct = query.DefaultMaxMemPct
 	}
 
+	// make sure the DB path is set to the path goProbe writes to
+	args.DBPath = a.dbPath
+
 	// execute query
 	res, err := engine.NewQueryRunner().Run(ctx, args)
 	if err != nil {

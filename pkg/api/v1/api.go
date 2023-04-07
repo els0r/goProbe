@@ -28,6 +28,13 @@ func WithDiscoveryConfigUpdate(update chan *discovery.Config) Option {
 	}
 }
 
+// WithDBPath sets the DB path
+func WithDBPath(path string) Option {
+	return func(a *API) {
+		a.dbPath = path
+	}
+}
+
 // API holds access to goProbe's internal capture routines
 type API struct {
 	captureManager  *capture.Manager
@@ -35,6 +42,7 @@ type API struct {
 
 	discoveryConfigUpdate chan *discovery.Config
 	errorHandler          errors.Handler
+	dbPath                string
 }
 
 // New creates a new API

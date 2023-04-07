@@ -50,6 +50,32 @@ type Status struct {
 	Message string       `json:"message,omitempty"`
 }
 
+func New() *Result {
+	return &Result{
+		Status: Status{
+			Code: types.StatusOK,
+		},
+	}
+}
+
+func (r *Result) Start() {
+	r.Summary = Summary{
+		Timings: Timings{
+			QueryStart: time.Now(),
+		},
+	}
+}
+
+func (r *Result) End() {
+	r.Summary.Timings.QueryDuration = time.Since(r.Summary.Timings.QueryStart)
+	if len(r.Rows) == 0 {
+		r.Status = Status{
+			Code:    types.StatusEmpty,
+			Message: ErrorNoResults.Error(),
+		}
+	}
+}
+
 // HostsStatus captures the query status for every host queried
 type HostsStatuses map[string]Status
 
@@ -219,7 +245,7 @@ type MergeableAttributes struct {
 }
 
 // RowsMap is an aggregated representation of a Rows list
-type RowsMap map[MergeableAttributes]*types.Counters
+type RowsMap map[MergeableAttributes]types.Counters
 
 // MergeRows aggregates Rows by use of the RowsMap rm, which is modified
 // in the process
@@ -227,9 +253,9 @@ func (rm RowsMap) MergeRows(r Rows) {
 	for _, res := range r {
 		counters, exists := rm[MergeableAttributes{res.Labels, res.Attributes}]
 		if exists {
-			*counters = counters.Add(res.Counters)
+			rm[MergeableAttributes{res.Labels, res.Attributes}] = counters.Add(res.Counters)
 		} else {
-			rm[MergeableAttributes{res.Labels, res.Attributes}] = &res.Counters
+			rm[MergeableAttributes{res.Labels, res.Attributes}] = res.Counters
 		}
 	}
 }
@@ -239,7 +265,7 @@ func (rm RowsMap) MergeRowsMap(om RowsMap) {
 	for oma, oc := range om {
 		counters, exists := rm[oma]
 		if exists {
-			*counters = counters.Add(*oc)
+			rm[oma] = counters.Add(oc)
 		} else {
 			rm[oma] = oc
 		}
@@ -267,7 +293,7 @@ func (rm RowsMap) ToRows() Rows {
 		r[i] = Row{
 			Labels:     ma.Labels,
 			Attributes: ma.Attributes,
-			Counters:   *c,
+			Counters:   c,
 		}
 		i++
 	}

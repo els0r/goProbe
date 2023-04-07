@@ -145,11 +145,21 @@ func (c *Client) newAuthorizedRequest(ctx context.Context, method, path string, 
 
 // Run implements the query.Runner interface
 func (c *Client) Run(ctx context.Context, args *query.Args) (*results.Result, error) {
-	return c.Query(ctx, args)
+	// use a copy of the arguments, since some fields are modified by the client
+	argsQuery := *args
+	return c.Query(ctx, &argsQuery)
 }
 
 // Query runs a query on the API endpoint
 func (c *Client) Query(ctx context.Context, args *query.Args) (*results.Result, error) {
+	// whatever happens, the results are expected to be returned in json
+	args.Format = "json"
+
+	// we need more results before truncating
+	if args.NumResults < query.DefaultNumResults {
+		args.NumResults = query.DefaultNumResults
+	}
+
 	var buf = new(bytes.Buffer)
 	err := json.NewEncoder(buf).Encode(args)
 	if err != nil {
@@ -164,7 +174,7 @@ func (c *Client) Query(ctx context.Context, args *query.Args) (*results.Result, 
 		return nil, err
 	}
 
-	var res *results.Result
+	var res = new(results.Result)
 	for {
 		resp, err := c.client.Do(req)
 		if err != nil {

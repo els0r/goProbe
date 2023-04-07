@@ -211,7 +211,7 @@ func entrypoint(cmd *cobra.Command, args []string) error {
 	// log the query
 	qlogger := logger.With("hosts", hostList)
 
-	b, err := json.Marshal(stmt)
+	b, err := json.Marshal(queryArgs)
 	if err == nil {
 		qlogger = qlogger.With("query", string(b))
 	}
@@ -233,6 +233,14 @@ func entrypoint(cmd *cobra.Command, args []string) error {
 			hosts.PrepareQueries(ctx, querier, hostList, &queryArgs),
 		),
 	)
+
+	// truncate results based on the limit
+	finalResult.End()
+
+	if queryArgs.NumResults < len(finalResult.Rows) {
+		finalResult.Rows = finalResult.Rows[:queryArgs.NumResults]
+	}
+	finalResult.Summary.Hits.Displayed = len(finalResult.Rows)
 
 	// serialize raw result if json is selected
 	if stmt.Format == "json" {

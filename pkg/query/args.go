@@ -80,7 +80,7 @@ type Args struct {
 	DNSResolution DNSResolution `json:"dns_resolution,omitempty" yaml:"dns_resolution,omitempty"`
 
 	// file system
-	DBPath    string `json:"db_path" yaml:"db_path"`
+	DBPath    string `json:"db_path,omitempty" yaml:"db_path,omitempty"`
 	MaxMemPct int    `json:"max_mem_pct,omitempty" yaml:"max_mem_pct,omitempty"`
 	LowMem    bool   `json:"low_mem,omitempty" yaml:"low_mem,omitempty"`
 

@@ -162,7 +162,7 @@ func main() {
 	// configure api server
 	var (
 		server     *api.Server
-		apiOptions []api.Option
+		apiOptions = []api.Option{api.WithDBPath(config.DB.Path)}
 	)
 
 	if config.API.Metrics {
@@ -184,7 +184,6 @@ func main() {
 		discoveryConfig       *discovery.Config
 	)
 	if config.API.Discovery != nil {
-
 		var clientOpts []discovery.Option
 		if config.API.Discovery.SkipVerify {
 			clientOpts = append(clientOpts, discovery.WithAllowSelfSignedCerts())

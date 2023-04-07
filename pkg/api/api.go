@@ -53,6 +53,8 @@ type Server struct {
 
 	// discovery config update
 	discoveryConfigUpdate chan *discovery.Config
+
+	dbPath string
 }
 
 // Keys allows for quick key validation
@@ -92,7 +94,6 @@ func getMetrics(w http.ResponseWriter, r *http.Request) {
 
 // New creates a base router for goProbe's APIs and provides the metrics export out of the box
 func New(port string, manager *capture.Manager, handler *writeout.Handler, opts ...Option) (*Server, error) {
-
 	s := &Server{
 		root:                  "/",
 		keys:                  make(map[string]struct{}),
@@ -122,6 +123,7 @@ func New(port string, manager *capture.Manager, handler *writeout.Handler, opts 
 	v1Options := []v1.Option{
 		// inject standard error handler
 		v1.WithErrorHandler(errors.NewStandardHandler()),
+		v1.WithDBPath(s.dbPath),
 	}
 	if s.discoveryConfigUpdate != nil {
 		v1Options = append(v1Options, v1.WithDiscoveryConfigUpdate(s.discoveryConfigUpdate))

@@ -146,24 +146,19 @@ func RunQueries(ctx context.Context, numRunners int, workloads <-chan *QueryWork
 // and returns the final result. The `tracker` variable provides information about potential Run failures for individual hosts
 func AggregateResults(ctx context.Context, stmt *query.Statement, workloads <-chan *QueryWorkload) (finalResult *results.Result, tracker results.HostsStatuses) {
 	// aggregation
-	finalResult = &results.Result{
-		Status: results.Status{
-			Code: types.StatusOK,
-		},
-	}
-	tracker = make(results.HostsStatuses)
+	finalResult = results.New()
+	finalResult.Start()
 
-	var rowMap results.RowsMap
+	tracker = make(results.HostsStatuses)
+	var rowMap = make(results.RowsMap)
 
 	logger := logging.WithContext(ctx)
 
 	defer func() {
-		if len(finalResult.Rows) > 0 {
+		if len(rowMap) > 0 {
 			finalResult.Rows = rowMap.ToRowsSorted(results.By(stmt.SortBy, stmt.Direction, stmt.SortAscending))
-		} else {
-			finalResult.Status.Code = types.StatusEmpty
-			finalResult.Status.Message = results.ErrorNoResults.Error()
 		}
+		finalResult.End()
 	}()
 
 	for {
@@ -190,7 +185,9 @@ func AggregateResults(ctx context.Context, stmt *query.Statement, workloads <-ch
 
 			rowMap.MergeRows(res.Rows)
 
-			finalResult.Summary.Totals.Add(res.Summary.Totals)
+			finalResult.Summary.TimeFirst = res.Summary.TimeFirst
+			finalResult.Summary.TimeLast = res.Summary.TimeLast
+			finalResult.Summary.Totals = finalResult.Summary.Totals.Add(res.Summary.Totals)
 			finalResult.Summary.Hits.Total = len(rowMap)
 		}
 	}
