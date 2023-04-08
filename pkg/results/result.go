@@ -74,6 +74,8 @@ func (r *Result) End() {
 			Message: ErrorNoResults.Error(),
 		}
 	}
+	sort.Strings(r.Summary.Hosts)
+	sort.Strings(r.Summary.Interfaces)
 }
 
 // HostsStatus captures the query status for every host queried

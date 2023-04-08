@@ -152,6 +152,10 @@ func AggregateResults(ctx context.Context, stmt *query.Statement, workloads <-ch
 	tracker = make(results.HostsStatuses)
 	var rowMap = make(results.RowsMap)
 
+	// tracker maps for meta info
+	var ifaceMap = make(map[string]struct{})
+	var hostMap = make(map[string]struct{})
+
 	logger := logging.WithContext(ctx)
 
 	defer func() {
@@ -183,8 +187,30 @@ func AggregateResults(ctx context.Context, stmt *query.Statement, workloads <-ch
 			res := hq.Result
 			tracker[hq.Host] = res.Status
 
+			// merges the traffic data
 			rowMap.MergeRows(res.Rows)
 
+			// merges the metadata
+			for _, iface := range res.Summary.Interfaces {
+				ifaceMap[iface] = struct{}{}
+			}
+			var ifaces = make([]string, 0, len(ifaceMap))
+			for iface := range ifaceMap {
+				ifaces = append(ifaces, iface)
+			}
+
+			for _, host := range res.Summary.Hosts {
+				hostMap[host] = struct{}{}
+			}
+			var hosts = make([]string, 0, len(hostMap))
+			for host := range hostMap {
+				hosts = append(hosts, host)
+			}
+
+			finalResult.Summary.Hosts = hosts
+			finalResult.Summary.Interfaces = ifaces
+
+			finalResult.Query = res.Query
 			finalResult.Summary.TimeFirst = res.Summary.TimeFirst
 			finalResult.Summary.TimeLast = res.Summary.TimeLast
 			finalResult.Summary.Totals = finalResult.Summary.Totals.Add(res.Summary.Totals)
