@@ -60,7 +60,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	appVersion := version.GitSHA[0:8]
+	appVersion := version.Short()
 
 	if flags.CmdLine.Version {
 		fmt.Printf("goProbe\n%s", version.Version())
