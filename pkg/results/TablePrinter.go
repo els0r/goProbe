@@ -384,20 +384,12 @@ func NewCSVTablePrinter(b basePrinter) *CSVTablePrinter {
 		make([]string, 0, len(b.cols)),
 	}
 
-	headers := [CountOutcol]string{
-		"time",
-		"hostname",
-		"hostid",
-		"iface",
-		"sip",
-		"dip",
-		"dport",
-		"proto",
+	headers := append(types.AllColumns(), []string{
 		"packets", "%", "data vol.", "%",
 		"packets", "%", "data vol.", "%",
 		"packets", "%", "data vol.", "%",
 		"packets received", "packets sent", "%", "data vol. received", "data vol. sent", "%",
-	}
+	}...)
 
 	for _, col := range c.cols {
 		c.fields = append(c.fields, headers[col])
@@ -559,20 +551,12 @@ func NewTextTablePrinter(b basePrinter, numFlows int, resolveTimeout time.Durati
 	header1[OutcolBothBytesRcvd] = "bytes"
 	header1[OutcolBothBytesSent] = "bytes"
 
-	var header2 = [CountOutcol]string{
-		"time",
-		"hostname",
-		"hostid",
-		"iface",
-		"sip",
-		"dip",
-		"dport",
-		"proto",
+	var header2 = append(types.AllColumns(), []string{
 		"in", "%", "in", "%",
 		"out", "%", "out", "%",
 		"in+out", "%", "in+out", "%",
 		"in", "out", "%", "in", "out", "%",
-	}
+	}...)
 
 	for _, col := range t.cols {
 		fmt.Fprint(t.writer, header1[col])

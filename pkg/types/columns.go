@@ -199,6 +199,31 @@ func NewAttribute(name string) (Attribute, error) {
 	}
 }
 
+func AllColumns() []string {
+	return []string{"time", "hostname", "hostid", "iface", "sip", "dip", "dport", "proto"}
+}
+
+// ToAttribueNames translates query abbreviations into the attributes they hold
+func ToAttributeNames(queryType string) []string {
+	switch queryType {
+	case "talk_conv":
+		return []string{"sip", "dip"}
+	case "talk_src":
+		return []string{"sip"}
+	case "talk_dst":
+		return []string{"dip"}
+	case "apps_port":
+		return []string{"dport", "proto"}
+	case "agg_talk_port":
+		return []string{"sip", "dip", "dport", "proto"}
+	case "raw":
+		return AllColumns()
+	}
+	// We didn't match any of the preset query types, so we are dealing with
+	// a comma separated list of attribute names.
+	return strings.Split(queryType, ",")
+}
+
 // ParseQueryType parses the given query type into a list of attributes.
 // The returned list is guaranteed to have no duplicates.
 // A valid query type can either be a comma-separated list of
@@ -210,28 +235,7 @@ func NewAttribute(name string) (Attribute, error) {
 // 'raw', or if it is explicitly mentioned in a list of attribute
 // names.
 func ParseQueryType(queryType string) (attributes []Attribute, selector LabelSelector, err error) {
-	switch queryType {
-	case "talk_conv":
-		return []Attribute{SipAttribute{}, DipAttribute{}}, LabelSelector{}, nil
-	case "talk_src":
-		return []Attribute{SipAttribute{}}, LabelSelector{}, nil
-	case "talk_dst":
-		return []Attribute{DipAttribute{}}, LabelSelector{}, nil
-	case "apps_port":
-		return []Attribute{DportAttribute{}, ProtoAttribute{}}, LabelSelector{}, nil
-	case "agg_talk_port":
-		return []Attribute{SipAttribute{}, DipAttribute{}, DportAttribute{}, ProtoAttribute{}}, LabelSelector{}, nil
-	case "raw":
-		return []Attribute{SipAttribute{}, DipAttribute{}, DportAttribute{}, ProtoAttribute{}}, LabelSelector{
-			Timestamp: true,
-			Iface:     true,
-			Hostname:  true,
-			HostID:    true,
-		}, nil
-	}
-	// We didn't match any of the preset query types, so we are dealing with
-	// a comma separated list of attribute names.
-	attributeNames := strings.Split(queryType, ",")
+	attributeNames := ToAttributeNames(queryType)
 	attributeSet := make(map[string]struct{})
 	for _, attributeName := range attributeNames {
 		switch attributeName {
