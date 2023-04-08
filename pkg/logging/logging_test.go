@@ -331,9 +331,8 @@ func TestNewContext(t *testing.T) {
 	require.NotNil(t, ctx)
 }
 
-func BenchmarkSimpleLoggingWithCaller(b *testing.B) {
+func BenchmarkSimpleLogging(b *testing.B) {
 	err := Init(LevelFromString("info"), EncodingLogfmt,
-		WithCaller(true),
 		WithOutput(io.Discard),
 	)
 	if err != nil {
@@ -351,9 +350,9 @@ func BenchmarkSimpleLoggingWithCaller(b *testing.B) {
 	_ = logger
 }
 
-func BenchmarkSimpleLoggingWithoutCaller(b *testing.B) {
+func BenchmarkSimpleLoggingWithCaller(b *testing.B) {
 	err := Init(LevelFromString("info"), EncodingLogfmt,
-		WithCaller(false),
+		WithCaller(true),
 		WithOutput(io.Discard),
 	)
 	if err != nil {
@@ -415,6 +414,56 @@ func BenchmarkWithAttributes(b *testing.B) {
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
 		logger.With("leroy", "jenkins").Info("yeeeeeeeha!")
+	}
+
+	_ = logger
+}
+
+func BenchmarkSplitLevelHandler(b *testing.B) {
+	err := Init(LevelFromString("info"), EncodingLogfmt, WithOutput(io.Discard), WithErrorOutput(io.Discard))
+	if err != nil {
+		b.Fatalf("failed to set up logger: %s", err)
+	}
+	logger := Logger()
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for n := 0; n < b.N; n++ {
+		logger.Error("oh nooooo!")
+	}
+
+	_ = logger
+}
+
+func BenchmarkSplitLevelHandlerWithCaller(b *testing.B) {
+	err := Init(LevelFromString("info"), EncodingLogfmt, WithOutput(io.Discard), WithErrorOutput(io.Discard),
+		WithCaller(true),
+	)
+	if err != nil {
+		b.Fatalf("failed to set up logger: %s", err)
+	}
+	logger := Logger()
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for n := 0; n < b.N; n++ {
+		logger.Error("oh nooooo!")
+	}
+
+	_ = logger
+}
+
+func BenchmarkSplitLevelHandlerWithAttr(b *testing.B) {
+	err := Init(LevelFromString("info"), EncodingLogfmt, WithOutput(io.Discard), WithErrorOutput(io.Discard))
+	if err != nil {
+		b.Fatalf("failed to set up logger: %s", err)
+	}
+	logger := Logger()
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for n := 0; n < b.N; n++ {
+		logger.With("leroy", "jenkins").Error("oh nooooo!")
 	}
 
 	_ = logger
