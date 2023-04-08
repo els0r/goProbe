@@ -35,7 +35,7 @@ func WithOutput(w io.Writer) Option {
 }
 
 // WithErrorOutput sets the log output for level Error, Fatal and Panic. For the rest,
-// the default output or the output set by `WithOutput` is chosen
+// the default output os.Stdout or the output set by `WithOutput` is chosen
 func WithErrorOutput(w io.Writer) Option {
 	return func(lc *loggingConfig) {
 		lc.errsOutput = w

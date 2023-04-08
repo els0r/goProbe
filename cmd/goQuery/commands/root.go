@@ -99,7 +99,8 @@ func initLogger() {
 	// shouldn't go to a dedicated file
 	err := logging.Init(logging.LevelWarn, logging.EncodingLogfmt,
 		logging.WithVersion(version.Short()),
-		logging.WithOutput(os.Stderr),
+		logging.WithOutput(os.Stdout),
+		logging.WithErrorOutput(os.Stderr),
 	)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to initialize logger: %v\n", err)
