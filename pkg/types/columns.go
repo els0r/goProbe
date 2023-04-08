@@ -209,20 +209,25 @@ func NewAttribute(name string) (Attribute, error) {
 // attribute list.) The time attribute is present for the query type
 // 'raw', or if it is explicitly mentioned in a list of attribute
 // names.
-func ParseQueryType(queryType string) (attributes []Attribute, hasAttrTime, hasAttrIface bool, err error) {
+func ParseQueryType(queryType string) (attributes []Attribute, selector LabelSelector, err error) {
 	switch queryType {
 	case "talk_conv":
-		return []Attribute{SipAttribute{}, DipAttribute{}}, false, false, nil
+		return []Attribute{SipAttribute{}, DipAttribute{}}, LabelSelector{}, nil
 	case "talk_src":
-		return []Attribute{SipAttribute{}}, false, false, nil
+		return []Attribute{SipAttribute{}}, LabelSelector{}, nil
 	case "talk_dst":
-		return []Attribute{DipAttribute{}}, false, false, nil
+		return []Attribute{DipAttribute{}}, LabelSelector{}, nil
 	case "apps_port":
-		return []Attribute{DportAttribute{}, ProtoAttribute{}}, false, false, nil
+		return []Attribute{DportAttribute{}, ProtoAttribute{}}, LabelSelector{}, nil
 	case "agg_talk_port":
-		return []Attribute{SipAttribute{}, DipAttribute{}, DportAttribute{}, ProtoAttribute{}}, false, false, nil
+		return []Attribute{SipAttribute{}, DipAttribute{}, DportAttribute{}, ProtoAttribute{}}, LabelSelector{}, nil
 	case "raw":
-		return []Attribute{SipAttribute{}, DipAttribute{}, DportAttribute{}, ProtoAttribute{}}, true, true, nil
+		return []Attribute{SipAttribute{}, DipAttribute{}, DportAttribute{}, ProtoAttribute{}}, LabelSelector{
+			Timestamp: true,
+			Iface:     true,
+			Hostname:  true,
+			HostID:    true,
+		}, nil
 	}
 	// We didn't match any of the preset query types, so we are dealing with
 	// a comma separated list of attribute names.
@@ -231,16 +236,22 @@ func ParseQueryType(queryType string) (attributes []Attribute, hasAttrTime, hasA
 	for _, attributeName := range attributeNames {
 		switch attributeName {
 		case "time":
-			hasAttrTime = true
+			selector.Timestamp = true
 			continue
 		case "iface":
-			hasAttrIface = true
+			selector.Iface = true
+			continue
+		case "hostname":
+			selector.Hostname = true
+			continue
+		case "hostid":
+			selector.HostID = true
 			continue
 		}
 
 		attribute, err := NewAttribute(attributeName)
 		if err != nil {
-			return nil, false, false, err
+			return nil, LabelSelector{}, err
 		}
 		if _, exists := attributeSet[attribute.Name()]; !exists {
 			attributeSet[attribute.Name()] = struct{}{}

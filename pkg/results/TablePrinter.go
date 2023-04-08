@@ -31,12 +31,17 @@ type OutputColumn int
 
 // Enumeration of all possible output columns
 const (
+	// labels
 	OutcolTime OutputColumn = iota
+	OutcolHostname
+	OutcolHostID
 	OutcolIface
+	// attributes
 	OutcolSip
 	OutcolDip
 	OutcolDport
 	OutcolProto
+	// counters
 	OutcolInPkts
 	OutcolInPktsPercent
 	OutcolInBytes
@@ -61,12 +66,19 @@ const (
 // columns returns the list of OutputColumns that (might) be printed.
 // timed indicates whether we're supposed to print timestamps. attributes lists
 // all attributes we have to print. d tells us which counters to print.
-func columns(hasAttrTime, hasAttrIface bool, attributes []types.Attribute, d types.Direction) (cols []OutputColumn) {
-	if hasAttrTime {
+// in this function (and some others) ORDER matters
+func columns(selector types.LabelSelector, attributes []types.Attribute, d types.Direction) (cols []OutputColumn) {
+	if selector.Timestamp {
 		cols = append(cols, OutcolTime)
 	}
-
-	if hasAttrIface {
+	// this order represents the hierarchy host > ifaces
+	if selector.Hostname {
+		cols = append(cols, OutcolHostname)
+	}
+	if selector.HostID {
+		cols = append(cols, OutcolHostID)
+	}
+	if selector.Iface {
 		cols = append(cols, OutcolIface)
 	}
 
@@ -153,6 +165,10 @@ func extract(format Formatter, ips2domains map[string]string, totals types.Count
 		return format.Time(row.Labels.Timestamp.Unix())
 	case OutcolIface:
 		return format.String(row.Labels.Iface)
+	case OutcolHostname:
+		return format.String(row.Labels.Hostname)
+	case OutcolHostID:
+		return format.String(row.Labels.HostID)
 
 	case OutcolSip:
 		return format.String(tryLookup(ips2domains, row.Attributes.SrcIP.String()))
@@ -260,7 +276,7 @@ type basePrinter struct {
 
 	sort SortOrder
 
-	hasAttrTime, hasAttrIface bool
+	selector types.LabelSelector
 
 	direction types.Direction
 
@@ -281,15 +297,15 @@ type basePrinter struct {
 func newBasePrinter(
 	output io.Writer,
 	sort SortOrder,
-	hasAttrTime, hasAttrIface bool,
+	selector types.LabelSelector,
 	direction types.Direction,
 	attributes []types.Attribute,
 	ips2domains map[string]string,
 	totals types.Counters,
 	ifaces string,
 ) basePrinter {
-	result := basePrinter{output, sort, hasAttrTime, hasAttrIface, direction, attributes, ips2domains, totals, ifaces,
-		columns(hasAttrTime, hasAttrIface, attributes, direction),
+	result := basePrinter{output, sort, selector, direction, attributes, ips2domains, totals, ifaces,
+		columns(selector, attributes, direction),
 	}
 
 	return result
@@ -297,7 +313,7 @@ func newBasePrinter(
 
 func NewTablePrinter(output io.Writer, format string,
 	sort SortOrder,
-	hasAttrTime, hasAttrIface bool,
+	labelSel types.LabelSelector,
 	direction types.Direction,
 	attributes []types.Attribute,
 	ips2domains map[string]string,
@@ -306,7 +322,7 @@ func NewTablePrinter(output io.Writer, format string,
 	resolveTimeout time.Duration,
 	queryType string,
 	ifaces string) (TablePrinter, error) {
-	b := newBasePrinter(output, sort, hasAttrTime, hasAttrIface, direction, attributes, ips2domains, totals, ifaces)
+	b := newBasePrinter(output, sort, labelSel, direction, attributes, ips2domains, totals, ifaces)
 
 	var printer TablePrinter
 	switch format {
@@ -370,6 +386,8 @@ func NewCSVTablePrinter(b basePrinter) *CSVTablePrinter {
 
 	headers := [CountOutcol]string{
 		"time",
+		"hostname",
+		"hostid",
 		"iface",
 		"sip",
 		"dip",
@@ -543,6 +561,8 @@ func NewTextTablePrinter(b basePrinter, numFlows int, resolveTimeout time.Durati
 
 	var header2 = [CountOutcol]string{
 		"time",
+		"hostname",
+		"hostid",
 		"iface",
 		"sip",
 		"dip",

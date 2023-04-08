@@ -142,16 +142,12 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 	}
 
 	s := &Statement{
-		QueryType: a.Query,
-		DNSResolution: struct {
-			Enabled bool          `json:"enabled,omitempty"`
-			Timeout time.Duration `json:"dns_timeout,omitempty"`
-			MaxRows int           `json:"max_rows,omitempty"`
-		}(a.DNSResolution),
-		Condition: a.Condition,
-		LowMem:    a.LowMem,
-		Caller:    a.Caller,
-		Output:    os.Stdout, // by default, we write results to the console
+		QueryType:     a.Query,
+		DNSResolution: a.DNSResolution,
+		Condition:     a.Condition,
+		LowMem:        a.LowMem,
+		Caller:        a.Caller,
+		Output:        os.Stdout, // by default, we write results to the console
 	}
 
 	var err error
@@ -177,7 +173,10 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 		return s, fmt.Errorf("unknown sorting parameter '%s' specified", a.SortBy)
 	}
 
-	s.Attributes, _, _, err = types.ParseQueryType(a.Query)
+	// the query type is parsed here already in order to validate if the query contains
+	// errors
+	var selector types.LabelSelector
+	s.attributes, selector, err = types.ParseQueryType(a.Query)
 	if err != nil {
 		return s, fmt.Errorf("failed to parse query type: %w", err)
 	}
@@ -186,11 +185,12 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 	// interface column was not added as an attribute
 	if (len(s.Ifaces) > 1 || strings.Contains(a.Ifaces, "any")) &&
 		!strings.Contains(a.Query, "iface") {
-		s.HasAttrIface = true
+		selector.Iface = true
 	}
+	s.LabelSelector = selector
 
 	// override sorting direction and number of entries for time based queries
-	if s.HasAttrTime {
+	if selector.Timestamp {
 		s.SortBy = results.SortTime
 		s.SortAscending = true
 		s.NumResults = MaxResults

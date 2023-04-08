@@ -103,11 +103,11 @@ var parseQueryTypeTests = []struct {
 
 func TestParseQueryType(t *testing.T) {
 	for _, test := range parseQueryTypeTests {
-		attributes, hasAttrTime, hasAttrIface, err := ParseQueryType(test.InQueryType)
+		attributes, selector, err := ParseQueryType(test.InQueryType)
 		if !test.Success {
 			if err == nil {
 				t.Fatalf("Expected to fail on input %v but it didn't. Instead it output %v, %v",
-					test.InQueryType, attributes, hasAttrTime)
+					test.InQueryType, attributes, selector.Timestamp)
 			}
 		} else {
 			if err != nil {
@@ -115,11 +115,11 @@ func TestParseQueryType(t *testing.T) {
 					test.InQueryType, err)
 			}
 			if !reflect.DeepEqual(test.OutAttributes, attributes) ||
-				test.OutHasAttrTime != hasAttrTime ||
-				test.OutHasAttrIface != hasAttrIface {
+				test.OutHasAttrTime != selector.Timestamp ||
+				test.OutHasAttrIface != selector.Iface {
 				t.Fatalf("Returned an unexpected output. Expected output: %v, %v, %v. Actual output: %v, %v, %v",
 					test.OutAttributes, test.OutHasAttrTime, test.OutHasAttrIface,
-					attributes, hasAttrTime, hasAttrIface,
+					attributes, selector.Timestamp, selector.Iface,
 				)
 			}
 		}

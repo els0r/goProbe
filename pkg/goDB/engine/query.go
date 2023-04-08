@@ -42,6 +42,7 @@ func (qr *QueryRunner) Run(ctx context.Context, args *query.Args) (res *results.
 func (qr *QueryRunner) RunStatement(ctx context.Context, stmt *query.Statement) (res *results.Result, err error) {
 	result := results.New()
 	result.Start()
+	defer result.End()
 
 	// cross-check parameters
 	if len(stmt.Ifaces) == 0 {
@@ -54,9 +55,7 @@ func (qr *QueryRunner) RunStatement(ctx context.Context, stmt *query.Statement) 
 	result.Summary.Interfaces = stmt.Ifaces
 
 	// parse query
-	var queryAttributes []types.Attribute
-
-	queryAttributes, _, _, err = types.ParseQueryType(stmt.QueryType)
+	queryAttributes, _, err := types.ParseQueryType(stmt.QueryType)
 	if err != nil {
 		return res, fmt.Errorf("failed to parse query type: %w", err)
 	}
@@ -67,7 +66,7 @@ func (qr *QueryRunner) RunStatement(ctx context.Context, stmt *query.Statement) 
 		return res, fmt.Errorf("conditions parsing error: %w", parseErr)
 	}
 
-	qr.query = goDB.NewQuery(queryAttributes, queryConditional, stmt.HasAttrTime, stmt.HasAttrIface).LowMem(stmt.LowMem)
+	qr.query = goDB.NewQuery(queryAttributes, queryConditional, stmt.LabelSelector).LowMem(stmt.LowMem)
 	if qr.query == nil {
 		return res, fmt.Errorf("query is not executable")
 	}
@@ -265,7 +264,6 @@ func (qr *QueryRunner) RunStatement(ctx context.Context, stmt *query.Statement) 
 	results.By(stmt.SortBy, stmt.Direction, stmt.SortAscending).Sort(rs)
 
 	// stop timing everything related to the query and store the hits
-	result.End()
 	result.Summary.Hits.Total = len(rs)
 
 	if stmt.NumResults < len(rs) {
@@ -274,16 +272,7 @@ func (qr *QueryRunner) RunStatement(ctx context.Context, stmt *query.Statement) 
 	result.Summary.Hits.Displayed = len(rs)
 	result.Rows = rs
 
-	// set status and error message in case the query returned no results
-	if len(result.Rows) == 0 {
-		result.Status.Code = types.StatusEmpty
-		result.Status.Message = results.ErrorNoResults.Error()
-	}
-
-	// assign the result
-	res = result
-
-	return res, nil
+	return result, nil
 }
 
 func createWorkManager(dbPath string, iface string, tfirst, tlast int64, query *goDB.Query, numProcessingUnits int) (workManager *goDB.DBWorkManager, nonempty bool, err error) {

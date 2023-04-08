@@ -99,12 +99,12 @@ var queryConditionalColumnFlagSetters = [types.ColIdxAttributeCount]func(q *Quer
 }
 
 // NewQuery creates a new Query object based on the parsed command line parameters
-func NewQuery(attributes []types.Attribute, conditional node.Node, hasAttrTime, hasAttrIface bool) *Query {
+func NewQuery(attributes []types.Attribute, conditional node.Node, selector types.LabelSelector) *Query {
 	q := &Query{
 		Attributes:   attributes,
 		Conditional:  conditional,
-		hasAttrTime:  hasAttrTime,
-		hasAttrIface: hasAttrIface,
+		hasAttrTime:  selector.Timestamp,
+		hasAttrIface: selector.Iface,
 	}
 
 	// Compute index sets

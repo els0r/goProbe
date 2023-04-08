@@ -14,13 +14,12 @@ type Statement struct {
 	// Ifaces holds hte list of all interfaces that should be queried
 	Ifaces []string `json:"ifaces"`
 
-	HasAttrIface bool `json:"-"`
-	HasAttrTime  bool `json:"-"`
+	LabelSelector types.LabelSelector `json:"-"`
 
 	// needed for feedback to user
 	QueryType string `json:"query_type"`
 
-	Attributes []types.Attribute `json:"attributes"`
+	attributes []types.Attribute `json:"-"`
 	Condition  string            `json:"condition,omitempty"`
 
 	// which direction is added
@@ -41,11 +40,7 @@ type Statement struct {
 	Caller string `json:"caller,omitempty"` // who called the query
 
 	// resolution parameters (probably part of table printer)
-	DNSResolution struct {
-		Enabled bool          `json:"enabled,omitempty"`
-		Timeout time.Duration `json:"dns_timeout,omitempty"`
-		MaxRows int           `json:"max_rows,omitempty"`
-	} `json:"dns_resolution,omitempty"`
+	DNSResolution DNSResolution
 
 	// file system
 	DBPath    string `json:"db"`

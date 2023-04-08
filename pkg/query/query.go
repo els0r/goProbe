@@ -21,7 +21,7 @@ func (s *Statement) Print(ctx context.Context, result *results.Result) error {
 	var sip, dip types.Attribute
 
 	var hasDNSattributes bool
-	for _, attribute := range s.Attributes {
+	for _, attribute := range s.attributes {
 		switch attribute.Name() {
 		case "sip":
 			sip = attribute
@@ -56,9 +56,9 @@ func (s *Statement) Print(ctx context.Context, result *results.Result) error {
 		s.Output,
 		s.Format,
 		s.SortBy,
-		s.HasAttrTime, s.HasAttrIface,
+		s.LabelSelector,
 		s.Direction,
-		s.Attributes,
+		s.attributes,
 		ips2domains,
 		result.Summary.Totals,
 		result.Summary.Hits.Total,
