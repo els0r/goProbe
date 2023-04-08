@@ -204,7 +204,9 @@ func main() {
 	}
 
 	// get logger
-	err := logging.Init("goConvert", version.Short(), "debug", "console")
+	err := logging.Init(logging.LevelDebug, logging.EncodingLogfmt,
+		logging.WithVersion(version.Short()),
+	)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to spawn logger: %s\n", err)
 		os.Exit(1)

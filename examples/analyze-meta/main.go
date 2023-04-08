@@ -14,8 +14,9 @@ import (
 
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 	"github.com/els0r/goProbe/pkg/goDB/storage/gpfile"
+	"github.com/els0r/goProbe/pkg/logging"
 	"github.com/els0r/goProbe/pkg/types"
-	"go.uber.org/zap"
+	"github.com/els0r/goProbe/pkg/version"
 )
 
 var (
@@ -24,13 +25,14 @@ var (
 
 func main() {
 
-	zapLogger, err := zap.NewProduction()
+	err := logging.Init(logging.LevelInfo, logging.EncodingLogfmt,
+		logging.WithVersion(version.Short()),
+	)
 	if err != nil {
 		fmt.Printf("failed to instantiate logger: %s\n", err)
 		os.Exit(1)
 	}
-	defer zapLogger.Sync()
-	logger := zapLogger.Sugar()
+	logger := logging.Logger()
 
 	flag.StringVar(&pathMetaFile, "path", "", "Path to meta file")
 	flag.Parse()
