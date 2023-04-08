@@ -99,11 +99,12 @@ func newMetadata() *Metadata {
 type GPDir struct {
 	gpFiles [types.ColIdxCount]*GPFile // Set of GPFile (lazy-load)
 
-	options    []Option // Options (forwarded to all GPFiles)
-	basePath   string   // goDB base path (up to interface)
-	dirPath    string   // GPDir path (up to GPDir timestanp)
-	metaPath   string   // Full path to GPDir metadata
-	accessMode int      // Access mode (also forwarded to all GPFiles)
+	options     []Option    // Options (forwarded to all GPFiles)
+	basePath    string      // goDB base path (up to interface)
+	dirPath     string      // GPDir path (up to GPDir timestanp)
+	metaPath    string      // Full path to GPDir metadata
+	accessMode  int         // Access mode (also forwarded to all GPFiles)
+	permissions os.FileMode // Permissions (also forwarded to all GPFiles)
 
 	*Metadata
 }
@@ -111,9 +112,10 @@ type GPDir struct {
 // NewDir instantiates a new directory (doesn't yet do anything)
 func NewDir(basePath string, timestamp int64, accessMode int, options ...Option) *GPDir {
 	obj := GPDir{
-		basePath:   strings.TrimSuffix(basePath, "/"),
-		accessMode: accessMode,
-		options:    options,
+		basePath:    strings.TrimSuffix(basePath, "/"),
+		accessMode:  accessMode,
+		permissions: defaultPermissions,
+		options:     options,
 	}
 
 	dayTimestamp := DirTimestamp(timestamp)
@@ -129,6 +131,11 @@ func (d *GPDir) Open(options ...Option) error {
 
 	// append functional options, if any
 	d.options = append(d.options, options...)
+
+	// apply functional options
+	for _, opt := range d.options {
+		opt(d)
+	}
 
 	// If the directory has been opened in write mode, ensure it is created if required
 	if d.accessMode == ModeWrite {
@@ -445,7 +452,7 @@ func (d *GPDir) Column(colIdx types.ColumnIndex) (*GPFile, error) {
 
 // createIfRequired created the underlying path structure (if missing)
 func (d *GPDir) createIfRequired() error {
-	return os.MkdirAll(d.dirPath, 0755)
+	return os.MkdirAll(d.dirPath, calculateDirPerm(d.permissions))
 }
 
 func (d *GPDir) writeMetadataAtomic() error {
@@ -469,11 +476,35 @@ func (d *GPDir) writeMetadataAtomic() error {
 		return err
 	}
 
+	// Set permissions / file mode
+	if err = os.Chmod(tempFile.Name(), d.permissions); err != nil {
+		return err
+	}
+
 	// Move the temporary file
 	return os.Rename(tempFile.Name(), d.MetadataPath())
+}
+
+func (d *GPDir) setPermissions(permissions fs.FileMode) {
+	d.permissions = permissions
 }
 
 // DirTimestamp returns timestamp rounded down to the nearest directory time frame (usually a day)
 func DirTimestamp(timestamp int64) int64 {
 	return (timestamp / EpochDay) * EpochDay
+}
+
+func calculateDirPerm(filePerm os.FileMode) os.FileMode {
+
+	if filePerm&0400 != 0 {
+		filePerm |= 0100
+	}
+	if filePerm&0040 != 0 {
+		filePerm |= 0010
+	}
+	if filePerm&0004 != 0 {
+		filePerm |= 0001
+	}
+
+	return filePerm
 }

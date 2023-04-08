@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"testing"
@@ -22,14 +23,92 @@ const (
 )
 
 var (
-	testFilePath    = filepath.Join(testBasePath, "test.gpf")
-	invalidFilePath = filepath.Join(testBasePath, "invalid.gpf")
+	testFilePath = filepath.Join(testBasePath, "test.gpf")
 
 	testEncoders = []encoders.Type{
 		encoders.EncoderTypeLZ4,
 		encoders.EncoderTypeNull,
 	}
 )
+
+func TestCalcDirPermissions(t *testing.T) {
+	for in, out := range map[os.FileMode]os.FileMode{
+		0000: 0000,
+		0400: 0500,
+		0440: 0550,
+		0444: 0555,
+		0500: 0500,
+		0550: 0550,
+		0555: 0555,
+		0600: 0700,
+		0660: 0770,
+		0666: 0777,
+		0700: 0700,
+		0770: 0770,
+		0777: 0777,
+	} {
+		require.Equal(t, out, calculateDirPerm(in))
+	}
+}
+
+func TestDirPermissions(t *testing.T) {
+	for _, perm := range []fs.FileMode{
+		0000, // default case
+		0600,
+		0644,
+	} {
+		t.Run(perm.String(), func(t *testing.T) {
+			require.Nil(t, os.RemoveAll("/tmp/test_db"))
+
+			// default (no option provided) should amount to default permissions
+			opts := []Option{WithPermissions(perm)}
+			if perm == 0 {
+				opts = nil
+				perm = defaultPermissions
+			}
+
+			testDir := NewDir("/tmp/test_db", 1000, ModeWrite, opts...)
+			require.Nil(t, testDir.Open(), "error opening test dir for writing")
+			require.Nil(t, testDir.Close(), "error closing test dir")
+
+			stat, err := os.Stat("/tmp/test_db")
+			require.Nil(t, err, "failed to call Stat() on new GPDir")
+			require.Equal(t, stat.Mode().Perm(), calculateDirPerm(perm), stat.Mode().String())
+
+			stat, err = os.Stat(filepath.Join("/tmp/test_db/1970/01/0", metadataFileName))
+			require.Nil(t, err, "failed to call Stat() on block metadata file")
+			require.Equal(t, stat.Mode().Perm(), perm, stat.Mode().String())
+		})
+	}
+}
+
+func TestFilePermissions(t *testing.T) {
+	require.Nil(t, os.RemoveAll(testFilePath))
+	for _, perm := range []fs.FileMode{
+		0000, // default case
+		0600,
+		0644,
+	} {
+		t.Run(perm.String(), func(t *testing.T) {
+
+			// default (no option provided) should amount to default permissions
+			opts := []Option{WithPermissions(perm)}
+			if perm == 0 {
+				opts = nil
+				perm = defaultPermissions
+			}
+
+			gpf, err := New(testFilePath, newMetadata().BlockMetadata[0], ModeWrite, opts...)
+			require.Nil(t, err, "failed to create new GPFile")
+			require.Nil(t, gpf.writeBlock(time.Now().Unix(), []byte{1, 2, 3, 4}), "failed to write block")
+			require.Nil(t, gpf.Close(), "failed to close test file")
+			stat, err := os.Stat(testFilePath)
+			require.Nil(t, err, "failed to call Stat() on new GPFile")
+			require.Equal(t, stat.Mode().Perm(), perm, stat.Mode().String())
+			require.Nil(t, gpf.Delete(), "failed to delete test file")
+		})
+	}
+}
 
 func TestFailedRead(t *testing.T) {
 	_, err := New(testFilePath, nil, ModeRead)
@@ -138,7 +217,7 @@ func testRoundtrip(t *testing.T, encType encoders.Type) {
 func TestInvalidMetadata(t *testing.T) {
 
 	require.Nil(t, os.RemoveAll("/tmp/test_db"))
-	require.Nil(t, os.MkdirAll("/tmp/test_db/1970/01/0", 0755), "error creating test dir for reading")
+	require.Nil(t, os.MkdirAll("/tmp/test_db/1970/01/0", 0750), "error creating test dir for reading")
 	require.Nil(t, os.WriteFile("/tmp/test_db/1970/01/0/.blockmeta", []byte{0x1}, 0644), "error creating test metdadata for reading")
 
 	testDir := NewDir("/tmp/test_db", 1000, ModeRead)
