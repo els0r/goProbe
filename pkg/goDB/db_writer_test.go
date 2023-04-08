@@ -26,7 +26,7 @@ func TestPanicDuringWrite(t *testing.T) {
 	dayUnix := time.Unix(dayTimestamp, 0)
 	dirPath := filepath.Join(filepath.Join(tempDir, "test"), strconv.Itoa(dayUnix.Year()), fmt.Sprintf("%02d", dayUnix.Month()), strconv.Itoa(int(dayTimestamp)))
 
-	w := NewDBWriter(tempDir, "test", encoders.EncoderTypeNull)
+	w := NewDBWriter(tempDir, "test", encoders.EncoderTypeNull).Permissions(0600)
 
 	// Add a single item that will trigger a panic later
 	testMap := hashmap.NewAggFlowMap()
