@@ -16,6 +16,7 @@ import (
 	"bufio"
 	"encoding/binary"
 	"errors"
+	"io/fs"
 	"os"
 	"os/exec"
 	"runtime"
@@ -41,12 +42,13 @@ import (
 
 // Config stores the flags provided to the converter
 type Config struct {
-	FilePath    string
-	SavePath    string
-	Iface       string
-	Schema      string
-	NumLines    int
-	EncoderType int
+	FilePath      string
+	SavePath      string
+	Iface         string
+	Schema        string
+	NumLines      int
+	EncoderType   int
+	DBPermissions uint
 }
 
 // parameter governing the number of seconds that are covered by a block
@@ -183,6 +185,7 @@ func parseCommandLineArgs(cfg *Config) {
 	flag.StringVar(&cfg.Iface, "iface", "", "Interface from which CSV data was created")
 	flag.IntVar(&cfg.NumLines, "n", 1000, "Number of rows to read from the CSV file")
 	flag.IntVar(&cfg.EncoderType, "encoder", 0, "Encoder type to use for compression")
+	flag.UintVar(&cfg.DBPermissions, "permissions", 0, "Permissions to use when writing DB (Unix file mode)")
 	flag.Parse()
 }
 
@@ -263,6 +266,11 @@ func main() {
 	// channel for passing flow maps to writer
 	writeChan := make(chan writeJob, 1024)
 
+	dbPermissions := goDB.DefaultPermissions
+	if config.DBPermissions != 0 {
+		dbPermissions = fs.FileMode(config.DBPermissions)
+	}
+
 	// writer routine accepting flow maps to write out
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -270,7 +278,7 @@ func main() {
 		defer wg.Done()
 		for fm := range writeChan {
 			if _, ok := mapWriters[fm.iface]; !ok {
-				mapWriters[fm.iface] = goDB.NewDBWriter(config.SavePath, fm.iface, encoders.Type(config.EncoderType))
+				mapWriters[fm.iface] = goDB.NewDBWriter(config.SavePath, fm.iface, encoders.Type(config.EncoderType)).Permissions(dbPermissions)
 			}
 
 			if err = mapWriters[fm.iface].Write(fm.data, goDB.CaptureMetadata{}, fm.tstamp); err != nil {

@@ -139,6 +139,10 @@ func main() {
 	if err != nil {
 		logger.Fatalf("failed to get encoder type from %s: %v", config.DB.EncoderType, err)
 	}
+	dbPermissions := goDB.DefaultPermissions
+	if config.DB.Permissions != 0 {
+		dbPermissions = config.DB.Permissions
+	}
 
 	// Initialize packet logger
 	ifaces := make([]string, len(config.Interfaces))
@@ -199,7 +203,8 @@ func main() {
 
 	// start goroutine for writeouts
 	writeoutHandler := writeout.NewHandler(captureManager, encoderType).
-		WithSyslogWriting(config.SyslogFlows)
+		WithSyslogWriting(config.SyslogFlows).
+		WithPermissions(dbPermissions)
 
 	// start writeout handler
 	doneWriting := writeoutHandler.HandleWriteouts()
