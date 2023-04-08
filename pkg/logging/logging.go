@@ -15,7 +15,8 @@ import (
 
 type loggingConfig struct {
 	enableCaller bool
-	output       io.Writer
+	stdOutput    io.Writer
+	errsOutput   io.Writer
 	initialAttr  map[string]slog.Attr
 }
 
@@ -29,7 +30,15 @@ type Option func(*loggingConfig)
 // WithOutput sets the log output
 func WithOutput(w io.Writer) Option {
 	return func(lc *loggingConfig) {
-		lc.output = w
+		lc.stdOutput = w
+	}
+}
+
+// WithErrorOutput sets the log output for level Error, Fatal and Panic. For the rest,
+// the default output or the output set by `WithOutput` is chosen
+func WithErrorOutput(w io.Writer) Option {
+	return func(lc *loggingConfig) {
+		lc.errsOutput = w
 	}
 }
 
@@ -96,9 +105,8 @@ func Init(level slog.Level, encoding Encoding, opts ...Option) error {
 	}
 
 	cfg := &loggingConfig{
-		enableCaller: true,
-		output:       os.Stdout,
-		initialAttr:  make(map[string]slog.Attr),
+		stdOutput:   os.Stdout,
+		initialAttr: make(map[string]slog.Attr),
 	}
 	for _, opt := range opts {
 		opt(cfg)
@@ -112,18 +120,24 @@ func Init(level slog.Level, encoding Encoding, opts ...Option) error {
 	var th slog.Handler
 	switch encoding {
 	case EncodingJSON:
-		th = hopts.NewJSONHandler(cfg.output)
+		th = hopts.NewJSONHandler(cfg.stdOutput)
 	case EncodingLogfmt:
-		th = hopts.NewTextHandler(cfg.output)
+		th = hopts.NewTextHandler(cfg.stdOutput)
 	default:
 		return fmt.Errorf("unknown encoding %q", encoding)
 	}
 
-	// set package var addSource to the configured option
-	var once sync.Once
-	once.Do(func() {
-		addSource = cfg.enableCaller
-	})
+	// inject a split level handler in case the error output is defined
+	if cfg.errsOutput != nil {
+		var errth slog.Handler
+		switch encoding {
+		case EncodingJSON:
+			errth = hopts.NewJSONHandler(cfg.errsOutput)
+		case EncodingLogfmt:
+			errth = hopts.NewTextHandler(cfg.errsOutput)
+		}
+		th = newLevelSplitHandler(th, errth)
+	}
 
 	// assign initial attributes if there are any
 	var attrs []slog.Attr

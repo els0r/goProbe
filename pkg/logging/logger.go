@@ -60,10 +60,16 @@ type L struct {
 	*formatter
 }
 
-// With attaches the newly created slog Logger to the formatter as well
-// and returns a new compound logger
+// With runs With(args...) on the slog.Logger and attaches it
 func (l *L) With(args ...interface{}) *L {
 	return newL(l.formatter.l.With(args...)).
+		exiter(l.formatter.exiter).
+		panicker(l.formatter.panicker)
+}
+
+// WithGroup runs WithGroup(group) on the slog.Logger and attaches it
+func (l *L) WithGroup(group string) *L {
+	return newL(l.formatter.l.WithGroup(group)).
 		exiter(l.formatter.exiter).
 		panicker(l.formatter.panicker)
 }

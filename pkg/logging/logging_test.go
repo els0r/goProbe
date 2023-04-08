@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -112,6 +113,38 @@ type lineCounterOutput struct {
 func (l *lineCounterOutput) Write(data []byte) (n int, err error) {
 	l.lines++
 	return n, err
+}
+
+func TestLevelSplitHandler(t *testing.T) {
+	lcostd := &lineCounterOutput{}
+	lcoerrs := &lineCounterOutput{}
+
+	err := Init(LevelFromString("debug"), EncodingJSON,
+		WithOutput(lcostd),
+		WithErrorOutput(lcoerrs),
+	)
+	require.Nil(t, err)
+
+	logger := Logger()
+	logger.Info("a message")
+	logger.Warn("a warning message")
+	logger.Error("an error")
+
+	require.Equal(t, 2, lcostd.lines)
+	require.Equal(t, 1, lcoerrs.lines)
+
+	// re-initialize so messages can be visually inspected with -v
+	err = Init(LevelFromString("debug"), EncodingLogfmt,
+		// tests the WithGroup/WithAttr from the callerHandler
+		WithCaller(true),
+		WithOutput(os.Stdout),
+		WithErrorOutput(os.Stderr),
+	)
+	require.Nil(t, err)
+
+	logger = Logger().WithGroup("bubu").With("hello", "kitty")
+	logger.Info("a message")
+	logger.Error("an error")
 }
 
 func TestDebug(t *testing.T) {
