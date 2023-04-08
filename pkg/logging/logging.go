@@ -152,18 +152,16 @@ func Init(level slog.Level, encoding Encoding, opts ...Option) error {
 		th = th.WithAttrs(attrs)
 	}
 
-	logger := slog.New(th)
-	slog.SetDefault(logger)
+	if cfg.enableCaller {
+		// inject a caller handler in case the caller should be reported. It's important that
+		// this one comes at the beginning of the chain
+		th = &callerHandler{addSource: cfg.enableCaller, next: th}
+	}
 
+	// assign configured logger to slog's default logger
+	slog.SetDefault(slog.New(th))
 	return nil
 }
-
-// addSource tracks whether the caller should be determined in the functions from
-// the formatter.
-// TODO: It feels dirty, and probably is, but the Handler() interface
-// unfortunately doesn't expose this info after it's been initialized with its options,
-// so this will have to do for now
-var addSource bool
 
 // Logger returns a low allocation logger for performance critical sections
 func Logger() *L {

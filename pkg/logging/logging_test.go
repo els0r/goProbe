@@ -84,10 +84,10 @@ func (m mockPanicker) Panic(msg string) {
 	m.t.Logf("mocking panic with message: %s", msg)
 }
 
-func TestNoCaller(t *testing.T) {
+func TestCaller(t *testing.T) {
 	err := Init(LevelFromString("warn"), EncodingLogfmt,
 		WithOutput(&testLogger{t}),
-		WithCaller(false),
+		WithCaller(true),
 		WithName("testing"),
 		WithVersion("snapshot"),
 	)
@@ -95,7 +95,7 @@ func TestNoCaller(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 	logger := Logger()
-	logger.Error(errors.New("testing plain error without caller"))
+	logger.Error(errors.New("testing plain error aller"))
 
 	// shouldn't show up
 	logger.Info("the things you do for love")
@@ -116,35 +116,41 @@ func (l *lineCounterOutput) Write(data []byte) (n int, err error) {
 }
 
 func TestLevelSplitHandler(t *testing.T) {
-	lcostd := &lineCounterOutput{}
-	lcoerrs := &lineCounterOutput{}
+	t.Run("check split outputs", func(t *testing.T) {
+		lcostd := &lineCounterOutput{}
+		lcoerrs := &lineCounterOutput{}
 
-	err := Init(LevelFromString("debug"), EncodingJSON,
-		WithOutput(lcostd),
-		WithErrorOutput(lcoerrs),
-	)
-	require.Nil(t, err)
+		err := Init(LevelFromString("debug"), EncodingJSON,
+			WithOutput(lcostd),
+			WithErrorOutput(lcoerrs),
+		)
+		require.Nil(t, err)
 
-	logger := Logger()
-	logger.Info("a message")
-	logger.Warn("a warning message")
-	logger.Error("an error")
+		logger := Logger()
+		logger.Info("a message")
+		logger.Warn("a warning message")
+		logger.Error("an error")
 
-	require.Equal(t, 2, lcostd.lines)
-	require.Equal(t, 1, lcoerrs.lines)
+		require.Equal(t, 2, lcostd.lines)
+		require.Equal(t, 1, lcoerrs.lines)
+	})
 
-	// re-initialize so messages can be visually inspected with -v
-	err = Init(LevelFromString("debug"), EncodingLogfmt,
-		// tests the WithGroup/WithAttr from the callerHandler
-		WithCaller(true),
-		WithOutput(os.Stdout),
-		WithErrorOutput(os.Stderr),
-	)
-	require.Nil(t, err)
+	t.Run("check split output visually", func(t *testing.T) {
+		// re-initialize so messages can be visually inspected with -v
+		err := Init(LevelFromString("debug"), EncodingLogfmt,
+			WithName("test"),
+			WithVersion("snapshot"),
+			// tests the WithGroup/WithAttr from the callerHandler
+			WithCaller(true),
+			WithOutput(os.Stdout),
+			WithErrorOutput(os.Stderr),
+		)
+		require.Nil(t, err)
 
-	logger = Logger().WithGroup("bubu").With("hello", "kitty")
-	logger.Info("a message")
-	logger.Error("an error")
+		logger := Logger().WithGroup("bubu").With("hello", "kitty")
+		logger.Info("a message")
+		logger.Error("an error")
+	})
 }
 
 func TestDebug(t *testing.T) {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"runtime"
 	"time"
 
 	"golang.org/x/exp/slog"
@@ -37,17 +36,6 @@ func (dp defaultPanicker) Panic(msg string) {
 	panic(msg)
 }
 
-func getPc() uintptr {
-	if addSource {
-		// get caller who called the function, not the function itself
-		var pcs [1]uintptr
-		runtime.Callers(3, pcs[:]) // skip [Callers, <Log>f, getPc]
-
-		return pcs[0]
-	}
-	return 0
-}
-
 var enableCtx = context.Background()
 
 // Debug will emit a log message with level debug
@@ -55,8 +43,7 @@ func (f *formatter) Debug(args ...interface{}) {
 	if !f.l.Enabled(enableCtx, slog.LevelDebug) {
 		return
 	}
-
-	r := slog.NewRecord(time.Now(), slog.LevelDebug, fmt.Sprint(args...), getPc())
+	r := slog.NewRecord(time.Now(), slog.LevelDebug, fmt.Sprint(args...), 0)
 	_ = f.l.Handler().Handle(enableCtx, r)
 }
 
@@ -65,8 +52,7 @@ func (f *formatter) Debugf(format string, args ...interface{}) {
 	if !f.l.Enabled(enableCtx, slog.LevelDebug) {
 		return
 	}
-
-	r := slog.NewRecord(time.Now(), slog.LevelDebug, fmt.Sprintf(format, args...), getPc())
+	r := slog.NewRecord(time.Now(), slog.LevelDebug, fmt.Sprintf(format, args...), 0)
 	_ = f.l.Handler().Handle(enableCtx, r)
 }
 
@@ -75,8 +61,7 @@ func (f *formatter) Info(args ...interface{}) {
 	if !f.l.Enabled(enableCtx, slog.LevelInfo) {
 		return
 	}
-
-	r := slog.NewRecord(time.Now(), slog.LevelInfo, fmt.Sprint(args...), getPc())
+	r := slog.NewRecord(time.Now(), slog.LevelInfo, fmt.Sprint(args...), 0)
 	_ = f.l.Handler().Handle(enableCtx, r)
 }
 
@@ -85,8 +70,7 @@ func (f *formatter) Infof(format string, args ...interface{}) {
 	if !f.l.Enabled(enableCtx, slog.LevelInfo) {
 		return
 	}
-
-	r := slog.NewRecord(time.Now(), slog.LevelInfo, fmt.Sprintf(format, args...), getPc())
+	r := slog.NewRecord(time.Now(), slog.LevelInfo, fmt.Sprintf(format, args...), 0)
 	_ = f.l.Handler().Handle(enableCtx, r)
 }
 
@@ -95,8 +79,7 @@ func (f *formatter) Warn(args ...interface{}) {
 	if !f.l.Enabled(enableCtx, slog.LevelWarn) {
 		return
 	}
-
-	r := slog.NewRecord(time.Now(), slog.LevelWarn, fmt.Sprint(args...), getPc())
+	r := slog.NewRecord(time.Now(), slog.LevelWarn, fmt.Sprint(args...), 0)
 	_ = f.l.Handler().Handle(enableCtx, r)
 }
 
@@ -105,8 +88,7 @@ func (f *formatter) Warnf(format string, args ...interface{}) {
 	if !f.l.Enabled(enableCtx, slog.LevelWarn) {
 		return
 	}
-
-	r := slog.NewRecord(time.Now(), slog.LevelWarn, fmt.Sprintf(format, args...), getPc())
+	r := slog.NewRecord(time.Now(), slog.LevelWarn, fmt.Sprintf(format, args...), 0)
 	_ = f.l.Handler().Handle(enableCtx, r)
 }
 
@@ -115,8 +97,7 @@ func (f *formatter) Error(args ...interface{}) {
 	if !f.l.Enabled(enableCtx, slog.LevelError) {
 		return
 	}
-
-	r := slog.NewRecord(time.Now(), slog.LevelError, fmt.Sprint(args...), getPc())
+	r := slog.NewRecord(time.Now(), slog.LevelError, fmt.Sprint(args...), 0)
 	_ = f.l.Handler().Handle(enableCtx, r)
 }
 
@@ -127,8 +108,7 @@ func (f *formatter) Errorf(format string, args ...interface{}) {
 	if !f.l.Enabled(enableCtx, slog.LevelError) {
 		return
 	}
-
-	r := slog.NewRecord(time.Now(), slog.LevelError, fmt.Sprintf(format, args...), getPc())
+	r := slog.NewRecord(time.Now(), slog.LevelError, fmt.Sprintf(format, args...), 0)
 	_ = f.l.Handler().Handle(enableCtx, r)
 }
 
@@ -137,10 +117,8 @@ func (f *formatter) Fatal(args ...interface{}) {
 	if !f.l.Enabled(enableCtx, LevelFatal) {
 		return
 	}
-
-	r := slog.NewRecord(time.Now(), LevelFatal, fmt.Sprint(args...), getPc())
+	r := slog.NewRecord(time.Now(), LevelFatal, fmt.Sprint(args...), 0)
 	_ = f.l.Handler().Handle(enableCtx, r)
-
 	f.exiter.Exit(1)
 }
 
@@ -149,10 +127,8 @@ func (f *formatter) Fatalf(format string, args ...interface{}) {
 	if !f.l.Enabled(enableCtx, LevelFatal) {
 		return
 	}
-
-	r := slog.NewRecord(time.Now(), LevelFatal, fmt.Sprintf(format, args...), getPc())
+	r := slog.NewRecord(time.Now(), LevelFatal, fmt.Sprintf(format, args...), 0)
 	_ = f.l.Handler().Handle(enableCtx, r)
-
 	f.exiter.Exit(1)
 }
 
@@ -161,12 +137,10 @@ func (f *formatter) Panic(args ...interface{}) {
 	if !f.l.Enabled(enableCtx, LevelPanic) {
 		return
 	}
-
 	msg := fmt.Sprint(args...)
 
-	r := slog.NewRecord(time.Now(), LevelPanic, msg, getPc())
+	r := slog.NewRecord(time.Now(), LevelPanic, msg, 0)
 	_ = f.l.Handler().Handle(enableCtx, r)
-
 	f.panicker.Panic(msg)
 }
 
@@ -175,11 +149,9 @@ func (f *formatter) Panicf(format string, args ...interface{}) {
 	if !f.l.Enabled(enableCtx, LevelPanic) {
 		return
 	}
-
 	msg := fmt.Sprintf(format, args...)
 
-	r := slog.NewRecord(time.Now(), LevelPanic, msg, getPc())
+	r := slog.NewRecord(time.Now(), LevelPanic, msg, 0)
 	_ = f.l.Handler().Handle(enableCtx, r)
-
 	f.panicker.Panic(msg)
 }
