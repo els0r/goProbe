@@ -86,7 +86,9 @@ func (qr *QueryRunner) RunStatement(ctx context.Context, stmt *query.Statement) 
 	hostID := info.GetHostID(stmt.DBPath)
 
 	// assign the hostname to the list of hosts handled in this query. Here, the only one
-	result.Summary.Hosts = []string{hostname}
+	defer func() {
+		result.HostsStatuses[hostname] = result.Status
+	}()
 
 	// start ticker to check memory consumption every second
 	heapWatchCtx, cancelHeapWatch := context.WithCancel(ctx)

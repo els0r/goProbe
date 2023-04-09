@@ -50,6 +50,8 @@ type Args struct {
 	Query  string `json:"query" yaml:"query"` // the query type such as sip,dip
 	Ifaces string `json:"ifaces" yaml:"ifaces"`
 
+	HostQuery string `json:"host_query,omitempty" yaml:"host_query,omitempty"` // the hosts query
+
 	Hostname string `json:"hostname,omitempty" yaml:"hostname,omitempty"`
 	HostID   uint   `json:"host_id,omitempty" yaml:"host_id,omitempty"`
 

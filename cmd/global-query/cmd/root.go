@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -12,6 +11,7 @@ import (
 	"time"
 
 	"github.com/els0r/goProbe/cmd/global-query/pkg/conf"
+	"github.com/els0r/goProbe/cmd/global-query/pkg/distributed"
 	"github.com/els0r/goProbe/cmd/global-query/pkg/hosts"
 	"github.com/els0r/goProbe/pkg/logging"
 	"github.com/els0r/goProbe/pkg/query"
@@ -28,7 +28,6 @@ var cfgFile string
 var (
 	cmdLineParams = &query.Args{}
 	argsLocation  string
-	hostQuery     string
 )
 
 var shortText = "Query distributed goDBs and aggregate the results"
@@ -69,7 +68,6 @@ func init() {
 	rootCmd.Flags().StringVarP(&cmdLineParams.Condition, "condition", "c", "", helpMap["Condition"])
 	rootCmd.Flags().StringVarP(&cmdLineParams.First, "first", "f", time.Now().AddDate(0, -1, 0).Format(time.ANSIC), helpMap["First"])
 	rootCmd.Flags().StringVarP(&cmdLineParams.Format, "format", "e", query.DefaultFormat, helpMap["Format"])
-	rootCmd.Flags().StringVarP(&hostQuery, "hosts", "", "", "comma-separated list of hosts to query")
 	rootCmd.Flags().StringVarP(&cmdLineParams.Ifaces, "ifaces", "i", "", helpMap["Ifaces"])
 	rootCmd.Flags().StringVarP(&cmdLineParams.Last, "last", "l", time.Now().Format(time.ANSIC), "Show flows no later than --last. See help for --first for more info\n")
 	rootCmd.Flags().StringVarP(&argsLocation, "stored-query", "", "", "Load JSON serialized query arguments from disk and run them")
@@ -92,7 +90,7 @@ func init() {
 	rootCmd.Flags().String(conf.HostsQuerierType, conf.DefaultHostsQuerierType, "querier used to run queries")
 	rootCmd.Flags().String(conf.HostsQuerierConfig, "", "querier config file location")
 
-	rootCmd.Flags().StringVarP(&hostQuery, "hosts-query", "q", "", "hosts resolution query")
+	rootCmd.Flags().StringVarP(&cmdLineParams.HostQuery, "hosts-query", "q", "", "hosts resolution query")
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.global-query.yaml)")
 
 	_ = viper.BindPFlags(rootCmd.Flags())
@@ -167,8 +165,6 @@ const (
 )
 
 func entrypoint(cmd *cobra.Command, args []string) error {
-	logger := logging.Logger()
-
 	// assign query args
 	var queryArgs = *cmdLineParams
 
@@ -182,10 +178,11 @@ func entrypoint(cmd *cobra.Command, args []string) error {
 		cmd.Help()
 		return nil
 	}
+	queryArgs.Query = args[0]
 
 	// store the query type and make sure that aliases are resolved. This
-	// is important such that the hostname/hostid can be appended
-	queryArgs.Query = strings.Join(types.ToAttributeNames(args[0]), ",")
+	// is important so that the hostname/hostid can be appended
+	queryArgs.Query = strings.Join(types.ToAttributeNames(queryArgs.Query), ",")
 
 	// make sure that the hostname is present in the query type (and therefore output)
 	// The assumption being that a human will have better knowledge
@@ -206,32 +203,11 @@ func entrypoint(cmd *cobra.Command, args []string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	defer stop()
 
-	// parse host list
-	if hostQuery == "" {
-		err := fmt.Errorf("list of target hosts is empty")
-		fmt.Fprintf(os.Stderr, "Couldn't prepare query: %v\n", err)
-		return err
-	}
-
 	hostListResolver, err := initHostListResolver()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Couldn't prepare query: %v\n", err)
 		return err
 	}
-	hostList, err := hostListResolver.Resolve(ctx, hostQuery)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to resolve host list: %v\n", err)
-		return err
-	}
-
-	// log the query
-	qlogger := logger.With("hosts", hostList)
-
-	b, err := json.Marshal(queryArgs)
-	if err == nil {
-		qlogger = qlogger.With("query", string(b))
-	}
-	qlogger.Infof("setting up queriers")
 
 	// get the workload provider
 	querier, err := initQuerier()
@@ -240,23 +216,11 @@ func entrypoint(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// query pipeline setup
-	// sets up a fan-out, fan-in query processing pipeline
-	numRunners := len(hostList)
-
-	finalResult, statusTracker := hosts.AggregateResults(ctx, stmt,
-		hosts.RunQueries(ctx, numRunners,
-			hosts.PrepareQueries(ctx, querier, hostList, &queryArgs),
-		),
-	)
-
-	// truncate results based on the limit
-	finalResult.End()
-
-	if queryArgs.NumResults < len(finalResult.Rows) {
-		finalResult.Rows = finalResult.Rows[:queryArgs.NumResults]
+	finalResult, err := distributed.NewQuerier(hostListResolver, querier).Run(ctx, &queryArgs)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Distributed query failed: %v\n", err)
+		return err
 	}
-	finalResult.Summary.Hits.Displayed = len(finalResult.Rows)
 
 	// serialize raw result if json is selected
 	if stmt.Format == "json" {
@@ -279,7 +243,8 @@ func entrypoint(cmd *cobra.Command, args []string) error {
 	}
 
 	// print all tracker information
-	statusTracker.PrintErrorHosts(stmt.Output)
+	// TODO: move into printer
+	// statusTracker.PrintErrorHosts(stmt.Output)
 
 	return nil
 }

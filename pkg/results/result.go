@@ -20,7 +20,8 @@ var (
 
 // Result bundles the data rows returned and the query meta information
 type Result struct {
-	Status Status `json:"status"`
+	Status        Status        `json:"status"`
+	HostsStatuses HostsStatuses `json:"hosts_statuses"`
 
 	Summary Summary `json:"summary"`
 	Query   Query   `json:"query"`
@@ -37,7 +38,6 @@ type Query struct {
 // queried range and the interfaces that were queried
 type Summary struct {
 	Interfaces []string       `json:"interfaces"`
-	Hosts      []string       `json:"hosts"`
 	TimeFirst  time.Time      `json:"time_first"`
 	TimeLast   time.Time      `json:"time_last"`
 	Totals     types.Counters `json:"totals"`
@@ -64,6 +64,7 @@ func (r *Result) Start() {
 			QueryStart: time.Now(),
 		},
 	}
+	r.HostsStatuses = make(HostsStatuses)
 }
 
 func (r *Result) End() {
@@ -74,35 +75,38 @@ func (r *Result) End() {
 			Message: ErrorNoResults.Error(),
 		}
 	}
-	sort.Strings(r.Summary.Hosts)
 	sort.Strings(r.Summary.Interfaces)
 }
 
 // HostsStatus captures the query status for every host queried
 type HostsStatuses map[string]Status
 
-func (hs HostsStatuses) PrintErrorHosts(w io.Writer) {
-	var errHosts []struct {
+func (hs HostsStatuses) Print(w io.Writer) {
+	var hosts []struct {
 		host string
 		Status
 	}
 
+	var ok, empty, withError int
 	for host, status := range hs {
-		if status.Code != types.StatusOK {
-			errHosts = append(errHosts, struct {
-				host string
-				Status
-			}{host: host, Status: status})
+		switch status.Code {
+		case types.StatusOK:
+			ok++
+		case types.StatusEmpty:
+			empty++
+		case types.StatusError:
+			withError++
 		}
+		hosts = append(hosts, struct {
+			host string
+			Status
+		}{host: host, Status: status})
 	}
-
-	if len(errHosts) == 0 {
-		return
-	}
-
-	sort.SliceStable(errHosts, func(i, j int) bool {
-		return errHosts[i].host < errHosts[j].host
+	sort.SliceStable(hosts, func(i, j int) bool {
+		return hosts[i].host < hosts[j].host
 	})
+
+	fmt.Fprintf(w, "Hosts: %d ok / %d empty / %d error\n\n", ok, empty, withError)
 
 	tw := tabwriter.NewWriter(w, 0, 0, 4, ' ', tabwriter.AlignRight)
 
@@ -111,13 +115,11 @@ func (hs HostsStatuses) PrintErrorHosts(w io.Writer) {
 	header := []string{"#", "host", "status", "message"}
 	fmtStr := sep + strings.Join([]string{"%d", "%s", "%s", "%s"}, sep) + sep + "\n"
 
-	fmt.Fprintf(w, "Hosts with errors: %d\n\n", len(errHosts))
-
 	fmt.Fprintln(tw, sep+strings.Join(header, sep)+sep)
-	fmt.Fprintln(tw, sep+strings.Repeat(sep, len(header))+sep)
+	// fmt.Fprintln(tw, sep+strings.Repeat(sep, len(header))+sep)
 
-	for i, errHost := range errHosts {
-		fmt.Fprintf(tw, fmtStr, i+1, errHost.host, errHost.Code, errHost.Message)
+	for i, host := range hosts {
+		fmt.Fprintf(tw, fmtStr, i+1, host.host, host.Code, host.Message)
 	}
 	tw.Flush()
 }

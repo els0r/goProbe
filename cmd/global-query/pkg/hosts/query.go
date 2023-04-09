@@ -144,17 +144,15 @@ func RunQueries(ctx context.Context, numRunners int, workloads <-chan *QueryWork
 
 // AggregateResults takes finished query workloads from the workloads channel, aggregates the result by merging the rows and summaries,
 // and returns the final result. The `tracker` variable provides information about potential Run failures for individual hosts
-func AggregateResults(ctx context.Context, stmt *query.Statement, workloads <-chan *QueryWorkload) (finalResult *results.Result, tracker results.HostsStatuses) {
+func AggregateResults(ctx context.Context, stmt *query.Statement, workloads <-chan *QueryWorkload) (finalResult *results.Result) {
 	// aggregation
 	finalResult = results.New()
 	finalResult.Start()
 
-	tracker = make(results.HostsStatuses)
 	var rowMap = make(results.RowsMap)
 
 	// tracker maps for meta info
 	var ifaceMap = make(map[string]struct{})
-	var hostMap = make(map[string]struct{})
 
 	logger := logging.WithContext(ctx)
 
@@ -175,7 +173,7 @@ func AggregateResults(ctx context.Context, stmt *query.Statement, workloads <-ch
 			}
 			logger := logger.With("hostname", hq.Host)
 			if hq.Err != nil {
-				tracker[hq.Host] = results.Status{
+				finalResult.HostsStatuses[hq.Host] = results.Status{
 					Code:    types.StatusError,
 					Message: hq.Err.Error(),
 				}
@@ -185,7 +183,9 @@ func AggregateResults(ctx context.Context, stmt *query.Statement, workloads <-ch
 			}
 
 			res := hq.Result
-			tracker[hq.Host] = res.Status
+			for host, status := range res.HostsStatuses {
+				finalResult.HostsStatuses[host] = status
+			}
 
 			// merges the traffic data
 			rowMap.MergeRows(res.Rows)
@@ -199,15 +199,6 @@ func AggregateResults(ctx context.Context, stmt *query.Statement, workloads <-ch
 				ifaces = append(ifaces, iface)
 			}
 
-			for _, host := range res.Summary.Hosts {
-				hostMap[host] = struct{}{}
-			}
-			var hosts = make([]string, 0, len(hostMap))
-			for host := range hostMap {
-				hosts = append(hosts, host)
-			}
-
-			finalResult.Summary.Hosts = hosts
 			finalResult.Summary.Interfaces = ifaces
 
 			finalResult.Query = res.Query

@@ -266,7 +266,7 @@ type TablePrinter interface {
 	AddRow(row Row)
 	AddRows(ctx context.Context, rows Rows) error
 	Footer(result *Result)
-	Print() error
+	Print(result *Result) error
 }
 
 // basePrinter encapsulates variables and methods used by all TablePrinter
@@ -435,8 +435,9 @@ func (c *CSVTablePrinter) Footer(result *Result) {
 }
 
 // Print flushes the writer and actually prints out all CSV rows contained in the table printer
-func (c *CSVTablePrinter) Print() error {
+func (c *CSVTablePrinter) Print(_ *Result) error {
 	c.writer.Flush()
+	// TODO: adding the host statuses
 	return nil
 }
 
@@ -689,12 +690,17 @@ func (t *TextTablePrinter) Footer(result *Result) {
 }
 
 // Print flushes the table printer and outputs all entries to stdout
-func (t *TextTablePrinter) Print() error {
+func (t *TextTablePrinter) Print(result *Result) error {
 	fmt.Fprintln(t.output) // newline between prompt and results
 	t.writer.Flush()
 	fmt.Fprintln(t.output)
 	t.footwriter.Flush()
 	fmt.Fprintln(t.output)
 
+	// print the host list if it  isn't covered by the above already
+	// if len(result.HostsStatuses) > 1 {
+	result.HostsStatuses.Print(t.output)
+	// }
+	fmt.Fprintln(t.output)
 	return nil
 }

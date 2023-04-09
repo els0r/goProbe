@@ -98,6 +98,5 @@ func (s *Statement) Print(ctx context.Context, result *results.Result) error {
 		return err
 	}
 	printer.Footer(result)
-
-	return printer.Print()
+	return printer.Print(result)
 }
