@@ -15,6 +15,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"sync"
 
@@ -45,8 +46,9 @@ type Config struct {
 }
 
 type DBConfig struct {
-	Path        string `json:"path"`
-	EncoderType string `json:"encoder_type"`
+	Path        string      `json:"path"`
+	EncoderType string      `json:"encoder_type"`
+	Permissions fs.FileMode `json:"permissions"`
 }
 
 type CaptureConfig struct {

@@ -12,6 +12,7 @@ package goDB
 
 import (
 	"fmt"
+	"io/fs"
 	"path/filepath"
 
 	"github.com/els0r/goProbe/pkg/goDB/encoder/bitpack"
@@ -21,6 +22,8 @@ import (
 	"github.com/els0r/goProbe/pkg/types/hashmap"
 )
 
+const DefaultPermissions = fs.FileMode(0644)
+
 // DBWriter writes goProbe flows to goDB database files
 type DBWriter struct {
 	dbpath string
@@ -28,11 +31,18 @@ type DBWriter struct {
 
 	dayTimestamp int64
 	encoderType  encoders.Type
+	permissions  fs.FileMode
 }
 
 // NewDBWriter initializes a new DBWriter
 func NewDBWriter(dbpath string, iface string, encoderType encoders.Type) (w *DBWriter) {
-	return &DBWriter{dbpath, iface, 0, encoderType}
+	return &DBWriter{dbpath, iface, 0, encoderType, DefaultPermissions}
+}
+
+// Permissions overrides the default permissions for files / directories in the DB
+func (w *DBWriter) Permissions(permissions fs.FileMode) *DBWriter {
+	w.permissions = permissions
+	return w
 }
 
 // Write takes an aggregated flow map and its metadata and writes it to disk for a given timestamp
@@ -43,7 +53,7 @@ func (w *DBWriter) Write(flowmap *hashmap.AggFlowMap, captureMeta CaptureMetadat
 		err    error
 	)
 
-	dir := gpfile.NewDir(filepath.Join(w.dbpath, w.iface), timestamp, gpfile.ModeWrite)
+	dir := gpfile.NewDir(filepath.Join(w.dbpath, w.iface), timestamp, gpfile.ModeWrite, gpfile.WithPermissions(w.permissions))
 	if err = dir.Open(); err != nil {
 		err = fmt.Errorf("Could not create / open daily directory: %w", err)
 		return err
@@ -75,7 +85,7 @@ func (w *DBWriter) WriteBulk(workloads []BulkWorkload, dirTimestamp int64) (err 
 		update gpfile.Stats
 	)
 
-	dir := gpfile.NewDir(filepath.Join(w.dbpath, w.iface), dirTimestamp, gpfile.ModeWrite)
+	dir := gpfile.NewDir(filepath.Join(w.dbpath, w.iface), dirTimestamp, gpfile.ModeWrite, gpfile.WithPermissions(w.permissions))
 	if err = dir.Open(); err != nil {
 		err = fmt.Errorf("Could not create / open daily directory: %w", err)
 		return err

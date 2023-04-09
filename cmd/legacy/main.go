@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io/fs"
 	"io/ioutil"
 	"net/netip"
 	"os"
@@ -26,8 +27,9 @@ type work struct {
 }
 
 type converter struct {
-	dbDir string
-	pipe  chan work
+	dbDir         string
+	dbPermissions fs.FileMode
+	pipe          chan work
 }
 
 var logger *zap.SugaredLogger
@@ -46,12 +48,15 @@ func main() {
 		inPath, outPath string
 		dryRun          bool
 		nWorkers        int
+		dbPermissions   uint
 		wg              sync.WaitGroup
 	)
 	flag.StringVar(&inPath, "path", "", "Path to legacy goDB")
 	flag.StringVar(&outPath, "output", "", "Path to output goDB")
 	flag.BoolVar(&dryRun, "dry-run", true, "Perform a dry-run")
+	flag.UintVar(&dbPermissions, "permissions", 0, "Permissions to use when writing DB (Unix file mode)")
 	flag.IntVar(&nWorkers, "n", 4, "Number of parallel conversion workers")
+
 	flag.Parse()
 
 	if inPath == "" || outPath == "" {
@@ -59,8 +64,12 @@ func main() {
 	}
 
 	c := converter{
-		dbDir: outPath,
-		pipe:  make(chan work, 64),
+		dbDir:         outPath,
+		dbPermissions: goDB.DefaultPermissions,
+		pipe:          make(chan work, 64),
+	}
+	if dbPermissions != 0 {
+		c.dbPermissions = fs.FileMode(dbPermissions)
 	}
 
 	for i := 0; i < nWorkers; i++ {
@@ -209,7 +218,7 @@ func (c converter) convertDir(w work, dryRun bool) error {
 	if err != nil {
 		return fmt.Errorf("failed to read metadata from %s: %w", filepath.Join(w.path, MetadataFileName), err)
 	}
-	writer := goDB.NewDBWriter(c.dbDir, w.iface, encoders.EncoderTypeLZ4)
+	writer := goDB.NewDBWriter(c.dbDir, w.iface, encoders.EncoderTypeLZ4).Permissions(c.dbPermissions)
 
 	var bulkWorkload []goDB.BulkWorkload
 	for _, block := range allBlocks {

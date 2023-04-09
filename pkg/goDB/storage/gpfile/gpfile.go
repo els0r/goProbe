@@ -3,6 +3,7 @@ package gpfile
 import (
 	"bufio"
 	"fmt"
+	"io/fs"
 	"os"
 
 	"github.com/els0r/goProbe/pkg/goDB/encoder"
@@ -62,7 +63,9 @@ type GPFile struct {
 
 	// accessMode denotes if the file is opened for read or write operations (to avoid
 	// race conditions and unpredictable behavior, only one mode is possible at a time)
-	accessMode int
+	// permissions defines the permissions / mode to use for this GPFile
+	accessMode  int
+	permissions fs.FileMode
 
 	// Reusable buffers for compression / decompression
 	uncompData, blockData []byte
@@ -77,6 +80,7 @@ func New(filename string, header *storage.BlockHeader, accessMode int, options .
 		filename:           filename,
 		header:             header,
 		accessMode:         accessMode,
+		permissions:        defaultPermissions,
 		defaultEncoderType: defaultEncoderType,
 		freeEncoder:        true,
 	}
@@ -298,7 +302,9 @@ func (g *GPFile) open(flags int) (err error) {
 	}
 
 	// Open file for append, create if not exists
-	g.file, err = os.OpenFile(g.filename, flags, defaultPermissions)
+	if g.file, err = os.OpenFile(g.filename, flags, g.permissions); err != nil {
+		return fmt.Errorf("failed to open file %s: %w", g.filename, err)
+	}
 	if flags == ModeWrite {
 
 		// Ensure that the file is loaded at the position of the last known successful write
@@ -315,4 +321,18 @@ func (g *GPFile) open(flags int) (err error) {
 	}
 
 	return
+}
+
+func (g *GPFile) setPermissions(permissions fs.FileMode) {
+	g.permissions = permissions
+}
+
+func (g *GPFile) setMemPool(pool MemPoolGCable) {
+	g.memPool = pool
+}
+
+func (g *GPFile) setEncoder(e encoder.Encoder) {
+	g.defaultEncoder = e
+	g.defaultEncoderType = e.Type()
+	g.freeEncoder = false
 }

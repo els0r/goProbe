@@ -3,6 +3,7 @@ package writeout
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"time"
 
 	"github.com/els0r/goProbe/cmd/goProbe/config"
@@ -26,11 +27,17 @@ type Handler struct {
 	captureManager *capture.Manager
 
 	encoderType encoders.Type
+	permissions fs.FileMode
 	logToSyslog bool
 }
 
 func (h *Handler) WithSyslogWriting(b bool) *Handler {
 	h.logToSyslog = b
+	return h
+}
+
+func (h *Handler) WithPermissions(permissions fs.FileMode) *Handler {
+	h.permissions = permissions
 	return h
 }
 
@@ -42,6 +49,7 @@ func NewHandler(captureManager *capture.Manager, encoderType encoders.Type) *Han
 		captureManager: captureManager,
 
 		encoderType: encoderType,
+		permissions: goDB.DefaultPermissions,
 	}
 }
 
@@ -204,7 +212,7 @@ func (h *Handler) HandleWriteouts() <-chan struct{} {
 					w := goDB.NewDBWriter(config.RuntimeDBPath(),
 						taggedMap.Iface,
 						h.encoderType,
-					)
+					).Permissions(h.permissions)
 					dbWriters[taggedMap.Iface] = w
 				}
 
