@@ -1,5 +1,7 @@
 package conf
 
+import "time"
+
 const (
 	loggingKey  = "logging"
 	LogLevel    = loggingKey + ".level"
@@ -14,6 +16,10 @@ const (
 
 	HostsQuerierType   = hostsQuerierKey + ".type"
 	HostsQuerierConfig = hostsQuerierKey + ".config"
+
+	serverKey                 = "server"
+	ServerAddr                = serverKey + ".addr"
+	ServerShutdownGracePeriod = serverKey + ".shutdowngraceperiod"
 )
 
 const (
@@ -23,4 +29,7 @@ const (
 	DefaultHostsResolver = "string"
 
 	DefaultHostsQuerierType = "api"
+
+	DefaultServerAddr                = "localhost:8145"
+	DefaultServerShutdownGracePeriod = 30 * time.Second
 )

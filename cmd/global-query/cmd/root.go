@@ -72,6 +72,7 @@ func init() {
 	rootCmd.Flags().StringVarP(&cmdLineParams.Last, "last", "l", time.Now().Format(time.ANSIC), "Show flows no later than --last. See help for --first for more info\n")
 	rootCmd.Flags().StringVarP(&argsLocation, "stored-query", "", "", "Load JSON serialized query arguments from disk and run them")
 	rootCmd.Flags().StringVarP(&cmdLineParams.SortBy, "sort-by", "s", query.DefaultSortBy, helpMap["SortBy"])
+	rootCmd.Flags().StringVarP(&cmdLineParams.HostQuery, "hosts-query", "q", "", "hosts resolution query")
 
 	// Integers
 	rootCmd.Flags().IntVarP(&cmdLineParams.NumResults, "limit", "n", query.DefaultNumResults, helpMap["NumResults"])
@@ -82,18 +83,15 @@ func init() {
 	// Duration
 	rootCmd.Flags().DurationVarP(&cmdLineParams.QueryTimeout, "timeout", "", query.DefaultQueryTimeout, helpMap["QueryTimeout"])
 
-	rootCmd.Flags().String(conf.LogLevel, conf.DefaultLogLevel, "log level for logger")
-	rootCmd.Flags().String(conf.LogEncoding, conf.DefaultLogEncoding, "message encoding format for logger")
-
-	rootCmd.Flags().String(conf.HostsResolverType, conf.DefaultHostsResolver, "resolver used for the hosts resolution query")
-
-	rootCmd.Flags().String(conf.HostsQuerierType, conf.DefaultHostsQuerierType, "querier used to run queries")
-	rootCmd.Flags().String(conf.HostsQuerierConfig, "", "querier config file location")
-
-	rootCmd.Flags().StringVarP(&cmdLineParams.HostQuery, "hosts-query", "q", "", "hosts resolution query")
+	rootCmd.PersistentFlags().String(conf.LogLevel, conf.DefaultLogLevel, "log level for logger")
+	rootCmd.PersistentFlags().String(conf.LogEncoding, conf.DefaultLogEncoding, "message encoding format for logger")
+	rootCmd.PersistentFlags().String(conf.HostsResolverType, conf.DefaultHostsResolver, "resolver used for the hosts resolution query")
+	rootCmd.PersistentFlags().String(conf.HostsQuerierType, conf.DefaultHostsQuerierType, "querier used to run queries")
+	rootCmd.PersistentFlags().String(conf.HostsQuerierConfig, "", "querier config file location")
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.global-query.yaml)")
 
 	_ = viper.BindPFlags(rootCmd.Flags())
+	_ = viper.BindPFlags(rootCmd.PersistentFlags())
 }
 
 func initLogger() {
@@ -241,11 +239,6 @@ func entrypoint(cmd *cobra.Command, args []string) error {
 			return err
 		}
 	}
-
-	// print all tracker information
-	// TODO: move into printer
-	// statusTracker.PrintErrorHosts(stmt.Output)
-
 	return nil
 }
 
