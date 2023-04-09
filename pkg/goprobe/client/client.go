@@ -1,9 +1,7 @@
 package client
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -13,7 +11,7 @@ import (
 	"github.com/els0r/goProbe/pkg/logging"
 	"github.com/els0r/goProbe/pkg/query"
 	"github.com/els0r/goProbe/pkg/results"
-	jsoniter "github.com/json-iterator/go"
+	"github.com/fako1024/httpc"
 	"gopkg.in/yaml.v3"
 )
 
@@ -123,24 +121,22 @@ func (c *Client) FromConfigFile(path string) (*Client, error) {
 	return c.FromReader(f)
 }
 
-func (c *Client) newAuthorizedRequest(ctx context.Context, method, path string, body io.Reader) (*http.Request, error) {
-	url := fmt.Sprintf("%s://%s/%s", c.scheme, c.hostAddr, path)
-
+func (c *Client) authorize(ctx context.Context, req *httpc.Request) *httpc.Request {
 	// TODO: this should go into the transport as well
 	if c.logRequests {
-		logger := logging.WithContext(ctx).With("method", method, "url", url)
+		logger := logging.WithContext(ctx).With("method", req.GetMethod(), "url", req.GetURI())
 		logger.Info("creating new request")
 	}
-
-	req, err := http.NewRequestWithContext(ctx, "POST", url, body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
 	if c.key != "" {
-		req.Header.Add("Authorization", fmt.Sprintf("digest %s", c.key))
+		return req.Headers(map[string]string{
+			"Authorization": fmt.Sprintf("digest %s", c.key),
+		})
 	}
+	return req
+}
 
-	return req, nil
+func (c *Client) newURL(path string) string {
+	return fmt.Sprintf("%s://%s/%s", c.scheme, c.hostAddr, path)
 }
 
 // Run implements the query.Runner interface
@@ -160,40 +156,19 @@ func (c *Client) Query(ctx context.Context, args *query.Args) (*results.Result, 
 		args.NumResults = query.DefaultNumResults
 	}
 
-	var buf = new(bytes.Buffer)
-	err := json.NewEncoder(buf).Encode(args)
-	if err != nil {
-		return nil, fmt.Errorf("failed to serialize query statement: %w", err)
-	}
-
-	ctx, cancel := context.WithTimeout(ctx, c.timeout)
-	defer cancel()
-
-	req, err := c.newAuthorizedRequest(ctx, "POST", queryPath, buf)
-	if err != nil {
-		return nil, err
-	}
-
 	var res = new(results.Result)
-	for {
-		resp, err := c.client.Do(req)
-		if err != nil {
-			return nil, fmt.Errorf("request failed: %w", err)
-		}
 
-		switch resp.StatusCode {
-		case http.StatusOK:
-			err = jsoniter.NewDecoder(resp.Body).Decode(res)
-			if err != nil {
-				return nil, fmt.Errorf("failed to decode results: %w", err)
-			}
-			return res, nil
-		case http.StatusTooManyRequests:
-			// TODO: should be backoff and live within a custom transport implementation
-			time.Sleep(10 * time.Second)
-			continue
-		default:
-			return nil, fmt.Errorf("%s", resp.Status)
-		}
+	req := c.authorize(ctx, httpc.NewWithClient("POST", c.newURL(queryPath), c.client).
+		EncodeJSON(args).
+		Timeout(c.timeout).
+		RetryBackOffErrFn(func(resp *http.Response, _ error) bool {
+			return resp.StatusCode == http.StatusTooManyRequests
+		}).
+		ParseJSON(res),
+	)
+	err := req.RunWithContext(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to run request: %w", err)
 	}
+	return res, nil
 }
