@@ -26,6 +26,9 @@ func newMockCaptureSource(maxPkts int) *mockCapture {
 func (c *mockCapture) NewPacket() capture.Packet {
 	panic("not implemented") // TODO: Implement
 }
+func (c *mockCapture) NextIPPacket(pBuf capture.IPLayer) (capture.IPLayer, capture.PacketType, uint32, error) {
+	panic("not implemented") // TODO: Implement
+}
 
 // NextPacket receives the next packet from the wire and returns it. The operation is blocking. In
 // case a non-nil "buffer" Packet is provided it will be populated with the data (and returned). The
