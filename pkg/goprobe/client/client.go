@@ -141,15 +141,15 @@ func (c *Client) newURL(path string) string {
 
 // Run implements the query.Runner interface
 func (c *Client) Run(ctx context.Context, args *query.Args) (*results.Result, error) {
-	// use a copy of the arguments, since some fields are modified by the client
-	argsQuery := *args
-	return c.Query(ctx, &argsQuery)
+	return c.Query(ctx, args)
 }
 
 // Query runs a query on the API endpoint
 func (c *Client) Query(ctx context.Context, args *query.Args) (*results.Result, error) {
+	// use a copy of the arguments, since some fields are modified by the client
+	queryArgs := *args
 	// whatever happens, the results are expected to be returned in json
-	args.Format = "json"
+	queryArgs.Format = "json"
 
 	// we need more results before truncating
 	if args.NumResults < query.DefaultNumResults {
@@ -159,7 +159,7 @@ func (c *Client) Query(ctx context.Context, args *query.Args) (*results.Result, 
 	var res = new(results.Result)
 
 	req := c.authorize(ctx, httpc.NewWithClient("POST", c.newURL(queryPath), c.client).
-		EncodeJSON(args).
+		EncodeJSON(queryArgs).
 		Timeout(c.timeout).
 		RetryBackOffErrFn(func(resp *http.Response, _ error) bool {
 			return resp.StatusCode == http.StatusTooManyRequests

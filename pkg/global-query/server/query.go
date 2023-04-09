@@ -3,11 +3,9 @@ package server
 import (
 	"fmt"
 	"net/http"
-	"strings"
 
 	"github.com/els0r/goProbe/cmd/global-query/pkg/distributed"
 	"github.com/els0r/goProbe/pkg/query"
-	"github.com/els0r/goProbe/pkg/types"
 	"github.com/gin-gonic/gin"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -26,19 +24,6 @@ func (server *Server) postQuery(c *gin.Context) {
 	if err != nil {
 		c.AbortWithError(http.StatusBadRequest, err)
 		return
-	}
-
-	// store the query type and make sure that aliases are resolved. This
-	// is important so that the hostname/hostid can be appended
-	queryArgs.Query = strings.Join(types.ToAttributeNames(queryArgs.Query), ",")
-
-	// make sure that the hostname is present in the query type (and therefore output)
-	// The assumption being that a human will have better knowledge
-	// of hostnames than of their ID counterparts
-	if queryArgs.Format == "txt" {
-		if !strings.Contains(queryArgs.Query, queryHostname) {
-			queryArgs.Query += "," + queryHostname
-		}
 	}
 
 	// check if the statement can be created
