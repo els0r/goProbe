@@ -16,9 +16,10 @@ import (
 	"github.com/els0r/goProbe/pkg/goDB"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 	"github.com/els0r/goProbe/pkg/goDB/storage/gpfile"
+	"github.com/els0r/goProbe/pkg/logging"
 	"github.com/els0r/goProbe/pkg/types"
 	"github.com/els0r/goProbe/pkg/types/hashmap"
-	"go.uber.org/zap"
+	"github.com/els0r/goProbe/pkg/version"
 )
 
 type work struct {
@@ -32,17 +33,18 @@ type converter struct {
 	pipe          chan work
 }
 
-var logger *zap.SugaredLogger
+var logger *logging.L
 
 func main() {
 
-	zapLogger, err := zap.NewProduction()
+	err := logging.Init(logging.LevelInfo, logging.EncodingLogfmt,
+		logging.WithVersion(version.Short()),
+	)
 	if err != nil {
 		fmt.Printf("failed to instantiate logger: %s\n", err)
 		os.Exit(1)
 	}
-	defer zapLogger.Sync()
-	logger = zapLogger.Sugar()
+	logger = logging.Logger()
 
 	var (
 		inPath, outPath string
@@ -88,7 +90,7 @@ func main() {
 	// Get all interfaces
 	ifaces, err := ioutil.ReadDir(inPath)
 	if err != nil {
-		logger.Fatal(err)
+		logger.Fatal(err.Error())
 	}
 	for _, iface := range ifaces {
 		if !iface.IsDir() {
@@ -98,7 +100,7 @@ func main() {
 		// Get all date directories (usually days)
 		dates, err := ioutil.ReadDir(filepath.Join(inPath, iface.Name()))
 		if err != nil {
-			logger.Fatal(err)
+			logger.Fatal(err.Error())
 		}
 		for _, date := range dates {
 			if !date.IsDir() {
@@ -151,7 +153,6 @@ func isLegacyDir(path string) (bool, error) {
 }
 
 func (c converter) convertDir(w work, dryRun bool) error {
-
 	var (
 		fs  fileSet
 		err error

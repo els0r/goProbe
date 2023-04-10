@@ -206,7 +206,7 @@ func (cmd captureCommandRotate) execute(c *Capture) stateFn {
 		// or race conditions
 		c.rotationState.request <- struct{}{}
 		if err := c.captureHandle.Unblock(); err != nil {
-			logger.Fatalf("unexpectedly failed to unblock capture handle, deadlock likely: %w", err)
+			logger.Fatalf("unexpectedly failed to unblock capture handle, deadlock likely: %v", err)
 		}
 
 		// Wait for confirmation of reception from the processing routine, then

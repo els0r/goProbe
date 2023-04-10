@@ -45,13 +45,13 @@ func (a *authenticator) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		userKey = authHeader[1]
 
 		if !a.keys.exists(userKey) {
-			logger.Debugf("user key '%s' denied: not registered")
+			logger.Debug("user key denied: not registered")
 
 			ReturnStatus(w, http.StatusUnauthorized)
 			return
 		}
 
-		logger.Debugf("user successfully authenticated")
+		logger.Debug("user successfully authenticated")
 
 		// set key in request context
 		authCtx = context.WithValue(r.Context(), apiKeyCtxKey, userKey)

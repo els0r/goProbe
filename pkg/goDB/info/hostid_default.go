@@ -3,6 +3,8 @@
 
 package info
 
+import "errors"
+
 func hostID() (string, error) {
 	return UnknownID, errors.New("not implemented")
 }

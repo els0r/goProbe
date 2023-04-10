@@ -198,7 +198,7 @@ func (h *Handler) HandleWriteouts() <-chan struct{} {
 			var err error
 			if syslogWriter, err = goDB.NewSyslogDBWriter(); err != nil {
 				// we are not failing here due to the fact that a DB write out should still be attempted.
-				logger.Error("failed to create syslog based flow writer: %v", err)
+				logger.Errorf("failed to create syslog based flow writer: %v", err)
 			}
 		}
 
@@ -239,7 +239,7 @@ func (h *Handler) HandleWriteouts() <-chan struct{} {
 
 						// try to reinitialize the writer
 						if syslogWriter, err = goDB.NewSyslogDBWriter(); err != nil {
-							logger.Error("failed to reinitialize syslog writer: %v", err)
+							logger.Errorf("failed to reinitialize syslog writer: %v", err)
 						}
 					}
 				}
