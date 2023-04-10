@@ -63,8 +63,8 @@ func (p *GPPacket) Populate(pkt capture.Packet) error {
 	// Extract the IP layer of the packet
 	srcPacket := pkt.IPLayer()
 
-	// read the direction from which the packet entered the interface
-	p.dirInbound = pkt.Type() == 0
+	// Ascertain the direction from which the packet entered the interface
+	p.dirInbound = pkt.IsInbound()
 	p.numBytes = pkt.TotalLen()
 	var protocol byte
 

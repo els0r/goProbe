@@ -2,7 +2,7 @@ module github.com/els0r/goProbe
 
 require (
 	github.com/els0r/status v1.0.0
-	github.com/fako1024/slimcap v0.0.0-20230312144344-ffc7db30268a
+	github.com/fako1024/slimcap v0.0.0-20230321123248-08a876d268b3
 	github.com/go-chi/chi/v5 v5.0.7
 	github.com/json-iterator/go v1.1.12
 	github.com/spf13/cobra v1.5.0
