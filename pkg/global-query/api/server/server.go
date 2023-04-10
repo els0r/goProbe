@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/els0r/goProbe/cmd/global-query/pkg/hosts"
-	"github.com/els0r/goProbe/pkg/global-query/routes"
+	"github.com/els0r/goProbe/pkg/global-query/api"
 	"github.com/gin-gonic/gin"
 )
 
@@ -50,7 +50,7 @@ func NewServer(addr string, resolver hosts.Resolver, querier hosts.Querier, opts
 
 func (server *Server) registerMiddlewares() {}
 func (server *Server) registerRoutes() {
-	server.router.POST(routes.Query, server.postQuery)
+	server.router.POST(api.QueryRoute, server.postQuery)
 }
 
 const headerTimeout = 30 * time.Second

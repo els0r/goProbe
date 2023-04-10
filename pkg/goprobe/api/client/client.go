@@ -8,6 +8,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/els0r/goProbe/pkg/goprobe/api"
 	"github.com/els0r/goProbe/pkg/logging"
 	"github.com/els0r/goProbe/pkg/query"
 	"github.com/els0r/goProbe/pkg/results"
@@ -24,14 +25,8 @@ type Client struct {
 	hostAddr string
 	key      string
 
-	logRequests bool
+	requestLogging bool
 }
-
-const (
-	apiPath = "api/v1"
-
-	queryPath = apiPath + "/_query"
-)
 
 const defaultRequestTimeout = 30 * time.Second
 
@@ -40,7 +35,7 @@ func New() *Client {
 	return &Client{
 		client:   http.DefaultClient,
 		scheme:   "http",
-		hostAddr: "localhost:6061",
+		hostAddr: api.DefaultServerAddress,
 		timeout:  defaultRequestTimeout,
 	}
 }
@@ -64,7 +59,7 @@ func (c *Client) APIKey(key string) *Client {
 
 // LogRequests toggles request logging
 func (c *Client) LogRequests(b bool) *Client {
-	c.logRequests = b
+	c.requestLogging = b
 	return c
 }
 
@@ -121,14 +116,18 @@ func (c *Client) FromConfigFile(path string) (*Client, error) {
 	return c.FromReader(f)
 }
 
-func (c *Client) authorize(ctx context.Context, req *httpc.Request) *httpc.Request {
-	// TODO: this should go into the transport as well
-	if c.logRequests {
-		logger := logging.WithContext(ctx).With("method", req.GetMethod(), "url", req.GetURI())
-		logger.Info("creating new request")
+func (c *Client) modify(ctx context.Context, req *httpc.Request) *httpc.Request {
+	if c.requestLogging {
+		req = req.ModifyRequest(func(req *http.Request) error {
+			logging.WithContext(ctx).WithGroup("req").With("method", req.Method, "url", req.URL).Infof("sending request")
+			return nil
+		})
+	}
+	if c.timeout > 0 {
+		req = req.Timeout(c.timeout)
 	}
 	if c.key != "" {
-		return req.Headers(map[string]string{
+		req = req.Headers(map[string]string{
 			"Authorization": fmt.Sprintf("digest %s", c.key),
 		})
 	}
@@ -158,7 +157,7 @@ func (c *Client) Query(ctx context.Context, args *query.Args) (*results.Result, 
 
 	var res = new(results.Result)
 
-	req := c.authorize(ctx, httpc.NewWithClient("POST", c.newURL(queryPath), c.client).
+	req := c.modify(ctx, httpc.NewWithClient("POST", c.newURL(api.QueryRoute), c.client).
 		EncodeJSON(queryArgs).
 		Timeout(c.timeout).
 		RetryBackOffErrFn(func(resp *http.Response, _ error) bool {

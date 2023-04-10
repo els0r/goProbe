@@ -700,7 +700,7 @@ func (t *TextTablePrinter) Print(result *Result) error {
 	// print the host list if it  isn't covered by the above already
 	if len(result.HostsStatuses) > 1 {
 		result.HostsStatuses.Print(t.output)
+		fmt.Fprintln(t.output)
 	}
-	fmt.Fprintln(t.output)
 	return nil
 }

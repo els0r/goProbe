@@ -1,24 +1,14 @@
 package cmd
 
 import (
-	"context"
-	"errors"
 	"fmt"
 	"os"
-	"os/signal"
-	"strings"
-	"syscall"
-	"time"
 
 	"github.com/els0r/goProbe/cmd/global-query/pkg/conf"
-	"github.com/els0r/goProbe/cmd/global-query/pkg/distributed"
 	"github.com/els0r/goProbe/cmd/global-query/pkg/hosts"
 	"github.com/els0r/goProbe/pkg/logging"
 	"github.com/els0r/goProbe/pkg/query"
-	"github.com/els0r/goProbe/pkg/results"
-	"github.com/els0r/goProbe/pkg/types"
 	"github.com/els0r/goProbe/pkg/version"
-	jsoniter "github.com/json-iterator/go"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -30,14 +20,14 @@ var (
 	argsLocation  string
 )
 
-var shortText = "Query distributed goDBs and aggregate the results"
+var shortText = "Query server for running distributed goQuery queries and aggregating the results"
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:           "global-query",
-	Short:         shortText,
-	Long:          shortText,
-	RunE:          entrypoint,
+	Use:           "global-query [flags] [" + supportedCmds + "]",
+	Short:         helpBase,
+	Long:          helpBase,
+	RunE:          func(cmd *cobra.Command, args []string) error { return nil },
 	SilenceErrors: true,
 	SilenceUsage:  true,
 }
@@ -57,37 +47,12 @@ func init() {
 	rootCmd.InitDefaultHelpCmd()
 	rootCmd.InitDefaultHelpFlag()
 
-	rootCmd.Flags().BoolVarP(&cmdLineParams.In, "in", "", query.DefaultIn, helpMap["In"])
-	rootCmd.Flags().BoolVarP(&cmdLineParams.Out, "out", "", query.DefaultOut, helpMap["Out"])
-	rootCmd.Flags().BoolVarP(&cmdLineParams.DNSResolution.Enabled, "resolve", "", false, helpMap["Resolve"])
-	rootCmd.Flags().BoolVarP(&cmdLineParams.SortAscending, "ascending", "a", false, helpMap["SortAscending"])
-	rootCmd.Flags().BoolVarP(&cmdLineParams.Sum, "sum", "", false, helpMap["Sum"])
-	rootCmd.Flags().BoolVarP(&cmdLineParams.Version, "version", "v", false, "Print version information and exit\n")
-
-	// Strings
-	rootCmd.Flags().StringVarP(&cmdLineParams.Condition, "condition", "c", "", helpMap["Condition"])
-	rootCmd.Flags().StringVarP(&cmdLineParams.First, "first", "f", time.Now().AddDate(0, -1, 0).Format(time.ANSIC), helpMap["First"])
-	rootCmd.Flags().StringVarP(&cmdLineParams.Format, "format", "e", query.DefaultFormat, helpMap["Format"])
-	rootCmd.Flags().StringVarP(&cmdLineParams.Ifaces, "ifaces", "i", "", helpMap["Ifaces"])
-	rootCmd.Flags().StringVarP(&cmdLineParams.Last, "last", "l", time.Now().Format(time.ANSIC), "Show flows no later than --last. See help for --first for more info\n")
-	rootCmd.Flags().StringVarP(&argsLocation, "stored-query", "", "", "Load JSON serialized query arguments from disk and run them")
-	rootCmd.Flags().StringVarP(&cmdLineParams.SortBy, "sort-by", "s", query.DefaultSortBy, helpMap["SortBy"])
-	rootCmd.Flags().StringVarP(&cmdLineParams.HostQuery, "hosts-query", "q", "", "hosts resolution query")
-
-	// Integers
-	rootCmd.Flags().IntVarP(&cmdLineParams.NumResults, "limit", "n", query.DefaultNumResults, helpMap["NumResults"])
-	rootCmd.Flags().IntVarP(&cmdLineParams.DNSResolution.MaxRows, "resolve-rows", "", query.DefaultResolveRows, helpMap["ResolveRows"])
-	rootCmd.Flags().DurationVarP(&cmdLineParams.DNSResolution.Timeout, "resolve-timeout", "", query.DefaultResolveTimeout, helpMap["ResolveTimeout"])
-	rootCmd.Flags().IntVarP(&cmdLineParams.MaxMemPct, "max-mem", "", query.DefaultMaxMemPct, helpMap["MaxMemPct"])
-
-	// Duration
-	rootCmd.Flags().DurationVarP(&cmdLineParams.QueryTimeout, "timeout", "", query.DefaultQueryTimeout, helpMap["QueryTimeout"])
-
 	rootCmd.PersistentFlags().String(conf.LogLevel, conf.DefaultLogLevel, "log level for logger")
 	rootCmd.PersistentFlags().String(conf.LogEncoding, conf.DefaultLogEncoding, "message encoding format for logger")
 	rootCmd.PersistentFlags().String(conf.HostsResolverType, conf.DefaultHostsResolver, "resolver used for the hosts resolution query")
 	rootCmd.PersistentFlags().String(conf.HostsQuerierType, conf.DefaultHostsQuerierType, "querier used to run queries")
 	rootCmd.PersistentFlags().String(conf.HostsQuerierConfig, "", "querier config file location")
+
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.global-query.yaml)")
 
 	_ = viper.BindPFlags(rootCmd.Flags())
@@ -95,14 +60,12 @@ func init() {
 }
 
 func initLogger() {
-	outputPaths := []string{"stderr"}
-
 	// since this is a command line tool, only warnings and errors should be printed and they
 	// shouldn't go to a dedicated file
-	err := logging.Init("global-query", version.Short(), viper.GetString(conf.LogLevel), "logfmt",
-		logging.WithOutputPaths(outputPaths),
-		logging.WithErrorPaths(outputPaths),
-		logging.WithStackTraces(false),
+	err := logging.Init(logging.LevelFromString(viper.GetString(conf.LogLevel)), logging.Encoding(viper.GetString(conf.LogEncoding)),
+		logging.WithVersion(version.Short()),
+		logging.WithOutput(os.Stdout),
+		logging.WithErrorOutput(os.Stderr),
 	)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to initialize logger: %v\n", err)
@@ -155,96 +118,4 @@ func initQuerier() (hosts.Querier, error) {
 		err := fmt.Errorf("querier type %q not supported", querierType)
 		return nil, err
 	}
-}
-
-const (
-	queryHostname = "hostname"
-	queryHostID   = "hostid"
-)
-
-func entrypoint(cmd *cobra.Command, args []string) error {
-	// assign query args
-	var queryArgs = *cmdLineParams
-
-	// check that query type or other subcommands were provided
-	if len(args) == 0 {
-		err := errors.New("No query type or command provided")
-		fmt.Fprintf(os.Stderr, "%v\n%s\n", err, cmd.Long)
-		return err
-	}
-	if args[0] == "help" {
-		cmd.Help()
-		return nil
-	}
-	queryArgs.Query = args[0]
-
-	// store the query type and make sure that aliases are resolved. This
-	// is important so that the hostname/hostid can be appended
-	queryArgs.Query = strings.Join(types.ToAttributeNames(queryArgs.Query), ",")
-
-	// make sure that the hostname is present in the query type (and therefore output)
-	// The assumption being that a human will have better knowledge
-	// of hostnames than of their ID counterparts
-	if queryArgs.Format == "txt" {
-		if !strings.Contains(queryArgs.Query, queryHostname) {
-			queryArgs.Query += "," + queryHostname
-		}
-	}
-
-	// check if the statement can be created
-	stmt, err := queryArgs.Prepare()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to prepare query statement: %v\n", err)
-		return err
-	}
-
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
-	defer stop()
-
-	hostListResolver, err := initHostListResolver()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Couldn't prepare query: %v\n", err)
-		return err
-	}
-
-	// get the workload provider
-	querier, err := initQuerier()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to set up queriers: %v\n", err)
-		return err
-	}
-
-	finalResult, err := distributed.NewQuerier(hostListResolver, querier).Run(ctx, &queryArgs)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Distributed query failed: %v\n", err)
-		return err
-	}
-
-	// serialize raw result if json is selected
-	if stmt.Format == "json" {
-		err = jsoniter.NewEncoder(stmt.Output).Encode(finalResult)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Results serialization failed: %v\n", err)
-			return err
-		}
-		return nil
-	}
-
-	if finalResult.Status.Code != types.StatusOK {
-		fmt.Fprintf(stmt.Output, "Status %q: %s\n", finalResult.Status.Code, finalResult.Status.Message)
-	} else {
-		err = stmt.Print(ctx, finalResult)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Result printing failed: %v\n", err)
-			return err
-		}
-	}
-	return nil
-}
-
-type nopRunner struct{}
-
-func (n *nopRunner) Run(_ context.Context, _ *query.Statement) (res []results.Result, err error) {
-	fmt.Println("running nop query")
-	return res, err
 }

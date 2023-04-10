@@ -10,12 +10,14 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/els0r/goProbe/cmd/goQuery/pkg/conf"
 	"github.com/els0r/goProbe/pkg/goDB/info"
 	"github.com/els0r/goProbe/pkg/goDB/storage/gpfile"
 	"github.com/els0r/goProbe/pkg/query"
 	"github.com/els0r/goProbe/pkg/types"
 	"github.com/els0r/status"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 var adminCmd = &cobra.Command{
@@ -43,16 +45,18 @@ var cleanCmd = &cobra.Command{
 			return fmt.Errorf("failed to set clean date: %s", err)
 		}
 
+		dbpath := viper.GetString(conf.DBPath)
+
 		// check if DB exists at path
-		err = info.CheckDBExists(subcmdLineParams.DBPath)
+		err = info.CheckDBExists(dbpath)
 		if err != nil {
 			return err
 		}
 
 		// cleanup DB
 		t := time.Unix(tClean, 0)
-		fmt.Printf("Cleaning DBs older than '%s' at %s\n", t.Format(time.ANSIC), subcmdLineParams.DBPath)
-		err = cleanOldDBDirs(subcmdLineParams.DBPath, tClean)
+		fmt.Printf("Cleaning DBs older than '%s' at %s\n", t.Format(time.ANSIC), dbpath)
+		err = cleanOldDBDirs(dbpath, tClean)
 		if err != nil {
 			return fmt.Errorf("database clean up failed: %s", err)
 		}
@@ -65,17 +69,19 @@ var wipeCmd = &cobra.Command{
 	Short: "Wipes the entire database. CAUTION: all your data will be lost if you run this!",
 	RunE: func(cmd *cobra.Command, args []string) error {
 
+		dbpath := viper.GetString(conf.DBPath)
+
 		status.Linef("Completely wiping DB")
 
 		// check if DB exists at path
-		err := info.CheckDBExists(subcmdLineParams.DBPath)
+		err := info.CheckDBExists(dbpath)
 		defer handleStatus(err)
 
 		if err != nil {
 			return err
 		}
 
-		err = wipeDB(subcmdLineParams.DBPath)
+		err = wipeDB(dbpath)
 		if err != nil {
 			return fmt.Errorf("database wipe failed: %s", err)
 		}
@@ -100,6 +106,7 @@ type cleanIfaceResult struct {
 	Gone         bool                   // The interface has no entries left
 }
 
+// TODO: this method probably doesn't reflect the new folder structure. Double check!
 func cleanIfaceDir(dbPath string, timestamp int64, iface string) (result cleanIfaceResult, err error) {
 
 	dayTimestamp := gpfile.DirTimestamp(timestamp)
@@ -134,7 +141,6 @@ func cleanIfaceDir(dbPath string, timestamp int64, iface string) (result cleanIf
 		gpDir := gpfile.NewDir(filepath.Join(dbPath, iface), dirTimestamp, gpfile.ModeRead)
 		if dirTimestamp < dayTimestamp {
 			// delete directory
-
 			if err := gpDir.Open(); err == nil {
 				result.DeltaCounts = result.DeltaCounts.Add(gpDir.Counts)
 				result.DeltaTraffic = result.DeltaTraffic.Add(gpDir.Traffic)

@@ -7,7 +7,7 @@ import (
 	"os"
 	"sync"
 
-	"github.com/els0r/goProbe/pkg/goprobe/client"
+	"github.com/els0r/goProbe/pkg/goprobe/api/client"
 	"github.com/els0r/goProbe/pkg/logging"
 	"github.com/els0r/goProbe/pkg/query"
 	"github.com/els0r/goProbe/pkg/results"

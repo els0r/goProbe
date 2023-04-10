@@ -19,6 +19,7 @@ import (
 	"os"
 	"sync"
 
+	"github.com/els0r/goProbe/pkg/defaults"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 )
 
@@ -75,9 +76,6 @@ type LogConfig struct {
 	Destination string `json:"destination"`
 	Level       string `json:"level"`
 	Encoding    string `json:"encoding"`
-
-	DevelopmentMode bool `json:"developmentMode,omitempty"`
-	StackTraces     bool `json:"stackTraces,omitempty"`
 }
 
 // APIConfig stores goProbe's API configuration
@@ -103,6 +101,7 @@ type DiscoveryConfig struct {
 func New() *Config {
 	return &Config{
 		DB: DBConfig{
+			Path:        defaults.DBPath,
 			EncoderType: "lz4",
 		},
 		Interfaces: make(Ifaces),
