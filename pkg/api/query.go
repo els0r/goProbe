@@ -1,21 +1,15 @@
-package server
+package api
 
 import (
 	"fmt"
 	"net/http"
 
-	"github.com/els0r/goProbe/cmd/global-query/pkg/distributed"
 	"github.com/els0r/goProbe/pkg/query"
 	"github.com/gin-gonic/gin"
 	jsoniter "github.com/json-iterator/go"
 )
 
-const (
-	queryHostname = "hostname"
-	queryHostID   = "hostid"
-)
-
-func (server *Server) postQuery(c *gin.Context) {
+func RunQuery(caller, sourceData string, querier query.Runner, c *gin.Context) {
 	ctx := c.Request.Context()
 
 	// parse query args from request
@@ -26,6 +20,12 @@ func (server *Server) postQuery(c *gin.Context) {
 		return
 	}
 
+	// make sure that the caller variable is always the API
+	queryArgs.Caller = caller
+
+	// the default format is json
+	queryArgs.Format = "json"
+
 	// check if the statement can be created
 	_, err = queryArgs.Prepare()
 	if err != nil {
@@ -33,13 +33,12 @@ func (server *Server) postQuery(c *gin.Context) {
 		return
 	}
 
-	finalResult, err := distributed.NewQuerier(server.hostListResolver, server.querier).Run(ctx, queryArgs)
+	result, err := querier.Run(ctx, queryArgs)
 	if err != nil {
-		c.AbortWithError(http.StatusInternalServerError, fmt.Errorf("distributed query failed: %w", err))
+		c.AbortWithError(http.StatusInternalServerError, fmt.Errorf("%s query failed: %w", sourceData, err))
 		return
 	}
 
 	// serialize raw result if json is selected
-	c.JSON(http.StatusOK, finalResult)
-	return
+	c.JSON(http.StatusOK, result)
 }

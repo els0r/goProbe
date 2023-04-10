@@ -53,9 +53,6 @@ func WithResolveTimeout(t time.Duration) Option { return func(a *Args) { a.DNSRe
 // WithResolveRows sets the amount of rows for which lookups should be attempted
 func WithResolveRows(r int) Option { return func(a *Args) { a.DNSResolution.MaxRows = r } }
 
-// WithDBPath sets the location of the goDB
-func WithDBPath(p string) Option { return func(a *Args) { a.DBPath = p } }
-
 // WithMaxMemPct is an advanced parameter to restrict system memory usage to a fixed percentage of the available memory during query processing
 func WithMaxMemPct(m int) Option { return func(a *Args) { a.MaxMemPct = m } }
 

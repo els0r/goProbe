@@ -1,6 +1,7 @@
 package query
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -8,10 +9,10 @@ import (
 	"time"
 
 	"github.com/els0r/goProbe/pkg/goDB/conditions"
-	"github.com/els0r/goProbe/pkg/goDB/info"
 	"github.com/els0r/goProbe/pkg/query/dns"
 	"github.com/els0r/goProbe/pkg/results"
 	"github.com/els0r/goProbe/pkg/types"
+	"golang.org/x/exp/slog"
 )
 
 // NewArgs creates new query arguments with the defaults set
@@ -22,7 +23,6 @@ func NewArgs(query, ifaces string, opts ...Option) *Args {
 		Ifaces: ifaces,
 
 		// defaults
-		DBPath:     DefaultDBPath,
 		First:      time.Now().AddDate(0, -1, 0).Format(time.ANSIC),
 		Format:     DefaultFormat,
 		In:         DefaultIn,
@@ -82,9 +82,8 @@ type Args struct {
 	DNSResolution DNSResolution `json:"dns_resolution,omitempty" yaml:"dns_resolution,omitempty"`
 
 	// file system
-	DBPath    string `json:"db_path,omitempty" yaml:"db_path,omitempty"`
-	MaxMemPct int    `json:"max_mem_pct,omitempty" yaml:"max_mem_pct,omitempty"`
-	LowMem    bool   `json:"low_mem,omitempty" yaml:"low_mem,omitempty"`
+	MaxMemPct int  `json:"max_mem_pct,omitempty" yaml:"max_mem_pct,omitempty"`
+	LowMem    bool `json:"low_mem,omitempty" yaml:"low_mem,omitempty"`
 
 	// stores who produced these args (caller)
 	Caller string `json:"caller,omitempty" yaml:"caller,omitempty"`
@@ -118,8 +117,7 @@ func (a *Args) String() string {
 	if a.Condition != "" {
 		str += fmt.Sprintf(", condition: %s", a.Condition)
 	}
-	str += fmt.Sprintf(", db: %s, limit: %d, from: %s, to: %s",
-		a.DBPath,
+	str += fmt.Sprintf(", limit: %d, from: %s, to: %s",
 		a.NumResults,
 		a.First,
 		a.Last,
@@ -134,6 +132,15 @@ func (a *Args) String() string {
 	}
 	str += "}"
 	return str
+}
+
+func (a *Args) LogValue() slog.Value {
+	val := "<marshal failed>"
+	b, err := json.Marshal(a)
+	if err == nil {
+		val = string(b)
+	}
+	return slog.StringValue(val)
 }
 
 // Prepare takes the query Arguments, validates them and creates an executable statement. Optionally, additional writers can be passed to route query results to different destinations.
@@ -160,14 +167,6 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 		return s, fmt.Errorf("unknown output format '%s'", a.Format)
 	}
 	s.Format = a.Format
-
-	s.DBPath = a.DBPath
-
-	// assign ifaces
-	s.Ifaces, err = parseIfaceList(s.DBPath, a.Ifaces)
-	if err != nil {
-		return s, fmt.Errorf("failed to parse interface list: %w", err)
-	}
 
 	// assign sort order and direction
 	s.SortBy, verifies = PermittedSortBy[a.SortBy]
@@ -271,26 +270,4 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 	}
 
 	return s, nil
-}
-
-func parseIfaceList(dbPath string, ifacelist string) (ifaces []string, err error) {
-	if ifacelist == "" {
-		return nil, fmt.Errorf("no interface(s) specified")
-	}
-
-	if strings.ToLower(ifacelist) == "any" {
-		ifaces, err = info.GetInterfaces(dbPath)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		ifaces = strings.Split(ifacelist, ",")
-		for _, iface := range ifaces {
-			if iface == "" {
-				err = fmt.Errorf("interface list contains empty interface name")
-				return
-			}
-		}
-	}
-	return
 }

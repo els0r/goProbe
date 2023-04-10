@@ -4,10 +4,10 @@ package v1
 import (
 	"net/http"
 
-	"github.com/els0r/goProbe/pkg/api/errors"
 	"github.com/els0r/goProbe/pkg/capture"
 	"github.com/els0r/goProbe/pkg/discovery"
 	"github.com/els0r/goProbe/pkg/goprobe/writeout"
+	"github.com/els0r/goProbe/pkg/legacyapi/errors"
 	"github.com/go-chi/chi/v5"
 )
 

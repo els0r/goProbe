@@ -13,7 +13,9 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -22,9 +24,8 @@ import (
 	"time"
 
 	"github.com/els0r/goProbe/cmd/goProbe/flags"
-	"github.com/els0r/goProbe/pkg/api"
+	"github.com/els0r/goProbe/pkg/api/goprobe/server"
 	"github.com/els0r/goProbe/pkg/capture"
-	"github.com/els0r/goProbe/pkg/discovery"
 	"github.com/els0r/goProbe/pkg/goDB"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 	"github.com/els0r/goProbe/pkg/goprobe/writeout"
@@ -161,41 +162,41 @@ func main() {
 
 	// configure api server
 	var (
-		server     *api.Server
-		apiOptions = []api.Option{api.WithDBPath(config.DB.Path)}
+		apiServer  *server.Server
+		apiOptions = []server.Option{server.WithDBPath(config.DB.Path)}
 	)
 
-	if config.API.Metrics {
-		apiOptions = append(apiOptions, api.WithMetricsExport())
-	}
-	if len(config.API.Keys) > 0 {
-		apiOptions = append(apiOptions, api.WithKeys(config.API.Keys))
-	}
-	if config.API.Host != "" {
-		apiOptions = append(apiOptions, api.WithHost(config.API.Host))
-	}
-	if config.API.Timeout > 0 {
-		apiOptions = append(apiOptions, api.WithTimeout(config.API.Timeout))
-	}
+	// if config.API.Metrics {
+	// 	apiOptions = append(apiOptions, api.WithMetricsExport())
+	// }
+	// if len(config.API.Keys) > 0 {
+	// 	apiOptions = append(apiOptions, api.WithKeys(config.API.Keys))
+	// }
+	// if config.API.Host != "" {
+	// 	apiOptions = append(apiOptions, api.WithHost(config.API.Host))
+	// }
+	// if config.API.Timeout > 0 {
+	// 	apiOptions = append(apiOptions, api.WithTimeout(config.API.Timeout))
+	// }
 
 	// run go-routine to register with discovery service
-	var (
-		discoveryConfigUpdate chan *discovery.Config
-		discoveryConfig       *discovery.Config
-	)
-	if config.API.Discovery != nil {
-		var clientOpts []discovery.Option
-		if config.API.Discovery.SkipVerify {
-			clientOpts = append(clientOpts, discovery.WithAllowSelfSignedCerts())
-		}
+	// var (
+	// 	discoveryConfigUpdate chan *discovery.Config
+	// 	discoveryConfig       *discovery.Config
+	// )
+	// if config.API.Discovery != nil {
+	// 	var clientOpts []discovery.Option
+	// 	if config.API.Discovery.SkipVerify {
+	// 		clientOpts = append(clientOpts, discovery.WithAllowSelfSignedCerts())
+	// 	}
 
-		discoveryConfigUpdate = discovery.RunConfigRegistration(
-			discovery.NewClient(config.API.Discovery.Registry, clientOpts...),
-		)
+	// 	discoveryConfigUpdate = discovery.RunConfigRegistration(
+	// 		discovery.NewClient(config.API.Discovery.Registry, clientOpts...),
+	// 	)
 
-		// allow API to update config
-		apiOptions = append(apiOptions, api.WithDiscoveryConfigUpdate(discoveryConfigUpdate))
-	}
+	// 	// allow API to update config
+	// 	apiOptions = append(apiOptions, api.WithDiscoveryConfigUpdate(discoveryConfigUpdate))
+	// }
 
 	// start goroutine for writeouts
 	writeoutHandler := writeout.NewHandler(captureManager, encoderType).
@@ -209,20 +210,17 @@ func main() {
 	writeoutHandler.HandleRotations(ctx, time.Duration(goDB.DBWriteInterval)*time.Second)
 
 	// create server and start listening for requests
-	server, err = api.New(config.API.Port, captureManager, writeoutHandler, apiOptions...)
-	if err != nil {
-		logger.Errorf("failed to spawn API server: %s", err)
-	} else {
-		// start server
-		server.Run()
-	}
+	if config.API != nil {
+		addr := fmt.Sprintf("%s:%s", config.API.Host, config.API.Port)
+		apiServer = server.New(addr, captureManager, writeoutHandler, apiOptions...)
 
-	// report supported API versions if discovery is used
-	if config.API.Discovery != nil {
-		discoveryConfig = discovery.MakeConfig(config)
-		discoveryConfig.Versions = server.SupportedAPIs()
-
-		discoveryConfigUpdate <- discoveryConfig
+		logger.With("addr", addr).Info("starting API server")
+		go func() {
+			err = apiServer.Serve()
+			if err != nil && !errors.Is(err, http.ErrServerClosed) {
+				logger.Fatalf("failed to spawn goProbe API server: %s", err)
+			}
+		}()
 	}
 
 	// listen for the interrupt signal
@@ -237,13 +235,21 @@ func main() {
 	fallbackCtx, cancel := context.WithTimeout(context.Background(), shutdownGracePeriod)
 	defer cancel()
 
+	// shut down running server resources, forcibly if need be
+	if config.API != nil {
+		err = apiServer.Shutdown(fallbackCtx)
+		if err != nil {
+			logger.Errorf("forced shut down of goProbe API server: %v", err)
+		}
+	}
+
 	// one last writeout
 	writeoutHandler.FullWriteout(fallbackCtx, time.Now())
 	writeoutHandler.Close()
 
-	if discoveryConfigUpdate != nil {
-		close(discoveryConfigUpdate)
-	}
+	// if discoveryConfigUpdate != nil {
+	// 	close(discoveryConfigUpdate)
+	// }
 
 	captureManager.CloseAll()
 

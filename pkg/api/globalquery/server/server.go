@@ -5,8 +5,9 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/els0r/goProbe/cmd/global-query/pkg/distributed"
 	"github.com/els0r/goProbe/cmd/global-query/pkg/hosts"
-	"github.com/els0r/goProbe/pkg/global-query/api"
+	gqapi "github.com/els0r/goProbe/pkg/api/globalquery"
 	"github.com/gin-gonic/gin"
 )
 
@@ -14,7 +15,7 @@ type Option func(*Server)
 
 type Server struct {
 	hostListResolver hosts.Resolver
-	querier          hosts.Querier
+	querier          distributed.Querier
 
 	// TODO: authorize API access
 	keys []string
@@ -25,7 +26,7 @@ type Server struct {
 	router *gin.Engine
 }
 
-func NewServer(addr string, resolver hosts.Resolver, querier hosts.Querier, opts ...Option) *Server {
+func NewServer(addr string, resolver hosts.Resolver, querier distributed.Querier, opts ...Option) *Server {
 	server := &Server{
 		addr:             addr,
 		hostListResolver: resolver,
@@ -50,7 +51,7 @@ func NewServer(addr string, resolver hosts.Resolver, querier hosts.Querier, opts
 
 func (server *Server) registerMiddlewares() {}
 func (server *Server) registerRoutes() {
-	server.router.POST(api.QueryRoute, server.postQuery)
+	RegisterQueryHandler(server.router, gqapi.QueryRoute, server.hostListResolver, server.querier)
 }
 
 const headerTimeout = 30 * time.Second

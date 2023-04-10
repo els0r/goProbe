@@ -6,7 +6,5 @@ const (
 
 // Routes
 const (
-	apiV1route = "api/v1"
-
-	QueryRoute = apiV1route + "/_query"
+	QueryRoute = "/_query"
 )

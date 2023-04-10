@@ -9,7 +9,7 @@ import (
 	"syscall"
 
 	"github.com/els0r/goProbe/cmd/global-query/pkg/conf"
-	"github.com/els0r/goProbe/pkg/global-query/api/server"
+	"github.com/els0r/goProbe/pkg/api/globalquery/server"
 	"github.com/els0r/goProbe/pkg/logging"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"

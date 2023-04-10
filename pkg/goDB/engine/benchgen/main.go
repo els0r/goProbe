@@ -33,7 +33,7 @@ func BenchmarkStdQueryJSONOutput(b *testing.B) {
 
 	benchQuery(b, buf, flushCaches,
 		"eth1", "time",
-		[]query.Option{query.WithDBPath(TestDB),
+		[]query.Option{
 			query.WithFirst("0"),
 			query.WithNumResults(query.MaxResults),
 			query.WithFormat("json"),
@@ -51,7 +51,7 @@ func BenchmarkStdQueryJSONOutputCondition(b *testing.B) {
 
 	benchQuery(b, buf, flushCaches,
 		"eth1", "time",
-		[]query.Option{query.WithDBPath(TestDB),
+		[]query.Option{
 			query.WithFirst("0"),
 			query.WithNumResults(query.MaxResults),
 			query.WithFormat("json"),
@@ -68,7 +68,7 @@ func BenchmarkStdQueryTableOutput(b *testing.B) {
 
 	benchQuery(b, buf, flushCaches,
 		"eth1", "time",
-		[]query.Option{query.WithDBPath(TestDB),
+		[]query.Option{
 			query.WithFirst("0"),
 			query.WithNumResults(query.MaxResults),
 		}...,
@@ -83,7 +83,7 @@ func BenchmarkStdQueryTableOutputCondition(b *testing.B) {
 
 	benchQuery(b, buf, flushCaches,
 		"eth1", "time",
-		[]query.Option{query.WithDBPath(TestDB),
+		[]query.Option{
 			query.WithFirst("0"),
 			query.WithNumResults(query.MaxResults),
 			query.WithCondition("dport eq 443"),
@@ -99,7 +99,7 @@ func BenchmarkStdQueryCSVOutput(b *testing.B) {
 
 	benchQuery(b, buf, flushCaches,
 		"eth1", "time",
-		[]query.Option{query.WithDBPath(TestDB),
+		[]query.Option{
 			query.WithFirst("0"),
 			query.WithNumResults(query.MaxResults),
 			query.WithFormat("csv"),
@@ -115,7 +115,7 @@ func BenchmarkStdQueryCSVOutputCondition(b *testing.B) {
 
 	benchQuery(b, buf, flushCaches,
 		"eth1", "time",
-		[]query.Option{query.WithDBPath(TestDB),
+		[]query.Option{
 			query.WithFirst("0"),
 			query.WithNumResults(query.MaxResults),
 			query.WithCondition("dport eq 443"),
@@ -133,7 +133,7 @@ func benchQuery(b *testing.B, buf *bytes.Buffer, flushFunc func(), iface, queryS
 		// prepare query
 		args := query.NewArgs(queryStr, iface, opts...).AddOutputs(buf)
 		// run query
-		_, err := NewQueryRunner().Run(context.Background(), args)
+		_, err := NewQueryRunner(TestDB).Run(context.Background(), args)
 		if err != nil {
 			b.Fatalf("error during execute: ` + "%%s" + `", err)
 		}
@@ -190,7 +190,7 @@ func BenchmarkNFq{{$trimmedQuery | upper}}i{{$trimmedIfaces | upper }}n{{if le .
 
 	benchQuery(b, buf, nil,
 		"{{ .Iface }}", "{{.Query}}",
-		[]query.Option{query.WithDBPath(TestDB),
+		[]query.Option{
 			query.WithFirst("0"),
 			query.WithNumResults({{ .N }}),
             {{if .Condition -}}

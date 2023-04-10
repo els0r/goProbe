@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/els0r/goProbe/cmd/global-query/pkg/conf"
+	"github.com/els0r/goProbe/cmd/global-query/pkg/distributed"
 	"github.com/els0r/goProbe/cmd/global-query/pkg/hosts"
 	"github.com/els0r/goProbe/pkg/logging"
 	"github.com/els0r/goProbe/pkg/query"
@@ -109,11 +110,11 @@ func initHostListResolver() (hosts.Resolver, error) {
 	}
 }
 
-func initQuerier() (hosts.Querier, error) {
+func initQuerier() (distributed.Querier, error) {
 	querierType := viper.GetString(conf.HostsQuerierType)
 	switch querierType {
-	case string(hosts.APIClientQuerierType):
-		return hosts.NewAPIClientQuerier(viper.GetString(conf.HostsQuerierConfig))
+	case string(distributed.APIClientQuerierType):
+		return distributed.NewAPIClientQuerier(viper.GetString(conf.HostsQuerierConfig))
 	default:
 		err := fmt.Errorf("querier type %q not supported", querierType)
 		return nil, err

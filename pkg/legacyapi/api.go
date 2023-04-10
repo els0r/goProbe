@@ -6,11 +6,11 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/els0r/goProbe/pkg/api/errors"
-	v1 "github.com/els0r/goProbe/pkg/api/v1"
 	"github.com/els0r/goProbe/pkg/capture"
 	"github.com/els0r/goProbe/pkg/discovery"
 	"github.com/els0r/goProbe/pkg/goprobe/writeout"
+	"github.com/els0r/goProbe/pkg/legacyapi/errors"
+	v1 "github.com/els0r/goProbe/pkg/legacyapi/v1"
 	"github.com/els0r/goProbe/pkg/logging"
 
 	"github.com/go-chi/chi/v5"

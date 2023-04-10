@@ -43,9 +43,8 @@ type Statement struct {
 	DNSResolution DNSResolution
 
 	// file system
-	DBPath    string `json:"db"`
-	MaxMemPct int    `json:"-"`
-	LowMem    bool   `json:"low_mem,omitempty"`
+	MaxMemPct int  `json:"-"`
+	LowMem    bool `json:"low_mem,omitempty"`
 
 	// error during execution
 	Err error `json:"error,omitempty"`
@@ -61,8 +60,7 @@ func (s *Statement) String() string {
 		str += fmt.Sprintf(", condition: %s", s.Condition)
 	}
 	tFrom, tTo := time.Unix(s.First, 0), time.Unix(s.Last, 0)
-	str += fmt.Sprintf(", db: %s, limit: %d, from: %s, to: %s",
-		s.DBPath,
+	str += fmt.Sprintf(", limit: %d, from: %s, to: %s",
 		s.NumResults,
 		tFrom.Format(time.ANSIC),
 		tTo.Format(time.ANSIC),

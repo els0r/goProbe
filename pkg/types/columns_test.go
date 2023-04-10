@@ -11,8 +11,11 @@
 package types
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -84,44 +87,35 @@ var parseQueryTypeTests = []struct {
 	OutAttributes   []Attribute
 	OutHasAttrTime  bool
 	OutHasAttrIface bool
-	Success         bool
 }{
-	{"sip", []Attribute{SipAttribute{}}, false, false, true},
-	{"src", []Attribute{SipAttribute{}}, false, false, true},
-	{"dst", []Attribute{DipAttribute{}}, false, false, true},
-	{"talk_src", []Attribute{SipAttribute{}}, false, false, true},
-	{"sip,dip,dip,sip,dport", []Attribute{SipAttribute{}, DipAttribute{}, DportAttribute{}}, false, false, true},
-	{"sip,dip,dip,iface,sip,dport", []Attribute{SipAttribute{}, DipAttribute{}, DportAttribute{}}, false, true, true},
-	{"sip,dip,dst,src,dport", []Attribute{SipAttribute{}, DipAttribute{}, DportAttribute{}}, false, false, true},
-	{"src,dst,dip,sip,dport", []Attribute{SipAttribute{}, DipAttribute{}, DportAttribute{}}, false, false, true},
-	{"sip,dip,dip,sip,dport,talk_src", nil, false, false, false},
-	{"sip,dip,time,dip,sip,dport", []Attribute{SipAttribute{}, DipAttribute{}, DportAttribute{}}, true, false, true},
-	{"talk_src,dip", []Attribute{SipAttribute{}, DipAttribute{}, DportAttribute{}}, false, false, false},
-	{"talk_src,src", []Attribute{SipAttribute{}, DipAttribute{}, DportAttribute{}}, false, false, false},
-	{"raw", []Attribute{SipAttribute{}, DipAttribute{}, DportAttribute{}, ProtoAttribute{}}, true, true, true},
+	{"sip", []Attribute{SipAttribute{}}, false, false},
+	{"src", []Attribute{SipAttribute{}}, false, false},
+	{"dst", []Attribute{DipAttribute{}}, false, false},
+	{"talk_src", []Attribute{SipAttribute{}}, false, false},
+	{"sip,dip,dip,sip,dport", []Attribute{SipAttribute{}, DipAttribute{}, DportAttribute{}}, false, false},
+	{"sip,dip,dip,iface,sip,dport", []Attribute{SipAttribute{}, DipAttribute{}, DportAttribute{}}, false, true},
+	{"sip,dip,dst,src,dport", []Attribute{SipAttribute{}, DipAttribute{}, DportAttribute{}}, false, false},
+	{"src,dst,dip,sip,dport", []Attribute{SipAttribute{}, DipAttribute{}, DportAttribute{}}, false, false},
+	{"sip,dip,dip,sip,dport,talk_src", []Attribute{SipAttribute{}, DipAttribute{}, DportAttribute{}}, false, false},
+	{"sip,dip,time,dip,sip,dport", []Attribute{SipAttribute{}, DipAttribute{}, DportAttribute{}}, true, false},
+	{"talk_src,dip", []Attribute{SipAttribute{}, DipAttribute{}}, false, false},
+	{"talk_src,src", []Attribute{SipAttribute{}}, false, false},
+	{"raw", []Attribute{SipAttribute{}, DipAttribute{}, DportAttribute{}, ProtoAttribute{}}, true, true},
 }
 
 func TestParseQueryType(t *testing.T) {
-	for _, test := range parseQueryTypeTests {
-		attributes, selector, err := ParseQueryType(test.InQueryType)
-		if !test.Success {
-			if err == nil {
-				t.Fatalf("Expected to fail on input %v but it didn't. Instead it output %v, %v",
-					test.InQueryType, attributes, selector.Timestamp)
-			}
-		} else {
+	for i, test := range parseQueryTypeTests {
+		test := test
+		t.Run(fmt.Sprint(i), func(t *testing.T) {
+			attributes, selector, err := ParseQueryType(test.InQueryType)
+
 			if err != nil {
 				t.Fatalf("Unexpectedly failed on input %v. The error is: %s",
 					test.InQueryType, err)
 			}
-			if !reflect.DeepEqual(test.OutAttributes, attributes) ||
-				test.OutHasAttrTime != selector.Timestamp ||
-				test.OutHasAttrIface != selector.Iface {
-				t.Fatalf("Returned an unexpected output. Expected output: %v, %v, %v. Actual output: %v, %v, %v",
-					test.OutAttributes, test.OutHasAttrTime, test.OutHasAttrIface,
-					attributes, selector.Timestamp, selector.Iface,
-				)
-			}
-		}
+			require.Equal(t, test.OutHasAttrIface, selector.Iface)
+			require.Equal(t, test.OutHasAttrTime, selector.Timestamp)
+			require.Equal(t, test.OutAttributes, attributes)
+		})
 	}
 }

@@ -13,8 +13,8 @@ import (
 	"time"
 
 	"github.com/els0r/goProbe/cmd/goQuery/pkg/conf"
+	"github.com/els0r/goProbe/pkg/api/globalquery/client"
 	"github.com/els0r/goProbe/pkg/defaults"
-	"github.com/els0r/goProbe/pkg/global-query/api/client"
 	"github.com/els0r/goProbe/pkg/goDB/engine"
 	"github.com/els0r/goProbe/pkg/logging"
 	"github.com/els0r/goProbe/pkg/query"
@@ -77,8 +77,6 @@ func init() {
 	rootCmd.Flags().BoolVarP(&cmdLineParams.SortAscending, "ascending", "a", false, helpMap["SortAscending"])
 	rootCmd.Flags().BoolVarP(&cmdLineParams.Sum, "sum", "", false, helpMap["Sum"])
 	rootCmd.Flags().BoolVarP(&cmdLineParams.Version, "version", "v", false, "Print version information and exit\n")
-
-	rootCmd.Flags().StringVarP(&cmdLineParams.DBPath, "db-path", "d", defaults.DBPath, helpMap["DBPath"])
 
 	rootCmd.Flags().StringVarP(&cmdLineParams.Ifaces, "ifaces", "i", "", helpMap["Ifaces"])
 	rootCmd.Flags().StringVarP(&cmdLineParams.First, "first", "f", time.Now().AddDate(0, -1, 0).Format(time.ANSIC), helpMap["First"])
@@ -160,9 +158,9 @@ func entrypoint(cmd *cobra.Command, args []string) error {
 
 	// the DB path that can be set in the configuration file has precedence over the one
 	// in the arguments
-	dbPathCfg := viper.GetString(conf.QueryDBPath)
+	dbPathCfg := viper.GetString(conf.DBPath)
 	if dbPathCfg != "" {
-		queryArgs.DBPath = dbPathCfg
+		dbPathCfg = viper.GetString(conf.QueryDBPath)
 	}
 
 	// run commands that don't require any argument
@@ -261,9 +259,9 @@ func entrypoint(cmd *cobra.Command, args []string) error {
 			}
 		}
 
-		querier = client.NewClient(viper.GetString(conf.QueryServerAddr))
+		querier = client.New(viper.GetString(conf.QueryServerAddr))
 	} else {
-		querier = engine.NewQueryRunner()
+		querier = engine.NewQueryRunner(dbPathCfg)
 	}
 
 	// convert the command line parameters
