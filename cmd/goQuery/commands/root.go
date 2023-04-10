@@ -100,6 +100,8 @@ func init() {
 	rootCmd.PersistentFlags().String(conf.QueryServerAddr, "", helpMap["QueryServer"])
 	rootCmd.Flags().StringVarP(&cmdLineParams.HostQuery, "hosts-query", "q", "", "hosts resolution query")
 
+	rootCmd.PersistentFlags().String(conf.QueryDBPath, "", helpMap["DBPath"])
+
 	rootCmd.PersistentFlags().String(conf.StoredQuery, "", "Load JSON serialized query arguments from disk and run them")
 
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file location")
@@ -156,10 +158,18 @@ func entrypoint(cmd *cobra.Command, args []string) error {
 	// assign query args
 	var queryArgs = *cmdLineParams
 
+	// the DB path that can be set in the configuration file has precedence over the one
+	// in the arguments
+	dbPathCfg := viper.GetString(conf.QueryDBPath)
+	if dbPathCfg != "" {
+		queryArgs.DBPath = dbPathCfg
+	}
+
 	// run commands that don't require any argument
 	// handle list flag
 	if cmdLineParams.List {
-		if err := listInterfaces(cmdLineParams.DBPath); err != nil {
+		err := listInterfaces(queryArgs.DBPath)
+		if err != nil {
 			return fmt.Errorf("failed to retrieve list of available databases: %w", err)
 		}
 		return nil
@@ -167,7 +177,8 @@ func entrypoint(cmd *cobra.Command, args []string) error {
 
 	// print version and exit
 	if cmdLineParams.Version {
-		return versionCmd.Execute()
+		printVersion()
+		return nil
 	}
 
 	// check if arguments should be loaded from disk. The cmdLineParams are taken as
