@@ -2,7 +2,6 @@ package client
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/els0r/goProbe/pkg/api/client"
 	gqapi "github.com/els0r/goProbe/pkg/api/globalquery"
@@ -53,7 +52,7 @@ func (c *Client) Query(ctx context.Context, args *query.Args) (*results.Result, 
 
 	err := req.RunWithContext(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to run request: %w", err)
+		return nil, err
 	}
 
 	return res, nil

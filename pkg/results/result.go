@@ -253,27 +253,31 @@ type RowsMap map[MergeableAttributes]types.Counters
 
 // MergeRows aggregates Rows by use of the RowsMap rm, which is modified
 // in the process
-func (rm RowsMap) MergeRows(r Rows) {
+func (rm RowsMap) MergeRows(r Rows) (merged int) {
 	for _, res := range r {
 		counters, exists := rm[MergeableAttributes{res.Labels, res.Attributes}]
 		if exists {
 			rm[MergeableAttributes{res.Labels, res.Attributes}] = counters.Add(res.Counters)
+			merged++
 		} else {
 			rm[MergeableAttributes{res.Labels, res.Attributes}] = res.Counters
 		}
 	}
+	return
 }
 
 // MergeRowsMap aggregates all results of om and stores them in rm
-func (rm RowsMap) MergeRowsMap(om RowsMap) {
+func (rm RowsMap) MergeRowsMap(om RowsMap) (merged int) {
 	for oma, oc := range om {
 		counters, exists := rm[oma]
 		if exists {
 			rm[oma] = counters.Add(oc)
+			merged++
 		} else {
 			rm[oma] = oc
 		}
 	}
+	return
 }
 
 // ToRowsSorted uses the available sorting functions for Rows to produce

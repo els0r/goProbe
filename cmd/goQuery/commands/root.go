@@ -60,10 +60,6 @@ func init() {
 	cobra.OnInitialize(initConfig)
 	cobra.OnInitialize(initLogger)
 
-	// flags to be also passed to children commands
-	subRootCmd.PersistentFlags().StringP(conf.DBPath, "d", defaults.DBPath, helpMap["DBPath"])
-	_ = viper.BindPFlags(subRootCmd.PersistentFlags())
-
 	// help commands
 	rootCmd.InitDefaultHelpCmd()
 	rootCmd.InitDefaultHelpFlag()
@@ -93,14 +89,13 @@ func init() {
 	rootCmd.Flags().IntVarP(&cmdLineParams.MaxMemPct, "max-mem", "", query.DefaultMaxMemPct, helpMap["MaxMemPct"])
 	rootCmd.Flags().BoolVarP(&cmdLineParams.LowMem, "low-mem", "", false, helpMap["LowMem"])
 
-	rootCmd.Flags().DurationVarP(&cmdLineParams.QueryTimeout, "timeout", "", query.DefaultQueryTimeout, helpMap["QueryTimeout"])
-
+	// flags to be also passed to children commands
 	rootCmd.PersistentFlags().String(conf.QueryServerAddr, "", helpMap["QueryServer"])
 	rootCmd.Flags().StringVarP(&cmdLineParams.HostQuery, "hosts-query", "q", "", "hosts resolution query")
 
-	rootCmd.PersistentFlags().String(conf.QueryDBPath, "", helpMap["DBPath"])
-
+	rootCmd.PersistentFlags().StringP(conf.QueryDBPath, "d", defaults.DBPath, helpMap["DBPath"])
 	rootCmd.PersistentFlags().String(conf.StoredQuery, "", "Load JSON serialized query arguments from disk and run them")
+	rootCmd.PersistentFlags().Duration(conf.QueryTimeout, query.DefaultQueryTimeout, helpMap["QueryTimeout"])
 
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file location")
 
@@ -158,10 +153,7 @@ func entrypoint(cmd *cobra.Command, args []string) error {
 
 	// the DB path that can be set in the configuration file has precedence over the one
 	// in the arguments
-	dbPathCfg := viper.GetString(conf.DBPath)
-	if dbPathCfg != "" {
-		dbPathCfg = viper.GetString(conf.QueryDBPath)
-	}
+	dbPathCfg := viper.GetString(conf.QueryDBPath)
 
 	// run commands that don't require any argument
 	// handle list flag
@@ -224,9 +216,10 @@ func entrypoint(cmd *cobra.Command, args []string) error {
 	defer stop()
 
 	var ctx context.Context
-	if cmdLineParams.QueryTimeout > 0 {
+	queryTimeout := viper.GetDuration(conf.QueryTimeout)
+	if queryTimeout > 0 {
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(queryCtx, cmdLineParams.QueryTimeout)
+		ctx, cancel = context.WithTimeout(queryCtx, queryTimeout)
 		defer cancel()
 	} else {
 		ctx = queryCtx

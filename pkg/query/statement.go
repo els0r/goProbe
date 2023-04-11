@@ -45,9 +45,6 @@ type Statement struct {
 	// file system
 	MaxMemPct int  `json:"-"`
 	LowMem    bool `json:"low_mem,omitempty"`
-
-	// error during execution
-	Err error `json:"error,omitempty"`
 }
 
 // String prints the executable statement in human-readable form

@@ -2,7 +2,6 @@ package client
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"os"
 
@@ -101,7 +100,7 @@ func (c *Client) Query(ctx context.Context, args *query.Args) (*results.Result, 
 	)
 	err := req.RunWithContext(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to run request: %w", err)
+		return nil, err
 	}
 
 	return res, nil

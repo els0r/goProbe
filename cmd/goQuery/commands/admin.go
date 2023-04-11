@@ -45,7 +45,7 @@ var cleanCmd = &cobra.Command{
 			return fmt.Errorf("failed to set clean date: %s", err)
 		}
 
-		dbpath := viper.GetString(conf.DBPath)
+		dbpath := viper.GetString(conf.QueryDBPath)
 
 		// check if DB exists at path
 		err = info.CheckDBExists(dbpath)
@@ -69,7 +69,7 @@ var wipeCmd = &cobra.Command{
 	Short: "Wipes the entire database. CAUTION: all your data will be lost if you run this!",
 	RunE: func(cmd *cobra.Command, args []string) error {
 
-		dbpath := viper.GetString(conf.DBPath)
+		dbpath := viper.GetString(conf.QueryDBPath)
 
 		status.Linef("Completely wiping DB")
 

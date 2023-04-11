@@ -138,16 +138,6 @@ func (qr *QueryRunner) RunStatement(ctx context.Context, stmt *query.Statement) 
 		}
 	}()
 
-	// make sure execution stats and logging are taken care of
-	defer func() {
-		if err != nil {
-			// get duration of execution even under error
-			result.Summary.Timings.QueryDuration = time.Since(result.Summary.Timings.QueryStart)
-			stmt.Err = err
-		}
-		// TODO: log the query
-	}()
-
 	result.Query = results.Query{
 		Attributes: qr.query.AttributesToString(),
 	}

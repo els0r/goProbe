@@ -5,10 +5,10 @@ const (
 
 	serverKey       = queryKey + ".server"
 	QueryServerAddr = serverKey + ".addr"
+	QueryTimeout    = queryKey + ".timeout"
 
 	dbKey       = "db"
 	QueryDBPath = dbKey + ".path"
 
-	DBPath      = "db-path"
 	StoredQuery = "stored-query"
 )

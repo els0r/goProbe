@@ -88,9 +88,6 @@ type Args struct {
 	// stores who produced these args (caller)
 	Caller string `json:"caller,omitempty" yaml:"caller,omitempty"`
 
-	// query is aborted after timeout expires
-	QueryTimeout time.Duration `json:"query_timeout,omitempty" yaml:"query_timeout,omitempty"`
-
 	// outputs is unexported
 	outputs []io.Writer
 }

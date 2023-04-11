@@ -7,6 +7,7 @@ import (
 
 	"github.com/els0r/goProbe/pkg/api/goprobe/client"
 	"github.com/els0r/goProbe/pkg/query"
+	"github.com/els0r/goProbe/pkg/results"
 	"gopkg.in/yaml.v3"
 )
 
@@ -51,9 +52,23 @@ func (a *APIClientQuerier) CreateQueryWorkload(ctx context.Context, host string,
 	// create the api client runner by looking up the endpoint config for the given host
 	cfg, exists := a.apiEndpoints[host]
 	if !exists {
-		return nil, fmt.Errorf("couldn't find endpoint configuration for host")
+		err := fmt.Errorf("couldn't find endpoint configuration for host")
+
+		// inject an error runner so that the workload creation error is transported into the final
+		// result
+		qw.Runner = &errorRunner{err: err}
+	} else {
+		qw.Runner = client.NewFromConfig(cfg)
 	}
-	qw.Runner = client.NewFromConfig(cfg)
 
 	return qw, nil
+}
+
+// errorRunner is used to propagate an error all the way to the aggregation routine
+type errorRunner struct {
+	err error
+}
+
+func (e *errorRunner) Run(ctx context.Context, args *query.Args) (*results.Result, error) {
+	return nil, e.err
 }

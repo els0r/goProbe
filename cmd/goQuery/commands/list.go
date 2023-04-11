@@ -10,7 +10,7 @@ var listCmd = &cobra.Command{
 	Use:   "list",
 	Short: "Lists available interfaces and their statistics",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return listInterfaces(viper.GetString(conf.DBPath))
+		return listInterfaces(viper.GetString(conf.QueryDBPath))
 	},
 }
 

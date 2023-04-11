@@ -2,6 +2,7 @@ package distributed
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -59,9 +60,9 @@ func (q *QueryRunner) Run(ctx context.Context, args *query.Args) (*results.Resul
 		),
 	)
 
-	// truncate results based on the limit
 	finalResult.End()
 
+	// truncate results based on the limit
 	if queryArgs.NumResults < len(finalResult.Rows) {
 		finalResult.Rows = finalResult.Rows[:queryArgs.NumResults]
 	}
@@ -82,7 +83,6 @@ func prepareQueries(ctx context.Context, querier Querier, hostList hosts.Hosts, 
 			wl, err := querier.CreateQueryWorkload(ctx, host, args)
 			if err != nil {
 				logger.With("hostname", host).Errorf("failed to create workload: %v", err)
-				continue
 			}
 			workloads <- wl
 		}
@@ -165,9 +165,19 @@ func aggregateResults(ctx context.Context, stmt *query.Statement, queryResults <
 			}
 			logger := logger.With("hostname", qr.host)
 			if qr.err != nil {
+				// unwrap the error if it's possible
+				var msg string
+
+				uerr := errors.Unwrap(qr.err)
+				if uerr != nil {
+					msg = uerr.Error()
+				} else {
+					msg = qr.err.Error()
+				}
+
 				finalResult.HostsStatuses[qr.host] = results.Status{
 					Code:    types.StatusError,
-					Message: qr.err.Error(),
+					Message: msg,
 				}
 				logger.Error(qr.err)
 				continue
@@ -179,7 +189,7 @@ func aggregateResults(ctx context.Context, stmt *query.Statement, queryResults <
 			}
 
 			// merges the traffic data
-			rowMap.MergeRows(res.Rows)
+			merged := rowMap.MergeRows(res.Rows)
 
 			// merges the metadata
 			for _, iface := range res.Summary.Interfaces {
@@ -196,7 +206,10 @@ func aggregateResults(ctx context.Context, stmt *query.Statement, queryResults <
 			finalResult.Summary.TimeFirst = res.Summary.TimeFirst
 			finalResult.Summary.TimeLast = res.Summary.TimeLast
 			finalResult.Summary.Totals = finalResult.Summary.Totals.Add(res.Summary.Totals)
-			finalResult.Summary.Hits.Total = len(rowMap)
+
+			// take the total from the query result. Since there may be overlap between the queries of two
+			// different systems, the overlap has to be deducted from the total
+			finalResult.Summary.Hits.Total += res.Summary.Hits.Total - merged
 		}
 	}
 }
