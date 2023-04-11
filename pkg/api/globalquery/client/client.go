@@ -15,8 +15,13 @@ type Client struct {
 	*client.DefaultClient
 }
 
+const (
+	clientName = "global-query-client"
+)
+
 // NewClient creates a new client for the global-query API
 func New(addr string, opts ...client.Option) *Client {
+	opts = append(opts, client.WithName(clientName))
 	return &Client{
 		DefaultClient: client.NewDefault(addr, opts...),
 	}

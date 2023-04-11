@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"time"
 
 	"github.com/els0r/goProbe/pkg/api/client"
 	gpapi "github.com/els0r/goProbe/pkg/api/goprobe"
@@ -20,7 +19,9 @@ type Client struct {
 	*client.DefaultClient
 }
 
-const defaultRequestTimeout = 30 * time.Second
+const (
+	clientName = "goprobe-client"
+)
 
 // NewFromReader creates the client based on configuration read from an io.Reader
 func NewFromReader(r io.Reader) (*Client, error) {
@@ -37,6 +38,7 @@ func NewFromReader(r io.Reader) (*Client, error) {
 }
 
 func New(addr string, opts ...client.Option) *Client {
+	opts = append(opts, client.WithName(clientName))
 	return &Client{
 		DefaultClient: client.NewDefault(addr, opts...),
 	}

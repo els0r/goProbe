@@ -28,7 +28,6 @@ var tests = []struct {
 }
 
 func TestValidate(t *testing.T) {
-
 	// run tests
 	for i, test := range tests {
 		// run each case as a sub test

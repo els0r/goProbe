@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/els0r/goProbe/pkg/api"
 	gpapi "github.com/els0r/goProbe/pkg/api/goprobe"
 	"github.com/els0r/goProbe/pkg/capture"
 	"github.com/els0r/goProbe/pkg/defaults"
@@ -60,7 +61,13 @@ func New(addr string, captureManager *capture.Manager, writeoutHandler *writeout
 	return server
 }
 
-func (server *Server) registerMiddlewares() {}
+func (server *Server) registerMiddlewares() {
+	server.router.Use(
+		api.TraceIDMiddleware(),
+		api.RequestLoggingMiddleware(),
+	)
+}
+
 func (server *Server) registerRoutes() {
 	server.router.POST(gpapi.QueryRoute, server.postQuery)
 }

@@ -7,6 +7,7 @@ import (
 
 	"github.com/els0r/goProbe/cmd/global-query/pkg/distributed"
 	"github.com/els0r/goProbe/cmd/global-query/pkg/hosts"
+	"github.com/els0r/goProbe/pkg/api"
 	gqapi "github.com/els0r/goProbe/pkg/api/globalquery"
 	"github.com/gin-gonic/gin"
 )
@@ -49,7 +50,12 @@ func NewServer(addr string, resolver hosts.Resolver, querier distributed.Querier
 	return server
 }
 
-func (server *Server) registerMiddlewares() {}
+func (server *Server) registerMiddlewares() {
+	server.router.Use(
+		api.TraceIDMiddleware(),
+		api.RequestLoggingMiddleware(),
+	)
+}
 func (server *Server) registerRoutes() {
 	RegisterQueryHandler(server.router, gqapi.QueryRoute, server.hostListResolver, server.querier)
 }

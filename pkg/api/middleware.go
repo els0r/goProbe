@@ -39,19 +39,26 @@ func RequestLoggingMiddleware() gin.HandlerFunc {
 		c.Next()
 		duration := time.Since(start)
 
-		statusCode := c.Request.Response.StatusCode
+		statusCode := c.Writer.Status()
+		size := c.Writer.Size()
+		// size is set to -1 if there no data written
+		if size < 0 {
+			size = 0
+		}
 		logger = logger.With("req", slog.GroupValue(
 			slog.String("method", c.Request.Method),
-			slog.String("url", c.Request.RequestURI),
+			slog.String("path", c.Request.RequestURI),
+			slog.String("user-agent", c.Request.UserAgent()),
 			slog.Duration("duration", duration),
 		)).With("resp", slog.GroupValue(
 			slog.Int("status_code", statusCode),
+			slog.Int("size", size),
 		))
 
 		if 200 <= statusCode && statusCode < 300 {
-			logger.Info("successful request")
+			logger.Info("handled request")
 		} else {
-			logger.Error("failed request")
+			logger.Error("handled request")
 		}
 	}
 }

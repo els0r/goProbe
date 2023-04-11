@@ -7,7 +7,10 @@ import (
 	"time"
 
 	"github.com/els0r/goProbe/pkg/logging"
+	"github.com/els0r/goProbe/pkg/version"
 	"github.com/fako1024/httpc"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/exp/slog"
 )
 
@@ -18,6 +21,8 @@ type DefaultClient struct {
 	scheme   string
 	hostAddr string
 	key      string
+
+	name string
 
 	requestLogging bool
 }
@@ -54,7 +59,18 @@ func WithScheme(scheme string) Option {
 	}
 }
 
-const defaultRequestTimeout = 30 * time.Second
+func WithName(name string) Option {
+	return func(c *DefaultClient) {
+		if name != "" {
+			c.name = fmt.Sprintf("%s/%s", name, version.Short())
+		}
+	}
+}
+
+const (
+	defaultRequestTimeout = 30 * time.Second
+	defaultClientName     = "default-client"
+)
 
 // NewDefault creates a new default client that can be used for all calls to goProbe APIs
 func NewDefault(addr string, opts ...Option) *DefaultClient {
@@ -63,15 +79,17 @@ func NewDefault(addr string, opts ...Option) *DefaultClient {
 		scheme:   "http",
 		hostAddr: addr,
 		timeout:  defaultRequestTimeout,
+		name:     defaultClientName,
 	}
 	for _, opt := range opts {
 		opt(c)
 	}
-	if c.requestLogging {
-		c.client.Transport = &transport{
-			rt:             http.DefaultTransport,
-			requestLogging: true,
-		}
+	c.client.Transport = &transport{
+		rt: otelhttp.NewTransport(
+			http.DefaultTransport,
+		),
+		requestLogging: c.requestLogging,
+		clientName:     c.name,
 	}
 	return c
 }
@@ -83,10 +101,36 @@ func (c *DefaultClient) Client() *http.Client {
 type transport struct {
 	rt             http.RoundTripper
 	requestLogging bool
+	clientName     string
+}
+
+func (t *transport) setTraceID(r *http.Request) *http.Request {
+	// extract the trace ID from the context if it is present
+	sc := trace.SpanContextFromContext(r.Context())
+	if !sc.HasTraceID() {
+		// set tracing info if it isn't available in the request
+		command := r.Method + " " + r.URL.String()
+
+		var (
+			err        error
+			traceState trace.TraceState = trace.TraceState{}
+		)
+
+		traceState, err = traceState.Insert(t.clientName, command)
+		if err == nil {
+			r = r.WithContext(trace.ContextWithSpanContext(r.Context(), trace.NewSpanContext(
+				trace.SpanContextConfig{TraceState: traceState},
+			)))
+		}
+	}
+	return r
 }
 
 func (t *transport) RoundTrip(r *http.Request) (*http.Response, error) {
 	start := time.Now()
+
+	r = t.setTraceID(r)
+	r.Header.Set("User-Agent", t.clientName)
 
 	// make request
 	resp, err := t.rt.RoundTrip(r)
@@ -96,6 +140,7 @@ func (t *transport) RoundTrip(r *http.Request) (*http.Response, error) {
 		logger := logging.WithContext(r.Context()).With("req", slog.GroupValue(
 			slog.String("method", r.Method),
 			slog.String("url", r.URL.String()),
+			slog.String("user-agent", r.UserAgent()),
 			slog.Duration("duration", duration),
 		))
 		if resp != nil {
@@ -103,13 +148,18 @@ func (t *transport) RoundTrip(r *http.Request) (*http.Response, error) {
 				slog.Int("status_code", resp.StatusCode),
 			))
 		}
+		sc := trace.SpanContextFromContext(r.Context())
+		if !sc.HasTraceID() {
+			logger = logger.With(slog.String("traceID", sc.TraceID().String()))
+		}
+
 		if err == nil && 200 <= resp.StatusCode && resp.StatusCode < 300 {
-			logger.Info("successful request")
+			logger.Info("sent request")
 		} else {
 			if err != nil {
-				logger.Errorf("failed request: %v", err)
+				logger.Errorf("failed to send request: %v", err)
 			} else {
-				logger.Errorf("failed request")
+				logger.Errorf("failed to send request")
 			}
 		}
 	}
