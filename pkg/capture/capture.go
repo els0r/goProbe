@@ -166,7 +166,7 @@ type captureCommandUpdate struct {
 func (cmd captureCommandUpdate) execute(c *Capture) stateFn {
 	defer cmd.done()
 
-	logger := logging.WithContext(c.ctx)
+	logger := logging.FromContext(c.ctx)
 
 	if c.needReinitialization(cmd.config) {
 		logger.Infof("interface received updated configuration")
@@ -191,7 +191,7 @@ type captureCommandRotate struct {
 }
 
 func (cmd captureCommandRotate) execute(c *Capture) stateFn {
-	logger := logging.WithContext(c.ctx)
+	logger := logging.FromContext(c.ctx)
 
 	var result rotateResult
 
@@ -293,7 +293,7 @@ type Capture struct {
 func NewCapture(ctx context.Context, iface string, config config.CaptureConfig) *Capture {
 	// make sure that the interface is set for all log messages using
 	// this context
-	capCtx := logging.NewContext(ctx, "iface", iface)
+	capCtx := logging.WithFields(ctx, "iface", iface)
 
 	return &Capture{
 		iface:         iface,
@@ -318,17 +318,17 @@ type stateFn func(*Capture) stateFn
 // a Capture. It also logs the state change.
 func (c *Capture) setState(s State) {
 	c.state = s
-	c.ctx = logging.NewContext(c.ctx, "state", s.String())
+	c.ctx = logging.WithFields(c.ctx, "state", s.String())
 
 	// log state transition
-	logger := logging.WithContext(c.ctx)
+	logger := logging.FromContext(c.ctx)
 	logger.Debugf("interface state transition")
 }
 
 // Run spawns the capture state machine
 func (c *Capture) Run() {
 	go func() {
-		logger := logging.WithContext(c.ctx)
+		logger := logging.FromContext(c.ctx)
 
 		if c.closed {
 			logger.Errorf("unable to run closed capture")
@@ -344,7 +344,7 @@ func (c *Capture) Run() {
 func initializing(c *Capture) stateFn {
 	c.setState(StateInitializing)
 
-	logger := logging.WithContext(c.ctx)
+	logger := logging.FromContext(c.ctx)
 	logger.Info("initializing capture")
 
 	// set up the packet source
@@ -364,7 +364,7 @@ func initializing(c *Capture) stateFn {
 func capturing(c *Capture) stateFn {
 	c.setState(StateCapturing)
 
-	logger := logging.WithContext(c.ctx)
+	logger := logging.FromContext(c.ctx)
 	logger.Info("capturing packets")
 
 	// packet capturing
@@ -396,7 +396,7 @@ func capturing(c *Capture) stateFn {
 func inError(c *Capture) stateFn {
 	c.setState(StateError)
 
-	logger := logging.WithContext(c.ctx)
+	logger := logging.FromContext(c.ctx)
 	logger.Infof("waiting for configuration update to re-initialize")
 
 	// wait until the capture is closed or an update/re-init command is
@@ -426,7 +426,7 @@ func closing(c *Capture) stateFn {
 
 	// free resources of the capture handle
 	if err := c.captureHandle.Free(); err != nil {
-		logging.WithContext(c.ctx).Errorf("failed to free capture resources: %s", err)
+		logging.FromContext(c.ctx).Errorf("failed to free capture resources: %s", err)
 	}
 	c.captureHandle = nil
 
@@ -437,7 +437,7 @@ func closing(c *Capture) stateFn {
 // reset unites logic used in both recoverError and uninitialize
 // in a single method.
 func (c *Capture) reset() {
-	logger := logging.WithContext(c.ctx)
+	logger := logging.FromContext(c.ctx)
 
 	if c.captureHandle != nil {
 		logger.Infof("closing capture handle")
@@ -503,7 +503,7 @@ func (c *Capture) capturePacket(pkt capture.Packet) (err error) {
 // process keeps running until Close is called on its capture handle or it encounters
 // a serious capture error
 func (c *Capture) process() {
-	logger := logging.WithContext(c.ctx)
+	logger := logging.FromContext(c.ctx)
 
 	c.errCount = 0
 
@@ -555,7 +555,7 @@ func (c *Capture) needReinitialization(config config.CaptureConfig) bool {
 }
 
 func (c *Capture) tryGetCaptureStats() *CaptureStats {
-	logger := logging.WithContext(c.ctx)
+	logger := logging.FromContext(c.ctx)
 
 	var (
 		stats capture.Stats
@@ -578,7 +578,7 @@ func (c *Capture) tryGetCaptureStats() *CaptureStats {
 // Enable instructs the capture to initialize itself. This command
 // has no effect if the capture is already running
 func (c *Capture) Enable() {
-	logger := logging.WithContext(c.ctx)
+	logger := logging.FromContext(c.ctx)
 
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
@@ -600,7 +600,7 @@ func (c *Capture) Enable() {
 // Note: result.Stats.Stats may be null if there was an error fetching the
 // stats of the underlying pcap handle.
 func (c *Capture) Status() (result Status) {
-	logger := logging.WithContext(c.ctx)
+	logger := logging.FromContext(c.ctx)
 
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
@@ -617,7 +617,7 @@ func (c *Capture) Status() (result Status) {
 
 // Errors implements the status call to return all interface errors
 func (c *Capture) Errors() (result ErrorMap) {
-	logger := logging.WithContext(c.ctx)
+	logger := logging.FromContext(c.ctx)
 
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
@@ -634,7 +634,7 @@ func (c *Capture) Errors() (result ErrorMap) {
 
 // Flows impolements the status call to return the contents of the active flow log
 func (c *Capture) Flows() (result *FlowLog) {
-	logger := logging.WithContext(c.ctx)
+	logger := logging.FromContext(c.ctx)
 
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
@@ -654,7 +654,7 @@ func (c *Capture) Flows() (result *FlowLog) {
 // If the Capture is already active with the given config
 // Update will detect this and do no work.
 func (c *Capture) Update(config config.CaptureConfig) {
-	logger := logging.WithContext(c.ctx)
+	logger := logging.FromContext(c.ctx)
 
 	c.mutex.Lock()
 	defer c.mutex.Unlock()

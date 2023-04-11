@@ -28,7 +28,7 @@ func NewStandardHandler() *StandardHandler {
 // Handle is a convenience method to return a standard formatted http Error and
 // write a log line if a logger is provided
 func (s *StandardHandler) Handle(ctx context.Context, w http.ResponseWriter, statusCode int, err error, msg string) {
-	logger := logging.WithContext(ctx)
+	logger := logging.FromContext(ctx)
 
 	http.Error(w, fmt.Sprintf("%s: %s", http.StatusText(statusCode), msg), statusCode)
 	logger.Errorf("%s: %v", msg, err)

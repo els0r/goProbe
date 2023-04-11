@@ -44,10 +44,10 @@ func TestLogConcurrent(t *testing.T) {
 	}
 
 	t.Run("samectxhierarchy", func(t *testing.T) {
-		ctx := NewContext(context.Background(), "hello", "world")
+		ctx := WithFields(context.Background(), "hello", "world")
 		numConcurrent := 32
 
-		logger := WithContext(ctx)
+		logger := FromContext(ctx)
 		logger.Info("before go-routines")
 
 		var wg sync.WaitGroup
@@ -56,14 +56,14 @@ func TestLogConcurrent(t *testing.T) {
 			go func(n int, ctx context.Context) {
 				defer wg.Done()
 
-				f1ctx := NewContext(ctx, "fval", n)
-				l2 := WithContext(f1ctx)
+				f1ctx := WithFields(ctx, "fval", n)
+				l2 := FromContext(f1ctx)
 				l2.Infof("f%d", n)
 			}(i, ctx)
 		}
 		wg.Wait()
 
-		logger = WithContext(ctx)
+		logger = FromContext(ctx)
 		logger.Infof("after %d go-routines", numConcurrent)
 	})
 }
@@ -291,7 +291,7 @@ func TestCustomLogMessages(t *testing.T) {
 	}
 
 	t.Run("testformatting", func(t *testing.T) {
-		logger := WithContext(context.Background())
+		logger := FromContext(context.Background())
 		// the next two lines shouldn't show up due to level "info" in init
 		logger.With("level_num", LevelDebug).Debug("f")
 		logger.Debugf("f%d", LevelDebug)
@@ -307,13 +307,13 @@ func TestCustomLogMessages(t *testing.T) {
 	})
 
 	t.Run("fatal", func(t *testing.T) {
-		logger := WithContext(nil).exiter(mockExiter{t})
+		logger := FromContext(nil).exiter(mockExiter{t})
 		logger.With("left", 42).Fatal("this my dearest friends, is where I leave you")
 		logger.Fatalf("this my dearest friends, is where I leave %s", "you")
 	})
 
 	t.Run("panic", func(t *testing.T) {
-		logger := WithContext(nil).panicker(mockPanicker{t})
+		logger := FromContext(nil).panicker(mockPanicker{t})
 		logger.With("left", 24).Panic("this my dearest friends, is where I leave you")
 		logger.Panicf("this my dearest friends, is where I leave %s", "you")
 	})
@@ -321,13 +321,13 @@ func TestCustomLogMessages(t *testing.T) {
 
 // tests the edge cases in context creation
 func TestNewContext(t *testing.T) {
-	ctx := NewContext(nil)
+	ctx := WithFields(nil)
 	require.NotNil(t, ctx)
 
-	ctx = NewContext(nil, "hello")
+	ctx = WithFields(nil, "hello")
 	require.NotNil(t, ctx)
 
-	ctx = NewContext(nil, 3, "hello")
+	ctx = WithFields(nil, 3, "hello")
 	require.NotNil(t, ctx)
 }
 

@@ -76,7 +76,7 @@ func (w *writeout) close() {
 const tFormat = "2006-01-02 15:04:05 -0700 MST"
 
 func (h *Handler) FullWriteout(ctx context.Context, at time.Time) error {
-	logger := logging.WithContext(ctx)
+	logger := logging.FromContext(ctx)
 
 	// don't rotate if a bogus timestamp is supplied
 	if at.Sub(h.LastRotation) < 0 {
@@ -103,7 +103,7 @@ func (h *Handler) FullWriteout(ctx context.Context, at time.Time) error {
 }
 
 func (h *Handler) UpdateAndRotate(ctx context.Context, ifaces config.Ifaces, at time.Time) error {
-	logger := logging.WithContext(ctx)
+	logger := logging.FromContext(ctx)
 
 	// don't rotate if a bogus timestamp is supplied
 	if at.Sub(h.LastRotation) < 0 {
@@ -131,7 +131,7 @@ func (h *Handler) UpdateAndRotate(ctx context.Context, ifaces config.Ifaces, at 
 
 func (h *Handler) HandleRotations(ctx context.Context, interval time.Duration) {
 	go func() {
-		logger := logging.WithContext(ctx)
+		logger := logging.FromContext(ctx)
 
 		// wait until the next 5 minute interval of the hour is reached before starting the ticker
 		tNow := time.Now()

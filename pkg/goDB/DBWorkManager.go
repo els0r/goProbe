@@ -240,7 +240,7 @@ func (w *DBWorkManager) grabAndProcessWorkload(ctx context.Context, wg *sync.Wai
 	go func() {
 		defer wg.Done()
 
-		logger := logging.WithContext(ctx)
+		logger := logging.FromContext(ctx)
 
 		enc, err := encoder.New(defaultEncoderType)
 		if err != nil {
