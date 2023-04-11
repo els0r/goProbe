@@ -83,6 +83,10 @@ func (c *Client) Query(ctx context.Context, args *query.Args) (*results.Result, 
 	// whatever happens, the results are expected to be returned in json
 	queryArgs.Format = "json"
 
+	if queryArgs.Caller == "" {
+		queryArgs.Caller = clientName
+	}
+
 	// we need more results before truncating
 	if args.NumResults < query.DefaultNumResults {
 		args.NumResults = query.DefaultNumResults

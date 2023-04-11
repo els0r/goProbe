@@ -84,12 +84,14 @@ func NewDefault(addr string, opts ...Option) *DefaultClient {
 	for _, opt := range opts {
 		opt(c)
 	}
-	c.client.Transport = &transport{
-		rt: otelhttp.NewTransport(
-			http.DefaultTransport,
-		),
-		requestLogging: c.requestLogging,
-		clientName:     c.name,
+	c.client = &http.Client{
+		Transport: &transport{
+			rt: otelhttp.NewTransport(
+				http.DefaultTransport,
+			),
+			requestLogging: c.requestLogging,
+			clientName:     c.name,
+		},
 	}
 	return c
 }
@@ -104,32 +106,9 @@ type transport struct {
 	clientName     string
 }
 
-func (t *transport) setTraceID(r *http.Request) *http.Request {
-	// extract the trace ID from the context if it is present
-	sc := trace.SpanContextFromContext(r.Context())
-	if !sc.HasTraceID() {
-		// set tracing info if it isn't available in the request
-		command := r.Method + " " + r.URL.String()
-
-		var (
-			err        error
-			traceState trace.TraceState = trace.TraceState{}
-		)
-
-		traceState, err = traceState.Insert(t.clientName, command)
-		if err == nil {
-			r = r.WithContext(trace.ContextWithSpanContext(r.Context(), trace.NewSpanContext(
-				trace.SpanContextConfig{TraceState: traceState},
-			)))
-		}
-	}
-	return r
-}
-
 func (t *transport) RoundTrip(r *http.Request) (*http.Response, error) {
 	start := time.Now()
 
-	r = t.setTraceID(r)
 	r.Header.Set("User-Agent", t.clientName)
 
 	// make request
@@ -143,38 +122,51 @@ func (t *transport) RoundTrip(r *http.Request) (*http.Response, error) {
 			slog.String("user-agent", r.UserAgent()),
 			slog.Duration("duration", duration),
 		))
-		if resp != nil {
-			logger = logger.With("resp", slog.GroupValue(
-				slog.Int("status_code", resp.StatusCode),
-			))
-		}
+		// log trace ID if it is present
 		sc := trace.SpanContextFromContext(r.Context())
-		if !sc.HasTraceID() {
+		if sc.HasTraceID() {
 			logger = logger.With(slog.String("traceID", sc.TraceID().String()))
 		}
 
-		if err == nil && 200 <= resp.StatusCode && resp.StatusCode < 300 {
-			logger.Info("sent request")
-		} else {
-			if err != nil {
-				logger.Errorf("failed to send request: %v", err)
+		if err == nil {
+			if resp != nil {
+				logger = logger.With("resp", slog.GroupValue(
+					slog.Int("status_code", resp.StatusCode),
+				))
+				switch {
+				case 200 <= resp.StatusCode && resp.StatusCode < 300:
+					logger.Info("completed request")
+				case 300 <= resp.StatusCode && resp.StatusCode < 400:
+					logger.Info("further action needed to complete request")
+				default:
+					logger.Error("server error returned")
+				}
 			} else {
-				logger.Errorf("failed to send request")
+				logger.Error("empty response")
 			}
+		} else {
+			logger.Errorf("failed to send request: %v", err)
 		}
 	}
 	return resp, err
 }
 
 func (c *DefaultClient) Modify(ctx context.Context, req *httpc.Request) *httpc.Request {
+	// TODO: have a long, hard look at this function
+	//
+	// It did happen to suck the bytes out of the body, leaving nothing for the
+	// parser following it
+	//
+	// DO NOT uncomment before clarifying behavior with httpc library
+	//
 	// retry any request that isn't 2xx
-	req = req.RetryBackOffErrFn(func(resp *http.Response, _ error) bool {
-		// if the response is nil, we should try again definitely
-		if resp == nil {
-			return true
-		}
-		return resp.StatusCode != http.StatusBadRequest
-	})
+	// req = req.RetryBackOffErrFn(func(resp *http.Response, _ error) bool {
+	// 	// if the response is nil, we should try again definitely
+	// 	if resp == nil {
+	// 		return true
+	// 	}
+	// 	return resp.StatusCode != http.StatusBadRequest
+	// })
 	if c.timeout > 0 {
 		req = req.Timeout(c.timeout)
 	}

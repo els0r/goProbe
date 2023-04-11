@@ -35,8 +35,13 @@ func (c *Client) Run(ctx context.Context, args *query.Args) (*results.Result, er
 func (c *Client) Query(ctx context.Context, args *query.Args) (*results.Result, error) {
 	// use a copy of the arguments, since some fields are modified by the client
 	queryArgs := *args
+
 	// whatever happens, the results are expected to be returned in json
 	queryArgs.Format = "json"
+
+	if queryArgs.Caller == "" {
+		queryArgs.Caller = clientName
+	}
 
 	var res = new(results.Result)
 

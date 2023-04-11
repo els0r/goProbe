@@ -2,7 +2,6 @@ package distributed
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 
@@ -48,11 +47,11 @@ func (q *QueryRunner) Run(ctx context.Context, args *query.Args) (*results.Resul
 	// log the query
 	logger := logging.Logger().With("hosts", hostList)
 
-	logger.With("args", &queryArgs).Info("running query")
-
 	// query pipeline setup
 	// sets up a fan-out, fan-in query processing pipeline
 	numRunners := len(hostList)
+
+	logger.With("runners", numRunners).Info("dispatching queries")
 
 	finalResult := aggregateResults(ctx, stmt,
 		runQueries(ctx, numRunners,
@@ -92,10 +91,6 @@ func prepareQueries(ctx context.Context, querier Querier, hostList hosts.Hosts, 
 
 	return workloads
 }
-
-var (
-	ErrorNoDataReturned = errors.New("no data returned")
-)
 
 // runQueries takes query workloads from the workloads channel, runs them, and returns a channel from which
 // the results can be read
