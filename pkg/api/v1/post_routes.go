@@ -22,7 +22,7 @@ func (a *API) postRequestRoutes(r chi.Router) {
 
 func (a *API) handleReload(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	logger := logging.WithContext(ctx)
+	logger := logging.FromContext(ctx)
 
 	pp := printPretty(r)
 

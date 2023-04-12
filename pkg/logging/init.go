@@ -67,8 +67,19 @@ func WithVersion(version string) Option {
 // Init initializes the global logger. The `encoding` variable sets whether content should
 // be printed for console output or in JSON (for machine consumption)
 func Init(level slog.Level, encoding Encoding, opts ...Option) error {
+	// assign configured logger to slog's default logger
+	logger, err := New(level, encoding, opts...)
+	if err != nil {
+		return err
+	}
+	slog.SetDefault(logger.l)
+	return nil
+}
+
+// New returns a new logger
+func New(level slog.Level, encoding Encoding, opts ...Option) (*L, error) {
 	if level == LevelUnknown {
-		return fmt.Errorf("unknown log level provided: %s", level)
+		return nil, fmt.Errorf("unknown log level provided: %s", level)
 	}
 
 	replaceFunc := func(groups []string, a slog.Attr) slog.Attr {
@@ -124,7 +135,7 @@ func Init(level slog.Level, encoding Encoding, opts ...Option) error {
 	case EncodingLogfmt:
 		th = hopts.NewTextHandler(cfg.stdOutput)
 	default:
-		return fmt.Errorf("unknown encoding %q", encoding)
+		return nil, fmt.Errorf("unknown encoding %q", encoding)
 	}
 
 	// inject a split level handler in case the error output is defined
@@ -158,9 +169,17 @@ func Init(level slog.Level, encoding Encoding, opts ...Option) error {
 		th = &callerHandler{addSource: cfg.enableCaller, next: th}
 	}
 
-	// assign configured logger to slog's default logger
-	slog.SetDefault(slog.New(th))
-	return nil
+	// return a new L logger
+	return newL(slog.New(th)), nil
+}
+
+// NewFromContext creates a new logger, deriving structured fields from the supplied context
+func NewFromContext(ctx context.Context, level slog.Level, encoding Encoding, opts ...Option) (*L, error) {
+	logger, err := New(level, encoding, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return fromContext(ctx, logger), nil
 }
 
 // Logger returns a low allocation logger for performance critical sections
@@ -191,13 +210,13 @@ func getFields(ctx context.Context) (loggerFields, bool) {
 	return lf, ok
 }
 
-// NewContext returns a context that has extra fields added.
+// WithFields returns a context that has extra fields added.
 //
 // The method is meant to be used in conjunction with WithContext that selects
 // the context-enriched logger.
 //
 // The strength of this approach is that labels set in parent context are accessible
-func NewContext(ctx context.Context, fields ...interface{}) context.Context {
+func WithFields(ctx context.Context, fields ...interface{}) context.Context {
 	var (
 		newFields loggerFields = newLoggerFields()
 	)
@@ -233,10 +252,9 @@ func NewContext(ctx context.Context, fields ...interface{}) context.Context {
 	return context.WithValue(ctx, fieldsKey, newFields)
 }
 
-// WithContext returns a logger which has as much context set as possible
-func WithContext(ctx context.Context) *L {
+func fromContext(ctx context.Context, logger *L) *L {
 	if ctx == nil {
-		return Logger()
+		return logger
 	}
 	ctxLoggerFields, ok := getFields(ctx)
 	if ok {
@@ -257,9 +275,14 @@ func WithContext(ctx context.Context) *L {
 		}
 		ctxLoggerFields.mu.RUnlock()
 
-		return Logger().With(fields...)
+		return logger.With(fields...)
 	}
-	return Logger()
+	return logger
+}
+
+// FromContext returns a global logger which has as much context set as possible
+func FromContext(ctx context.Context) *L {
+	return fromContext(ctx, Logger())
 }
 
 func copyMap(in, out map[string]interface{}) {

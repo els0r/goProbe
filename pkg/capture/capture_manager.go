@@ -94,7 +94,7 @@ func (cm *Manager) enable(ifaces map[string]config.CaptureConfig) {
 
 			cm.setCapture(iface, &ManagedCapture{capture: capture, cancel: cancel})
 
-			logger := logging.WithContext(capture.ctx)
+			logger := logging.FromContext(capture.ctx)
 			logger.Info(fmt.Sprintf("added interface to capture list"))
 
 			capture.Run()
@@ -177,7 +177,7 @@ func (cm *Manager) capturesCopy() map[string]*ManagedCapture {
 //
 // Returns once all the above actions have been completed.
 func (cm *Manager) Update(ifaces config.Ifaces, returnChan chan TaggedAggFlowMap) {
-	logger := logging.WithContext(cm.ctx)
+	logger := logging.FromContext(cm.ctx)
 
 	t0 := time.Now()
 
@@ -216,7 +216,7 @@ func (cm *Manager) Update(ifaces config.Ifaces, returnChan chan TaggedAggFlowMap
 		})
 
 		// close capture and delete from list of managed captures
-		logger = logging.WithContext(mc.capture.ctx)
+		logger = logging.FromContext(mc.capture.ctx)
 
 		mc.cancel()
 		cm.delCapture(iface)
@@ -303,7 +303,7 @@ func (cm *Manager) ErrorsAll() map[string]ErrorMap {
 // The resulting TaggedAggFlowMaps will be sent over returnChan and
 // be tagged with the given timestamp.
 func (cm *Manager) RotateAll(returnChan chan TaggedAggFlowMap) {
-	logger := logging.WithContext(cm.ctx)
+	logger := logging.FromContext(cm.ctx)
 
 	t0 := time.Now()
 

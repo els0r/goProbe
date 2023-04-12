@@ -27,7 +27,7 @@ func (a *authenticator) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	)
 
 	ctx := r.Context()
-	logger := logging.WithContext(ctx)
+	logger := logging.FromContext(ctx)
 
 	select {
 	case <-ctx.Done():
