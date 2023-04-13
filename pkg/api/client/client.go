@@ -116,7 +116,7 @@ func (t *transport) RoundTrip(r *http.Request) (*http.Response, error) {
 	duration := time.Since(start)
 
 	if t.requestLogging {
-		logger := logging.WithContext(r.Context()).With("req", slog.GroupValue(
+		logger := logging.FromContext(r.Context()).With("req", slog.GroupValue(
 			slog.String("method", r.Method),
 			slog.String("url", r.URL.String()),
 			slog.String("user-agent", r.UserAgent()),
@@ -171,9 +171,7 @@ func (c *DefaultClient) Modify(ctx context.Context, req *httpc.Request) *httpc.R
 		req = req.Timeout(c.timeout)
 	}
 	if c.key != "" {
-		req = req.Headers(map[string]string{
-			"Authorization": fmt.Sprintf("digest %s", c.key),
-		})
+		req = req.AuthToken("digest", c.key)
 	}
 	return req
 }

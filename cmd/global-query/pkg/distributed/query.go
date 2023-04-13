@@ -16,13 +16,30 @@ import (
 type QueryRunner struct {
 	resolver hosts.Resolver
 	querier  Querier
+
+	maxConcurrent int
 }
 
-func NewQueryRunner(resolver hosts.Resolver, querier Querier) *QueryRunner {
-	return &QueryRunner{
+// QueryOption configures the query runner
+type QueryOption func(*QueryRunner)
+
+// WithMaxConcurrent limits the amount of hosts that are queried concurrently.
+// If it isn't set, every hosts in the list is queried in a separate goroutine
+func WithMaxConcurrent(n int) QueryOption {
+	return func(qr *QueryRunner) {
+		qr.maxConcurrent = n
+	}
+}
+
+func NewQueryRunner(resolver hosts.Resolver, querier Querier, opts ...QueryOption) *QueryRunner {
+	qr := &QueryRunner{
 		resolver: resolver,
 		querier:  querier,
 	}
+	for _, opt := range opts {
+		opt(qr)
+	}
+	return qr
 }
 
 func (q *QueryRunner) Run(ctx context.Context, args *query.Args) (*results.Result, error) {
@@ -51,12 +68,15 @@ func (q *QueryRunner) Run(ctx context.Context, args *query.Args) (*results.Resul
 	// query pipeline setup
 	// sets up a fan-out, fan-in query processing pipeline
 	numRunners := len(hostList)
+	if q.maxConcurrent > 0 {
+		numRunners = q.maxConcurrent
+	}
 
 	logger.With("runners", numRunners).Info("dispatching queries")
 
 	finalResult := aggregateResults(ctx, stmt,
 		runQueries(ctx, numRunners,
-			prepareQueries(ctx, q.querier, hostList, &queryArgs),
+			prepareQueries(ctx, q.querier, hostList, &queryArgs, numRunners),
 		),
 	)
 
@@ -73,11 +93,11 @@ func (q *QueryRunner) Run(ctx context.Context, args *query.Args) (*results.Resul
 
 // prepareQueries creates query workloads for all hosts in the host list and returns the channel it sends the
 // workloads on
-func prepareQueries(ctx context.Context, querier Querier, hostList hosts.Hosts, args *query.Args) <-chan *QueryWorkload {
+func prepareQueries(ctx context.Context, querier Querier, hostList hosts.Hosts, args *query.Args, maxConcurrent int) <-chan *QueryWorkload {
 	workloads := make(chan *QueryWorkload)
 
 	go func(ctx context.Context) {
-		logger := logging.WithContext(ctx)
+		logger := logging.FromContext(ctx)
 
 		for _, host := range hostList {
 			wl, err := querier.CreateQueryWorkload(ctx, host, args)
@@ -94,12 +114,12 @@ func prepareQueries(ctx context.Context, querier Querier, hostList hosts.Hosts, 
 
 // runQueries takes query workloads from the workloads channel, runs them, and returns a channel from which
 // the results can be read
-func runQueries(ctx context.Context, numRunners int, workloads <-chan *QueryWorkload) <-chan *queryResponse {
-	out := make(chan *queryResponse, numRunners)
+func runQueries(ctx context.Context, maxConcurrent int, workloads <-chan *QueryWorkload) <-chan *queryResponse {
+	out := make(chan *queryResponse, maxConcurrent)
 
 	wg := new(sync.WaitGroup)
-	wg.Add(numRunners)
-	for i := 0; i < numRunners; i++ {
+	wg.Add(maxConcurrent)
+	for i := 0; i < maxConcurrent; i++ {
 		go func(ctx context.Context) {
 			defer wg.Done()
 			for {
@@ -146,7 +166,7 @@ func aggregateResults(ctx context.Context, stmt *query.Statement, queryResults <
 	// tracker maps for meta info
 	var ifaceMap = make(map[string]struct{})
 
-	logger := logging.WithContext(ctx)
+	logger := logging.FromContext(ctx)
 
 	defer func() {
 		if len(rowMap) > 0 {

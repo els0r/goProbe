@@ -12,10 +12,11 @@ const (
 
 	HostsResolverType = hostsResolverKey + ".type"
 
-	hostsQuerierKey = hostsKey + ".querier"
+	querierKey = "querier"
 
-	HostsQuerierType   = hostsQuerierKey + ".type"
-	HostsQuerierConfig = hostsQuerierKey + ".config"
+	QuerierType          = querierKey + ".type"
+	QuerierConfig        = querierKey + ".config"
+	QuerierMaxConcurrent = querierKey + ".max_concurrent"
 
 	serverKey                 = "server"
 	ServerAddr                = serverKey + ".addr"

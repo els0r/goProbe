@@ -36,7 +36,7 @@ func serverEntrypoint(cmd *cobra.Command, args []string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	defer stop()
 
-	logger := logging.WithContext(ctx)
+	logger := logging.FromContext(ctx)
 
 	hostListResolver, err := initHostListResolver()
 	if err != nil {

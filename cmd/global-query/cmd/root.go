@@ -51,8 +51,9 @@ func init() {
 	rootCmd.PersistentFlags().String(conf.LogLevel, conf.DefaultLogLevel, "log level for logger")
 	rootCmd.PersistentFlags().String(conf.LogEncoding, conf.DefaultLogEncoding, "message encoding format for logger")
 	rootCmd.PersistentFlags().String(conf.HostsResolverType, conf.DefaultHostsResolver, "resolver used for the hosts resolution query")
-	rootCmd.PersistentFlags().String(conf.HostsQuerierType, conf.DefaultHostsQuerierType, "querier used to run queries")
-	rootCmd.PersistentFlags().String(conf.HostsQuerierConfig, "", "querier config file location")
+	rootCmd.PersistentFlags().String(conf.QuerierType, conf.DefaultHostsQuerierType, "querier used to run queries")
+	rootCmd.PersistentFlags().String(conf.QuerierConfig, "", "querier config file location")
+	rootCmd.PersistentFlags().Int(conf.QuerierMaxConcurrent, 0, "maximum number of concurrent queries to hosts")
 
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.global-query.yaml)")
 
@@ -111,10 +112,10 @@ func initHostListResolver() (hosts.Resolver, error) {
 }
 
 func initQuerier() (distributed.Querier, error) {
-	querierType := viper.GetString(conf.HostsQuerierType)
+	querierType := viper.GetString(conf.QuerierType)
 	switch querierType {
 	case string(distributed.APIClientQuerierType):
-		return distributed.NewAPIClientQuerier(viper.GetString(conf.HostsQuerierConfig))
+		return distributed.NewAPIClientQuerier(viper.GetString(conf.QuerierConfig))
 	default:
 		err := fmt.Errorf("querier type %q not supported", querierType)
 		return nil, err

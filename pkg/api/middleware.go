@@ -20,7 +20,7 @@ func TraceIDMiddleware() gin.HandlerFunc {
 		// extract the trace ID from the context if it is present
 		sc := trace.SpanContextFromContext(ctx)
 		if sc.HasTraceID() {
-			ctx = logging.NewContext(ctx, slog.String(traceIDKey, sc.TraceID().String()))
+			ctx = logging.WithFields(ctx, slog.String(traceIDKey, sc.TraceID().String()))
 		}
 
 		// pass the context through the request context
@@ -32,7 +32,7 @@ func TraceIDMiddleware() gin.HandlerFunc {
 
 func RequestLoggingMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		logger := logging.WithContext(c.Request.Context())
+		logger := logging.FromContext(c.Request.Context())
 
 		// call next handlers
 		start := time.Now()

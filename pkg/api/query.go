@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 
@@ -10,6 +11,11 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
+func LogAndAbort(ctx context.Context, c *gin.Context, code int, err error) {
+	logging.FromContext(ctx).Error(err)
+	c.AbortWithError(code, err)
+}
+
 func RunQuery(caller, sourceData string, querier query.Runner, c *gin.Context) {
 	ctx := c.Request.Context()
 
@@ -17,7 +23,7 @@ func RunQuery(caller, sourceData string, querier query.Runner, c *gin.Context) {
 	var queryArgs = new(query.Args)
 	err := jsoniter.NewDecoder(c.Request.Body).Decode(queryArgs)
 	if err != nil {
-		c.AbortWithError(http.StatusBadRequest, err)
+		LogAndAbort(ctx, c, http.StatusBadRequest, err)
 		return
 	}
 
@@ -29,22 +35,18 @@ func RunQuery(caller, sourceData string, querier query.Runner, c *gin.Context) {
 	}
 
 	// check if the statement can be created
-	logger := logging.WithContext(ctx).With("args", queryArgs)
+	logger := logging.FromContext(ctx)
 
-	logger.Info("running query")
+	logger.With("args", queryArgs).Info("running query")
 	_, err = queryArgs.Prepare()
 	if err != nil {
-		err = fmt.Errorf("failed to prepare query statement: %v", err)
-		logger.Error(err)
-		c.AbortWithError(http.StatusBadRequest, err)
+		LogAndAbort(ctx, c, http.StatusBadRequest, fmt.Errorf("failed to prepare query statement: %v", err))
 		return
 	}
 
 	result, err := querier.Run(ctx, queryArgs)
 	if err != nil {
-		err = fmt.Errorf("%s query failed: %w", sourceData, err)
-		logger.Error(err)
-		c.AbortWithError(http.StatusInternalServerError, err)
+		LogAndAbort(ctx, c, http.StatusBadRequest, fmt.Errorf("%s query failed: %w", sourceData, err))
 		return
 	}
 

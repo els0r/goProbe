@@ -4,5 +4,6 @@ logging:
 hosts:
   resolver:
     type: string
-  querier:
-    type: api
+querier:
+  type: api
+  max_concurrent: 64
