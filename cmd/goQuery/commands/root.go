@@ -38,7 +38,7 @@ var subRootCmd = &cobra.Command{}
 // Execute is the main entrypoint and runs the CLI tool
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
-		logging.Logger().Fatalf("Error running query: %s", err)
+		cliLogger.Fatalf("Error running query: %s", err)
 	}
 }
 
@@ -50,6 +50,7 @@ var (
 )
 
 func init() {
+	initCLILogger()
 	initLogger()
 
 	// flags to be also passed to children commands
@@ -91,6 +92,20 @@ func init() {
 
 	// Duration
 	rootCmd.Flags().DurationVarP(&cmdLineParams.QueryTimeout, "timeout", "", query.DefaultQueryTimeout, helpMap["QueryTimeout"])
+}
+
+var cliLogger *logging.L
+
+func initCLILogger() {
+	var err error
+	// TODO: switch to logging.EncodingPlain once https://github.com/els0r/goProbe/pull/110 is merged
+	cliLogger, err = logging.New(logging.LevelError, logging.EncodingLogfmt,
+		logging.WithOutput(os.Stderr),
+	)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to instantiate CLI logger: %v\n", err)
+		os.Exit(1)
+	}
 }
 
 func initLogger() {
