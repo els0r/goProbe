@@ -1,6 +1,7 @@
 package logging
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -35,6 +36,38 @@ func TestInitialization(t *testing.T) {
 		err := Init(LevelDebug, Encoding("windings"))
 		require.NotNil(t, err)
 	})
+}
+
+func TestBogusInput(t *testing.T) {
+	_, err := NewFromContext(context.Background(), 42, Encoding("00000000000llllllllll"))
+	require.NotNil(t, err)
+}
+
+func TestNewPlainLogger(t *testing.T) {
+	buf := &bytes.Buffer{}
+	buf2 := &bytes.Buffer{}
+
+	logger, err := NewFromContext(context.Background(), LevelInfo, EncodingPlain,
+		WithOutput(buf),
+		WithErrorOutput(buf2),
+	)
+	require.Nil(t, err)
+
+	logger.WithGroup("nothing").With(slog.String("else", "matters")).Info("hello world")
+	require.Equal(t, "Hello world\n", buf.String())
+
+	logger.WithGroup("nothing").With(slog.String("else", "matters")).Error("hello error")
+	require.Equal(t, "Hello error\n", buf2.String())
+
+	buf.Reset()
+
+	logger.Info("")
+	require.Equal(t, "\n", buf.String())
+
+	buf.Reset()
+
+	logger.Debug("i shouldn't show up")
+	require.Equal(t, "", buf.String())
 }
 
 func TestLogConcurrent(t *testing.T) {
