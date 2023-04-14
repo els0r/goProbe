@@ -128,26 +128,16 @@ func New(level slog.Level, encoding Encoding, opts ...Option) (*L, error) {
 		AddSource:   cfg.enableCaller,
 		ReplaceAttr: replaceFunc,
 	}
-	var th slog.Handler
-	switch encoding {
-	case EncodingJSON:
-		th = hopts.NewJSONHandler(cfg.stdOutput)
-	case EncodingLogfmt:
-		th = hopts.NewTextHandler(cfg.stdOutput)
-	default:
-		return nil, fmt.Errorf("unknown encoding %q", encoding)
+
+	th, err := getHandler(cfg.stdOutput, encoding, hopts)
+	if err != nil {
+		return nil, err
 	}
 
 	// inject a split level handler in case the error output is defined
 	if cfg.errsOutput != nil {
-		var errth slog.Handler
-		switch encoding {
-		case EncodingJSON:
-			errth = hopts.NewJSONHandler(cfg.errsOutput)
-		case EncodingLogfmt:
-			errth = hopts.NewTextHandler(cfg.errsOutput)
-		}
-		th = newLevelSplitHandler(th, errth)
+		h, _ := getHandler(cfg.errsOutput, encoding, hopts)
+		th = newLevelSplitHandler(th, h)
 	}
 
 	// assign initial attributes if there are any
@@ -171,6 +161,20 @@ func New(level slog.Level, encoding Encoding, opts ...Option) (*L, error) {
 
 	// return a new L logger
 	return newL(slog.New(th)), nil
+}
+
+func getHandler(w io.Writer, encoding Encoding, hopts slog.HandlerOptions) (th slog.Handler, err error) {
+	switch encoding {
+	case EncodingJSON:
+		th = hopts.NewJSONHandler(w)
+	case EncodingLogfmt:
+		th = hopts.NewTextHandler(w)
+	case EncodingPlain:
+		th = newPlainHandler(w, hopts.Level.Level())
+	default:
+		return nil, fmt.Errorf("unknown encoding %q", encoding)
+	}
+	return th, nil
 }
 
 // NewFromContext creates a new logger, deriving structured fields from the supplied context

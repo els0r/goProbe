@@ -18,11 +18,26 @@ const (
 	LevelUnknown = slog.Level(-255)
 )
 
+// Encoding defines the type of log message encoding
 type Encoding string
 
 const (
-	EncodingJSON   Encoding = "json"
+	// EncodingJSON encodes structured log messages as JSON
+	// It uses the slog.JSONHandler under the hood
+	EncodingJSON Encoding = "json"
+
+	// EncodingLogfmt will output the messages in structured key=value pairs according
+	// to the logfmt "standard"
+	// It uses the slog.TextHandler under the hood
 	EncodingLogfmt Encoding = "logfmt"
+
+	// EncodingPlain causes only the message part of the log line to be printed
+	// with the first letter of the message capitalized. It will not print any
+	// other structured fields.
+	//
+	// The only thing setting it aside from fmt.Fprintln is that it respects the log level
+	// it was initialized with
+	EncodingPlain Encoding = "plain"
 )
 
 // enumeration of level keys (for performance. See Init's replaceFunc)
