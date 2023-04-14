@@ -98,8 +98,7 @@ var cliLogger *logging.L
 
 func initCLILogger() {
 	var err error
-	// TODO: switch to logging.EncodingPlain once https://github.com/els0r/goProbe/pull/110 is merged
-	cliLogger, err = logging.New(logging.LevelError, logging.EncodingLogfmt,
+	cliLogger, err = logging.New(logging.LevelError, logging.EncodingPlain,
 		logging.WithOutput(os.Stderr),
 	)
 	if err != nil {
