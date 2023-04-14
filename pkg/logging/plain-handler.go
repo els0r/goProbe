@@ -38,7 +38,7 @@ func (ph *plainHandler) Handle(ctx context.Context, r slog.Record) error {
 
 	ph.mu.Lock()
 	_, err := ph.w.Write([]byte(string(runes)))
-	defer ph.mu.Unlock()
+	ph.mu.Unlock()
 	return err
 }
 
