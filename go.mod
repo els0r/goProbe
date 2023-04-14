@@ -3,7 +3,7 @@ module github.com/els0r/goProbe
 require (
 	github.com/els0r/status v1.0.0
 	github.com/fako1024/httpc v1.0.14-0.20230411075714-71a3dee0eae2
-	github.com/fako1024/slimcap v0.0.0-20230411071014-93578b0ce1d4
+	github.com/fako1024/slimcap v0.0.0-20230321123248-08a876d268b3
 	github.com/gin-gonic/gin v1.9.0
 	github.com/go-chi/chi/v5 v5.0.7
 	github.com/json-iterator/go v1.1.12
