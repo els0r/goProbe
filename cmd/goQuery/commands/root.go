@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/els0r/goProbe/pkg/goDB/engine"
@@ -25,6 +25,7 @@ var rootCmd = &cobra.Command{
 	Use:   "goQuery [flags] [" + supportedCmds + "]",
 	Short: helpBase,
 	Long:  helpBaseLong,
+
 	// entry point for goQuery
 	RunE:          entrypoint,
 	SilenceUsage:  true,
@@ -36,11 +37,9 @@ var subRootCmd = &cobra.Command{}
 
 // Execute is the main entrypoint and runs the CLI tool
 func Execute() {
-	err := rootCmd.Execute()
-	if err != nil {
-		os.Exit(1)
+	if err := rootCmd.Execute(); err != nil {
+		cliLogger.Fatalf("Error running query: %s", err)
 	}
-	return
 }
 
 // globally accessible variable for other packages
@@ -51,7 +50,8 @@ var (
 )
 
 func init() {
-	cobra.OnInitialize(initLogger)
+	initCLILogger()
+	initLogger()
 
 	// flags to be also passed to children commands
 	subRootCmd.PersistentFlags().StringVarP(&subcmdLineParams.DBPath, "db-path", "d", query.DefaultDBPath, helpMap["DBPath"])
@@ -94,6 +94,19 @@ func init() {
 	rootCmd.Flags().DurationVarP(&cmdLineParams.QueryTimeout, "timeout", "", query.DefaultQueryTimeout, helpMap["QueryTimeout"])
 }
 
+var cliLogger *logging.L
+
+func initCLILogger() {
+	var err error
+	cliLogger, err = logging.New(logging.LevelError, logging.EncodingPlain,
+		logging.WithOutput(os.Stderr),
+	)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to instantiate CLI logger: %v\n", err)
+		os.Exit(1)
+	}
+}
+
 func initLogger() {
 	// since this is a command line tool, only warnings and errors should be printed and they
 	// shouldn't go to a dedicated file
@@ -118,10 +131,8 @@ func entrypoint(cmd *cobra.Command, args []string) error {
 	// run commands that don't require any argument
 	// handle list flag
 	if cmdLineParams.List {
-		err := listInterfaces(cmdLineParams.DBPath, cmdLineParams.External)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to retrieve list of available databases: %s", err)
-			return err
+		if err := listInterfaces(cmdLineParams.DBPath, cmdLineParams.External); err != nil {
+			return fmt.Errorf("failed to retrieve list of available databases: %w", err)
 		}
 		return nil
 	}
@@ -135,25 +146,18 @@ func entrypoint(cmd *cobra.Command, args []string) error {
 	// check if arguments should be loaded from disk. The cmdLineParams are taken as
 	// the base for this to allow modification of single parameters
 	if argsLocation != "" {
-		argumentsJSON, err := ioutil.ReadFile(argsLocation)
+		argumentsJSON, err := os.ReadFile(filepath.Clean(argsLocation))
 		if err != nil {
-			err := fmt.Errorf("Failed to read query args from %s", argsLocation)
-			fmt.Fprintf(os.Stderr, "%s", err)
-			return err
+			return fmt.Errorf("failed to read query args from %s: %w", argsLocation, err)
 		}
 		// unmarshal arguments into the command line parameters
-		err = json.Unmarshal(argumentsJSON, &queryArgs)
-		if err != nil {
-			err := fmt.Errorf("Failed to parse JSON query args %s", err)
-			fmt.Fprintf(os.Stderr, "%s", err)
-			return err
+		if err = json.Unmarshal(argumentsJSON, &queryArgs); err != nil {
+			return fmt.Errorf("failed to parse JSON query args %s: %w", string(argumentsJSON), err)
 		}
 	} else {
 		// check that query type or other subcommands were provided
 		if len(args) == 0 {
-			err := errors.New("No query type or command provided")
-			fmt.Fprintf(os.Stderr, "%s\n%s\n", err, cmd.Long)
-			return err
+			return errors.New("no query type or command provided")
 		}
 		if args[0] == "help" {
 			cmd.Help()
@@ -172,8 +176,7 @@ func entrypoint(cmd *cobra.Command, args []string) error {
 		for _, c := range subRootCmd.Commands() {
 			if c.Name() == args[0] {
 				c.SetArgs(args[1:])
-				err := c.Execute()
-				return err
+				return c.Execute()
 			}
 		}
 
@@ -186,8 +189,7 @@ func entrypoint(cmd *cobra.Command, args []string) error {
 	// convert the command line parameters
 	stmt, err := queryArgs.Prepare()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Query preparation failed: %v\n", err)
-		return err
+		return fmt.Errorf("failed to prepare query: %w", err)
 	}
 
 	var ctx context.Context
@@ -204,8 +206,7 @@ func entrypoint(cmd *cobra.Command, args []string) error {
 
 	res, err := engine.NewQueryRunner().Run(ctx, stmt)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Query execution failed: %v\n", err)
-		return err
+		return fmt.Errorf("failed to execute query %s: %w", stmt, err)
 	}
 	// empty results should be handled here exclusively
 	if len(res) == 0 {
@@ -220,10 +221,8 @@ func entrypoint(cmd *cobra.Command, args []string) error {
 
 	// serialize raw results array if json is selected
 	if stmt.Format == "json" {
-		err = jsoniter.NewEncoder(stmt.Output).Encode(res)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Results serialization failed: %v\n", err)
-			return err
+		if err = jsoniter.NewEncoder(stmt.Output).Encode(res); err != nil {
+			return fmt.Errorf("failed to serialize query results: %w", err)
 		}
 		return nil
 	}
@@ -235,10 +234,8 @@ func entrypoint(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	err = stmt.Print(ctx, result)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Result printing failed: %v\n", err)
-		return err
+	if err = stmt.Print(ctx, result); err != nil {
+		return fmt.Errorf("failed to print query result: %w", err)
 	}
 	return nil
 }
