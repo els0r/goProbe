@@ -234,7 +234,7 @@ func (p testParams) genDummyPacket(pktType capture.PacketType) capture.Packet {
 		copy(data[ipv6.HeaderLen+2:ipv6.HeaderLen+4], epHash[32:34])
 	}
 
-	return capture.NewIPPacket(nil, data, pktType, 128)
+	return capture.NewIPPacket(nil, data, pktType, 128, 0)
 }
 
 type dummyPacket struct {

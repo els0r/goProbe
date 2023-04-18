@@ -22,7 +22,8 @@ import (
 	"github.com/els0r/goProbe/pkg/logging"
 	"github.com/els0r/goProbe/pkg/types/hashmap"
 	"github.com/fako1024/slimcap/capture"
-	"github.com/fako1024/slimcap/capture/afpacket"
+	"github.com/fako1024/slimcap/capture/afpacket/afring"
+	"github.com/fako1024/slimcap/link"
 )
 
 const (
@@ -32,6 +33,14 @@ const (
 	// ErrorThreshold is the maximum amount of consecutive errors that can occur on an interface before capturing is halted.
 	ErrorThreshold = 10000
 )
+
+var defaultSourceInitFn = func(c *Capture) (capture.Source, error) {
+	return afring.NewSource(c.iface,
+		afring.CaptureLength(link.CaptureLengthMinimalIPv6Transport),
+		afring.BufferSize(c.config.RingBufferBlockSize, c.config.RingBufferNumBlocks),
+		afring.Promiscuous(c.config.Promisc),
+	)
+}
 
 //////////////////////// Ancillary types ////////////////////////
 
@@ -191,48 +200,7 @@ type captureCommandRotate struct {
 }
 
 func (cmd captureCommandRotate) execute(c *Capture) stateFn {
-	logger := logging.FromContext(c.ctx)
-
-	var result rotateResult
-
-	if c.flowLog.Len() == 0 {
-		logger.Debug("there are currently no flow records available")
-	} else {
-
-		// Notify the capture that a rotation is about to begin, then unblock
-		// the capture potentially being in a blocking PPOLL syscall
-		// Channel has a depth of one and hence this push is non-blocking. Since
-		// we wait for confirmation there is no possibility of repeated attempts
-		// or race conditions
-		c.rotationState.request <- struct{}{}
-		if err := c.captureHandle.Unblock(); err != nil {
-			logger.Fatalf("unexpectedly failed to unblock capture handle, deadlock likely: %v", err)
-		}
-
-		// Wait for confirmation of reception from the processing routine, then
-		// commit the rotation
-		<-c.rotationState.confirm
-		result.agg = c.flowLog.Rotate()
-
-		// Signal that the rotation is complete, releasing the processing routine
-		c.rotationState.done <- struct{}{}
-
-		stats := c.tryGetCaptureStats()
-		lastRotationStats := *stats
-
-		sub(stats, c.lastRotationStats.CaptureStats)
-
-		result.stats = Stats{
-			CaptureStats:  stats,
-			PacketsLogged: c.packetsLogged - c.lastRotationStats.PacketsLogged,
-		}
-		c.lastRotationStats = Stats{
-			CaptureStats:  &lastRotationStats,
-			PacketsLogged: c.packetsLogged,
-		}
-	}
-
-	cmd.returnChan <- result
+	cmd.returnChan <- c.rotate()
 	return nil
 }
 
@@ -280,6 +248,7 @@ type Capture struct {
 
 	// Generic handle / source for packet capture
 	captureHandle capture.Source
+	sourceInitFn  sourceInitFn
 
 	// error map for logging errors more properly
 	errMap   ErrorMap
@@ -308,11 +277,27 @@ func NewCapture(ctx context.Context, iface string, config config.CaptureConfig) 
 		flowLog:       NewFlowLog(),
 		errMap:        make(map[string]int),
 		ctx:           capCtx,
+		sourceInitFn:  defaultSourceInitFn,
 	}
+}
+
+// Iface returns the interface name of the Capture
+func (c *Capture) Iface() string {
+	return c.iface
+}
+
+// SetSourceInitFn sets a custom function used to initialize a new capture
+func (c *Capture) SetSourceInitFn(fn sourceInitFn) *Capture {
+	c.sourceInitFn = fn
+	return c
 }
 
 // stateFn enables the implementation of the state machine
 type stateFn func(*Capture) stateFn
+
+// sourceInitFn denotes the function used to initialize a capture source,
+// providing the ability to override the default behavior, e.g. in mock tests
+type sourceInitFn func(*Capture) (capture.Source, error)
 
 // setState provides write access to the state field of
 // a Capture. It also logs the state change.
@@ -349,11 +334,7 @@ func initializing(c *Capture) stateFn {
 
 	// set up the packet source
 	var err error
-	c.captureHandle, err = afpacket.NewRingBufSource(c.iface,
-		afpacket.CaptureLength(Snaplen),
-		afpacket.BufferSize(c.config.RingBufferBlockSize, c.config.RingBufferNumBlocks),
-		afpacket.Promiscuous(c.config.Promisc),
-	)
+	c.captureHandle, err = c.sourceInitFn(c)
 	if err != nil {
 		logger.Errorf("failed to create new packet source: %v", err)
 		return inError
@@ -544,6 +525,50 @@ func (c *Capture) process() {
 			}
 		}
 	}
+}
+
+func (c *Capture) rotate() (result rotateResult) {
+
+	logger := logging.FromContext(c.ctx)
+
+	if c.flowLog.Len() == 0 {
+		logger.Debug("there are currently no flow records available")
+	} else {
+
+		// Notify the capture that a rotation is about to begin, then unblock
+		// the capture potentially being in a blocking PPOLL syscall
+		// Channel has a depth of one and hence this push is non-blocking. Since
+		// we wait for confirmation there is no possibility of repeated attempts
+		// or race conditions
+		c.rotationState.request <- struct{}{}
+		if err := c.captureHandle.Unblock(); err != nil {
+			logger.Fatalf("unexpectedly failed to unblock capture handle, deadlock likely: %v", err)
+		}
+
+		// Wait for confirmation of reception from the processing routine, then
+		// commit the rotation
+		<-c.rotationState.confirm
+		result.agg = c.flowLog.Rotate()
+
+		// Signal that the rotation is complete, releasing the processing routine
+		c.rotationState.done <- struct{}{}
+
+		stats := c.tryGetCaptureStats()
+		lastRotationStats := *stats
+
+		sub(stats, c.lastRotationStats.CaptureStats)
+
+		result.stats = Stats{
+			CaptureStats:  stats,
+			PacketsLogged: c.packetsLogged - c.lastRotationStats.PacketsLogged,
+		}
+		c.lastRotationStats = Stats{
+			CaptureStats:  &lastRotationStats,
+			PacketsLogged: c.packetsLogged,
+		}
+	}
+
+	return
 }
 
 //////////////////////// utilities ////////////////////////
