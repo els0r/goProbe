@@ -1,0 +1,36 @@
+# Adopted from an action that is no longer maintained
+# https://github.com/deepakputhraya/action-pr-title
+name: Pull Request Title Naming Rules
+on:
+  pull_request:
+    types: [opened, synchronize, edited, reopened]
+jobs:
+  truncation-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v6
+        with:
+          script: |
+            const REGEX = new RegExp("^(\[(feature|bugfix|doc|security|trivial)\])+ [A-Z].+");   // Title must match this regex
+            const MIN_LENGTH = 32;                                                               // Min length of the title
+            const MAX_LENGTH = 256;                                                              // Max length of the title (-1 is no max)
+            
+            const { title } = context.payload.pull_request;
+            if (!REGEX.test(title)) {
+              core.setFailed(
+                `Pull Request title "${title}" failed to match regex - ${REGEX}`
+              );
+              return;
+            }
+            if (title.length < MIN_LENGTH) {
+              core.setFailed(
+                `Pull Request title "${title}" is smaller than the minimum length - ${MIN_LENGTH}`
+              );
+              return;
+            }
+            if (MAX_LENGTH > 0 && title.length > MAX_LENGTH) {
+              core.setFailed(
+                `Pull Request title "${title}" is greater than the maximum length - ${MAX_LENGTH}`
+              );
+              return;
+            }
