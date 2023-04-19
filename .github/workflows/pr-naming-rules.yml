@@ -1,11 +1,11 @@
 # Adopted from an action that is no longer maintained
 # https://github.com/deepakputhraya/action-pr-title
-name: Pull Request Title Naming Rules
+name: Pull Request Validation
 on:
   pull_request:
     types: [opened, synchronize, edited, reopened]
 jobs:
-  truncation-check:
+  title-rules:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/github-script@v6
