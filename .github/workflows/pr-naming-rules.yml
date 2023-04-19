@@ -11,7 +11,7 @@ jobs:
       - uses: actions/github-script@v6
         with:
           script: |
-            const REGEX = new RegExp("^(\[(feature|bugfix|doc|security|trivial)\])+ [A-Z].+");   // Title must match this regex
+            const REGEX = new RegExp('^(\[(feature|bugfix|doc|security|trivial)\])+ [A-Z].+');   // Title must match this regex
             const MIN_LENGTH = 32;                                                               // Min length of the title
             const MAX_LENGTH = 256;                                                              // Max length of the title (-1 is no max)
             
