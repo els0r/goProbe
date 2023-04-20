@@ -1,11 +1,9 @@
 name: build-packages
 
 on:
-  - push
-# on:
-#   push:
-    # tags:
-    #   - 'v*.*.*'
+  push:
+    tags:
+      - 'v*.*.*'
 
 jobs:
   build-deb:
@@ -134,8 +132,7 @@ jobs:
     steps:
 
       - name: Set environment
-        # run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/v}" >> $GITHUB_ENV
-        run: echo "RELEASE_VERSION=3.0.2" >> $GITHUB_ENV
+        run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/v}" >> $GITHUB_ENV
 
       - name: Install OS dependencies
         run: apk add cmake make gcc libtool git bash musl-dev zstd-dev lz4-dev
