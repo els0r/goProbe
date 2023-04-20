@@ -130,14 +130,8 @@ jobs:
 
   build-apk:
     runs-on: ubuntu-latest
-    container: alpine:3.17
+    container: golang:alpine
     steps:
-
-      - name: Set up Go
-        uses: actions/setup-go@v4
-        with:
-          go-version: 'stable'
-        id: go
 
       - name: Set environment
         # run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/v}" >> $GITHUB_ENV
