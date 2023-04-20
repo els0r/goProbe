@@ -1,17 +1,17 @@
 # Adopted from an action that is no longer maintained
 # https://github.com/deepakputhraya/action-pr-title
-name: Pull Request Title Naming Rules
+name: Pull Request Validation
 on:
   pull_request:
     types: [opened, synchronize, edited, reopened]
 jobs:
-  truncation-check:
+  title-rules:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/github-script@v6
         with:
           script: |
-            const REGEX = new RegExp('^(\[(feature|bugfix|doc|security|trivial)\])+ [A-Z].+');   // Title must match this regex
+            const REGEX = new RegExp('^(\\[(feature|bugfix|doc|security|trivial)\\])+ [A-Z].+'); // Title must match this regex
             const MIN_LENGTH = 32;                                                               // Min length of the title
             const MAX_LENGTH = 256;                                                              // Max length of the title (-1 is no max)
             
