@@ -35,6 +35,10 @@ var rootCmd = &cobra.Command{
 // any commands other than query type will be hooked up to this command
 var subRootCmd = &cobra.Command{}
 
+func GetRootCmd() *cobra.Command {
+	return rootCmd
+}
+
 // Execute is the main entrypoint and runs the CLI tool
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
