@@ -1,4 +1,4 @@
-package commands
+package cmd
 
 import (
 	"context"
@@ -44,8 +44,18 @@ var subRootCmd = &cobra.Command{}
 
 // Execute is the main entrypoint and runs the CLI tool
 func Execute() {
-	if err := rootCmd.Execute(); err != nil {
-		cliLogger.Fatalf("Error running query: %s", err)
+	err := rootCmd.Execute()
+	if err != nil {
+		logger, logErr := logging.New(logging.LevelError, logging.EncodingPlain,
+			logging.WithOutput(os.Stderr),
+		)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to instantiate CLI logger: %v\n", logErr)
+
+			fmt.Fprintf(os.Stderr, "Error running query: %s\n", err)
+			os.Exit(1)
+		}
+		logger.Fatalf("Error running query: %s", err)
 	}
 }
 
@@ -56,7 +66,6 @@ var (
 )
 
 func init() {
-	initCLILogger()
 	cobra.OnInitialize(initConfig)
 	cobra.OnInitialize(initLogger)
 
@@ -100,19 +109,6 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file location")
 
 	_ = viper.BindPFlags(rootCmd.PersistentFlags())
-}
-
-var cliLogger *logging.L
-
-func initCLILogger() {
-	var err error
-	cliLogger, err = logging.New(logging.LevelError, logging.EncodingPlain,
-		logging.WithOutput(os.Stderr),
-	)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to instantiate CLI logger: %v\n", err)
-		os.Exit(1)
-	}
 }
 
 func initLogger() {
@@ -252,8 +248,10 @@ func entrypoint(cmd *cobra.Command, args []string) error {
 			}
 		}
 
+		// query using query server
 		querier = client.New(viper.GetString(conf.QueryServerAddr))
 	} else {
+		// query using local goDB
 		querier = engine.NewQueryRunner(dbPathCfg)
 	}
 
@@ -279,11 +277,18 @@ func entrypoint(cmd *cobra.Command, args []string) error {
 
 	// when running against a local goDB, there should be exactly one result
 	if result.Status.Code != types.StatusOK {
-		fmt.Fprintf(stmt.Output, "Status %q: %s\n", result.Status.Code, result.Status.Message)
+		logger, err := logging.New(logging.LevelInfo, logging.EncodingPlain,
+			logging.WithOutput(stmt.Output),
+		)
+		if err != nil {
+			return err
+		}
+		logger.Infof("Status %q: %s", result.Status.Code, result.Status.Message)
 		return nil
 	}
 
-	if err = stmt.Print(ctx, result); err != nil {
+	err = stmt.Print(ctx, result)
+	if err != nil {
 		return fmt.Errorf("failed to print query result: %w", err)
 	}
 	return nil

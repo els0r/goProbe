@@ -1,4 +1,4 @@
-package commands
+package cmd
 
 import (
 	"github.com/els0r/goProbe/cmd/goQuery/pkg/conf"

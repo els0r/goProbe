@@ -1,4 +1,4 @@
-package commands
+package cmd
 
 var helpBase = `
   goquery -i <interfaces> [-hax] [--in|--out|--sum] [-n <max_n>] [--resolve]
