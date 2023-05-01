@@ -158,7 +158,7 @@ func entrypoint(cmd *cobra.Command, args []string) error {
 	// run commands that don't require any argument
 	// handle list flag
 	if cmdLineParams.List {
-		err := listInterfaces(queryArgs.DBPath)
+		err := listInterfaces(dbPathCfg)
 		if err != nil {
 			return fmt.Errorf("failed to retrieve list of available databases: %w", err)
 		}
