@@ -119,7 +119,7 @@ func (t *transport) RoundTrip(r *http.Request) (*http.Response, error) {
 		logger := logging.FromContext(r.Context()).With("req", slog.GroupValue(
 			slog.String("method", r.Method),
 			slog.String("url", r.URL.String()),
-			slog.String("user-agent", r.UserAgent()),
+			slog.String("user_agent", r.UserAgent()),
 			slog.Duration("duration", duration),
 		))
 		// log trace ID if it is present
@@ -152,13 +152,6 @@ func (t *transport) RoundTrip(r *http.Request) (*http.Response, error) {
 }
 
 func (c *DefaultClient) Modify(ctx context.Context, req *httpc.Request) *httpc.Request {
-	// TODO: have a long, hard look at this function
-	//
-	// It did happen to suck the bytes out of the body, leaving nothing for the
-	// parser following it
-	//
-	// DO NOT uncomment before clarifying behavior with httpc library
-	//
 	// retry any request that isn't 2xx
 	// req = req.RetryBackOffErrFn(func(resp *http.Response, _ error) bool {
 	// 	// if the response is nil, we should try again definitely

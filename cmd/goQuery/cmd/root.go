@@ -49,7 +49,7 @@ func Execute() {
 		logger, logErr := logging.New(logging.LevelError, logging.EncodingPlain,
 			logging.WithOutput(os.Stderr),
 		)
-		if err != nil {
+		if logErr != nil {
 			fmt.Fprintf(os.Stderr, "Failed to instantiate CLI logger: %v\n", logErr)
 
 			fmt.Fprintf(os.Stderr, "Error running query: %s\n", err)
@@ -79,7 +79,6 @@ func init() {
 	rootCmd.Flags().BoolVarP(&cmdLineParams.In, "in", "", query.DefaultIn, helpMap["In"])
 	rootCmd.Flags().BoolVarP(&cmdLineParams.List, "list", "", false, helpMap["List"])
 	rootCmd.Flags().BoolVarP(&cmdLineParams.Out, "out", "", query.DefaultOut, helpMap["Out"])
-	rootCmd.Flags().BoolVarP(&cmdLineParams.SortAscending, "ascending", "a", false, helpMap["SortAscending"])
 	rootCmd.Flags().BoolVarP(&cmdLineParams.Sum, "sum", "", false, helpMap["Sum"])
 	rootCmd.Flags().BoolVarP(&cmdLineParams.Version, "version", "v", false, "Print version information and exit\n")
 
@@ -87,26 +86,86 @@ func init() {
 	rootCmd.Flags().StringVarP(&cmdLineParams.First, "first", "f", time.Now().AddDate(0, -1, 0).Format(time.ANSIC), helpMap["First"])
 	rootCmd.Flags().StringVarP(&cmdLineParams.Last, "last", "l", time.Now().Format(time.ANSIC), "Show flows no later than --last. See help for --first for more info\n")
 	rootCmd.Flags().StringVarP(&cmdLineParams.Condition, "condition", "c", "", helpMap["Condition"])
-	rootCmd.Flags().IntVarP(&cmdLineParams.NumResults, "limit", "n", query.DefaultNumResults, helpMap["NumResults"])
-	rootCmd.Flags().StringVarP(&cmdLineParams.SortBy, "sort-by", "s", query.DefaultSortBy, helpMap["SortBy"])
-	rootCmd.Flags().StringVarP(&cmdLineParams.Format, "format", "e", query.DefaultFormat, helpMap["Format"])
 
-	rootCmd.Flags().BoolVarP(&cmdLineParams.DNSResolution.Enabled, "resolve", "", false, helpMap["Resolve"])
-	rootCmd.Flags().IntVarP(&cmdLineParams.DNSResolution.MaxRows, "resolve-rows", "", query.DefaultResolveRows, helpMap["ResolveRows"])
-	rootCmd.Flags().DurationVarP(&cmdLineParams.DNSResolution.Timeout, "resolve-timeout", "", query.DefaultResolveTimeout, helpMap["ResolveTimeout"])
+	rootCmd.Flags().StringVarP(&cmdLineParams.SortBy, conf.SortBy, "s", query.DefaultSortBy,
+		`Sort results by given column name:
+  bytes         Sort by accumulated data volume (default)
+  packets       Sort by accumulated packets
+  time          Sort by time. Enforced for "time" queries
+`,
+	)
+	rootCmd.Flags().BoolVarP(&cmdLineParams.SortAscending, conf.SortAscending, "a", false,
+		`Sort results in ascending instead of descending order. Forced for queries
+including the "time" field.
+`,
+	)
 
-	rootCmd.Flags().IntVarP(&cmdLineParams.MaxMemPct, "max-mem", "", query.DefaultMaxMemPct, helpMap["MaxMemPct"])
-	rootCmd.Flags().BoolVarP(&cmdLineParams.LowMem, "low-mem", "", false, helpMap["LowMem"])
+	rootCmd.Flags().StringVarP(&cmdLineParams.Format, conf.ResultsFormat, "e", query.DefaultFormat,
+		`Output format:
+  txt           Output in plain text format (default)
+  json          Output in JSON format
+  csv           Output in comma-separated table format
+`,
+	)
+	rootCmd.Flags().IntVarP(&cmdLineParams.NumResults, conf.ResultsLimit, "n", query.DefaultNumResults,
+		`Maximum number of final entries to show. Defaults to 95% of the overall
+data volume / number of packets (depending on the '-s' parameter).
+Ignored for queries including the "time" field.
+`,
+	)
+
+	rootCmd.Flags().BoolVarP(&cmdLineParams.DNSResolution.Enabled, conf.DNSResolutionEnabled, "r", false,
+		`Resolve top IPs in output using reverse DNS lookups.
+If the reverse DNS lookup for an IP fails, the IP is shown instead.
+The lookup is performed for the first '--resolve-rows' rows
+of output.
+Beware: The lookup is carried out at query time; DNS data may have been
+different when the packets were captured.
+`,
+	)
+	rootCmd.Flags().IntVarP(&cmdLineParams.DNSResolution.MaxRows, conf.DNSResolutionMaxRows, "", query.DefaultResolveRows,
+		`Maximum number of output rows to perform DNS resolution against. Before
+setting this to some high value (e.g. 1000), consider that this may incur
+a high load on the DNS resolver and network!
+`,
+	)
+	rootCmd.Flags().DurationVarP(&cmdLineParams.DNSResolution.Timeout, conf.DNSResolutionTimeout, "", query.DefaultResolveTimeout,
+		"Timeout in seconds for (reverse) DNS lookups\n",
+	)
+
+	rootCmd.Flags().IntVar(&cmdLineParams.MaxMemPct, conf.MemoryMaxPct, query.DefaultMaxMemPct,
+		`Maximum amount of memory that can be used for the query
+(in % of available memory)
+`,
+	)
+	rootCmd.Flags().BoolVar(&cmdLineParams.LowMem, conf.MemoryLowMode, false,
+		`Enable low-memory mode (reduces overall memory use at the expense of higher CPU
+and I/O load)
+`,
+	)
 
 	// flags to be also passed to children commands
-	rootCmd.PersistentFlags().String(conf.QueryServerAddr, "", helpMap["QueryServer"])
-	rootCmd.Flags().StringVarP(&cmdLineParams.HostQuery, "hosts-query", "q", "", "hosts resolution query")
+	rootCmd.PersistentFlags().String(conf.QueryServerAddr, "",
+		`Address of query server to run queries against (host:port). If this value is
+set, goQuery will attempt to run queries using the specified query server as opposed to its local goDB
+`,
+	)
+	rootCmd.Flags().StringVarP(&cmdLineParams.HostQuery, "hosts-query", "q", "", "Hosts resolution query\n")
 
-	rootCmd.PersistentFlags().StringP(conf.QueryDBPath, "d", defaults.DBPath, helpMap["DBPath"])
-	rootCmd.PersistentFlags().String(conf.StoredQuery, "", "Load JSON serialized query arguments from disk and run them")
-	rootCmd.PersistentFlags().Duration(conf.QueryTimeout, query.DefaultQueryTimeout, helpMap["QueryTimeout"])
+	rootCmd.PersistentFlags().StringP(conf.QueryDBPath, "d", defaults.DBPath,
+		`Path to goDB database directory. By default,
+the database path from the configuration file is used.
+If it does not exist, an error will be thrown.
 
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file location")
+This also implies that you have to explicitly specify
+the path if you analyze data on a different host without
+goProbe.
+`,
+	)
+	rootCmd.PersistentFlags().String(conf.StoredQuery, "", "Load JSON serialized query arguments from disk and run them\n")
+	rootCmd.PersistentFlags().Duration(conf.QueryTimeout, query.DefaultQueryTimeout, "Abort query processing after timeout expires\n")
+
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "Config file location\n")
 
 	_ = viper.BindPFlags(rootCmd.PersistentFlags())
 }
