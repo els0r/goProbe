@@ -18,6 +18,9 @@ type DefaultClient struct {
 	client  *http.Client
 	timeout time.Duration
 
+	retry          bool
+	retryIntervals httpc.Intervals
+
 	scheme   string
 	hostAddr string
 	key      string
@@ -80,6 +83,11 @@ func NewDefault(addr string, opts ...Option) *DefaultClient {
 		hostAddr: addr,
 		timeout:  defaultRequestTimeout,
 		name:     defaultClientName,
+		retry:    true,
+		retryIntervals: httpc.Intervals{
+			// retry three times before giving up
+			1 * time.Second, 2 * time.Second, 4 * time.Second,
+		},
 	}
 	for _, opt := range opts {
 		opt(c)
@@ -153,13 +161,21 @@ func (t *transport) RoundTrip(r *http.Request) (*http.Response, error) {
 
 func (c *DefaultClient) Modify(ctx context.Context, req *httpc.Request) *httpc.Request {
 	// retry any request that isn't 2xx
-	// req = req.RetryBackOffErrFn(func(resp *http.Response, _ error) bool {
-	// 	// if the response is nil, we should try again definitely
-	// 	if resp == nil {
-	// 		return true
-	// 	}
-	// 	return resp.StatusCode != http.StatusBadRequest
-	// })
+	if c.retry {
+		req = req.RetryBackOff(c.retryIntervals).
+			RetryBackOffErrFn(func(resp *http.Response, _ error) bool {
+				// if the response is nil, we should try again definitely
+				if resp == nil {
+					return true
+				}
+				switch resp.StatusCode {
+				case http.StatusBadGateway, http.StatusInternalServerError,
+					http.StatusTooManyRequests:
+					return true
+				}
+				return false
+			})
+	}
 	if c.timeout > 0 {
 		req = req.Timeout(c.timeout)
 	}

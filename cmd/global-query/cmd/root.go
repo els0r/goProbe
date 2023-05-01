@@ -36,7 +36,16 @@ var rootCmd = &cobra.Command{
 func Execute() {
 	err := rootCmd.Execute()
 	if err != nil {
-		os.Exit(1)
+		logger, logErr := logging.New(logging.LevelError, logging.EncodingPlain,
+			logging.WithOutput(os.Stderr),
+		)
+		if logErr != nil {
+			fmt.Fprintf(os.Stderr, "Failed to instantiate CLI logger: %v\n", logErr)
+
+			fmt.Fprintf(os.Stderr, "Error running query: %s\n", err)
+			os.Exit(1)
+		}
+		logger.Fatalf("Error running query: %s", err)
 	}
 }
 
@@ -94,7 +103,8 @@ func initConfig() {
 	viper.AutomaticEnv() // read in environment variables that match
 
 	// If a config file is found, read it in.
-	if err := viper.ReadInConfig(); err != nil {
+	err := viper.ReadInConfig()
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to read in config: %v\n", err)
 		os.Exit(1)
 	}

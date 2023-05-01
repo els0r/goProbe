@@ -143,15 +143,14 @@ a high load on the DNS resolver and network!
 and I/O load)
 `,
 	)
+	rootCmd.Flags().StringVarP(&cmdLineParams.HostQuery, "hosts-query", "q", "", "Hosts resolution query\n")
 
-	// flags to be also passed to children commands
+	// persistent flags to be also passed to children commands
 	rootCmd.PersistentFlags().String(conf.QueryServerAddr, "",
 		`Address of query server to run queries against (host:port). If this value is
 set, goQuery will attempt to run queries using the specified query server as opposed to its local goDB
 `,
 	)
-	rootCmd.Flags().StringVarP(&cmdLineParams.HostQuery, "hosts-query", "q", "", "Hosts resolution query\n")
-
 	rootCmd.PersistentFlags().StringP(conf.QueryDBPath, "d", defaults.DBPath,
 		`Path to goDB database directory. By default,
 the database path from the configuration file is used.
