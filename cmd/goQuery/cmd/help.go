@@ -1,4 +1,4 @@
-package commands
+package cmd
 
 var helpBase = `
   goquery -i <interfaces> [-hax] [--in|--out|--sum] [-n <max_n>] [--resolve]
@@ -254,31 +254,7 @@ and ( dport   le 1024 or dport   ge 443 )
 
 and any other combination of the allowed representations.
 `,
-	"DBPath": `Path to goDB database directory <db-path>. By default,
-the database path from the configuration file is used.
-If it does not exist, an error will be thrown.
 
-This also implies that you have to explicitly specify
-the path if you analyze data on a different host without
-goProbe.
-`,
-	"Format": `Output format:
-txt           Output in plain text format (default)
-json          Output in JSON format
-csv           Output in comma-separated table format
-`,
-	"NumResults": `Maximum number of final entries to show. Defaults to 95% of the overall
-data volume / number of packets (depending on the '-s' parameter).
-Ignored for queries including the "time" field.
-`,
-	"SortBy": `Sort results by given column name:
-  bytes         Sort by accumulated data volume (default)
-  packets       Sort by accumulated packets
-  time          Sort by time. Enforced for "time" queries
-`,
-	"SortAscending": `Sort results in ascending instead of descending order. Forced for queries
-including the "time" field.
-`,
 	"List": `List all interfaces on which data was captured and written
 to the database.
 `,
@@ -289,33 +265,6 @@ with --out.
 with --in.
 `,
 	"Sum": `Sum incoming and outgoing data.
-`,
-	"External": `Mode for external calls, e.g. from portal. Reduces verbosity of error
-messages to customer friendly text and writes full error messages
-to message log instead.
-`,
-	"Resolve": `Resolve top IPs in output using reverse DNS lookups. Off by default.
-If the reverse DNS lookup for an IP fails, the IP is shown instead.
-The lookup is performed for the first '--resolve-rows' rows
-of output.
-Beware: The lookup is carried out at query time; DNS data may have been
-different when the packets were captured.
-`,
-	"ResolveTimeout": `Timeout in seconds for (reverse) DNS lookups
-`,
-	"Output": `Set the output to path (file). By default, results are written to stdout.
-`,
-	"MaxMemPct": `Maximum amount of memory that can be used for the query
-(in % of available memory)
-`,
-	"LowMem": `Enable low-memory mode (reduces overall memory use at the expense of higher CPU
-and I/O load)
-`,
-	"ResolveRows": `Maximum number of output rows to perform DNS resolution against. Before
-setting this to some high value (e.g. 1000), consider that this may incur
-a high load on the DNS resolver and network!
-`,
-	"QueryTimeout": `Abort query processing after timeout expires
 `,
 }
 

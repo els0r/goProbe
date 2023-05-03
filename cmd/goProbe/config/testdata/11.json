@@ -1,6 +1,7 @@
 {
   "db": {
-    "path": "/usr/local/goProbe/db"
+    "path": "/usr/local/goProbe/db",
+    "encoder_type": "iwillneverbesupported"
   },
   "interfaces": {
     "en0": {
@@ -20,6 +21,5 @@
       "registry": "192.168.1.1:5000",
       "probe_identifier": "test_probe"
     }
-  },
-  "encoder_type": "iwillneverbesupported"
+  }
 }

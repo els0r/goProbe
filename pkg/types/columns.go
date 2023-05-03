@@ -47,6 +47,24 @@ const (
 	DportSizeof int = 2
 )
 
+// Below enumerate the data type names used across goProbe
+const (
+	TimeName     = "time"
+	HostnameName = "hostname"
+	HostIDName   = "hostid"
+	IfaceName    = "iface"
+
+	SipName   = "sip"
+	DipName   = "dip"
+	DportName = "dport"
+	ProtoName = "proto"
+
+	BytesRcvdName = "bytes_rcvd"
+	BytesSentName = "bytes_sent"
+	PktsRcvdName  = "pkts_rcvd"
+	PktsSentName  = "pkts_sent"
+)
+
 // IsCounterCol returns if a column is a counter (and hence does
 // not use fixed-width encoding)
 func (c ColumnIndex) IsCounterCol() bool {
@@ -58,8 +76,9 @@ var ColumnSizeofs = [ColIdxCount]int{
 }
 
 var ColumnFileNames = [ColIdxCount]string{
-	"sip", "dip", "proto", "dport",
-	"bytes_rcvd", "bytes_sent", "pkts_rcvd", "pkts_sent"}
+	SipName, DipName, ProtoName, DportName,
+	BytesRcvdName, BytesSentName, PktsRcvdName, PktsSentName,
+}
 
 type Column interface {
 	Name() string
@@ -121,7 +140,7 @@ type DipAttribute struct {
 
 // Name returns the attribute's name
 func (DipAttribute) Name() string {
-	return "dip"
+	return DipName
 }
 
 func (DipAttribute) attributeMarker() {}
@@ -141,7 +160,7 @@ func (ProtoAttribute) Width() Width {
 
 // Name returns the attribute's name
 func (ProtoAttribute) Name() string {
-	return "proto"
+	return ProtoName
 }
 
 func (ProtoAttribute) Resolvable() bool {
@@ -177,7 +196,7 @@ func PortToUint16(b []byte) uint16 {
 
 // Name returns the attribute's name
 func (DportAttribute) Name() string {
-	return "dport"
+	return DportName
 }
 
 func (DportAttribute) attributeMarker() {}
@@ -185,18 +204,57 @@ func (DportAttribute) attributeMarker() {}
 // NewAttribute returns an Attribute for the given name. If no such attribute
 // exists, an error is returned.
 func NewAttribute(name string) (Attribute, error) {
+	// name/alias to attribute matching
 	switch name {
-	case "sip", "src": // src is an alias for sip
+	case SipName, "src":
 		return SipAttribute{}, nil
-	case "dip", "dst": // dst is an alias for dip
+	case DipName, "dst":
 		return DipAttribute{}, nil
-	case "proto", "protocol", "ipproto": // ipproto/protocol is an alias for proto
+	case ProtoName, "protocol", "ipproto":
 		return ProtoAttribute{}, nil
-	case "dport", "port": // port is an alias for dport
+	case DportName, "port":
 		return DportAttribute{}, nil
 	default:
 		return nil, fmt.Errorf("Unknown attribute name: '%s'", name)
 	}
+}
+
+func AllColumns() []string {
+	return []string{
+		TimeName, HostnameName, HostIDName, IfaceName, SipName, DipName, DportName, ProtoName,
+	}
+}
+
+const attrSep = ","
+
+// ToAttribueNames translates query abbreviations into the attributes they hold
+func ToAttributeNames(queryType string) (attrs []string) {
+	// covers the case where aliases and attribute/label names are mixed (e.g. talk_conv,dport)
+	qtSplit := strings.Split(queryType, attrSep)
+	if len(qtSplit) > 1 {
+		for _, attr := range qtSplit {
+			attrs = append(attrs, ToAttributeNames(attr)...)
+		}
+		return attrs
+	}
+
+	switch queryType {
+	case "talk_conv":
+		return []string{SipName, DipName}
+	case "talk_src":
+		return []string{SipName}
+	case "talk_dst":
+		return []string{DipName}
+	case "apps_port":
+		return []string{DportName, ProtoName}
+	case "agg_talk_port":
+		return []string{SipName, DipName, DportName, ProtoName}
+	case "raw":
+		return AllColumns()
+	}
+	// We didn't match any of the preset query types, so we are dealing with
+	// a comma separated list of attribute names.
+	return strings.Split(queryType, attrSep)
 }
 
 // ParseQueryType parses the given query type into a list of attributes.
@@ -209,38 +267,28 @@ func NewAttribute(name string) (Attribute, error) {
 // attribute list.) The time attribute is present for the query type
 // 'raw', or if it is explicitly mentioned in a list of attribute
 // names.
-func ParseQueryType(queryType string) (attributes []Attribute, hasAttrTime, hasAttrIface bool, err error) {
-	switch queryType {
-	case "talk_conv":
-		return []Attribute{SipAttribute{}, DipAttribute{}}, false, false, nil
-	case "talk_src":
-		return []Attribute{SipAttribute{}}, false, false, nil
-	case "talk_dst":
-		return []Attribute{DipAttribute{}}, false, false, nil
-	case "apps_port":
-		return []Attribute{DportAttribute{}, ProtoAttribute{}}, false, false, nil
-	case "agg_talk_port":
-		return []Attribute{SipAttribute{}, DipAttribute{}, DportAttribute{}, ProtoAttribute{}}, false, false, nil
-	case "raw":
-		return []Attribute{SipAttribute{}, DipAttribute{}, DportAttribute{}, ProtoAttribute{}}, true, true, nil
-	}
-	// We didn't match any of the preset query types, so we are dealing with
-	// a comma separated list of attribute names.
-	attributeNames := strings.Split(queryType, ",")
+func ParseQueryType(queryType string) (attributes []Attribute, selector LabelSelector, err error) {
+	attributeNames := ToAttributeNames(queryType)
 	attributeSet := make(map[string]struct{})
 	for _, attributeName := range attributeNames {
 		switch attributeName {
-		case "time":
-			hasAttrTime = true
+		case TimeName:
+			selector.Timestamp = true
 			continue
-		case "iface":
-			hasAttrIface = true
+		case IfaceName:
+			selector.Iface = true
+			continue
+		case HostnameName:
+			selector.Hostname = true
+			continue
+		case HostIDName:
+			selector.HostID = true
 			continue
 		}
 
 		attribute, err := NewAttribute(attributeName)
 		if err != nil {
-			return nil, false, false, err
+			return nil, LabelSelector{}, err
 		}
 		if _, exists := attributeSet[attribute.Name()]; !exists {
 			attributeSet[attribute.Name()] = struct{}{}

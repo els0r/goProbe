@@ -4,7 +4,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/netip"
+	"sort"
+	"strings"
+	"text/tabwriter"
 	"time"
 
 	"github.com/els0r/goProbe/pkg/types"
@@ -16,8 +20,8 @@ var (
 
 // Result bundles the data rows returned and the query meta information
 type Result struct {
-	Status        types.Status `json:"status"`
-	StatusMessage string       `json:"status_message,omitempty"`
+	Status        Status        `json:"status"`
+	HostsStatuses HostsStatuses `json:"hosts_statuses"`
 
 	Summary Summary `json:"summary"`
 	Query   Query   `json:"query"`
@@ -39,6 +43,85 @@ type Summary struct {
 	Totals     types.Counters `json:"totals"`
 	Timings    Timings        `json:"timings"`
 	Hits       Hits           `json:"hits"`
+}
+
+type Status struct {
+	Code    types.Status `json:"code"`
+	Message string       `json:"message,omitempty"`
+}
+
+func New() *Result {
+	return &Result{
+		Status: Status{
+			Code: types.StatusOK,
+		},
+	}
+}
+
+func (r *Result) Start() {
+	r.Summary = Summary{
+		Timings: Timings{
+			QueryStart: time.Now(),
+		},
+	}
+	r.HostsStatuses = make(HostsStatuses)
+}
+
+func (r *Result) End() {
+	r.Summary.Timings.QueryDuration = time.Since(r.Summary.Timings.QueryStart)
+	if len(r.Rows) == 0 {
+		r.Status = Status{
+			Code:    types.StatusEmpty,
+			Message: ErrorNoResults.Error(),
+		}
+	}
+	sort.Strings(r.Summary.Interfaces)
+}
+
+// HostsStatus captures the query status for every host queried
+type HostsStatuses map[string]Status
+
+func (hs HostsStatuses) Print(w io.Writer) {
+	var hosts []struct {
+		host string
+		Status
+	}
+
+	var ok, empty, withError int
+	for host, status := range hs {
+		switch status.Code {
+		case types.StatusOK:
+			ok++
+		case types.StatusEmpty:
+			empty++
+		case types.StatusError:
+			withError++
+		}
+		hosts = append(hosts, struct {
+			host string
+			Status
+		}{host: host, Status: status})
+	}
+	sort.SliceStable(hosts, func(i, j int) bool {
+		return hosts[i].host < hosts[j].host
+	})
+
+	fmt.Fprintf(w, "Hosts: %d ok / %d empty / %d error\n\n", ok, empty, withError)
+
+	tw := tabwriter.NewWriter(w, 0, 0, 4, ' ', tabwriter.AlignRight)
+
+	sep := "\t"
+
+	header := []string{"#", "host", "status", "message"}
+	fmtStr := sep + strings.Join([]string{"%d", "%s", "%s", "%s"}, sep) + sep + "\n"
+
+	fmt.Fprintln(tw, sep+strings.Join(header, sep)+sep)
+	// fmt.Fprintln(tw, sep+strings.Repeat(sep, len(header))+sep)
+
+	for i, host := range hosts {
+		fmt.Fprintf(tw, fmtStr, i+1, host.host, host.Code, host.Message)
+	}
+	tw.Flush()
 }
 
 // Timinigs summarizes query runtimes
@@ -166,31 +249,35 @@ type MergeableAttributes struct {
 }
 
 // RowsMap is an aggregated representation of a Rows list
-type RowsMap map[MergeableAttributes]*types.Counters
+type RowsMap map[MergeableAttributes]types.Counters
 
 // MergeRows aggregates Rows by use of the RowsMap rm, which is modified
 // in the process
-func (rm RowsMap) MergeRows(r Rows) {
+func (rm RowsMap) MergeRows(r Rows) (merged int) {
 	for _, res := range r {
 		counters, exists := rm[MergeableAttributes{res.Labels, res.Attributes}]
 		if exists {
-			*counters = counters.Add(res.Counters)
+			rm[MergeableAttributes{res.Labels, res.Attributes}] = counters.Add(res.Counters)
+			merged++
 		} else {
-			rm[MergeableAttributes{res.Labels, res.Attributes}] = &res.Counters
+			rm[MergeableAttributes{res.Labels, res.Attributes}] = res.Counters
 		}
 	}
+	return
 }
 
 // MergeRowsMap aggregates all results of om and stores them in rm
-func (rm RowsMap) MergeRowsMap(om RowsMap) {
+func (rm RowsMap) MergeRowsMap(om RowsMap) (merged int) {
 	for oma, oc := range om {
 		counters, exists := rm[oma]
 		if exists {
-			*counters = counters.Add(*oc)
+			rm[oma] = counters.Add(oc)
+			merged++
 		} else {
 			rm[oma] = oc
 		}
 	}
+	return
 }
 
 // ToRowsSorted uses the available sorting functions for Rows to produce
@@ -214,7 +301,7 @@ func (rm RowsMap) ToRows() Rows {
 		r[i] = Row{
 			Labels:     ma.Labels,
 			Attributes: ma.Attributes,
-			Counters:   *c,
+			Counters:   c,
 		}
 		i++
 	}

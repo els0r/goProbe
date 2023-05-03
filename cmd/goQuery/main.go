@@ -1,7 +1,7 @@
 package main
 
-import "github.com/els0r/goProbe/cmd/goQuery/commands"
+import "github.com/els0r/goProbe/cmd/goQuery/cmd"
 
 func main() {
-	commands.Execute()
+	cmd.Execute()
 }

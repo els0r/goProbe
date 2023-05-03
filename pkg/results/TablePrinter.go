@@ -31,12 +31,17 @@ type OutputColumn int
 
 // Enumeration of all possible output columns
 const (
+	// labels
 	OutcolTime OutputColumn = iota
+	OutcolHostname
+	OutcolHostID
 	OutcolIface
+	// attributes
 	OutcolSip
 	OutcolDip
 	OutcolDport
 	OutcolProto
+	// counters
 	OutcolInPkts
 	OutcolInPktsPercent
 	OutcolInBytes
@@ -61,12 +66,19 @@ const (
 // columns returns the list of OutputColumns that (might) be printed.
 // timed indicates whether we're supposed to print timestamps. attributes lists
 // all attributes we have to print. d tells us which counters to print.
-func columns(hasAttrTime, hasAttrIface bool, attributes []types.Attribute, d types.Direction) (cols []OutputColumn) {
-	if hasAttrTime {
+// in this function (and some others) ORDER matters
+func columns(selector types.LabelSelector, attributes []types.Attribute, d types.Direction) (cols []OutputColumn) {
+	if selector.Timestamp {
 		cols = append(cols, OutcolTime)
 	}
-
-	if hasAttrIface {
+	// this order represents the hierarchy host > ifaces
+	if selector.Hostname {
+		cols = append(cols, OutcolHostname)
+	}
+	if selector.HostID {
+		cols = append(cols, OutcolHostID)
+	}
+	if selector.Iface {
 		cols = append(cols, OutcolIface)
 	}
 
@@ -153,6 +165,10 @@ func extract(format Formatter, ips2domains map[string]string, totals types.Count
 		return format.Time(row.Labels.Timestamp.Unix())
 	case OutcolIface:
 		return format.String(row.Labels.Iface)
+	case OutcolHostname:
+		return format.String(row.Labels.Hostname)
+	case OutcolHostID:
+		return format.String(row.Labels.HostID)
 
 	case OutcolSip:
 		return format.String(tryLookup(ips2domains, row.Attributes.SrcIP.String()))
@@ -250,7 +266,7 @@ type TablePrinter interface {
 	AddRow(row Row)
 	AddRows(ctx context.Context, rows Rows) error
 	Footer(result *Result)
-	Print() error
+	Print(result *Result) error
 }
 
 // basePrinter encapsulates variables and methods used by all TablePrinter
@@ -260,7 +276,7 @@ type basePrinter struct {
 
 	sort SortOrder
 
-	hasAttrTime, hasAttrIface bool
+	selector types.LabelSelector
 
 	direction types.Direction
 
@@ -281,15 +297,15 @@ type basePrinter struct {
 func newBasePrinter(
 	output io.Writer,
 	sort SortOrder,
-	hasAttrTime, hasAttrIface bool,
+	selector types.LabelSelector,
 	direction types.Direction,
 	attributes []types.Attribute,
 	ips2domains map[string]string,
 	totals types.Counters,
 	ifaces string,
 ) basePrinter {
-	result := basePrinter{output, sort, hasAttrTime, hasAttrIface, direction, attributes, ips2domains, totals, ifaces,
-		columns(hasAttrTime, hasAttrIface, attributes, direction),
+	result := basePrinter{output, sort, selector, direction, attributes, ips2domains, totals, ifaces,
+		columns(selector, attributes, direction),
 	}
 
 	return result
@@ -297,7 +313,7 @@ func newBasePrinter(
 
 func NewTablePrinter(output io.Writer, format string,
 	sort SortOrder,
-	hasAttrTime, hasAttrIface bool,
+	labelSel types.LabelSelector,
 	direction types.Direction,
 	attributes []types.Attribute,
 	ips2domains map[string]string,
@@ -306,7 +322,7 @@ func NewTablePrinter(output io.Writer, format string,
 	resolveTimeout time.Duration,
 	queryType string,
 	ifaces string) (TablePrinter, error) {
-	b := newBasePrinter(output, sort, hasAttrTime, hasAttrIface, direction, attributes, ips2domains, totals, ifaces)
+	b := newBasePrinter(output, sort, labelSel, direction, attributes, ips2domains, totals, ifaces)
 
 	var printer TablePrinter
 	switch format {
@@ -368,18 +384,12 @@ func NewCSVTablePrinter(b basePrinter) *CSVTablePrinter {
 		make([]string, 0, len(b.cols)),
 	}
 
-	headers := [CountOutcol]string{
-		"time",
-		"iface",
-		"sip",
-		"dip",
-		"dport",
-		"proto",
+	headers := append(types.AllColumns(), []string{
 		"packets", "%", "data vol.", "%",
 		"packets", "%", "data vol.", "%",
 		"packets", "%", "data vol.", "%",
 		"packets received", "packets sent", "%", "data vol. received", "data vol. sent", "%",
-	}
+	}...)
 
 	for _, col := range c.cols {
 		c.fields = append(c.fields, headers[col])
@@ -425,8 +435,9 @@ func (c *CSVTablePrinter) Footer(result *Result) {
 }
 
 // Print flushes the writer and actually prints out all CSV rows contained in the table printer
-func (c *CSVTablePrinter) Print() error {
+func (c *CSVTablePrinter) Print(_ *Result) error {
 	c.writer.Flush()
+	// TODO: adding the host statuses
 	return nil
 }
 
@@ -541,18 +552,12 @@ func NewTextTablePrinter(b basePrinter, numFlows int, resolveTimeout time.Durati
 	header1[OutcolBothBytesRcvd] = "bytes"
 	header1[OutcolBothBytesSent] = "bytes"
 
-	var header2 = [CountOutcol]string{
-		"time",
-		"iface",
-		"sip",
-		"dip",
-		"dport",
-		"proto",
+	var header2 = append(types.AllColumns(), []string{
 		"in", "%", "in", "%",
 		"out", "%", "out", "%",
 		"in+out", "%", "in+out", "%",
 		"in", "out", "%", "in", "out", "%",
-	}
+	}...)
 
 	for _, col := range t.cols {
 		fmt.Fprint(t.writer, header1[col])
@@ -685,12 +690,17 @@ func (t *TextTablePrinter) Footer(result *Result) {
 }
 
 // Print flushes the table printer and outputs all entries to stdout
-func (t *TextTablePrinter) Print() error {
+func (t *TextTablePrinter) Print(result *Result) error {
 	fmt.Fprintln(t.output) // newline between prompt and results
 	t.writer.Flush()
 	fmt.Fprintln(t.output)
 	t.footwriter.Flush()
 	fmt.Fprintln(t.output)
 
+	// print the host list if it  isn't covered by the above already
+	if len(result.HostsStatuses) > 1 {
+		result.HostsStatuses.Print(t.output)
+		fmt.Fprintln(t.output)
+	}
 	return nil
 }

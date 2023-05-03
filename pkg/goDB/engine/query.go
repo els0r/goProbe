@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"runtime/debug"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/els0r/goProbe/pkg/goDB"
@@ -22,25 +23,38 @@ import (
 // QueryRunner implements the Runner interface to execute queries
 // against the goDB flow database
 type QueryRunner struct {
-	query *goDB.Query
+	query  *goDB.Query
+	dbPath string
 }
 
 // NewQueryRunner creates a new query runner
-func NewQueryRunner() *QueryRunner {
-	return &QueryRunner{}
+func NewQueryRunner(dbPath string) *QueryRunner {
+	return &QueryRunner{
+		dbPath: dbPath,
+	}
 }
 
-// Execute runs the query with the provided parameters
-func (qr *QueryRunner) Run(ctx context.Context, stmt *query.Statement) (res []*results.Result, err error) {
-	result := &results.Result{
-		Status: types.StatusOK,
-		Summary: results.Summary{
-			Timings: results.Timings{
-				// Start timing
-				QueryStart: time.Now(),
-			},
-		},
+// Run implements the query.Runner interface
+func (qr *QueryRunner) Run(ctx context.Context, args *query.Args) (res *results.Result, err error) {
+	stmt, err := args.Prepare()
+	if err != nil {
+		return nil, fmt.Errorf("failed to prepare query statement: %w", err)
 	}
+
+	// get list of available interfaces in the local DB
+	stmt.Ifaces, err = parseIfaceList(qr.dbPath, args.Ifaces)
+	if err != nil {
+		return nil, fmt.Errorf("failed to prepare query statement: %w", err)
+	}
+
+	return qr.RunStatement(ctx, stmt)
+}
+
+func (qr *QueryRunner) RunStatement(ctx context.Context, stmt *query.Statement) (res *results.Result, err error) {
+	result := results.New()
+	result.Start()
+	defer result.End()
+
 	// cross-check parameters
 	if len(stmt.Ifaces) == 0 {
 		return res, fmt.Errorf("no interfaces provided")
@@ -52,9 +66,7 @@ func (qr *QueryRunner) Run(ctx context.Context, stmt *query.Statement) (res []*r
 	result.Summary.Interfaces = stmt.Ifaces
 
 	// parse query
-	var queryAttributes []types.Attribute
-
-	queryAttributes, _, _, err = types.ParseQueryType(stmt.QueryType)
+	queryAttributes, _, err := types.ParseQueryType(stmt.QueryType)
 	if err != nil {
 		return res, fmt.Errorf("failed to parse query type: %w", err)
 	}
@@ -65,7 +77,7 @@ func (qr *QueryRunner) Run(ctx context.Context, stmt *query.Statement) (res []*r
 		return res, fmt.Errorf("conditions parsing error: %w", parseErr)
 	}
 
-	qr.query = goDB.NewQuery(queryAttributes, queryConditional, stmt.HasAttrTime, stmt.HasAttrIface).LowMem(stmt.LowMem)
+	qr.query = goDB.NewQuery(queryAttributes, queryConditional, stmt.LabelSelector).LowMem(stmt.LowMem)
 	if qr.query == nil {
 		return res, fmt.Errorf("query is not executable")
 	}
@@ -82,7 +94,12 @@ func (qr *QueryRunner) Run(ctx context.Context, stmt *query.Statement) (res []*r
 	if err != nil {
 		return nil, fmt.Errorf("failed to get system hostname: %w", err)
 	}
-	hostID := info.GetHostID(stmt.DBPath)
+	hostID := info.GetHostID(qr.dbPath)
+
+	// assign the hostname to the list of hosts handled in this query. Here, the only one
+	defer func() {
+		result.HostsStatuses[hostname] = result.Status
+	}()
 
 	// start ticker to check memory consumption every second
 	heapWatchCtx, cancelHeapWatch := context.WithCancel(ctx)
@@ -121,16 +138,6 @@ func (qr *QueryRunner) Run(ctx context.Context, stmt *query.Statement) (res []*r
 		}
 	}()
 
-	// make sure execution stats and logging are taken care of
-	defer func() {
-		if err != nil {
-			// get duration of execution even under error
-			result.Summary.Timings.QueryDuration = time.Since(result.Summary.Timings.QueryStart)
-			stmt.Err = err
-		}
-		// TODO: log the query
-	}()
-
 	result.Query = results.Query{
 		Attributes: qr.query.AttributesToString(),
 	}
@@ -141,7 +148,7 @@ func (qr *QueryRunner) Run(ctx context.Context, stmt *query.Statement) (res []*r
 	// create work managers
 	workManagers := map[string]*goDB.DBWorkManager{} // map interfaces to workManagers
 	for _, iface := range stmt.Ifaces {
-		wm, nonempty, err := createWorkManager(stmt.DBPath, iface, stmt.First, stmt.Last, qr.query, numProcessingUnits)
+		wm, nonempty, err := createWorkManager(qr.dbPath, iface, stmt.First, stmt.Last, qr.query, numProcessingUnits)
 		if err != nil {
 			return res, err
 		}
@@ -260,7 +267,6 @@ func (qr *QueryRunner) Run(ctx context.Context, stmt *query.Statement) (res []*r
 	results.By(stmt.SortBy, stmt.Direction, stmt.SortAscending).Sort(rs)
 
 	// stop timing everything related to the query and store the hits
-	result.Summary.Timings.QueryDuration = time.Since(result.Summary.Timings.QueryStart)
 	result.Summary.Hits.Total = len(rs)
 
 	if stmt.NumResults < len(rs) {
@@ -269,16 +275,7 @@ func (qr *QueryRunner) Run(ctx context.Context, stmt *query.Statement) (res []*r
 	result.Summary.Hits.Displayed = len(rs)
 	result.Rows = rs
 
-	// set status and error message in case the query returned no results
-	if len(result.Rows) == 0 {
-		result.Status = types.StatusEmpty
-		result.StatusMessage = results.ErrorNoResults.Error()
-	}
-
-	// assign the result
-	res = []*results.Result{result}
-
-	return res, nil
+	return result, nil
 }
 
 func createWorkManager(dbPath string, iface string, tfirst, tlast int64, query *goDB.Query, numProcessingUnits int) (workManager *goDB.DBWorkManager, nonempty bool, err error) {
@@ -287,5 +284,27 @@ func createWorkManager(dbPath string, iface string, tfirst, tlast int64, query *
 		return nil, false, fmt.Errorf("could not initialize query work manager for interface '%s': %s", iface, err)
 	}
 	nonempty, err = workManager.CreateWorkerJobs(tfirst, tlast, query)
+	return
+}
+
+func parseIfaceList(dbPath string, ifacelist string) (ifaces []string, err error) {
+	if ifacelist == "" {
+		return nil, fmt.Errorf("no interface(s) specified")
+	}
+
+	if strings.ToLower(ifacelist) == "any" {
+		ifaces, err = info.GetInterfaces(dbPath)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		ifaces = strings.Split(ifacelist, ",")
+		for _, iface := range ifaces {
+			if iface == "" {
+				err = fmt.Errorf("interface list contains empty interface name")
+				return
+			}
+		}
+	}
 	return
 }

@@ -17,7 +17,6 @@ import (
 func (a *API) postRequestRoutes(r chi.Router) {
 	// list actions here
 	r.Post("/_reload", a.handleReload)
-	r.Post("/_query", a.handleQuery)
 }
 
 func (a *API) handleReload(w http.ResponseWriter, r *http.Request) {

@@ -9,8 +9,8 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/els0r/goProbe/pkg/api/json"
 	"github.com/els0r/goProbe/pkg/capture"
+	"github.com/els0r/goProbe/pkg/legacyapi/json"
 	"github.com/els0r/status"
 	"github.com/go-chi/chi/v5"
 )

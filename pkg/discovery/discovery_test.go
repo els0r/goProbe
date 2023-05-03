@@ -369,7 +369,7 @@ func TestMakeConfig(t *testing.T) {
 		{
 			"valid config",
 			&capconfig.Config{
-				API: capconfig.APIConfig{
+				API: &capconfig.APIConfig{
 					Keys: []string{"key1", "key2"},
 					Discovery: &capconfig.DiscoveryConfig{
 						Endpoint:   "localhost:6060",
@@ -387,7 +387,7 @@ func TestMakeConfig(t *testing.T) {
 		{
 			"no service discovery",
 			&capconfig.Config{
-				API: capconfig.APIConfig{
+				API: &capconfig.APIConfig{
 					Keys: []string{"key1", "key2"},
 				},
 			},

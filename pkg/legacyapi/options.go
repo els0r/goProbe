@@ -61,3 +61,10 @@ func WithDiscoveryConfigUpdate(update chan *discovery.Config) Option {
 		s.discoveryConfigUpdate = update
 	}
 }
+
+// WithDBPath
+func WithDBPath(path string) Option {
+	return func(s *Server) {
+		s.dbPath = path
+	}
+}
