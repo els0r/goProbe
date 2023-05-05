@@ -239,6 +239,20 @@ func (a Attributes) String() string {
 	)
 }
 
+// Less returns wether the set of attributes a sorts before a2
+func (a Attributes) Less(a2 Attributes) bool {
+	if a.SrcIP != a2.SrcIP {
+		return a.SrcIP.Less(a2.SrcIP)
+	}
+	if a.DstIP != a2.DstIP {
+		return a.DstIP.Less(a2.DstIP)
+	}
+	if a.IPProto != a2.IPProto {
+		return a.IPProto < a2.IPProto
+	}
+	return a.DstPort < a2.DstPort
+}
+
 // Rows is a list of results
 type Rows []Row
 
