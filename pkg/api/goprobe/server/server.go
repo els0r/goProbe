@@ -68,8 +68,20 @@ func (server *Server) registerMiddlewares() {
 	)
 }
 
+const ifaceKey = "interface"
+
 func (server *Server) registerRoutes() {
+	// query
 	server.router.POST(gpapi.QueryRoute, server.postQuery)
+
+	// stats
+	statsRoutes := server.router.Group(gpapi.StatusRoute)
+	statsRoutes.GET("", server.getStatus)
+	statsRoutes.GET("/:"+ifaceKey, server.getStatus)
+
+	// flows
+
+	// config
 }
 
 const headerTimeout = 30 * time.Second

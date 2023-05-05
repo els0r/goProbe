@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/els0r/goProbe/cmd/goProbe/config"
+	"github.com/els0r/goProbe/pkg/goprobe/types"
 	"github.com/els0r/goProbe/pkg/logging"
 	"github.com/els0r/goProbe/pkg/types/hashmap"
 )
@@ -38,8 +39,8 @@ const (
 // RotateAll() and Update().
 type TaggedAggFlowMap struct {
 	Map   *hashmap.AggFlowMap
-	Stats Stats  `json:"stats,omitempty"`
-	Iface string `json:"iface"`
+	Stats types.PacketStats `json:"stats,omitempty"`
+	Iface string            `json:"iface"`
 }
 
 // Manager manages a set of Capture instances.
@@ -232,9 +233,9 @@ func (cm *Manager) Update(ifaces config.Ifaces, returnChan chan TaggedAggFlowMap
 }
 
 // StatusAll returns the statuses of all managed Capture instances.
-func (cm *Manager) StatusAll() map[string]Status {
+func (cm *Manager) StatusAll() map[string]types.InterfaceStatus {
 	statusmapMutex := sync.Mutex{}
-	statusmap := make(map[string]Status)
+	statusmap := make(map[string]types.InterfaceStatus)
 
 	var rg RunGroup
 	for iface, mc := range cm.capturesCopy() {
@@ -249,6 +250,33 @@ func (cm *Manager) StatusAll() map[string]Status {
 	rg.Wait()
 
 	return statusmap
+}
+
+// types.InterfaceStatus returns the statuses of all interfaces provided in the arguments
+func (cm *Manager) Status(ifaces ...string) (map[string]types.InterfaceStatus, error) {
+	if len(ifaces) == 0 {
+		return nil, fmt.Errorf("no interface provided")
+	}
+	statusmapMutex := sync.Mutex{}
+	statusmap := make(map[string]types.InterfaceStatus)
+
+	var rg RunGroup
+	cmCopy := cm.capturesCopy()
+	for _, iface := range ifaces {
+		iface := iface
+		mc, exists := cmCopy[iface]
+		if exists {
+			rg.Run(func() {
+				status := mc.capture.Status()
+				statusmapMutex.Lock()
+				statusmap[iface] = status
+				statusmapMutex.Unlock()
+			})
+		}
+	}
+	rg.Wait()
+
+	return statusmap, nil
 }
 
 // ActiveFlows returns a copy of the current in-memory flow map. If iface is "all", flows for every interface are returned

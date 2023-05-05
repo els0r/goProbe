@@ -6,6 +6,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/els0r/goProbe/pkg/goprobe/types"
 )
 
 func TestLowTrafficDeadlock(t *testing.T) {
@@ -26,8 +28,8 @@ func testDeadlock(t *testing.T, maxPkts int) {
 		mutex:         sync.Mutex{},
 		cmdChan:       make(chan captureCommand),
 		captureErrors: make(chan error),
-		lastRotationStats: Stats{
-			CaptureStats: &CaptureStats{},
+		lastRotationStats: types.PacketStats{
+			CaptureStats: &types.CaptureStats{},
 		},
 		rotationState: newRotationState(),
 		flowLog:       NewFlowLog(),
@@ -74,8 +76,8 @@ func TestMockPacketCapturePerformance(t *testing.T) {
 		mutex:         sync.Mutex{},
 		cmdChan:       make(chan captureCommand),
 		captureErrors: make(chan error),
-		lastRotationStats: Stats{
-			CaptureStats: &CaptureStats{},
+		lastRotationStats: types.PacketStats{
+			CaptureStats: &types.CaptureStats{},
 		},
 		rotationState: newRotationState(),
 		flowLog:       NewFlowLog(),

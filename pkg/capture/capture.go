@@ -19,6 +19,7 @@ import (
 	"sync"
 
 	"github.com/els0r/goProbe/cmd/goProbe/config"
+	"github.com/els0r/goProbe/pkg/goprobe/types"
 	"github.com/els0r/goProbe/pkg/logging"
 	"github.com/els0r/goProbe/pkg/types/hashmap"
 	"github.com/fako1024/slimcap/capture"
@@ -34,48 +35,6 @@ const (
 )
 
 //////////////////////// Ancillary types ////////////////////////
-
-// State enumerates the activity states of a capture
-type State byte
-
-const (
-	// StateInitializing means that the capture is setting up
-	StateInitializing State = iota + 1
-	// StateCapturing means that the capture is actively capturing packets
-	StateCapturing
-	// StateClose means that the capture is fully terminating and it's held resources are
-	// cleaned up
-	StateClosing
-	// StateError means that the capture has hit the error threshold on the interface (set by ErrorThreshold)
-	StateError
-)
-
-func (cs State) String() string {
-	switch cs {
-	case StateInitializing:
-		return "initializing"
-	case StateCapturing:
-		return "capturing"
-	case StateClosing:
-		return "closing"
-	case StateError:
-		return "inError"
-	default:
-		return "unknown"
-	}
-}
-
-// Stats stores the packet statistics of the capture
-type Stats struct {
-	*CaptureStats
-	PacketsLogged int `json:"packets_logged"`
-}
-
-// Status stores both the capture's state and statistics
-type Status struct {
-	State State `json:"state"`
-	Stats Stats `json:"stats"`
-}
 
 // ErrorMap stores all encountered pcap errors and their number of occurrence
 type ErrorMap map[string]int
@@ -126,16 +85,15 @@ type captureCommand interface {
 }
 
 // commands for runtime information
-type captureCommandStatus struct{ returnChan chan<- Status }
+type captureCommandStatus struct{ returnChan chan<- types.InterfaceStatus }
 type captureCommandErrors struct{ returnChan chan<- ErrorMap }
 type captureCommandFlows struct{ returnChan chan<- *FlowLog }
 
 func (cmd captureCommandStatus) execute(c *Capture) stateFn {
-	var result = Status{
+	var result = types.InterfaceStatus{
 		State: c.state,
-		Stats: Stats{
-			CaptureStats:  c.tryGetCaptureStats(),
-			PacketsLogged: c.packetsLogged - c.lastRotationStats.PacketsLogged,
+		PacketStats: types.PacketStats{
+			CaptureStats: c.tryGetCaptureStats(),
 		},
 	}
 	cmd.returnChan <- result
@@ -183,7 +141,7 @@ func (cmd captureCommandUpdate) execute(c *Capture) stateFn {
 // of Rotate
 type rotateResult struct {
 	agg   *hashmap.AggFlowMap
-	stats Stats
+	stats types.PacketStats
 }
 
 type captureCommandRotate struct {
@@ -220,15 +178,13 @@ func (cmd captureCommandRotate) execute(c *Capture) stateFn {
 		stats := c.tryGetCaptureStats()
 		lastRotationStats := *stats
 
-		sub(stats, c.lastRotationStats.CaptureStats)
+		types.Sub(stats, c.lastRotationStats.CaptureStats)
 
-		result.stats = Stats{
-			CaptureStats:  stats,
-			PacketsLogged: c.packetsLogged - c.lastRotationStats.PacketsLogged,
+		result.stats = types.PacketStats{
+			CaptureStats: stats,
 		}
-		c.lastRotationStats = Stats{
-			CaptureStats:  &lastRotationStats,
-			PacketsLogged: c.packetsLogged,
+		c.lastRotationStats = types.PacketStats{
+			CaptureStats: &lastRotationStats,
 		}
 	}
 
@@ -255,7 +211,7 @@ type Capture struct {
 	// has Close been called on the Capture?
 	closed bool
 
-	state State
+	state types.State
 
 	config config.CaptureConfig
 
@@ -265,7 +221,7 @@ type Capture struct {
 	captureErrors chan error
 
 	// stats from the last rotation or reset (needed for Status)
-	lastRotationStats Stats
+	lastRotationStats types.PacketStats
 
 	// Rotation state synchronization
 	rotationState *rotationState
@@ -301,8 +257,8 @@ func NewCapture(ctx context.Context, iface string, config config.CaptureConfig) 
 		config:        config,
 		cmdChan:       make(chan captureCommand),
 		captureErrors: make(chan error),
-		lastRotationStats: Stats{
-			CaptureStats: &CaptureStats{},
+		lastRotationStats: types.PacketStats{
+			CaptureStats: &types.CaptureStats{},
 		},
 		rotationState: newRotationState(),
 		flowLog:       NewFlowLog(),
@@ -316,7 +272,7 @@ type stateFn func(*Capture) stateFn
 
 // setState provides write access to the state field of
 // a Capture. It also logs the state change.
-func (c *Capture) setState(s State) {
+func (c *Capture) setState(s types.State) {
 	c.state = s
 	c.ctx = logging.WithFields(c.ctx, "state", s.String())
 
@@ -342,7 +298,7 @@ func (c *Capture) Run() {
 }
 
 func initializing(c *Capture) stateFn {
-	c.setState(StateInitializing)
+	c.setState(types.StateInitializing)
 
 	logger := logging.FromContext(c.ctx)
 	logger.Info("initializing capture")
@@ -362,7 +318,7 @@ func initializing(c *Capture) stateFn {
 }
 
 func capturing(c *Capture) stateFn {
-	c.setState(StateCapturing)
+	c.setState(types.StateCapturing)
 
 	logger := logging.FromContext(c.ctx)
 	logger.Info("capturing packets")
@@ -394,7 +350,7 @@ func capturing(c *Capture) stateFn {
 }
 
 func inError(c *Capture) stateFn {
-	c.setState(StateError)
+	c.setState(types.StateError)
 
 	logger := logging.FromContext(c.ctx)
 	logger.Infof("waiting for configuration update to re-initialize")
@@ -415,7 +371,7 @@ func inError(c *Capture) stateFn {
 }
 
 func closing(c *Capture) stateFn {
-	c.setState(StateClosing)
+	c.setState(types.StateClosing)
 
 	// close the capture and reset fields
 	c.reset()
@@ -453,7 +409,7 @@ func (c *Capture) reset() {
 	// We reset the capture stats because we will create
 	// a new capture handle with new counts when the Capture is next
 	// initialized.
-	c.lastRotationStats.CaptureStats = &CaptureStats{}
+	c.lastRotationStats.CaptureStats = &types.CaptureStats{}
 
 	// reset the error map. The GC will take care of the previous
 	// one
@@ -554,7 +510,7 @@ func (c *Capture) needReinitialization(config config.CaptureConfig) bool {
 	return c.config != config
 }
 
-func (c *Capture) tryGetCaptureStats() *CaptureStats {
+func (c *Capture) tryGetCaptureStats() *types.CaptureStats {
 	logger := logging.FromContext(c.ctx)
 
 	var (
@@ -567,9 +523,9 @@ func (c *Capture) tryGetCaptureStats() *CaptureStats {
 			logger.Errorf("failed to get capture stats: %v", err)
 		}
 	}
-	return &CaptureStats{
-		PacketsReceived: stats.PacketsReceived,
-		PacketsDropped:  stats.PacketsDropped,
+	return &types.CaptureStats{
+		Received: stats.PacketsReceived,
+		Dropped:  stats.PacketsDropped,
 	}
 }
 
@@ -593,13 +549,7 @@ func (c *Capture) Enable() {
 
 // Status returns the current State as well as the statistics
 // collected since the last call to Rotate()
-//
-// Note: If the Capture was reinitialized since the last rotation,
-// result.Stats.Pcap will be inaccurate.
-//
-// Note: result.Stats.Stats may be null if there was an error fetching the
-// stats of the underlying pcap handle.
-func (c *Capture) Status() (result Status) {
+func (c *Capture) Status() (result types.InterfaceStatus) {
 	logger := logging.FromContext(c.ctx)
 
 	c.mutex.Lock()
@@ -610,7 +560,7 @@ func (c *Capture) Status() (result Status) {
 		return
 	}
 
-	ch := make(chan Status, 1)
+	ch := make(chan types.InterfaceStatus, 1)
 	c.cmdChan <- captureCommandStatus{ch}
 	return <-ch
 }
@@ -678,7 +628,7 @@ func (c *Capture) Update(config config.CaptureConfig) {
 //
 // Note: stats.Pcap may be null if there was an error fetching the
 // stats of the underlying pcap handle.
-func (c *Capture) Rotate() (agg *hashmap.AggFlowMap, stats Stats) {
+func (c *Capture) Rotate() (agg *hashmap.AggFlowMap, stats types.PacketStats) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
