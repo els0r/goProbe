@@ -87,7 +87,7 @@ type captureCommand interface {
 // commands for runtime information
 type captureCommandStatus struct{ returnChan chan<- types.InterfaceStatus }
 type captureCommandErrors struct{ returnChan chan<- ErrorMap }
-type captureCommandFlows struct{ returnChan chan<- *FlowLog }
+type captureCommandFlows struct{ returnChan chan<- *types.FlowLog }
 
 func (cmd captureCommandStatus) execute(c *Capture) stateFn {
 	var result = types.InterfaceStatus{
@@ -232,7 +232,7 @@ type Capture struct {
 
 	// Logged flows since creation of the capture (note that some
 	// flows are retained even after Rotate has been called)
-	flowLog *FlowLog
+	flowLog *types.FlowLog
 
 	// Generic handle / source for packet capture
 	captureHandle capture.Source
@@ -261,7 +261,7 @@ func NewCapture(ctx context.Context, iface string, config config.CaptureConfig) 
 			CaptureStats: &types.CaptureStats{},
 		},
 		rotationState: newRotationState(),
-		flowLog:       NewFlowLog(),
+		flowLog:       types.NewFlowLog(),
 		errMap:        make(map[string]int),
 		ctx:           capCtx,
 	}
@@ -426,13 +426,13 @@ func (c *Capture) capturePacket(pkt capture.Packet) (err error) {
 		return fmt.Errorf("capture error: %w", err)
 	}
 
-	// Populate the GPPacket
+	// Populate the types.GPPacket
 	// Instead of reusing an instance of capture.Packet over and over again a new
 	// one is allocated for each run on capturePacket(). Since it does not escape it is
 	// allocated on the stack and hence does not cause any GC overhead (and allocating is
 	// actually faster than resetting its fields, plus in that case it escapes to the heap)
-	var gppacket GPPacket
-	if err = gppacket.Populate(pkt); err == nil {
+	var gppacket types.GPPacket
+	if err = populate(&gppacket, pkt); err == nil {
 		c.flowLog.Add(&gppacket)
 		c.errCount = 0
 		c.packetsLogged++
@@ -583,7 +583,7 @@ func (c *Capture) Errors() (result ErrorMap) {
 }
 
 // Flows impolements the status call to return the contents of the active flow log
-func (c *Capture) Flows() (result *FlowLog) {
+func (c *Capture) Flows() (result *types.FlowLog) {
 	logger := logging.FromContext(c.ctx)
 
 	c.mutex.Lock()
@@ -594,7 +594,7 @@ func (c *Capture) Flows() (result *FlowLog) {
 		return
 	}
 
-	ch := make(chan *FlowLog, 1)
+	ch := make(chan *types.FlowLog, 1)
 	c.cmdChan <- captureCommandFlows{ch}
 	return <-ch
 }

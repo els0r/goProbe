@@ -7,21 +7,22 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func (server *Server) getStatus(c *gin.Context) {
+func (server *Server) getFlows(c *gin.Context) {
 	iface := c.Param(ifaceKey)
 
-	resp := &gpapi.StatusResponse{}
+	resp := &gpapi.FlowsResponse{}
 	resp.StatusCode = http.StatusOK
-	resp.LastWriteout = server.writeoutHandler.LastRotation
 
+	// TODO: make sure that the all case is only hit when no iface is specified
+	// --> ?ifaces=eth0,eth1
 	if iface != "" {
-		resp.Statuses = server.captureManager.Status(iface)
+		resp.Flows = server.captureManager.ActiveFlows(iface)
 	} else {
 		// otherwise, fetch all
-		resp.Statuses = server.captureManager.Status()
+		resp.Flows = server.captureManager.ActiveFlows()
 	}
 
-	if len(resp.Statuses) == 0 {
+	if len(resp.Flows) == 0 {
 		resp.StatusCode = http.StatusNoContent
 	}
 

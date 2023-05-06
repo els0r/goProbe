@@ -168,6 +168,19 @@ func (r *Row) Less(r2 *Row) bool {
 	return r.Attributes.Less(r2.Attributes)
 }
 
+// ExtendedRow is a human-readable, aggregatable representation of goProbe's active
+// flow data
+type ExtendedRow struct {
+	// Partition Attributes
+	Labels Labels `json:"l,omitempty"`
+
+	// ExtendedAttributes which can be grouped by
+	Attributes ExtendedAttributes `json:"a"`
+
+	// Counters
+	Counters types.Counters `json:"c"`
+}
+
 // Labels hold labels by which the goDB database is partitioned
 type Labels struct {
 	Timestamp time.Time `json:"timestamp,omitempty"`
@@ -200,12 +213,12 @@ func (l Labels) MarshalJSON() ([]byte, error) {
 
 // String prints all result labels
 func (l Labels) String() string {
-        return fmt.Sprintf("ts=%s iface=%s hostname=%s hostID=%s",
-                l.Timestamp,
-                l.Iface,
-                l.Hostname,
-                l.HostID,
-        )
+	return fmt.Sprintf("ts=%s iface=%s hostname=%s hostID=%s",
+		l.Timestamp,
+		l.Iface,
+		l.Hostname,
+		l.HostID,
+	)
 }
 
 // Less returns wether the set of labels l sorts before l2
@@ -229,6 +242,13 @@ type Attributes struct {
 	DstIP   netip.Addr `json:"dip,omitempty"`
 	IPProto uint8      `json:"proto,omitempty"`
 	DstPort uint16     `json:"dport,omitempty"`
+}
+
+// ExtendedAttributes includes the source port. It is meant to be used if (and only if)
+// the source port is still available (such as in the flow log)
+type ExtendedAttributes struct {
+	SrcPort uint16 `json:"sport,omitempty"`
+	Attributes
 }
 
 func (a Attributes) MarshalJSON() ([]byte, error) {

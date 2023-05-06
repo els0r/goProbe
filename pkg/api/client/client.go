@@ -70,6 +70,8 @@ func WithName(name string) Option {
 	}
 }
 
+// TODO: support for unix sockets
+
 const (
 	defaultRequestTimeout = 30 * time.Second
 	defaultClientName     = "default-client"

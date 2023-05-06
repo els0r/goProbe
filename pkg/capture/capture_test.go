@@ -32,7 +32,7 @@ func testDeadlock(t *testing.T, maxPkts int) {
 			CaptureStats: &types.CaptureStats{},
 		},
 		rotationState: newRotationState(),
-		flowLog:       NewFlowLog(),
+		flowLog:       types.NewFlowLog(),
 		errMap:        make(map[string]int),
 		ctx:           ctx,
 		captureHandle: mockSrc,
@@ -80,7 +80,7 @@ func TestMockPacketCapturePerformance(t *testing.T) {
 			CaptureStats: &types.CaptureStats{},
 		},
 		rotationState: newRotationState(),
-		flowLog:       NewFlowLog(),
+		flowLog:       types.NewFlowLog(),
 		errMap:        make(map[string]int),
 		ctx:           ctx,
 		captureHandle: mockSrc,
@@ -92,7 +92,7 @@ func TestMockPacketCapturePerformance(t *testing.T) {
 	})
 
 	mockC.process()
-	for _, v := range mockC.flowLog.flowMap {
-		fmt.Printf("Packets processed after %v: %d (%v/pkt)\n", runtime, v.packetsRcvd, runtime/time.Duration(v.packetsRcvd))
+	for _, v := range mockC.flowLog.Flows() {
+		fmt.Printf("Packets processed after %v: %d (%v/pkt)\n", runtime, v.PacketsRcvd(), runtime/time.Duration(v.PacketsRcvd()))
 	}
 }

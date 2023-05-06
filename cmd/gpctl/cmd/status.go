@@ -6,11 +6,8 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os"
-	"os/signal"
 	"sort"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/els0r/goProbe/cmd/gpctl/pkg/conf"
@@ -31,7 +28,7 @@ If the (list of) interface(s) is provided as an argument, it will only
 show the statistics for them. Otherwise, all interfaces are printed
 `,
 
-	RunE: statsEntrypoint,
+	RunE: wrapCancellationContext(time.Second, statusEntrypoint),
 }
 
 func init() {
@@ -56,25 +53,16 @@ func printStats(stats types.PacketStats) {
 	status.Okf("%s%s%s", rcvdStr, strings.Repeat(" ", len(receivedCol)+colDistance-len(rcvdStr)), droppedStr)
 }
 
-func statsEntrypoint(cmd *cobra.Command, args []string) error {
-	sdCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
-	defer stop()
-
-	// calls to the api shouldn't take longer than one second
-	ctx, cancel := context.WithTimeout(sdCtx, 1*time.Second)
-	defer cancel()
-
+func statusEntrypoint(ctx context.Context, cmd *cobra.Command, args []string) error {
 	client := client.New(viper.GetString(conf.GoProbeServerAddr))
 
 	ifaces := args
 
 	sr, err := client.GetInterfaceStatus(ctx, ifaces...)
 	if err != nil {
-		return fmt.Errorf("failed to fetch stats: %w", err)
+		return fmt.Errorf("failed to fetch stats for interfaces %v: %w", ifaces, err)
 	}
 	statuses := sr.Statuses
-
-	sort.Strings(ifaces)
 
 	var (
 		totalReceived, totalDropped int64
@@ -83,67 +71,41 @@ func statsEntrypoint(cmd *cobra.Command, args []string) error {
 
 	fmt.Println()
 	printHeader()
-	if len(ifaces) > 0 {
-		for _, iface := range ifaces {
 
-			ifaceStatus, exist := statuses[iface]
-			// skip interfaces that don't exist
-			if !exist {
-				continue
-			}
-
-			status.Line(iface)
-
-			totalReceived += int64(ifaceStatus.PacketStats.Received)
-			totalDropped += int64(ifaceStatus.PacketStats.Dropped)
-
-			// TODO: get rid of el code duplicado
-			switch ifaceStatus.State {
-			case types.StateError:
-				status.Fail(ifaceStatus.State.String())
-				continue
-			case types.StateCapturing:
-				totalActive++
-			}
-			printStats(ifaceStatus.PacketStats)
-		}
-	} else {
-		var allStatuses []struct {
+	var allStatuses []struct {
+		iface  string
+		status types.InterfaceStatus
+	}
+	for iface, status := range statuses {
+		allStatuses = append(allStatuses, struct {
 			iface  string
 			status types.InterfaceStatus
-		}
-		for iface, status := range statuses {
-			allStatuses = append(allStatuses, struct {
-				iface  string
-				status types.InterfaceStatus
-			}{
-				iface:  iface,
-				status: status,
-			})
-		}
-
-		sort.SliceStable(allStatuses, func(i, j int) bool {
-			return allStatuses[i].iface < allStatuses[j].iface
+		}{
+			iface:  iface,
+			status: status,
 		})
+	}
 
-		for _, st := range allStatuses {
-			status.Line(st.iface)
+	sort.SliceStable(allStatuses, func(i, j int) bool {
+		return allStatuses[i].iface < allStatuses[j].iface
+	})
 
-			ifaceStatus := st.status
+	for _, st := range allStatuses {
+		status.Line(st.iface)
 
-			totalReceived += int64(ifaceStatus.PacketStats.Received)
-			totalDropped += int64(ifaceStatus.PacketStats.Dropped)
+		ifaceStatus := st.status
 
-			switch st.status.State {
-			case types.StateError:
-				status.Fail(ifaceStatus.State.String())
-				continue
-			case types.StateCapturing:
-				totalActive++
-			}
-			printStats(ifaceStatus.PacketStats)
+		totalReceived += int64(ifaceStatus.PacketStats.Received)
+		totalDropped += int64(ifaceStatus.PacketStats.Dropped)
+
+		switch st.status.State {
+		case types.StateError:
+			status.Fail(ifaceStatus.State.String())
+			continue
+		case types.StateCapturing:
+			totalActive++
 		}
-
+		printStats(ifaceStatus.PacketStats)
 	}
 
 	lastWriteout := "-"

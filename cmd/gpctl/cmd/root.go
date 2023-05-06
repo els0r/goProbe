@@ -1,9 +1,13 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/els0r/goProbe/cmd/gpctl/pkg/conf"
 	"github.com/els0r/goProbe/pkg/logging"
@@ -100,4 +104,21 @@ func verifyArgs(_ *cobra.Command, _ []string) error {
 
 func rootEntrypoint(cmd *cobra.Command, args []string) error {
 	return fmt.Errorf("no sub-command provided")
+}
+
+type entrypointE func(ctx context.Context, cmd *cobra.Command, args []string) error
+type runE func(cmd *cobra.Command, args []string) error
+
+func wrapCancellationContext(timeout time.Duration, f entrypointE) runE {
+	return func(cmd *cobra.Command, args []string) error {
+		sdCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
+		defer stop()
+
+		// calls to the api shouldn't take longer than one second
+		ctx, cancel := context.WithTimeout(sdCtx, timeout)
+		defer cancel()
+
+		return f(ctx, cmd, args)
+	}
+
 }

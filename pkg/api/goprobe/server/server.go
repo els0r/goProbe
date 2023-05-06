@@ -37,6 +37,8 @@ func WithDBPath(path string) Option {
 	}
 }
 
+// TODO: support for unix sockets
+
 func New(addr string, captureManager *capture.Manager, writeoutHandler *writeout.Handler, opts ...Option) *Server {
 	server := &Server{
 		addr:            addr,
@@ -80,8 +82,14 @@ func (server *Server) registerRoutes() {
 	statsRoutes.GET("/:"+ifaceKey, server.getStatus)
 
 	// flows
+	flowsRoutes := server.router.Group(gpapi.FlowsRoute)
+	flowsRoutes.GET("", server.getFlows)
+	flowsRoutes.GET("/:"+ifaceKey, server.getFlows)
 
 	// config
+	configRoutes := server.router.Group(gpapi.ConfigRoute)
+	configRoutes.POST("", server.postConfig)
+	configRoutes.POST("/:"+ifaceKey, server.postConfig)
 }
 
 const headerTimeout = 30 * time.Second
