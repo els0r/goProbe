@@ -100,14 +100,14 @@ func By(sort SortOrder, direction types.Direction, ascending bool) by {
 			if ascending {
 				return func(e1, e2 *Row) bool {
 					if e1.Counters.PacketsSent+e1.Counters.PacketsRcvd == e2.Counters.PacketsSent+e2.Counters.PacketsRcvd {
-						return e1.Attributes.Less(e2.Attributes)
+						return e1.Less(e2)
 					}
 					return e1.Counters.PacketsSent+e1.Counters.PacketsRcvd < e2.Counters.PacketsSent+e2.Counters.PacketsRcvd
 				}
 			}
 			return func(e1, e2 *Row) bool {
 				if e1.Counters.PacketsSent+e1.Counters.PacketsRcvd == e2.Counters.PacketsSent+e2.Counters.PacketsRcvd {
-					return e2.Attributes.Less(e1.Attributes)
+					return e2.Less(e1)
 				}
 				return e1.Counters.PacketsSent+e1.Counters.PacketsRcvd > e2.Counters.PacketsSent+e2.Counters.PacketsRcvd
 			}
@@ -115,14 +115,14 @@ func By(sort SortOrder, direction types.Direction, ascending bool) by {
 			if ascending {
 				return func(e1, e2 *Row) bool {
 					if e1.Counters.PacketsRcvd == e2.Counters.PacketsRcvd {
-						return e1.Attributes.Less(e2.Attributes)
+						return e1.Less(e2)
 					}
 					return e1.Counters.PacketsRcvd < e2.Counters.PacketsRcvd
 				}
 			}
 			return func(e1, e2 *Row) bool {
 				if e1.Counters.PacketsRcvd == e2.Counters.PacketsRcvd {
-					return e2.Attributes.Less(e1.Attributes)
+					return e2.Less(e1)
 				}
 				return e1.Counters.PacketsRcvd > e2.Counters.PacketsRcvd
 			}
@@ -130,14 +130,14 @@ func By(sort SortOrder, direction types.Direction, ascending bool) by {
 			if ascending {
 				return func(e1, e2 *Row) bool {
 					if e1.Counters.PacketsSent == e2.Counters.PacketsSent {
-						return e1.Attributes.Less(e2.Attributes)
+						return e1.Less(e2)
 					}
 					return e1.Counters.PacketsSent < e2.Counters.PacketsSent
 				}
 			}
 			return func(e1, e2 *Row) bool {
 				if e1.Counters.PacketsSent == e2.Counters.PacketsSent {
-					return e2.Attributes.Less(e1.Attributes)
+					return e2.Less(e1)
 				}
 				return e1.Counters.PacketsSent > e2.Counters.PacketsSent
 			}
@@ -148,14 +148,14 @@ func By(sort SortOrder, direction types.Direction, ascending bool) by {
 			if ascending {
 				return func(e1, e2 *Row) bool {
 					if e1.Counters.BytesSent+e1.Counters.BytesRcvd == e2.Counters.BytesSent+e2.Counters.BytesRcvd {
-						return e1.Attributes.Less(e2.Attributes)
+						return e1.Less(e2)
 					}
 					return e1.Counters.BytesSent+e1.Counters.BytesRcvd < e2.Counters.BytesSent+e2.Counters.BytesRcvd
 				}
 			}
 			return func(e1, e2 *Row) bool {
 				if e1.Counters.BytesSent+e1.Counters.BytesRcvd == e2.Counters.BytesSent+e2.Counters.BytesRcvd {
-					return e2.Attributes.Less(e1.Attributes)
+					return e2.Less(e1)
 				}
 				return e1.Counters.BytesSent+e1.Counters.BytesRcvd > e2.Counters.BytesSent+e2.Counters.BytesRcvd
 			}
@@ -163,14 +163,14 @@ func By(sort SortOrder, direction types.Direction, ascending bool) by {
 			if ascending {
 				return func(e1, e2 *Row) bool {
 					if e1.Counters.BytesRcvd == e2.Counters.BytesRcvd {
-						return e1.Attributes.Less(e2.Attributes)
+						return e1.Less(e2)
 					}
 					return e1.Counters.BytesRcvd < e2.Counters.BytesRcvd
 				}
 			}
 			return func(e1, e2 *Row) bool {
 				if e1.Counters.BytesRcvd == e2.Counters.BytesRcvd {
-					return e2.Attributes.Less(e1.Attributes)
+					return e2.Less(e1)
 				}
 				return e1.Counters.BytesRcvd > e2.Counters.BytesRcvd
 			}
@@ -178,14 +178,14 @@ func By(sort SortOrder, direction types.Direction, ascending bool) by {
 			if ascending {
 				return func(e1, e2 *Row) bool {
 					if e1.Counters.BytesSent == e2.Counters.BytesSent {
-						return e1.Attributes.Less(e2.Attributes)
+						return e1.Less(e2)
 					}
 					return e1.Counters.BytesSent < e2.Counters.BytesSent
 				}
 			}
 			return func(e1, e2 *Row) bool {
 				if e1.Counters.BytesSent == e2.Counters.BytesSent {
-					return e2.Attributes.Less(e1.Attributes)
+					return e2.Less(e1)
 				}
 				return e1.Counters.BytesSent > e2.Counters.BytesSent
 			}
@@ -194,14 +194,14 @@ func By(sort SortOrder, direction types.Direction, ascending bool) by {
 		if ascending {
 			return func(e1, e2 *Row) bool {
 				if e1.Labels.Timestamp.Equal(e2.Labels.Timestamp) {
-					return e1.Attributes.Less(e2.Attributes)
+					return e1.Less(e2)
 				}
 				return e1.Labels.Timestamp.Before(e2.Labels.Timestamp)
 			}
 		}
 		return func(e1, e2 *Row) bool {
 			if e1.Labels.Timestamp.Equal(e2.Labels.Timestamp) {
-				return e2.Attributes.Less(e1.Attributes)
+				return e2.Less(e1)
 			}
 			return e1.Labels.Timestamp.After(e2.Labels.Timestamp)
 		}

@@ -155,6 +155,19 @@ type Row struct {
 	Counters types.Counters `json:"c"`
 }
 
+// String prints a single result
+func (r *Row) String() string {
+	return fmt.Sprintf("%s; %s; %s", r.Labels.String(), r.Attributes.String(), r.Counters.String())
+}
+
+// Less returns wether the row r sorts before r2
+func (r *Row) Less(r2 *Row) bool {
+	if r.Attributes == r2.Attributes {
+		return r.Labels.Less(r2.Labels)
+	}
+	return r.Attributes.Less(r2.Attributes)
+}
+
 // Labels hold labels by which the goDB database is partitioned
 type Labels struct {
 	Timestamp time.Time `json:"timestamp,omitempty"`
@@ -185,27 +198,37 @@ func (l Labels) MarshalJSON() ([]byte, error) {
 	return json.Marshal(aux)
 }
 
+// String prints all result labels
+func (l Labels) String() string {
+        return fmt.Sprintf("ts=%s iface=%s hostname=%s hostID=%s",
+                l.Timestamp,
+                l.Iface,
+                l.Hostname,
+                l.HostID,
+        )
+}
+
+// Less returns wether the set of labels l sorts before l2
+func (l Labels) Less(l2 Labels) bool {
+	if l.Timestamp != l2.Timestamp {
+		return l.Timestamp.Before(l2.Timestamp)
+	}
+
+	// Since sorting is about human-readable information this ignores the hostID, assuming
+	// that for sorting identical hostnames imply the same host
+	if l.Hostname != l2.Hostname {
+		return l.Hostname < l2.Hostname
+	}
+
+	return l.Iface < l2.Iface
+}
+
 // Attributes are traffic attributes by which the goDB can be aggregated
 type Attributes struct {
 	SrcIP   netip.Addr `json:"sip,omitempty"`
 	DstIP   netip.Addr `json:"dip,omitempty"`
 	IPProto uint8      `json:"proto,omitempty"`
 	DstPort uint16     `json:"dport,omitempty"`
-}
-
-// String prints a single result
-func (r Row) String() string {
-	return fmt.Sprintf("%s; %s; %s", r.Labels.String(), r.Attributes.String(), r.Counters.String())
-}
-
-// String prints all result labels
-func (l Labels) String() string {
-	return fmt.Sprintf("ts=%s iface=%s hostname=%s hostID=%s",
-		l.Timestamp,
-		l.Iface,
-		l.Hostname,
-		l.HostID,
-	)
 }
 
 func (a Attributes) MarshalJSON() ([]byte, error) {
