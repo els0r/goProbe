@@ -21,7 +21,7 @@ const FlowsRoute = "/flows"
 
 type FlowsResponse struct {
 	response
-	Flows map[string]types.FlowInfos
+	Flows map[string]types.FlowInfos `json:"flows"`
 }
 
 const StatusRoute = "/status"
