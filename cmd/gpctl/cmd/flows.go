@@ -63,7 +63,7 @@ func flowsEntrypoint(ctx context.Context, cmd *cobra.Command, args []string) err
 		if len(info.infos) > 0 {
 			err := info.infos.TablePrint(os.Stdout)
 			if err != nil {
-				logging.FromContext(ctx).Error("failed to print flow table: %v", err)
+				logging.FromContext(ctx).Errorf("failed to print flow table: %v", err)
 				fmt.Println()
 				continue
 			}
