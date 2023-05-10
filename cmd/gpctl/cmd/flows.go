@@ -9,7 +9,7 @@ import (
 
 	"github.com/els0r/goProbe/cmd/gpctl/pkg/conf"
 	"github.com/els0r/goProbe/pkg/api/goprobe/client"
-	"github.com/els0r/goProbe/pkg/goprobe/types"
+	"github.com/els0r/goProbe/pkg/capture/capturetypes"
 	"github.com/els0r/goProbe/pkg/logging"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -39,12 +39,12 @@ func flowsEntrypoint(ctx context.Context, cmd *cobra.Command, args []string) err
 
 	var allFlowInfos []struct {
 		iface string
-		infos types.FlowInfos
+		infos capturetypes.FlowInfos
 	}
 	for iface, infos := range fir.Flows {
 		allFlowInfos = append(allFlowInfos, struct {
 			iface string
-			infos types.FlowInfos
+			infos capturetypes.FlowInfos
 		}{
 			iface: iface,
 			infos: infos,

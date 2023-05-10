@@ -3,7 +3,7 @@ package goprobe
 import (
 	"time"
 
-	"github.com/els0r/goProbe/pkg/goprobe/types"
+	"github.com/els0r/goProbe/pkg/capture/capturetypes"
 )
 
 const (
@@ -21,15 +21,15 @@ const FlowsRoute = "/flows"
 
 type FlowsResponse struct {
 	response
-	Flows map[string]types.FlowInfos `json:"flows"`
+	Flows map[string]capturetypes.FlowInfos `json:"flows"`
 }
 
 const StatusRoute = "/status"
 
 type StatusResponse struct {
 	response
-	LastWriteout time.Time                        `json:"last_writeout"`
-	Statuses     map[string]types.InterfaceStatus `json:"statuses"`
+	LastWriteout time.Time                               `json:"last_writeout"`
+	Statuses     map[string]capturetypes.InterfaceStatus `json:"statuses"`
 }
 
 const ConfigRoute = "/config"

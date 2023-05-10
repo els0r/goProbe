@@ -3,7 +3,7 @@ package capture
 import (
 	"fmt"
 
-	"github.com/els0r/goProbe/pkg/goprobe/types"
+	"github.com/els0r/goProbe/pkg/capture/capturetypes"
 	"github.com/fako1024/slimcap/capture"
 	"golang.org/x/net/ipv4"
 	"golang.org/x/net/ipv6"
@@ -15,7 +15,7 @@ const (
 )
 
 // populate takes a raw packet and populates a GPPacket structure from it.
-func populate(p *types.GPPacket, pkt capture.Packet) error {
+func populate(p *capturetypes.GPPacket, pkt capture.Packet) error {
 	// Extract the IP layer of the packet
 	srcPacket := pkt.IPLayer()
 
@@ -42,7 +42,7 @@ func populate(p *types.GPPacket, pkt capture.Packet) error {
 		//
 		// Note: an ESP fragment will carry fragmentation information like any
 		// other IP packet. The fragment offset will of be MTU - 20 bytes (IP layer).
-		if protocol != types.ESP {
+		if protocol != capturetypes.ESP {
 
 			// check for IP fragmentation
 			fragBits := (0xe0 & srcPacket[6]) >> 5
@@ -55,7 +55,7 @@ func populate(p *types.GPPacket, pkt capture.Packet) error {
 			}
 		}
 
-		if protocol == types.TCP || protocol == types.UDP {
+		if protocol == capturetypes.TCP || protocol == capturetypes.UDP {
 
 			dport := srcPacket[ipv4.HeaderLen+2 : ipv4.HeaderLen+4]
 			sport := srcPacket[ipv4.HeaderLen : ipv4.HeaderLen+2]
@@ -73,10 +73,10 @@ func populate(p *types.GPPacket, pkt capture.Packet) error {
 				copy(p.EPHashReverse[34:36], dport)
 			}
 
-			if protocol == types.TCP {
+			if protocol == capturetypes.TCP {
 				p.AuxInfo = srcPacket[ipv4.HeaderLen+13] // store TCP flags
 			}
-		} else if protocol == types.ICMP {
+		} else if protocol == capturetypes.ICMP {
 			p.AuxInfo = srcPacket[ipv4.HeaderLen] // store ICMP type
 		}
 
@@ -91,7 +91,7 @@ func populate(p *types.GPPacket, pkt capture.Packet) error {
 		copy(p.EPHashReverse[16:32], p.EPHash[0:16])
 
 		protocol = srcPacket[6]
-		if protocol == types.TCP || protocol == types.UDP {
+		if protocol == capturetypes.TCP || protocol == capturetypes.UDP {
 
 			dport := srcPacket[ipv6.HeaderLen+2 : ipv6.HeaderLen+4]
 			sport := srcPacket[ipv6.HeaderLen : ipv6.HeaderLen+2]
@@ -109,10 +109,10 @@ func populate(p *types.GPPacket, pkt capture.Packet) error {
 				copy(p.EPHashReverse[34:36], dport)
 			}
 
-			if protocol == types.TCP {
+			if protocol == capturetypes.TCP {
 				p.AuxInfo = srcPacket[ipv6.HeaderLen+13] // store TCP flags
 			}
-		} else if protocol == types.ICMPv6 {
+		} else if protocol == capturetypes.ICMPv6 {
 			p.AuxInfo = srcPacket[ipv6.HeaderLen] // store ICMP type
 		}
 
@@ -132,13 +132,13 @@ func isCommonPort(port []byte, proto byte) bool {
 	}
 
 	// TCP common ports
-	if proto == types.TCP {
+	if proto == capturetypes.TCP {
 		return (port[0] == 0 && (port[1] == 53 || port[1] == 80)) || // DNS(TCP), HTTP
 			(port[0] == 1 && port[1] == 187) // HTTPS
 	}
 
 	// UDP common ports
-	if proto == types.UDP {
+	if proto == capturetypes.UDP {
 		return (port[0] == 0 && port[1] == 53) || // DNS(UDP)
 			(port[0] == 1 && port[1] == 187) // 443(UDP)
 	}

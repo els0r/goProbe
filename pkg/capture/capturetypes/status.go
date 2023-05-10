@@ -1,4 +1,4 @@
-package types
+package capturetypes
 
 // State enumerates the activity states of a capture
 type State byte

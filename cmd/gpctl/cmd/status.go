@@ -12,7 +12,7 @@ import (
 
 	"github.com/els0r/goProbe/cmd/gpctl/pkg/conf"
 	"github.com/els0r/goProbe/pkg/api/goprobe/client"
-	"github.com/els0r/goProbe/pkg/goprobe/types"
+	"github.com/els0r/goProbe/pkg/capture/capturetypes"
 	"github.com/els0r/status"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -46,7 +46,7 @@ func printHeader() {
 	fmt.Println(strings.Repeat(" ", 2+status.StatusLineIndent+8+1) + receivedCol + strings.Repeat(" ", colDistance) + droppedCol)
 }
 
-func printStats(stats types.PacketStats) {
+func printStats(stats capturetypes.PacketStats) {
 	rcvdStr := fmt.Sprint(stats.Received)
 	droppedStr := fmt.Sprint(stats.Dropped)
 
@@ -74,12 +74,12 @@ func statusEntrypoint(ctx context.Context, cmd *cobra.Command, args []string) er
 
 	var allStatuses []struct {
 		iface  string
-		status types.InterfaceStatus
+		status capturetypes.InterfaceStatus
 	}
 	for iface, status := range statuses {
 		allStatuses = append(allStatuses, struct {
 			iface  string
-			status types.InterfaceStatus
+			status capturetypes.InterfaceStatus
 		}{
 			iface:  iface,
 			status: status,
@@ -99,10 +99,10 @@ func statusEntrypoint(ctx context.Context, cmd *cobra.Command, args []string) er
 		totalDropped += int64(ifaceStatus.PacketStats.Dropped)
 
 		switch st.status.State {
-		case types.StateError:
+		case capturetypes.StateError:
 			status.Fail(ifaceStatus.State.String())
 			continue
-		case types.StateCapturing:
+		case capturetypes.StateCapturing:
 			totalActive++
 		}
 		printStats(ifaceStatus.PacketStats)

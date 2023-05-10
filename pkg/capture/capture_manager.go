@@ -19,7 +19,7 @@ import (
 	"time"
 
 	"github.com/els0r/goProbe/cmd/goProbe/config"
-	"github.com/els0r/goProbe/pkg/goprobe/types"
+	"github.com/els0r/goProbe/pkg/capture/capturetypes"
 	"github.com/els0r/goProbe/pkg/logging"
 	"github.com/els0r/goProbe/pkg/types/hashmap"
 )
@@ -40,8 +40,8 @@ const (
 // RotateAll() and Update().
 type TaggedAggFlowMap struct {
 	Map   *hashmap.AggFlowMap
-	Stats types.PacketStats `json:"stats,omitempty"`
-	Iface string            `json:"iface"`
+	Stats capturetypes.PacketStats `json:"stats,omitempty"`
+	Iface string                   `json:"iface"`
 }
 
 // Manager manages a set of Capture instances.
@@ -234,9 +234,9 @@ func (cm *Manager) Update(ifaces config.Ifaces, returnChan chan TaggedAggFlowMap
 }
 
 // Status returns the statuses of all interfaces provided in the arguments
-func (cm *Manager) Status(ifaces ...string) map[string]types.InterfaceStatus {
+func (cm *Manager) Status(ifaces ...string) map[string]capturetypes.InterfaceStatus {
 	statusmapMutex := sync.Mutex{}
-	statusmap := make(map[string]types.InterfaceStatus)
+	statusmap := make(map[string]capturetypes.InterfaceStatus)
 
 	var rg RunGroup
 	cmCopy := cm.capturesCopy()
@@ -271,8 +271,8 @@ func (cm *Manager) Status(ifaces ...string) map[string]types.InterfaceStatus {
 }
 
 // ActiveFlows returns a copy of the current in-memory flow map. If iface is "all", flows for every interface are returned
-func (cm *Manager) ActiveFlows(ifaces ...string) map[string]types.FlowInfos {
-	ifaceFlows := make(map[string]*types.FlowLog)
+func (cm *Manager) ActiveFlows(ifaces ...string) map[string]capturetypes.FlowInfos {
+	ifaceFlows := make(map[string]*capturetypes.FlowLog)
 	ifaceFlowsMutex := sync.Mutex{}
 
 	cmCopy := cm.capturesCopy()
@@ -303,11 +303,11 @@ func (cm *Manager) ActiveFlows(ifaces ...string) map[string]types.FlowInfos {
 	rg.Wait()
 
 	// convert data
-	var ifaceFlowInfos = make(map[string]types.FlowInfos, len(ifaceFlows))
+	var ifaceFlowInfos = make(map[string]capturetypes.FlowInfos, len(ifaceFlows))
 	for iface, flowLog := range ifaceFlows {
-		var flowInfos []types.FlowInfo
+		var flowInfos []capturetypes.FlowInfo
 		for _, flow := range flowLog.Flows() {
-			flowInfos = append(flowInfos, types.FlowInfo{
+			flowInfos = append(flowInfos, capturetypes.FlowInfo{
 				Idle:                    flow.HasBeenIdle(),
 				DirectionConfidenceHigh: flow.DirectionConfidenceHigh(),
 				Flow:                    flow.ToExtendedRow(),
