@@ -4,13 +4,15 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"time"
 
 	gpapi "github.com/els0r/goProbe/pkg/api/goprobe"
+	"github.com/els0r/goProbe/pkg/capture/capturetypes"
 	"github.com/fako1024/httpc"
 )
 
 // GetInterfaceStatus returns the interface capture stats from the running goProbe instance
-func (c *Client) GetInterfaceStatus(ctx context.Context, ifaces ...string) (*gpapi.StatusResponse, error) {
+func (c *Client) GetInterfaceStatus(ctx context.Context, ifaces ...string) (statuses map[string]capturetypes.InterfaceStatus, lastWriteout time.Time, err error) {
 	var res = new(gpapi.StatusResponse)
 
 	url := c.NewURL(gpapi.StatusRoute)
@@ -22,15 +24,15 @@ func (c *Client) GetInterfaceStatus(ctx context.Context, ifaces ...string) (*gpa
 		httpc.NewWithClient("GET", url, c.Client()).
 			ParseJSON(res),
 	)
-	err := req.RunWithContext(ctx)
+	err = req.RunWithContext(ctx)
 	if err != nil {
-		return nil, err
+		return nil, lastWriteout, err
 	}
 
 	switch res.StatusCode {
 	case http.StatusInternalServerError:
-		return nil, fmt.Errorf("%d: %s", res.StatusCode, res.Error)
+		return nil, lastWriteout, fmt.Errorf("%d: %s", res.StatusCode, res.Error)
 	}
 
-	return res, nil
+	return res.Statuses, res.LastWriteout, nil
 }

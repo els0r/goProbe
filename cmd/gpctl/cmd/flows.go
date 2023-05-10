@@ -32,7 +32,7 @@ func flowsEntrypoint(ctx context.Context, cmd *cobra.Command, args []string) err
 
 	ifaces := args
 
-	fir, err := client.GetActiveFlows(ctx, ifaces...)
+	flows, err := client.GetActiveFlows(ctx, ifaces...)
 	if err != nil {
 		return fmt.Errorf("failed to query flows for interfaces %v: %w", ifaces, err)
 	}
@@ -41,7 +41,7 @@ func flowsEntrypoint(ctx context.Context, cmd *cobra.Command, args []string) err
 		iface string
 		infos capturetypes.FlowInfos
 	}
-	for iface, infos := range fir.Flows {
+	for iface, infos := range flows {
 		allFlowInfos = append(allFlowInfos, struct {
 			iface string
 			infos capturetypes.FlowInfos

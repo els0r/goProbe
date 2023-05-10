@@ -6,11 +6,12 @@ import (
 	"net/http"
 
 	gpapi "github.com/els0r/goProbe/pkg/api/goprobe"
+	"github.com/els0r/goProbe/pkg/capture/capturetypes"
 	"github.com/fako1024/httpc"
 )
 
 // GetActiveFlows returns the active flows on the interface(s) captured by the running goProbe instance
-func (c *Client) GetActiveFlows(ctx context.Context, ifaces ...string) (*gpapi.FlowsResponse, error) {
+func (c *Client) GetActiveFlows(ctx context.Context, ifaces ...string) (map[string]capturetypes.FlowInfos, error) {
 	var res = new(gpapi.FlowsResponse)
 
 	url := c.NewURL(gpapi.FlowsRoute)
@@ -29,8 +30,7 @@ func (c *Client) GetActiveFlows(ctx context.Context, ifaces ...string) (*gpapi.F
 
 	switch res.StatusCode {
 	case http.StatusInternalServerError:
-		return nil, fmt.Errorf("%d: %s", res.StatusCode, res.Error)
+		return nil, fmt.Errorf("%d: %v", res.StatusCode, res.Error)
 	}
-
-	return res, nil
+	return res.Flows, nil
 }

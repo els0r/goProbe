@@ -58,11 +58,10 @@ func statusEntrypoint(ctx context.Context, cmd *cobra.Command, args []string) er
 
 	ifaces := args
 
-	sr, err := client.GetInterfaceStatus(ctx, ifaces...)
+	statuses, lastWriteout, err := client.GetInterfaceStatus(ctx, ifaces...)
 	if err != nil {
-		return fmt.Errorf("failed to fetch stats for interfaces %v: %w", ifaces, err)
+		return fmt.Errorf("failed to fetch status for interfaces %v: %w", ifaces, err)
 	}
-	statuses := sr.Statuses
 
 	var (
 		totalReceived, totalDropped int64
@@ -108,12 +107,12 @@ func statusEntrypoint(ctx context.Context, cmd *cobra.Command, args []string) er
 		printStats(ifaceStatus.PacketStats)
 	}
 
-	lastWriteout := "-"
+	lastWriteoutStr := "-"
 	ago := "-"
-	if !sr.LastWriteout.IsZero() {
-		tLocal := sr.LastWriteout.Local()
+	if !lastWriteout.IsZero() {
+		tLocal := lastWriteout.Local()
 
-		lastWriteout = tLocal.Format(conf.TimestampFormat)
+		lastWriteoutStr = tLocal.Format(conf.TimestampFormat)
 		ago = time.Since(tLocal).Round(time.Second).String()
 	}
 
@@ -125,7 +124,7 @@ func statusEntrypoint(ctx context.Context, cmd *cobra.Command, args []string) er
       Received: %d
       Dropped:  %d		(%.2f %%)
 
-`, lastWriteout, ago,
+`, lastWriteoutStr, ago,
 		totalReceived, totalDropped, float64(totalDropped)/float64(totalReceived)*100)
 
 	return nil
