@@ -10,6 +10,10 @@ const (
 	DefaultServerAddress = "localhost:8145"
 )
 
+const (
+	IfacesQueryParam = "ifaces"
+)
+
 const QueryRoute = "/_query"
 
 type response struct {

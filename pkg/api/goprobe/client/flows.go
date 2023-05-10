@@ -3,7 +3,7 @@ package client
 import (
 	"context"
 	"fmt"
-	"net/http"
+	"strings"
 
 	gpapi "github.com/els0r/goProbe/pkg/api/goprobe"
 	"github.com/els0r/goProbe/pkg/capture/capturetypes"
@@ -23,14 +23,17 @@ func (c *Client) GetActiveFlows(ctx context.Context, ifaces ...string) (map[stri
 		httpc.NewWithClient("GET", url, c.Client()).
 			ParseJSON(res),
 	)
+	if len(ifaces) > 1 {
+		req = req.QueryParams(httpc.Params{
+			gpapi.IfacesQueryParam: strings.Join(ifaces, ","),
+		})
+	}
 	err := req.RunWithContext(ctx)
 	if err != nil {
+		if res.Error != "" {
+			err = fmt.Errorf("%d: %s", res.StatusCode, res.Error)
+		}
 		return nil, err
-	}
-
-	switch res.StatusCode {
-	case http.StatusInternalServerError:
-		return nil, fmt.Errorf("%d: %v", res.StatusCode, res.Error)
 	}
 	return res.Flows, nil
 }

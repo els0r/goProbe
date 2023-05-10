@@ -180,7 +180,7 @@ func (cmd captureCommandRotate) execute(c *Capture) stateFn {
 		stats := c.tryGetCaptureStats()
 		lastRotationStats := *stats
 
-		capturetypes.Sub(stats, c.lastRotationStats.CaptureStats)
+		capturetypes.SubStats(stats, c.lastRotationStats.CaptureStats)
 
 		result.stats = capturetypes.PacketStats{
 			CaptureStats: stats,

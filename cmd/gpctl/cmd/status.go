@@ -13,6 +13,7 @@ import (
 	"github.com/els0r/goProbe/cmd/gpctl/pkg/conf"
 	"github.com/els0r/goProbe/pkg/api/goprobe/client"
 	"github.com/els0r/goProbe/pkg/capture/capturetypes"
+	"github.com/els0r/goProbe/pkg/types"
 	"github.com/els0r/status"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -112,7 +113,7 @@ func statusEntrypoint(ctx context.Context, cmd *cobra.Command, args []string) er
 	if !lastWriteout.IsZero() {
 		tLocal := lastWriteout.Local()
 
-		lastWriteoutStr = tLocal.Format(conf.TimestampFormat)
+		lastWriteoutStr = tLocal.Format(types.DefaultTimeOutputFormat)
 		ago = time.Since(tLocal).Round(time.Second).String()
 	}
 

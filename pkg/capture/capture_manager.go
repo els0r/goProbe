@@ -279,6 +279,7 @@ func (cm *Manager) ActiveFlows(ifaces ...string) map[string]capturetypes.FlowInf
 	var rg RunGroup
 	if len(ifaces) > 0 {
 		for _, iface := range ifaces {
+			iface := iface
 			mc, exists := cmCopy[iface]
 			if exists {
 				rg.Run(func() {

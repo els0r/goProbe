@@ -3,7 +3,7 @@ package client
 import (
 	"context"
 	"fmt"
-	"net/http"
+	"strings"
 	"time"
 
 	gpapi "github.com/els0r/goProbe/pkg/api/goprobe"
@@ -24,14 +24,17 @@ func (c *Client) GetInterfaceStatus(ctx context.Context, ifaces ...string) (stat
 		httpc.NewWithClient("GET", url, c.Client()).
 			ParseJSON(res),
 	)
+	if len(ifaces) > 1 {
+		req = req.QueryParams(httpc.Params{
+			gpapi.IfacesQueryParam: strings.Join(ifaces, ","),
+		})
+	}
 	err = req.RunWithContext(ctx)
 	if err != nil {
+		if res.Error != "" {
+			err = fmt.Errorf("%d: %s", res.StatusCode, res.Error)
+		}
 		return nil, lastWriteout, err
-	}
-
-	switch res.StatusCode {
-	case http.StatusInternalServerError:
-		return nil, lastWriteout, fmt.Errorf("%d: %s", res.StatusCode, res.Error)
 	}
 
 	return res.Statuses, res.LastWriteout, nil

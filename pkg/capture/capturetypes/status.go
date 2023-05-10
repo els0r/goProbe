@@ -57,10 +57,10 @@ func add(a, b *CaptureStats) {
 	a.Dropped += b.Dropped
 }
 
-// sub is a convenience method to total capture stats. This is relevant in the scope of
+// SubStats is a convenience method to total capture stats. This is relevant in the scope of
 // subtracting statistics from the two directions. The result of the subtraction is written back
 // to a to reduce allocations
-func Sub(a, b *CaptureStats) {
+func SubStats(a, b *CaptureStats) {
 	if a == nil || b == nil {
 		return
 	}
