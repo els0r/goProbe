@@ -20,14 +20,14 @@ var tests = []struct {
 	{"missing API port", true},
 	{"insecure API key", true},
 	{"faulty json", true},
-	{"empty DB path", true},
+	// this is ok, since the default DB path is assigned
+	{"empty DB path", false},
 	{"broken interface config", true},
 	{"negative timeout", true},
 	{"unknown encoder", true},
 }
 
 func TestValidate(t *testing.T) {
-
 	// run tests
 	for i, test := range tests {
 		// run each case as a sub test

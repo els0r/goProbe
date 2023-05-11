@@ -1,5 +1,6 @@
 {
   "db": {
+    "encoder_type": "lz4",
     "path": "/usr/local/goProbe/db"
   },
   "interfaces": {
@@ -20,6 +21,5 @@
       "registry": "192.168.1.1:5000",
       "probe_identifier": "test_probe"
     }
-  },
-  "encoder_type": "lz4"
+  }
 }

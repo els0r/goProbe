@@ -38,9 +38,6 @@ func WithExternal() Option { return func(a *Args) { a.External = true } }
 // WithSortAscending sorts rows ascending
 func WithSortAscending() Option { return func(a *Args) { a.SortAscending = true } }
 
-// WithOutput sets the output to (a) file(s) other than stdout
-func WithOutput(o string) Option { return func(a *Args) { a.Output = o } }
-
 // WithList sets the list parameter (only lists interfaces)
 func WithList() Option { return func(a *Args) { a.List = true } }
 
@@ -55,9 +52,6 @@ func WithResolveTimeout(t time.Duration) Option { return func(a *Args) { a.DNSRe
 
 // WithResolveRows sets the amount of rows for which lookups should be attempted
 func WithResolveRows(r int) Option { return func(a *Args) { a.DNSResolution.MaxRows = r } }
-
-// WithDBPath sets the location of the goDB
-func WithDBPath(p string) Option { return func(a *Args) { a.DBPath = p } }
 
 // WithMaxMemPct is an advanced parameter to restrict system memory usage to a fixed percentage of the available memory during query processing
 func WithMaxMemPct(m int) Option { return func(a *Args) { a.MaxMemPct = m } }

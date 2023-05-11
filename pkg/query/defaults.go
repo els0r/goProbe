@@ -3,12 +3,13 @@ package query
 import (
 	"time"
 
+	"github.com/els0r/goProbe/pkg/defaults"
 	"github.com/els0r/goProbe/pkg/results"
 )
 
 // Defaults for query arguments
 var (
-	DefaultDBPath         = "/usr/local/goProbe/db"
+	DefaultDBPath         = defaults.DBPath
 	DefaultFormat         = "txt"
 	DefaultIn             = false
 	DefaultMaxMemPct      = 60
@@ -16,7 +17,7 @@ var (
 	DefaultOut            = false
 	DefaultResolveRows    = 25
 	DefaultResolveTimeout = 1 * time.Second
-	DefaultQueryTimeout   = 0 * time.Second
+	DefaultQueryTimeout   = defaults.QueryTimeout
 	DefaultSortBy         = "bytes"
 )
 

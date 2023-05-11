@@ -218,7 +218,7 @@ func (h *Handler) HandleWriteouts() <-chan struct{} {
 
 				packetsDropped := 0
 				if taggedMap.Stats.CaptureStats != nil {
-					packetsDropped = taggedMap.Stats.PacketsDropped
+					packetsDropped = taggedMap.Stats.Dropped
 				}
 
 				// Write to database, update summary

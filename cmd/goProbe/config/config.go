@@ -19,6 +19,7 @@ import (
 	"os"
 	"sync"
 
+	"github.com/els0r/goProbe/pkg/defaults"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 )
 
@@ -38,11 +39,11 @@ type validator interface {
 // Config stores goProbe's configuration
 type Config struct {
 	sync.Mutex
-	DB          DBConfig  `json:"db"`
-	Interfaces  Ifaces    `json:"interfaces"`
-	SyslogFlows bool      `json:"syslog_flows"`
-	Logging     LogConfig `json:"logging"`
-	API         APIConfig `json:"api"`
+	DB          DBConfig   `json:"db"`
+	Interfaces  Ifaces     `json:"interfaces"`
+	SyslogFlows bool       `json:"syslog_flows"`
+	Logging     LogConfig  `json:"logging"`
+	API         *APIConfig `json:"api"`
 }
 
 type DBConfig struct {
@@ -75,9 +76,6 @@ type LogConfig struct {
 	Destination string `json:"destination"`
 	Level       string `json:"level"`
 	Encoding    string `json:"encoding"`
-
-	DevelopmentMode bool `json:"developmentMode,omitempty"`
-	StackTraces     bool `json:"stackTraces,omitempty"`
 }
 
 // APIConfig stores goProbe's API configuration
@@ -103,6 +101,7 @@ type DiscoveryConfig struct {
 func New() *Config {
 	return &Config{
 		DB: DBConfig{
+			Path:        defaults.DBPath,
 			EncoderType: "lz4",
 		},
 		Interfaces: make(Ifaces),
@@ -112,7 +111,7 @@ func New() *Config {
 			Level:    "info",
 		},
 		// default API config
-		API: APIConfig{
+		API: &APIConfig{
 			Host: "localhost",
 			Port: "6060",
 		},

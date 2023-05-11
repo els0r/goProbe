@@ -17,6 +17,13 @@ const (
 
 const DefaultTimeOutputFormat = "2006-01-02 15:04:05"
 
+type LabelSelector struct {
+	Timestamp bool
+	Iface     bool
+	Hostname  bool
+	HostID    bool
+}
+
 type Width = int
 
 const (

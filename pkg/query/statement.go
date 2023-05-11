@@ -14,13 +14,12 @@ type Statement struct {
 	// Ifaces holds hte list of all interfaces that should be queried
 	Ifaces []string `json:"ifaces"`
 
-	HasAttrIface bool `json:"-"`
-	HasAttrTime  bool `json:"-"`
+	LabelSelector types.LabelSelector `json:"-"`
 
 	// needed for feedback to user
 	QueryType string `json:"query_type"`
 
-	Attributes []types.Attribute `json:"attributes"`
+	attributes []types.Attribute `json:"-"`
 	Condition  string            `json:"condition,omitempty"`
 
 	// which direction is added
@@ -41,19 +40,11 @@ type Statement struct {
 	Caller string `json:"caller,omitempty"` // who called the query
 
 	// resolution parameters (probably part of table printer)
-	DNSResolution struct {
-		Enabled bool          `json:"enabled,omitempty"`
-		Timeout time.Duration `json:"dns_timeout,omitempty"`
-		MaxRows int           `json:"max_rows,omitempty"`
-	} `json:"dns_resolution,omitempty"`
+	DNSResolution DNSResolution
 
 	// file system
-	DBPath    string `json:"db"`
-	MaxMemPct int    `json:"-"`
-	LowMem    bool   `json:"low_mem,omitempty"`
-
-	// error during execution
-	Err error `json:"error,omitempty"`
+	MaxMemPct int  `json:"-"`
+	LowMem    bool `json:"low_mem,omitempty"`
 }
 
 // String prints the executable statement in human-readable form
@@ -66,8 +57,7 @@ func (s *Statement) String() string {
 		str += fmt.Sprintf(", condition: %s", s.Condition)
 	}
 	tFrom, tTo := time.Unix(s.First, 0), time.Unix(s.Last, 0)
-	str += fmt.Sprintf(", db: %s, limit: %d, from: %s, to: %s",
-		s.DBPath,
+	str += fmt.Sprintf(", limit: %d, from: %s, to: %s",
 		s.NumResults,
 		tFrom.Format(time.ANSIC),
 		tTo.Format(time.ANSIC),

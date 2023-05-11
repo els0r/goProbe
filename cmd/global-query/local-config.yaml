@@ -1,0 +1,9 @@
+logging:
+  level: debug
+  encoding: logfmt
+hosts:
+  resolver:
+    type: string
+querier:
+  type: api
+  max_concurrent: 64

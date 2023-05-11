@@ -49,7 +49,7 @@ func TestMockPacketCapturePerformance(t *testing.T) {
 	})
 
 	mockC.process()
-	for _, v := range mockC.flowLog.flowMap {
-		fmt.Printf("Packets processed after %v: %d (%v/pkt)\n", runtime, v.packetsSent, runtime/time.Duration(v.packetsSent))
+	for _, v := range mockC.flowLog.Flows() {
+		fmt.Printf("Packets processed after %v: %d (%v/pkt)\n", runtime, v.PacketsSent(), runtime/time.Duration(v.PacketsSent()))
 	}
 }

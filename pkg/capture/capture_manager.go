@@ -14,10 +14,12 @@ package capture
 import (
 	"context"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
 	"github.com/els0r/goProbe/cmd/goProbe/config"
+	"github.com/els0r/goProbe/pkg/capture/capturetypes"
 	"github.com/els0r/goProbe/pkg/logging"
 	"github.com/els0r/goProbe/pkg/types/hashmap"
 )
@@ -38,8 +40,8 @@ const (
 // RotateAll() and Update().
 type TaggedAggFlowMap struct {
 	Map   *hashmap.AggFlowMap
-	Stats Stats  `json:"stats,omitempty"`
-	Iface string `json:"iface"`
+	Stats capturetypes.PacketStats `json:"stats,omitempty"`
+	Iface string                   `json:"iface"`
 }
 
 // Manager manages a set of Capture instances.
@@ -239,20 +241,37 @@ func (cm *Manager) Update(ifaces config.Ifaces, returnChan chan TaggedAggFlowMap
 
 }
 
-// StatusAll returns the statuses of all managed Capture instances.
-func (cm *Manager) StatusAll() map[string]Status {
+// Status returns the statuses of all interfaces provided in the arguments
+func (cm *Manager) Status(ifaces ...string) map[string]capturetypes.InterfaceStatus {
 	statusmapMutex := sync.Mutex{}
-	statusmap := make(map[string]Status)
+	statusmap := make(map[string]capturetypes.InterfaceStatus)
 
 	var rg RunGroup
-	for iface, mc := range cm.capturesCopy() {
-		iface, mc := iface, mc
-		rg.Run(func() {
-			status := mc.capture.Status()
-			statusmapMutex.Lock()
-			statusmap[iface] = status
-			statusmapMutex.Unlock()
-		})
+	cmCopy := cm.capturesCopy()
+
+	if len(ifaces) > 0 {
+		for _, iface := range ifaces {
+			iface := iface
+			mc, exists := cmCopy[iface]
+			if exists {
+				rg.Run(func() {
+					status := mc.capture.Status()
+					statusmapMutex.Lock()
+					statusmap[iface] = status
+					statusmapMutex.Unlock()
+				})
+			}
+		}
+	} else {
+		for iface, mc := range cmCopy {
+			iface, mc := iface, mc
+			rg.Run(func() {
+				status := mc.capture.Status()
+				statusmapMutex.Lock()
+				statusmap[iface] = status
+				statusmapMutex.Unlock()
+			})
+		}
 	}
 	rg.Wait()
 
@@ -260,30 +279,59 @@ func (cm *Manager) StatusAll() map[string]Status {
 }
 
 // ActiveFlows returns a copy of the current in-memory flow map. If iface is "all", flows for every interface are returned
-func (cm *Manager) ActiveFlows(iface string) (map[string]*FlowLog, error) {
-	var rg RunGroup
-
-	ifaceFlows := make(map[string]*FlowLog)
+func (cm *Manager) ActiveFlows(ifaces ...string) map[string]capturetypes.FlowInfos {
+	ifaceFlows := make(map[string]*capturetypes.FlowLog)
 	ifaceFlowsMutex := sync.Mutex{}
 
-	for i, mc := range cm.capturesCopy() {
-		i, mc := i, mc
-
-		if iface == i || iface == "all" {
+	cmCopy := cm.capturesCopy()
+	var rg RunGroup
+	if len(ifaces) > 0 {
+		for _, iface := range ifaces {
+			iface := iface
+			mc, exists := cmCopy[iface]
+			if exists {
+				rg.Run(func() {
+					f := mc.capture.Flows()
+					ifaceFlowsMutex.Lock()
+					ifaceFlows[iface] = f
+					ifaceFlowsMutex.Unlock()
+				})
+			}
+		}
+	} else {
+		for iface, mc := range cmCopy {
+			iface, mc := iface, mc
 			rg.Run(func() {
 				f := mc.capture.Flows()
 				ifaceFlowsMutex.Lock()
-				ifaceFlows[i] = f
+				ifaceFlows[iface] = f
 				ifaceFlowsMutex.Unlock()
 			})
 		}
 	}
 	rg.Wait()
 
-	if len(ifaceFlows) == 0 {
-		return nil, fmt.Errorf("no active flows found for interface %q", iface)
+	// convert data
+	var ifaceFlowInfos = make(map[string]capturetypes.FlowInfos, len(ifaceFlows))
+	for iface, flowLog := range ifaceFlows {
+		var flowInfos []capturetypes.FlowInfo
+		for _, flow := range flowLog.Flows() {
+			flowInfos = append(flowInfos, capturetypes.FlowInfo{
+				Idle:                    flow.HasBeenIdle(),
+				DirectionConfidenceHigh: flow.DirectionConfidenceHigh(),
+				Flow:                    flow.ToExtendedRow(),
+			})
+		}
+
+		// sort by packets, descending
+		sort.SliceStable(flowInfos, func(i, j int) bool {
+			return flowInfos[i].Flow.Counters.SumBytes() > flowInfos[j].Flow.Counters.SumBytes()
+		})
+
+		ifaceFlowInfos[iface] = flowInfos
 	}
-	return ifaceFlows, nil
+
+	return ifaceFlowInfos
 }
 
 // ErrorsAll returns the error maps of all managed Capture instances.

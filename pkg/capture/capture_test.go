@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/els0r/goProbe/pkg/capture/capturetypes"
 	"github.com/fako1024/slimcap/capture"
 	"github.com/fako1024/slimcap/capture/afpacket/afring"
 	"github.com/fako1024/slimcap/link"
@@ -72,11 +73,11 @@ func newMockCapture(src capture.SourceZeroCopy) *Capture {
 		mutex:         sync.Mutex{},
 		cmdChan:       make(chan captureCommand),
 		captureErrors: make(chan error),
-		lastRotationStats: Stats{
-			CaptureStats: &CaptureStats{},
+		lastRotationStats: capturetypes.PacketStats{
+			CaptureStats: &capturetypes.CaptureStats{},
 		},
 		rotationState: newRotationState(),
-		flowLog:       NewFlowLog(),
+		flowLog:       capturetypes.NewFlowLog(),
 		errMap:        make(map[string]int),
 		ctx:           context.Background(),
 		captureHandle: src,

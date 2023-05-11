@@ -185,7 +185,7 @@ func testWorkload(t *testing.T, c testCase, dryRun bool) {
 			types.SipAttribute{},
 			types.DipAttribute{},
 			types.DportAttribute{},
-			types.ProtoAttribute{}}, nil, false, false),
+			types.ProtoAttribute{}}, nil, types.LabelSelector{}),
 	)
 	require.Nil(t, err)
 
