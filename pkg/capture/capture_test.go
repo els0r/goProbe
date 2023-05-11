@@ -33,6 +33,7 @@ func testDeadlock(t *testing.T, maxPkts int) {
 				mockSrc.AddPacket(testPacket)
 			}
 			mockSrc.Done()
+			mockSrc.ForceBlockRelease()
 		}()
 	} else {
 		for mockSrc.CanAddPackets() {
@@ -71,12 +72,14 @@ func newMockCapture(src capture.SourceZeroCopy) *Capture {
 	return &Capture{
 		iface:         src.Link().Name,
 		mutex:         sync.Mutex{},
+		stateMutex:    sync.RWMutex{},
 		cmdChan:       make(chan captureCommand),
 		captureErrors: make(chan error),
 		lastRotationStats: capturetypes.PacketStats{
 			CaptureStats: &capturetypes.CaptureStats{},
 		},
 		rotationState: newRotationState(),
+		closeState:    make(chan struct{}, 1),
 		flowLog:       capturetypes.NewFlowLog(),
 		errMap:        make(map[string]int),
 		ctx:           context.Background(),

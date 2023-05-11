@@ -241,6 +241,29 @@ func (cm *Manager) Update(ifaces config.Ifaces, returnChan chan TaggedAggFlowMap
 
 }
 
+// StateAll returns the states of all managed Capture instances (without touching
+// the capture stats)
+// func (cm *Manager) StateAll() map[string]capturetypes.State {
+// 	statemapMutex := sync.Mutex{}
+// 	statemap := make(map[string]capturetypes.State)
+
+// 	var rg RunGroup
+// 	for iface, mc := range cm.capturesCopy() {
+// 		iface, mc := iface, mc
+// 		rg.Run(func() {
+// 			mc.capture.mutex.Lock()
+// 			state := mc.capture.state
+// 			mc.capture.mutex.Unlock()
+// 			statemapMutex.Lock()
+// 			statemap[iface] = state
+// 			statemapMutex.Unlock()
+// 		})
+// 	}
+// 	rg.Wait()
+
+// 	return statemap
+// }
+
 // Status returns the statuses of all interfaces provided in the arguments
 func (cm *Manager) Status(ifaces ...string) map[string]capturetypes.InterfaceStatus {
 	statusmapMutex := sync.Mutex{}
