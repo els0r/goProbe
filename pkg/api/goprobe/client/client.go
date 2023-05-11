@@ -3,6 +3,7 @@ package client
 import (
 	"io"
 	"os"
+	"path/filepath"
 
 	"github.com/els0r/goProbe/pkg/api/client"
 	gpapi "github.com/els0r/goProbe/pkg/api/goprobe"
@@ -32,6 +33,7 @@ func NewFromReader(r io.Reader) (*Client, error) {
 	return NewFromConfig(cfg), nil
 }
 
+// New creates a new client instance
 func New(addr string, opts ...client.Option) *Client {
 	opts = append(opts, client.WithName(clientName))
 	return &Client{
@@ -57,11 +59,15 @@ func NewFromConfig(cfg *Config) *Client {
 
 // NewFromConfigFile creates the client based on configuration from a file
 func NewFromConfigFile(path string) (*Client, error) {
-	f, err := os.Open(path)
+	f, err := os.Open(filepath.Clean(path))
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer func() {
+		if cerr := f.Close(); cerr != nil && err == nil {
+			err = cerr
+		}
+	}()
 
 	return NewFromReader(f)
 }

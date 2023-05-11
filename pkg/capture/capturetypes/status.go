@@ -8,7 +8,7 @@ const (
 	StateInitializing State = iota + 1
 	// StateCapturing means that the capture is actively capturing packets
 	StateCapturing
-	// StateClose means that the capture is fully terminating and it's held resources are
+	// StateClosing means that the capture is fully terminating and it's held resources are
 	// cleaned up
 	StateClosing
 	// StateError means that the capture has hit the error threshold on the interface (set by ErrorThreshold)
@@ -30,26 +30,27 @@ func (cs State) String() string {
 	}
 }
 
-// Stats stores the packet statistics of the capture
+// PacketStats stores the packet statistics of the capture
 type PacketStats struct {
 	*CaptureStats
 }
 
-// Status stores both the capture's state and statistics
+// InterfaceStatus stores both the capture's state and statistics
 type InterfaceStatus struct {
 	State       State       `json:"state"`
 	PacketStats PacketStats `json:"packet_stats"`
 }
 
+// CaptureStats stores the capture stores its statistics
 type CaptureStats struct {
 	Received int `json:"received"`
 	Dropped  int `json:"dropped"`
 }
 
-// add is a convenience method to total capture stats. This is relevant in the scope of
+// AddStats is a convenience method to total capture stats. This is relevant in the scope of
 // adding statistics from the two directions. The result of the addition is written back
 // to a to reduce allocations
-func add(a, b *CaptureStats) {
+func AddStats(a, b *CaptureStats) {
 	if a == nil || b == nil {
 		return
 	}

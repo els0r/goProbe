@@ -17,7 +17,7 @@ type Config struct {
 }
 
 var (
-	ErrorEmptyAddress = errors.New("no endpoint address (host:port) provided")
+	ErrorEmptyAddress = errors.New("no endpoint address (host:port) provided") // ErrorEmptyAddress : Denotes that an empty config has been provided
 )
 
 // Validate validates the configuration

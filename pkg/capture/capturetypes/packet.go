@@ -176,18 +176,16 @@ func classifyByPorts(packet *GPPacket) Direction {
 		// Destination port is not ephemeral -> Probably this is client -> server
 		if !isEphemeralPort(dport) {
 			return DirectionRemains
+		}
 
-			// Destination port is ephemeral as well
-		} else {
+		// Destination port is ephemeral as well
+		// If destination port is smaller than the source port -> Probably this is client -> server
+		if dport < sport {
+			return DirectionRemains
 
-			// If destination port is smaller than the source port -> Probably this is client -> server
-			if dport < sport {
-				return DirectionRemains
-
-				// If source port is smaller than the destination port -> Probably this is server -> client
-			} else if sport < dport {
-				return DirectionReverts
-			}
+			// If source port is smaller than the destination port -> Probably this is server -> client
+		} else if sport < dport {
+			return DirectionReverts
 		}
 
 		// Source port is not ephemeral
@@ -196,18 +194,16 @@ func classifyByPorts(packet *GPPacket) Direction {
 		// Destination port is ephemeral -> Probably this is server -> client
 		if isEphemeralPort(dport) {
 			return DirectionReverts
+		}
 
-			// Destination port is not ephemeral either
-		} else {
+		// Destination port is not ephemeral either
+		// If source port is smaller than the destination port -> Probably this is server -> client
+		if sport < dport {
+			return DirectionReverts
 
-			// If source port is smaller than the destination port -> Probably this is server -> client
-			if sport < dport {
-				return DirectionReverts
-
-				// If destination port is smaller than the source  port -> Probably this is client -> server
-			} else if dport < sport {
-				return DirectionRemains
-			}
+			// If destination port is smaller than the source  port -> Probably this is client -> server
+		} else if dport < sport {
+			return DirectionRemains
 		}
 	}
 
