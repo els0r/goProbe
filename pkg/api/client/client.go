@@ -70,6 +70,10 @@ func WithName(name string) Option {
 	}
 }
 
+// TODO: support for unix sockets
+// TODO: DELETE for config
+// TODO: get rid of the Responses when returning data from the client (remove the HTTP part)
+
 const (
 	defaultRequestTimeout = 30 * time.Second
 	defaultClientName     = "default-client"

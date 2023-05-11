@@ -6,6 +6,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/els0r/goProbe/pkg/capture/capturetypes"
 )
 
 func TestLowTrafficDeadlock(t *testing.T) {
@@ -26,11 +28,11 @@ func testDeadlock(t *testing.T, maxPkts int) {
 		mutex:         sync.Mutex{},
 		cmdChan:       make(chan captureCommand),
 		captureErrors: make(chan error),
-		lastRotationStats: Stats{
-			CaptureStats: &CaptureStats{},
+		lastRotationStats: capturetypes.PacketStats{
+			CaptureStats: &capturetypes.CaptureStats{},
 		},
 		rotationState: newRotationState(),
-		flowLog:       NewFlowLog(),
+		flowLog:       capturetypes.NewFlowLog(),
 		errMap:        make(map[string]int),
 		ctx:           ctx,
 		captureHandle: mockSrc,
@@ -74,11 +76,11 @@ func TestMockPacketCapturePerformance(t *testing.T) {
 		mutex:         sync.Mutex{},
 		cmdChan:       make(chan captureCommand),
 		captureErrors: make(chan error),
-		lastRotationStats: Stats{
-			CaptureStats: &CaptureStats{},
+		lastRotationStats: capturetypes.PacketStats{
+			CaptureStats: &capturetypes.CaptureStats{},
 		},
 		rotationState: newRotationState(),
-		flowLog:       NewFlowLog(),
+		flowLog:       capturetypes.NewFlowLog(),
 		errMap:        make(map[string]int),
 		ctx:           ctx,
 		captureHandle: mockSrc,
@@ -90,7 +92,7 @@ func TestMockPacketCapturePerformance(t *testing.T) {
 	})
 
 	mockC.process()
-	for _, v := range mockC.flowLog.flowMap {
-		fmt.Printf("Packets processed after %v: %d (%v/pkt)\n", runtime, v.packetsRcvd, runtime/time.Duration(v.packetsRcvd))
+	for _, v := range mockC.flowLog.Flows() {
+		fmt.Printf("Packets processed after %v: %d (%v/pkt)\n", runtime, v.PacketsRcvd(), runtime/time.Duration(v.PacketsRcvd()))
 	}
 }

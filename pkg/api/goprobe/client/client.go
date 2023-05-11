@@ -1,15 +1,12 @@
 package client
 
 import (
-	"context"
 	"io"
 	"os"
+	"path/filepath"
 
 	"github.com/els0r/goProbe/pkg/api/client"
 	gpapi "github.com/els0r/goProbe/pkg/api/goprobe"
-	"github.com/els0r/goProbe/pkg/query"
-	"github.com/els0r/goProbe/pkg/results"
-	"github.com/fako1024/httpc"
 	"gopkg.in/yaml.v3"
 )
 
@@ -36,6 +33,7 @@ func NewFromReader(r io.Reader) (*Client, error) {
 	return NewFromConfig(cfg), nil
 }
 
+// New creates a new client instance
 func New(addr string, opts ...client.Option) *Client {
 	opts = append(opts, client.WithName(clientName))
 	return &Client{
@@ -61,47 +59,15 @@ func NewFromConfig(cfg *Config) *Client {
 
 // NewFromConfigFile creates the client based on configuration from a file
 func NewFromConfigFile(path string) (*Client, error) {
-	f, err := os.Open(path)
+	f, err := os.Open(filepath.Clean(path))
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer func() {
+		if cerr := f.Close(); cerr != nil && err == nil {
+			err = cerr
+		}
+	}()
 
 	return NewFromReader(f)
-}
-
-// Run implements the query.Runner interface
-func (c *Client) Run(ctx context.Context, args *query.Args) (*results.Result, error) {
-	return c.Query(ctx, args)
-}
-
-// Query runs a query on the API endpoint
-func (c *Client) Query(ctx context.Context, args *query.Args) (*results.Result, error) {
-	// use a copy of the arguments, since some fields are modified by the client
-	queryArgs := *args
-	// whatever happens, the results are expected to be returned in json
-	queryArgs.Format = "json"
-
-	if queryArgs.Caller == "" {
-		queryArgs.Caller = clientName
-	}
-
-	// we need more results before truncating
-	if args.NumResults < query.DefaultNumResults {
-		args.NumResults = query.DefaultNumResults
-	}
-
-	var res = new(results.Result)
-
-	req := c.Modify(ctx,
-		httpc.NewWithClient("POST", c.NewURL(gpapi.QueryRoute), c.Client()).
-			EncodeJSON(queryArgs).
-			ParseJSON(res),
-	)
-	err := req.RunWithContext(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return res, nil
 }
