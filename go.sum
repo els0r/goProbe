@@ -67,10 +67,8 @@ github.com/envoyproxy/go-control-plane v0.9.9-0.20201210154907-fd9021fe5dad/go.m
 github.com/envoyproxy/protoc-gen-validate v0.1.0/go.mod h1:iSmxcyjqTsJpI2R4NaDN7+kN2VEUnK/pcBlmesArF7c=
 github.com/fako1024/httpc v1.0.14 h1:1WDlT2p7tlfGBhkZXgG+VbIwFx5nVql2ht+yn5zMnmI=
 github.com/fako1024/httpc v1.0.14/go.mod h1:dqjklLvXS72dQ7sFxWi0A9te7JdzG2BhBXDe2OvjwvU=
-github.com/fako1024/slimcap v0.0.0-20230418071241-4120e7fd799c h1:jrdfsK0Bi/Saj8mbmkdZAPC9QsRZDlp1cBJtGBOF8+s=
-github.com/fako1024/slimcap v0.0.0-20230418071241-4120e7fd799c/go.mod h1:yux7ThjYmysyyk1YefBe3Eyzchp8dG+w5afA4Nje/dE=
-github.com/fako1024/slimcap v0.0.0-20230511135344-3b7400ad1a34 h1:vybbsChAENMvg4N6XyvgT7zQjVH1UQKuPaAUjrfGeYY=
-github.com/fako1024/slimcap v0.0.0-20230511135344-3b7400ad1a34/go.mod h1:yux7ThjYmysyyk1YefBe3Eyzchp8dG+w5afA4Nje/dE=
+github.com/fako1024/slimcap v0.0.0-20230512072549-58c6d54e1823 h1:LBGWdkY1M8sPsD8tWYjPJUgV3GGbu3fO59rB5zB2ijU=
+github.com/fako1024/slimcap v0.0.0-20230512072549-58c6d54e1823/go.mod h1:yux7ThjYmysyyk1YefBe3Eyzchp8dG+w5afA4Nje/dE=
 github.com/fatih/color v1.13.0 h1:8LOYc1KYPPmyKMuN8QV2DNRWNbLo6LZ0iLs8+mlH53w=
 github.com/fatih/color v1.13.0/go.mod h1:kLAiJbzzSOZDVNGyDpeOxJ47H46qBXwg5ILebYFFOfk=
 github.com/felixge/httpsnoop v1.0.2 h1:+nS9g82KMXccJ/wp0zyRW9ZBHFETmMGtkk+2CTTrW4o=
