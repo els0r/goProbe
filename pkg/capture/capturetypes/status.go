@@ -33,6 +33,7 @@ func (cs State) String() string {
 // PacketStats stores the packet statistics of the capture
 type PacketStats struct {
 	*CaptureStats
+	PacketsCapturedOverall int
 }
 
 // InterfaceStatus stores both the capture's state and statistics

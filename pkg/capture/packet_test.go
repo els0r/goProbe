@@ -97,7 +97,7 @@ func TestPopulation(t *testing.T) {
 			testPacket := params.genDummyPacket(0)
 			testHash, IsIPv4 := params.genEPHash()
 			var pkt capturetypes.GPPacket
-			require.Nil(t, populate(&pkt, testPacket), "population error")
+			require.Nil(t, Populate(&pkt, testPacket), "population error")
 			require.Equal(t, testHash, pkt.EPHash)
 			require.Equal(t, IsIPv4, pkt.IsIPv4)
 		})
@@ -127,7 +127,7 @@ func BenchmarkPopulation(b *testing.B) {
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
 				var pkt capturetypes.GPPacket
-				populate(&pkt, testPacket)
+				Populate(&pkt, testPacket)
 				doSomethingWithPacket(&pkt)
 			}
 		})
@@ -235,7 +235,7 @@ func (p testParams) genDummyPacket(pktType capture.PacketType) capture.Packet {
 		copy(data[ipv6.HeaderLen+2:ipv6.HeaderLen+4], EPHash[32:34])
 	}
 
-	return capture.NewIPPacket(nil, data, pktType, 128)
+	return capture.NewIPPacket(nil, data, pktType, 128, 0)
 }
 
 type dummyPacket struct {

@@ -48,8 +48,9 @@ type TaggedAggFlowMap struct {
 // Each interface can be associated with up to one Capture.
 type Manager struct {
 	sync.Mutex
-	captures map[string]*ManagedCapture
-	ctx      context.Context
+	captures     map[string]*ManagedCapture
+	ctx          context.Context
+	sourceInitFn sourceInitFn
 }
 
 type ManagedCapture struct {
@@ -60,9 +61,16 @@ type ManagedCapture struct {
 // NewManager creates a new Manager
 func NewManager(ctx context.Context) *Manager {
 	return &Manager{
-		captures: make(map[string]*ManagedCapture),
-		ctx:      ctx,
+		captures:     make(map[string]*ManagedCapture),
+		ctx:          ctx,
+		sourceInitFn: defaultSourceInitFn,
 	}
+}
+
+// SetSourceInitFn sets a custom function used to initialize a new capture
+func (cm *Manager) SetSourceInitFn(fn sourceInitFn) *Manager {
+	cm.sourceInitFn = fn
+	return cm
 }
 
 func (cm *Manager) ifaceNames() []string {
@@ -92,7 +100,7 @@ func (cm *Manager) enable(ifaces map[string]config.CaptureConfig) {
 			// capture manager solely decides when it should be stopped
 			capCtx, cancel := context.WithCancel(context.Background())
 
-			capture := NewCapture(capCtx, iface, config)
+			capture := NewCapture(capCtx, iface, config).SetSourceInitFn(cm.sourceInitFn)
 
 			cm.setCapture(iface, &ManagedCapture{capture: capture, cancel: cancel})
 
@@ -232,6 +240,29 @@ func (cm *Manager) Update(ifaces config.Ifaces, returnChan chan TaggedAggFlowMap
 	logger.With("elapsed", elapsed.String()).Debug("updated interface list")
 
 }
+
+// StateAll returns the states of all managed Capture instances (without touching
+// the capture stats)
+// func (cm *Manager) StateAll() map[string]capturetypes.State {
+// 	statemapMutex := sync.Mutex{}
+// 	statemap := make(map[string]capturetypes.State)
+
+// 	var rg RunGroup
+// 	for iface, mc := range cm.capturesCopy() {
+// 		iface, mc := iface, mc
+// 		rg.Run(func() {
+// 			mc.capture.mutex.Lock()
+// 			state := mc.capture.state
+// 			mc.capture.mutex.Unlock()
+// 			statemapMutex.Lock()
+// 			statemap[iface] = state
+// 			statemapMutex.Unlock()
+// 		})
+// 	}
+// 	rg.Wait()
+
+// 	return statemap
+// }
 
 // Status returns the statuses of all interfaces provided in the arguments
 func (cm *Manager) Status(ifaces ...string) map[string]capturetypes.InterfaceStatus {

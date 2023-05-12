@@ -137,6 +137,10 @@ func (f *GPFlow) PacketsRcvd() uint64 {
 	return f.packetsRcvd
 }
 
+func (f *GPFlow) PacketsSent() uint64 {
+	return f.packetsSent
+}
+
 // MarshalJSON implements the Marshaler interface for a flow
 func (f *GPFlow) MarshalJSON() ([]byte, error) {
 	return jsoniter.Marshal(f.ToExtendedRow())

@@ -15,7 +15,7 @@ const (
 )
 
 // populate takes a raw packet and populates a GPPacket structure from it.
-func populate(p *capturetypes.GPPacket, pkt capture.Packet) error {
+func Populate(p *capturetypes.GPPacket, pkt capture.Packet) error {
 	// Extract the IP layer of the packet
 	srcPacket := pkt.IPLayer()
 
@@ -51,7 +51,7 @@ func populate(p *capturetypes.GPPacket, pkt capture.Packet) error {
 			// return decoding error if the packet carries anything other than the
 			// first fragment, i.e. if the packet lacks a transport layer header
 			if fragOffset != 0 {
-				return fmt.Errorf("Fragmented IP packet: offset: %d flags: %d", fragOffset, fragBits)
+				return fmt.Errorf("fragmented IP packet: offset: %d flags: %d", fragOffset, fragBits)
 			}
 		}
 
@@ -74,6 +74,9 @@ func populate(p *capturetypes.GPPacket, pkt capture.Packet) error {
 			}
 
 			if protocol == capturetypes.TCP {
+				if len(srcPacket) < ipv4.HeaderLen+13 {
+					return fmt.Errorf("tcp packet too short")
+				}
 				p.AuxInfo = srcPacket[ipv4.HeaderLen+13] // store TCP flags
 			}
 		} else if protocol == capturetypes.ICMP {
@@ -110,6 +113,9 @@ func populate(p *capturetypes.GPPacket, pkt capture.Packet) error {
 			}
 
 			if protocol == capturetypes.TCP {
+				if len(srcPacket) < ipv6.HeaderLen+13 {
+					return fmt.Errorf("tcp packet too short")
+				}
 				p.AuxInfo = srcPacket[ipv6.HeaderLen+13] // store TCP flags
 			}
 		} else if protocol == capturetypes.ICMPv6 {
