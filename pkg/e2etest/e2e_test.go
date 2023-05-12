@@ -42,7 +42,10 @@ import (
 	"github.com/fako1024/slimcap/link"
 )
 
-const testDataPath = "testdata"
+const (
+	testDataPath        = "testdata"
+	defaultPcapTestFile = "default.pcap.gz"
+)
 
 //go:embed testdata/*
 var pcaps embed.FS
@@ -56,7 +59,7 @@ var defaultCaptureConfig = config.CaptureConfig{
 var externalPCAPPath string
 
 func TestE2EBasic(t *testing.T) {
-	pcapData, err := pcaps.ReadFile(filepath.Join(testDataPath, "default.pcap.gz"))
+	pcapData, err := pcaps.ReadFile(filepath.Join(testDataPath, defaultPcapTestFile))
 	require.Nil(t, err)
 
 	testE2E(t, pcapData)
@@ -67,7 +70,7 @@ func TestE2EMultipleIfaces(t *testing.T) {
 	// Load identical data several times
 	ifaceData := make([][]byte, 3)
 	for i := 0; i < len(ifaceData); i++ {
-		pcapData, err := pcaps.ReadFile(filepath.Join(testDataPath, "default.pcap.gz"))
+		pcapData, err := pcaps.ReadFile(filepath.Join(testDataPath, defaultPcapTestFile))
 		require.Nil(t, err)
 		ifaceData[i] = pcapData
 	}
