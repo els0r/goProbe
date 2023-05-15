@@ -55,7 +55,7 @@ type Capture struct {
 	stats capturetypes.CaptureStats
 
 	// Rotation state synchronization
-	lock *captureLock
+	capLock *captureLock
 
 	// Logged flows since creation of the capture (note that some
 	// flows are retained even after Rotate has been called)
@@ -70,12 +70,12 @@ type Capture struct {
 	errCount int
 }
 
-// NewCapture creates a new Capture associated with the given iface.
-func NewCapture(iface string, config config.CaptureConfig) *Capture {
+// newCapture creates a new Capture associated with the given iface.
+func newCapture(iface string, config config.CaptureConfig) *Capture {
 	return &Capture{
 		iface:   iface,
 		config:  config,
-		lock:    newCaptureLock(),
+		capLock: newCaptureLock(),
 		flowLog: capturetypes.NewFlowLog(),
 		errMap:  make(map[string]int),
 		// sourceInitFn: defaultSourceInitFn,
@@ -92,7 +92,7 @@ func (c *Capture) Iface() string {
 	return c.iface
 }
 
-func (c *Capture) Run(ctx context.Context) (err error) {
+func (c *Capture) run(ctx context.Context) (err error) {
 
 	ctx = logging.WithFields(ctx, slog.String("iface", c.iface))
 	logger := logging.FromContext(ctx)
@@ -125,30 +125,30 @@ func logErrors(ctx context.Context, errsChan <-chan error) {
 	}
 }
 
-func (c *Capture) Lock() {
+func (c *Capture) lock() {
 
 	// Notify the capture that a rotation is about to begin, then unblock
 	// the capture potentially being in a blocking PPOLL syscall
 	// Channel has a depth of one and hence this push is non-blocking. Since
 	// we wait for confirmation there is no possibility of repeated attempts
 	// or race conditions
-	c.lock.request <- struct{}{}
+	c.capLock.request <- struct{}{}
 	if err := c.captureHandle.Unblock(); err != nil {
 		panic(fmt.Sprintf("unexpectedly failed to unblock capture handle, deadlock inevitable: %s", err))
 	}
 
 	// Wait for confirmation of reception from the processing routine, then
 	// commit the rotation
-	<-c.lock.confirm
+	<-c.capLock.confirm
 }
 
-func (c *Capture) Unlock() {
+func (c *Capture) unlock() {
 
 	// Signal that the rotation is complete, releasing the processing routine
-	c.lock.done <- struct{}{}
+	c.capLock.done <- struct{}{}
 }
 
-func (c *Capture) Close() error {
+func (c *Capture) close() error {
 	return c.captureHandle.Close()
 }
 
@@ -189,9 +189,9 @@ func (c *Capture) process(ctx context.Context) <-chan error {
 			select {
 
 			// Lock state synchronization
-			case <-c.lock.request:
-				c.lock.confirm <- struct{}{} // Confirm that process() is not processing
-				<-c.lock.done
+			case <-c.capLock.request:
+				c.capLock.confirm <- struct{}{} // Confirm that process() is not processing
+				<-c.capLock.done
 
 			// Normal processing
 			default:

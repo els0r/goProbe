@@ -115,12 +115,12 @@ func (cm *Manager) Status(ctx context.Context, ifaces ...string) map[string]capt
 				logger := logging.FromContext(runCtx)
 
 				// Lock the running capture and extract the status
-				mc.Lock()
+				mc.lock()
 
 				// Since the capture is locked we can safely extract the (capture) status
 				// from the individual interfaces (and unlock no matter what)
 				status, err := mc.status()
-				mc.Unlock()
+				mc.unlock()
 
 				if err != nil {
 					logger.Errorf("failed to get capture stats: %v", err)
@@ -164,8 +164,8 @@ func (cm *Manager) Update(ctx context.Context, ifaces config.Ifaces) {
 			runCtx := logging.WithFields(ctx, slog.String("iface", iface))
 			logger := logging.FromContext(runCtx)
 
-			cap := NewCapture(iface, ifaces[iface]).SetSourceInitFn(cm.sourceInitFn)
-			if err := cap.Run(runCtx); err != nil {
+			cap := newCapture(iface, ifaces[iface]).SetSourceInitFn(cm.sourceInitFn)
+			if err := cap.run(runCtx); err != nil {
 				logger.Errorf("failed to start capture: %s", err)
 				return
 			}
@@ -210,7 +210,7 @@ func (cm *Manager) Close(ctx context.Context, ifaces ...string) {
 				runCtx := logging.WithFields(ctx, slog.String("iface", iface))
 				logger := logging.FromContext(runCtx)
 
-				if err := mc.Close(); err != nil {
+				if err := mc.close(); err != nil {
 					logger.Errorf("failed to close capture: %s", err)
 					return
 				}
@@ -241,7 +241,7 @@ func (cm *Manager) rotate(ctx context.Context, writeoutChan chan<- capturetypes.
 				logger := logging.FromContext(runCtx)
 
 				// Lock the running capture and perform the rotation
-				mc.Lock()
+				mc.lock()
 
 				rotateResult := mc.rotate(runCtx)
 
@@ -251,7 +251,7 @@ func (cm *Manager) rotate(ctx context.Context, writeoutChan chan<- capturetypes.
 				if err != nil {
 					logger.Errorf("failed to get capture stats: %v", err)
 				}
-				mc.Unlock()
+				mc.unlock()
 
 				writeoutChan <- capturetypes.TaggedAggFlowMap{
 					Map:   rotateResult,

@@ -49,11 +49,15 @@ func TestMockPacketCapturePerformance(t *testing.T) {
 
 	runtime := 10 * time.Second
 	time.AfterFunc(runtime, func() {
-		require.Nil(t, mockC.Close())
+		require.Nil(t, mockC.close())
 	})
 
 	mockC.process(ctx)
-	for _, v := range mockC.flowLog.Flows() {
+
+	mockC.lock()
+	flows := mockC.flowLog.Flows()
+	for _, v := range flows {
 		fmt.Printf("Packets processed after %v: %d (%v/pkt)\n", runtime, v.PacketsSent(), runtime/time.Duration(v.PacketsSent()))
 	}
+	mockC.unlock()
 }

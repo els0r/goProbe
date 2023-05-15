@@ -49,11 +49,13 @@ func testDeadlock(t *testing.T, maxPkts int) {
 	start := time.Now()
 	time.AfterFunc(100*time.Millisecond, func() {
 		for i := 0; i < 20; i++ {
+			mockC.lock()
 			mockC.rotate(ctx)
+			mockC.unlock()
 			time.Sleep(10 * time.Millisecond)
 		}
 
-		require.Nil(t, mockC.Close())
+		require.Nil(t, mockC.close())
 	})
 
 	select {
@@ -73,7 +75,7 @@ func testDeadlock(t *testing.T, maxPkts int) {
 func newMockCapture(src capture.SourceZeroCopy) *Capture {
 	return &Capture{
 		iface:         src.Link().Name,
-		lock:          newCaptureLock(),
+		capLock:       newCaptureLock(),
 		flowLog:       capturetypes.NewFlowLog(),
 		errMap:        make(map[string]int),
 		captureHandle: src,
