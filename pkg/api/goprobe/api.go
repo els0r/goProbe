@@ -32,8 +32,8 @@ const StatusRoute = "/status"
 
 type StatusResponse struct {
 	response
-	LastWriteout time.Time                               `json:"last_writeout"`
-	Statuses     map[string]capturetypes.InterfaceStatus `json:"statuses"`
+	LastWriteout time.Time                            `json:"last_writeout"`
+	Statuses     map[string]capturetypes.CaptureStats `json:"statuses"`
 }
 
 const ConfigRoute = "/config"

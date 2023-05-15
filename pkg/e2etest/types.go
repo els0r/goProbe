@@ -1,8 +1,8 @@
-//go:build !race
-
 package e2etest
 
 import (
+	"context"
+	"fmt"
 	"io/fs"
 	"os"
 	"sync"
@@ -147,31 +147,33 @@ func (m mockIfaces) KillGoProbeOnceDone(cm *capture.Manager) {
 
 	// Wait until all mock captures are in capturing state and
 	// All structures are initialized
-outer:
-	for {
-		for _, st := range cm.Status() {
-			if st.State != capturetypes.StateCapturing {
-				time.Sleep(10 * time.Millisecond)
-				goto outer
-			}
-		}
-		break
-	}
+	// outer:
+	// 	for {
+	// 		for _, st := range cm.Status() {
+	// 			if st.State != capturetypes.StateCapturing {
+	// 				time.Sleep(10 * time.Millisecond)
+	// 				goto outer
+	// 			}
+	// 		}
+	// 		break
+	// 	}
 
 	// Wait until all mock data has been consumed (e.g. from a pcap file)
 	m.WaitUntilDoneReading()
 	nRead := m.NRead()
 
+	ctx := context.Background()
 	for {
 		time.Sleep(50 * time.Millisecond)
 
 		// Grab the number of overall received / processed packets in all captures and
 		// wait until they match the number of read packets
-		var nReceived int
-		for _, st := range cm.Status() {
-			nReceived += st.PacketStats.PacketsCapturedOverall
+		var nProcessed int
+		for _, st := range cm.Status(ctx) {
+			nProcessed += st.ProcessedTotal
 		}
-		if nReceived != nRead {
+		fmt.Println(nRead, nProcessed)
+		if nRead == 0 || nProcessed != nRead {
 			continue
 		}
 

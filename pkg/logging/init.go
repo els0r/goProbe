@@ -166,9 +166,9 @@ func New(level slog.Level, encoding Encoding, opts ...Option) (*L, error) {
 func getHandler(w io.Writer, encoding Encoding, hopts slog.HandlerOptions) (th slog.Handler, err error) {
 	switch encoding {
 	case EncodingJSON:
-		th = hopts.NewJSONHandler(w)
+		th = slog.NewJSONHandler(w, &hopts)
 	case EncodingLogfmt:
-		th = hopts.NewTextHandler(w)
+		th = slog.NewJSONHandler(w, &hopts)
 	case EncodingPlain:
 		th = newPlainHandler(w, hopts.Level.Level())
 	default:

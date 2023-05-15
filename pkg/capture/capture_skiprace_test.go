@@ -3,6 +3,7 @@
 package capture
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -13,9 +14,11 @@ import (
 )
 
 func TestLowTrafficDeadlock(t *testing.T) {
-	testDeadlock(t, 0)
-	testDeadlock(t, 1)
-	testDeadlock(t, 10)
+	for _, n := range []int{0, 1, 10} {
+		t.Run(fmt.Sprintf("%d packets", n), func(t *testing.T) {
+			testDeadlock(t, n)
+		})
+	}
 }
 
 func TestHighTrafficDeadlock(t *testing.T) {
@@ -23,6 +26,8 @@ func TestHighTrafficDeadlock(t *testing.T) {
 }
 
 func TestMockPacketCapturePerformance(t *testing.T) {
+
+	ctx := context.Background()
 
 	if testing.Short() {
 		t.SkipNow()
@@ -38,17 +43,16 @@ func TestMockPacketCapturePerformance(t *testing.T) {
 	mockC := newMockCapture(mockSrc)
 
 	for mockSrc.CanAddPackets() {
-		mockSrc.AddPacket(testPacket)
+		require.Nil(t, mockSrc.AddPacket(testPacket))
 	}
 	mockSrc.RunNoDrain(time.Microsecond)
 
 	runtime := 10 * time.Second
 	time.AfterFunc(runtime, func() {
-		require.Nil(t, mockSrc.Close())
-		require.Nil(t, mockSrc.Free())
+		require.Nil(t, mockC.Close())
 	})
 
-	mockC.process()
+	mockC.process(ctx)
 	for _, v := range mockC.flowLog.Flows() {
 		fmt.Printf("Packets processed after %v: %d (%v/pkt)\n", runtime, v.PacketsSent(), runtime/time.Duration(v.PacketsSent()))
 	}

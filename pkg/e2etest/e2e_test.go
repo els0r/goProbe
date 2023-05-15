@@ -1,5 +1,3 @@
-//go:build !race
-
 package e2etest
 
 import (
@@ -169,7 +167,7 @@ func testE2E(t *testing.T, datasets ...[]byte) {
 	}
 
 	// Run GoProbe
-	runGoProbe(t, setupSources(t, mockIfaces))
+	runGoProbe(t, tempDir, setupSources(t, mockIfaces))
 
 	// Run GoQuery and build reference results from tracking
 	resGoQuery := runGoQuery(t, mockIfaces, 100000)
@@ -203,7 +201,7 @@ func testE2E(t *testing.T, datasets ...[]byte) {
 	require.EqualValues(t, refRows, resRows)
 }
 
-func runGoProbe(t *testing.T, sourceInitFn func() (mockIfaces, func(c *capture.Capture) (slimcap.Source, error))) {
+func runGoProbe(t *testing.T, testDir string, sourceInitFn func() (mockIfaces, func(c *capture.Capture) (slimcap.Source, error))) {
 
 	// We quit on encountering SIGUSR2 (instead of the ususal SIGTERM or SIGINT)
 	// to avoid killing the test
@@ -211,36 +209,39 @@ func runGoProbe(t *testing.T, sourceInitFn func() (mockIfaces, func(c *capture.C
 	defer stop()
 
 	mockIfaces, initFn := sourceInitFn()
-	captureManager := capture.NewManager(ctx).SetSourceInitFn(initFn)
 
+	// Start goroutine for writeouts
+	writeoutHandler := writeout.NewGoDBHandler(testDir, encoders.EncoderTypeLZ4).
+		WithPermissions(goDB.DefaultPermissions)
+
+	// Start writeout handler
+	// writeoutChan := writeoutHandler.HandleWriteouts()
+
+	captureManager := capture.NewManager(ctx, writeoutHandler).SetSourceInitFn(initFn)
 	ifaceConfigs := make(config.Ifaces)
 	for _, iface := range mockIfaces {
 		ifaceConfigs[iface.name] = defaultCaptureConfig
 	}
+	captureManager.Update(ctx, ifaceConfigs)
+
+	captureManager.ScheduleWriteouts(ctx, time.Second)
 
 	// Wait until goProbe is done processing all packets, then kill it in the
 	// background via the SIGUSR2 signal
 	go mockIfaces.KillGoProbeOnceDone(captureManager)
 
-	captureManager.Update(ifaceConfigs, nil)
-
-	// Start goroutine for writeouts
-	writeoutHandler := writeout.NewHandler(captureManager, encoders.EncoderTypeLZ4).
-		WithPermissions(goDB.DefaultPermissions)
-
-	// Start writeout handler
-	writeoutChan := writeoutHandler.HandleWriteouts()
-
 	// Start regular rotations (minimum one second to avoid timestamp duplicates)
-	writeoutHandler.HandleRotations(ctx, time.Second)
+	// writeoutHandler.HandleRotations(ctx, time.Second)
 
 	// Wait for the interrupt signal
 	<-ctx.Done()
 
 	// Finish up
-	writeoutHandler.Close()
-	<-writeoutChan
-	captureManager.CloseAll()
+	// writeoutHandler.Close()
+	// <-writeoutChan
+	shutDownCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	captureManager.Close(shutDownCtx)
+	cancel()
 }
 
 func runGoQuery(t *testing.T, mockIfaces mockIfaces, maxEntries int) results.Result {

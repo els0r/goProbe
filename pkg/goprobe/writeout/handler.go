@@ -2,196 +2,97 @@ package writeout
 
 import (
 	"context"
-	"fmt"
 	"io/fs"
 	"time"
 
-	"github.com/els0r/goProbe/cmd/goProbe/config"
-	"github.com/els0r/goProbe/pkg/capture"
+	"github.com/els0r/goProbe/pkg/capture/capturetypes"
 	"github.com/els0r/goProbe/pkg/goDB"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 	"github.com/els0r/goProbe/pkg/logging"
+	"golang.org/x/exp/slog"
 )
+
+type Handler interface {
+	HandleWriteout(ctx context.Context, timestamp time.Time, writeoutChan <-chan capturetypes.TaggedAggFlowMap) <-chan struct{}
+}
 
 const WriteoutsChanDepth = 100
 
-// writerCleanupCutoff governs when old DB writers are deleted from the map
-// of available writers
-const writerCleanupCutoff = 3
-
-type Handler struct {
-	// LastRotation is the time the handler last rotated all flow maps
-	LastRotation time.Time
-
-	writeoutsChan  chan *writeout
-	captureManager *capture.Manager
-
+type GoDBHandler struct {
 	encoderType encoders.Type
 	permissions fs.FileMode
+
+	path        string
+	dbWriters   map[string]*goDB.DBWriter
 	logToSyslog bool
 }
 
-func (h *Handler) WithSyslogWriting(b bool) *Handler {
+func (h *GoDBHandler) WithSyslogWriting(b bool) *GoDBHandler {
 	h.logToSyslog = b
 	return h
 }
 
-func (h *Handler) WithPermissions(permissions fs.FileMode) *Handler {
+func (h *GoDBHandler) WithPermissions(permissions fs.FileMode) *GoDBHandler {
 	h.permissions = permissions
 	return h
 }
 
-func NewHandler(captureManager *capture.Manager, encoderType encoders.Type) *Handler {
-	return &Handler{
-		LastRotation: time.Now(),
-
-		writeoutsChan:  make(chan *writeout, WriteoutsChanDepth),
-		captureManager: captureManager,
-
+func NewGoDBHandler(path string, encoderType encoders.Type) *GoDBHandler {
+	return &GoDBHandler{
+		path:        path,
+		dbWriters:   make(map[string]*goDB.DBWriter),
 		encoderType: encoderType,
 		permissions: goDB.DefaultPermissions,
 	}
 }
 
-func (h *Handler) Close() {
-	close(h.writeoutsChan)
-}
-
-type writeout struct {
-	dataChan    chan capture.TaggedAggFlowMap
-	atTimestamp time.Time
-}
-
-func newWriteout(at time.Time) *writeout {
-	return &writeout{
-		dataChan:    make(chan capture.TaggedAggFlowMap, capture.MaxIfaces),
-		atTimestamp: at,
-	}
-}
-
-func (w *writeout) close() {
-	close(w.dataChan)
-}
-
 const tFormat = "2006-01-02 15:04:05 -0700 MST"
 
-func (h *Handler) FullWriteout(ctx context.Context, at time.Time) error {
+func (h *GoDBHandler) handleIfaceWriteout(ctx context.Context, timestamp time.Time, taggedMap capturetypes.TaggedAggFlowMap, syslogWriter *goDB.SyslogDBWriter) {
+	ctx = logging.WithFields(ctx, slog.String("iface", taggedMap.Iface))
 	logger := logging.FromContext(ctx)
 
-	// don't rotate if a bogus timestamp is supplied
-	if at.Sub(h.LastRotation) < 0 {
-		return fmt.Errorf("attempting rotation at %s before the most recent one at %s",
-			at.Format(tFormat),
-			h.LastRotation.Format(tFormat),
-		)
+	// Ensure that there is a DBWriter for the given interface
+	_, exists := h.dbWriters[taggedMap.Iface]
+	if !exists {
+		w := goDB.NewDBWriter(h.path,
+			taggedMap.Iface,
+			h.encoderType,
+		).Permissions(h.permissions)
+		h.dbWriters[taggedMap.Iface] = w
 	}
-	h.LastRotation = at
 
-	writeout := newWriteout(at)
-	defer writeout.close()
-
-	select {
-	case <-ctx.Done():
-		logger.Debug("writeout was cancelled")
-		return nil
-	case h.writeoutsChan <- writeout:
-		logger.Debug("initiating flow data flush")
-
-		h.captureManager.RotateAll(writeout.dataChan)
+	// Write to database, update summary
+	err := h.dbWriters[taggedMap.Iface].Write(taggedMap.Map, goDB.CaptureMetadata{
+		PacketsDropped: taggedMap.Stats.Dropped,
+	}, timestamp.Unix())
+	if err != nil {
+		logger.Errorf("failed to perform writeout: %s", err)
 	}
-	return nil
-}
 
-func (h *Handler) UpdateAndRotate(ctx context.Context, ifaces config.Ifaces, at time.Time) error {
-	logger := logging.FromContext(ctx)
+	// write out flows to syslog if necessary
+	if h.logToSyslog {
+		if syslogWriter == nil {
+			logger.Error("cannot write flows to <nil> syslog writer. Attempting reinitialization")
 
-	// don't rotate if a bogus timestamp is supplied
-	if at.Sub(h.LastRotation) < 0 {
-		return fmt.Errorf("attempting rotation at %s before the most recent one at %s",
-			at.Format(tFormat),
-			h.LastRotation.Format(tFormat),
-		)
-	}
-	h.LastRotation = at
-
-	writeout := newWriteout(at)
-	defer writeout.close()
-
-	select {
-	case <-ctx.Done():
-		logger.Debug("writeout was cancelled")
-		return nil
-	case h.writeoutsChan <- writeout:
-		logger.Debug("initiating flow data flush")
-
-		h.captureManager.Update(ifaces, writeout.dataChan)
-	}
-	return nil
-}
-
-func (h *Handler) HandleRotations(ctx context.Context, interval time.Duration) {
-	go func() {
-		logger := logging.FromContext(ctx)
-
-		// wait until the next 5 minute interval of the hour is reached before starting the ticker
-		tNow := time.Now()
-
-		sleepUntil := tNow.Truncate(interval).Add(interval).Sub(tNow)
-		logger.Infof("waiting for %s to start capture rotation", sleepUntil.Round(time.Second))
-
-		timer := time.NewTimer(sleepUntil)
-		select {
-		case <-timer.C:
-			break
-		case <-ctx.Done():
-			return
-		}
-
-		ticker := time.NewTicker(interval)
-
-		// immediately write out after the initial sleep has completed
-		t := time.Now()
-		for {
-			select {
-			case <-ctx.Done():
-				logger.Info("stopping rotation handler")
+			// try to reinitialize the writer
+			if syslogWriter, err = goDB.NewSyslogDBWriter(); err != nil {
+				logger.Errorf("failed to reinitialize syslog writer: %v", err)
 				return
-			default:
-				err := h.FullWriteout(ctx, t)
-				if err != nil {
-					logger.Errorf("failed to write data: %v", err)
-				} else {
-					if len(h.writeoutsChan) > 2 {
-						log := logger.With("queue_length", len(h.writeoutsChan))
-						if len(h.writeoutsChan) > capture.WriteoutsChanDepth {
-							log.Fatalf("writeouts are lagging behind too much")
-						}
-						log.Warn("writeouts are lagging behind")
-					}
-				}
-
-				logger.Debug("restarting any interfaces that have encountered errors")
-				h.captureManager.EnableAll()
-
-				// wait for the the next ticker to complete
-				t = <-ticker.C
 			}
 		}
-	}()
+
+		syslogWriter.Write(taggedMap.Map, taggedMap.Iface, timestamp.Unix())
+	}
 }
 
-func (h *Handler) HandleWriteouts() <-chan struct{} {
-	logger := logging.Logger()
+func (h *GoDBHandler) HandleWriteout(ctx context.Context, timestamp time.Time, writeoutChan <-chan capturetypes.TaggedAggFlowMap) <-chan struct{} {
 
-	done := make(chan struct{})
+	doneChan := make(chan struct{})
 	go func() {
-		logger.Info("starting writeout handler")
 
-		var (
-			writeoutsCount = 0
-			dbWriters      = make(map[string]*goDB.DBWriter)
-			lastWrite      = make(map[string]int)
-		)
+		logger := logging.FromContext(ctx)
+		t0 := time.Now()
 
 		var syslogWriter *goDB.SyslogDBWriter
 		if h.logToSyslog {
@@ -202,72 +103,25 @@ func (h *Handler) HandleWriteouts() <-chan struct{} {
 			}
 		}
 
-		for writeout := range h.writeoutsChan {
-			t0 := time.Now()
-			count := 0
-			for taggedMap := range writeout.dataChan {
-				// Ensure that there is a DBWriter for the given interface
-				_, exists := dbWriters[taggedMap.Iface]
-				if !exists {
-					w := goDB.NewDBWriter(config.RuntimeDBPath(),
-						taggedMap.Iface,
-						h.encoderType,
-					).Permissions(h.permissions)
-					dbWriters[taggedMap.Iface] = w
-				}
-
-				packetsDropped := 0
-				if taggedMap.Stats.CaptureStats != nil {
-					packetsDropped = taggedMap.Stats.Dropped
-				}
-
-				// Write to database, update summary
-				err := dbWriters[taggedMap.Iface].Write(taggedMap.Map, goDB.CaptureMetadata{
-					PacketsDropped: packetsDropped,
-				}, writeout.atTimestamp.Unix())
-				lastWrite[taggedMap.Iface] = writeoutsCount
-				if err != nil {
-					logger.Error(fmt.Sprintf("Error during writeout: %s", err.Error()))
-				}
-
-				// write out flows to syslog if necessary
-				if h.logToSyslog {
-					if syslogWriter != nil {
-						syslogWriter.Write(taggedMap.Map, taggedMap.Iface, writeout.atTimestamp.Unix())
-					} else {
-						logger.Error("cannot write flows to <nil> syslog writer. Attempting reinitialization")
-
-						// try to reinitialize the writer
-						if syslogWriter, err = goDB.NewSyslogDBWriter(); err != nil {
-							logger.Errorf("failed to reinitialize syslog writer: %v", err)
-						}
-					}
-				}
-				count++
-			}
-
-			// Clean up dead writers. We say that a writer is dead
-			// if it hasn't been used in the last few writeouts.
-			var remove []string
-			for iface, last := range lastWrite {
-				if writeoutsCount-last >= writerCleanupCutoff {
-					remove = append(remove, iface)
-				}
-			}
-			for _, iface := range remove {
-				delete(dbWriters, iface)
-				delete(lastWrite, iface)
-			}
-
-			writeoutsCount++
-
-			elapsed := time.Since(t0).Round(time.Millisecond)
-
-			logger.With("count", count, "elapsed", elapsed.String()).Debug("completed writeout")
+		seenIfaces := make(map[string]struct{})
+		for taggedMap := range writeoutChan {
+			seenIfaces[taggedMap.Iface] = struct{}{}
+			h.handleIfaceWriteout(ctx, timestamp, taggedMap, syslogWriter)
 		}
 
-		logger.Info("completed all writeouts")
-		done <- struct{}{}
+		// Clean up dead writers. We say that a writer is dead
+		// if it hasn't been used in the last few writeouts.
+		for iface := range h.dbWriters {
+			if _, exists := seenIfaces[iface]; !exists {
+				delete(h.dbWriters, iface)
+			}
+		}
+
+		elapsed := time.Since(t0).Round(time.Millisecond)
+
+		logger.With("elapsed", elapsed.String()).Debug("completed writeout")
+		doneChan <- struct{}{}
 	}()
-	return done
+
+	return doneChan
 }

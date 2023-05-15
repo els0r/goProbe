@@ -3,7 +3,6 @@ package capture
 import (
 	"context"
 	"net"
-	"sync"
 	"testing"
 	"time"
 
@@ -16,6 +15,7 @@ import (
 
 func testDeadlock(t *testing.T, maxPkts int) {
 
+	ctx := context.Background()
 	mockSrc, err := afring.NewMockSource("mock",
 		afring.CaptureLength(link.CaptureLengthMinimalIPv4Transport),
 	)
@@ -27,34 +27,38 @@ func testDeadlock(t *testing.T, maxPkts int) {
 
 	var errChan chan error
 	if maxPkts >= 0 {
-		go func() {
-			errChan = mockSrc.Run()
-			for i := 0; i < maxPkts; i++ {
-				mockSrc.AddPacket(testPacket)
-			}
-			mockSrc.Done()
-			mockSrc.ForceBlockRelease()
-		}()
+
+		// TODO: Remove race condition when filling the buffer in a goroutine
+		// go func() {
+		errChan = mockSrc.Run()
+		for i := 0; i < maxPkts; i++ {
+			require.Nil(t, mockSrc.AddPacket(testPacket))
+		}
+		mockSrc.Done()
+		mockSrc.ForceBlockRelease()
+		// }()
 	} else {
 		for mockSrc.CanAddPackets() {
-			mockSrc.AddPacket(testPacket)
+			require.Nil(t, mockSrc.AddPacket(testPacket))
 		}
 		errChan = mockSrc.RunNoDrain(time.Microsecond)
 	}
 
+	procErrChan := mockC.process(ctx)
+
 	start := time.Now()
 	time.AfterFunc(100*time.Millisecond, func() {
 		for i := 0; i < 20; i++ {
-			mockC.rotate()
+			mockC.rotate(ctx)
 			time.Sleep(10 * time.Millisecond)
 		}
 
-		require.Nil(t, mockSrc.Close())
+		require.Nil(t, mockC.Close())
 	})
 
-	mockC.process()
-
 	select {
+	case err := <-procErrChan:
+		require.Nil(t, err)
 	case <-errChan:
 		break
 	case <-time.After(10 * time.Second):
@@ -64,25 +68,14 @@ func testDeadlock(t *testing.T, maxPkts int) {
 	if time.Since(start) > 2*time.Second {
 		t.Fatalf("potential deadlock situation on rotation logic")
 	}
-
-	require.Nil(t, mockSrc.Free())
 }
 
 func newMockCapture(src capture.SourceZeroCopy) *Capture {
 	return &Capture{
 		iface:         src.Link().Name,
-		mutex:         sync.Mutex{},
-		stateMutex:    sync.RWMutex{},
-		cmdChan:       make(chan captureCommand),
-		captureErrors: make(chan error),
-		lastRotationStats: capturetypes.PacketStats{
-			CaptureStats: &capturetypes.CaptureStats{},
-		},
-		rotationState: newRotationState(),
-		closeState:    make(chan struct{}, 1),
+		lock:          newCaptureLock(),
 		flowLog:       capturetypes.NewFlowLog(),
 		errMap:        make(map[string]int),
-		ctx:           context.Background(),
 		captureHandle: src,
 	}
 }

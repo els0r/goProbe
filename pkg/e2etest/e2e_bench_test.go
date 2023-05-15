@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"os"
 	"os/signal"
 	"syscall"
 	"testing"
@@ -40,20 +41,31 @@ func TestBenchmarkCaptureThroughput(t *testing.T) {
 
 func runBenchmarkCaptureThroughput(t *testing.T, runtime time.Duration, randomize bool) {
 
-	// We quit on encountering SIGTERM or SIGINT (see further down)
+	// Setup a temporary directory for the test DB
+	tempDir, err := os.MkdirTemp(os.TempDir(), "goprobe_e2e_bench")
+	if err != nil {
+		panic(err)
+	}
+
+	// We quit on encountering SIGUSR2 (instead of the ususal SIGTERM or SIGINT)
+	// to avoid killing the test
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGUSR2)
 	defer stop()
-	captureManager := capture.NewManager(ctx).SetSourceInitFn(setupSyntheticUnblockingSource(t, randomize))
-	captureManager.Update(config.Ifaces{
-		"mock": defaultCaptureConfig,
-	}, nil)
 
-	// start goroutine for writeouts
-	writeoutHandler := writeout.NewHandler(captureManager, encoders.EncoderTypeLZ4).
+	writeoutHandler := writeout.NewGoDBHandler(tempDir, encoders.EncoderTypeLZ4).
 		WithPermissions(goDB.DefaultPermissions)
 
-	// start writeout handler
-	writeoutHandler.HandleWriteouts()
+	captureManager := capture.NewManager(ctx, writeoutHandler).SetSourceInitFn(setupSyntheticUnblockingSource(t, randomize))
+	captureManager.Update(ctx, config.Ifaces{
+		"mock": defaultCaptureConfig,
+	})
+
+	// start goroutine for writeouts
+	// writeoutHandler := writeout.NewHandler(captureManager, encoders.EncoderTypeLZ4).
+	// 	WithPermissions(goDB.DefaultPermissions)
+
+	// // start writeout handler
+	// writeoutHandler.HandleWriteouts()
 
 	// start regular rotations
 	// writeoutHandler.HandleRotations(ctx, time.Hour)
@@ -66,13 +78,18 @@ func runBenchmarkCaptureThroughput(t *testing.T, runtime time.Duration, randomiz
 
 	// listen for the interrupt signal, then flush data
 	<-ctx.Done()
-	require.Nil(t, writeoutHandler.FullWriteout(context.Background(), time.Now()))
+	// require.Nil(t, captureManager.Close(ctx))
 
-	stats := captureManager.Status()["mock"]
-	fmt.Printf("Packets processed after %v: %d (%v/pkt), %d dropped\n", runtime, stats.PacketStats.PacketsCapturedOverall, runtime/time.Duration(stats.PacketStats.PacketsCapturedOverall), stats.PacketStats.Dropped)
+	stats := captureManager.Status(context.Background(), "mock")
+	fmt.Printf("Packets processed after %v: %d (%v/pkt), %d dropped\n", runtime,
+		stats["mock"].ProcessedTotal,
+		runtime/time.Duration(stats["mock"].ProcessedTotal),
+		stats["mock"].Dropped)
 
-	writeoutHandler.Close()
-	captureManager.CloseAll()
+	// writeoutHandler.Close()
+	shutDownCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	captureManager.Close(shutDownCtx)
+	cancel()
 }
 
 func setupSyntheticUnblockingSource(t testing.TB, randomize bool) func(c *capture.Capture) (slimcap.Source, error) {
