@@ -26,9 +26,6 @@ import (
 	"github.com/els0r/goProbe/cmd/goProbe/flags"
 	"github.com/els0r/goProbe/pkg/api/goprobe/server"
 	"github.com/els0r/goProbe/pkg/capture"
-	"github.com/els0r/goProbe/pkg/goDB"
-	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
-	"github.com/els0r/goProbe/pkg/goprobe/writeout"
 	"github.com/els0r/goProbe/pkg/logging"
 	"github.com/els0r/goProbe/pkg/version"
 
@@ -129,17 +126,8 @@ func main() {
 	defer stop()
 
 	// Create DB directory if it doesn't exist already.
-	if err := os.MkdirAll(capconfig.RuntimeDBPath(), 0755); err != nil {
+	if err := os.MkdirAll(config.DB.Path, 0755); err != nil {
 		logger.Fatalf("failed to create database directory: %v", err)
-	}
-
-	encoderType, err := encoders.GetTypeByString(config.DB.EncoderType)
-	if err != nil {
-		logger.Fatalf("failed to get encoder type from %s: %v", config.DB.EncoderType, err)
-	}
-	dbPermissions := goDB.DefaultPermissions
-	if config.DB.Permissions != 0 {
-		dbPermissions = config.DB.Permissions
 	}
 
 	// Initialize packet logger
@@ -152,13 +140,10 @@ func main() {
 
 	// None of the initialization steps failed.
 	logger.Info("started goProbe")
-
-	captureManager = capture.NewManager(ctx)
-
-	// no captures are being deleted here, so we can safely discard the channel we pass
-	logger.Debug("updating capture manager configuration")
-
-	captureManager.Update(config.Interfaces, nil)
+	captureManager, err := capture.InitManager(ctx, config)
+	if err != nil {
+		logger.Fatal(err)
+	}
 
 	// configure api server
 	var (
@@ -198,21 +183,10 @@ func main() {
 	// 	apiOptions = append(apiOptions, api.WithDiscoveryConfigUpdate(discoveryConfigUpdate))
 	// }
 
-	// start goroutine for writeouts
-	writeoutHandler := writeout.NewHandler(captureManager, encoderType).
-		WithSyslogWriting(config.SyslogFlows).
-		WithPermissions(dbPermissions)
-
-	// start writeout handler
-	doneWriting := writeoutHandler.HandleWriteouts()
-
-	// start regular rotations
-	writeoutHandler.HandleRotations(ctx, time.Duration(goDB.DBWriteInterval)*time.Second)
-
 	// create server and start listening for requests
 	if config.API != nil {
 		addr := fmt.Sprintf("%s:%s", config.API.Host, config.API.Port)
-		apiServer = server.New(addr, captureManager, writeoutHandler, apiOptions...)
+		apiServer = server.New(addr, captureManager, apiOptions...)
 
 		logger.With("addr", addr).Info("starting API server")
 		go func() {
@@ -243,22 +217,12 @@ func main() {
 		}
 	}
 
-	// one last writeout
-	writeoutHandler.FullWriteout(fallbackCtx, time.Now())
-	writeoutHandler.Close()
-
 	// if discoveryConfigUpdate != nil {
 	// 	close(discoveryConfigUpdate)
 	// }
 
-	captureManager.CloseAll()
-
-	select {
-	case <-doneWriting:
-		logger.Info("graceful shut down completed")
-	case <-fallbackCtx.Done():
-		logger.Error("forced shutdown")
-	}
+	captureManager.Close(fallbackCtx)
+	logger.Info("graceful shut down completed")
 
 	return
 }

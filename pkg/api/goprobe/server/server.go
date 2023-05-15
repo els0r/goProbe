@@ -39,12 +39,11 @@ func WithDBPath(path string) Option {
 
 // TODO: support for unix sockets
 
-func New(addr string, captureManager *capture.Manager, writeoutHandler *writeout.Handler, opts ...Option) *Server {
+func New(addr string, captureManager *capture.Manager, opts ...Option) *Server {
 	server := &Server{
-		addr:            addr,
-		dbPath:          defaults.DBPath,
-		captureManager:  captureManager,
-		writeoutHandler: writeoutHandler,
+		addr:           addr,
+		dbPath:         defaults.DBPath,
+		captureManager: captureManager,
 	}
 
 	router := gin.New()
@@ -80,11 +79,6 @@ func (server *Server) registerRoutes() {
 	statsRoutes := server.router.Group(gpapi.StatusRoute)
 	statsRoutes.GET("", server.getStatus)
 	statsRoutes.GET("/:"+ifaceKey, server.getStatus)
-
-	// flows
-	flowsRoutes := server.router.Group(gpapi.FlowsRoute)
-	flowsRoutes.GET("", server.getFlows)
-	flowsRoutes.GET("/:"+ifaceKey, server.getFlows)
 
 	// config
 	configRoutes := server.router.Group(gpapi.ConfigRoute)

@@ -233,28 +233,7 @@ func Parse(src io.Reader) (*Config, error) {
 		return nil, err
 	}
 
-	// set the runtime DB path
-	if !runtimeDBPath.set {
-		SetRuntimeDBPath(config.DB.Path)
-	}
-
 	return config, nil
-}
-
-var runtimeDBPath = struct {
-	set  bool
-	path string
-}{}
-
-// RuntimeDBPath returns the DB path set at the beginning of program execution
-func RuntimeDBPath() string {
-	return runtimeDBPath.path
-}
-
-// SetRuntimeDBPath explicitly sets the DB path
-func SetRuntimeDBPath(path string) {
-	runtimeDBPath.path = path
-	runtimeDBPath.set = true
 }
 
 func checkKeyConstraints(key string) error {

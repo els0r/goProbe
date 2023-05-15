@@ -55,20 +55,11 @@ func runBenchmarkCaptureThroughput(t *testing.T, runtime time.Duration, randomiz
 	writeoutHandler := writeout.NewGoDBHandler(tempDir, encoders.EncoderTypeLZ4).
 		WithPermissions(goDB.DefaultPermissions)
 
-	captureManager := capture.NewManager(ctx, writeoutHandler).SetSourceInitFn(setupSyntheticUnblockingSource(t, randomize))
+	captureManager := capture.NewManager(writeoutHandler).SetSourceInitFn(setupSyntheticUnblockingSource(t, randomize))
 	captureManager.Update(ctx, config.Ifaces{
 		"mock": defaultCaptureConfig,
 	})
 
-	// start goroutine for writeouts
-	// writeoutHandler := writeout.NewHandler(captureManager, encoders.EncoderTypeLZ4).
-	// 	WithPermissions(goDB.DefaultPermissions)
-
-	// // start writeout handler
-	// writeoutHandler.HandleWriteouts()
-
-	// start regular rotations
-	// writeoutHandler.HandleRotations(ctx, time.Hour)
 	go func() {
 		time.Sleep(runtime)
 		if err := syscall.Kill(syscall.Getpid(), syscall.SIGUSR2); err != nil {
@@ -76,17 +67,16 @@ func runBenchmarkCaptureThroughput(t *testing.T, runtime time.Duration, randomiz
 		}
 	}()
 
-	// listen for the interrupt signal, then flush data
+	// listen for the interrupt signal
 	<-ctx.Done()
-	// require.Nil(t, captureManager.Close(ctx))
 
+	// Extract interface stats and calculate metrics
 	stats := captureManager.Status(context.Background(), "mock")
 	fmt.Printf("Packets processed after %v: %d (%v/pkt), %d dropped\n", runtime,
 		stats["mock"].ProcessedTotal,
 		runtime/time.Duration(stats["mock"].ProcessedTotal),
 		stats["mock"].Dropped)
 
-	// writeoutHandler.Close()
 	shutDownCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	captureManager.Close(shutDownCtx)
 	cancel()

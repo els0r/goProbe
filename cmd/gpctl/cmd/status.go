@@ -47,7 +47,7 @@ func printHeader() {
 	fmt.Println(strings.Repeat(" ", 2+status.StatusLineIndent+8+1) + receivedCol + strings.Repeat(" ", colDistance) + droppedCol)
 }
 
-func printStats(stats capturetypes.PacketStats) {
+func printStats(stats capturetypes.CaptureStats) {
 	rcvdStr := fmt.Sprint(stats.Received)
 	droppedStr := fmt.Sprint(stats.Dropped)
 
@@ -74,12 +74,12 @@ func statusEntrypoint(ctx context.Context, cmd *cobra.Command, args []string) er
 
 	var allStatuses []struct {
 		iface  string
-		status capturetypes.InterfaceStatus
+		status capturetypes.CaptureStats
 	}
 	for iface, status := range statuses {
 		allStatuses = append(allStatuses, struct {
 			iface  string
-			status capturetypes.InterfaceStatus
+			status capturetypes.CaptureStats
 		}{
 			iface:  iface,
 			status: status,
@@ -95,17 +95,11 @@ func statusEntrypoint(ctx context.Context, cmd *cobra.Command, args []string) er
 
 		ifaceStatus := st.status
 
-		totalReceived += int64(ifaceStatus.PacketStats.Received)
-		totalDropped += int64(ifaceStatus.PacketStats.Dropped)
+		totalReceived += int64(ifaceStatus.Received)
+		totalDropped += int64(ifaceStatus.Dropped)
+		totalActive++
 
-		switch st.status.State {
-		case capturetypes.StateError:
-			status.Fail(ifaceStatus.State.String())
-			continue
-		case capturetypes.StateCapturing:
-			totalActive++
-		}
-		printStats(ifaceStatus.PacketStats)
+		printStats(ifaceStatus)
 	}
 
 	lastWriteoutStr := "-"

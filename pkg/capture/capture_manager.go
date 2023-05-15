@@ -2,11 +2,14 @@ package capture
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
 	"github.com/els0r/goProbe/cmd/goProbe/config"
 	"github.com/els0r/goProbe/pkg/capture/capturetypes"
+	"github.com/els0r/goProbe/pkg/goDB"
+	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 	"github.com/els0r/goProbe/pkg/goprobe/writeout"
 	"github.com/els0r/goProbe/pkg/logging"
 	"golang.org/x/exp/slog"
@@ -23,8 +26,39 @@ type Manager struct {
 	lastRotation    time.Time
 }
 
+func InitManager(ctx context.Context, config *config.Config, opts ...ManagerOption) (*Manager, error) {
+
+	logger := logging.FromContext(ctx)
+
+	encoderType, err := encoders.GetTypeByString(config.DB.EncoderType)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get encoder type from %s: %w", config.DB.EncoderType, err)
+	}
+	dbPermissions := goDB.DefaultPermissions
+	if config.DB.Permissions != 0 {
+		dbPermissions = config.DB.Permissions
+	}
+
+	writeoutHandler := writeout.NewGoDBHandler(config.DB.Path, encoderType).
+		WithSyslogWriting(config.SyslogFlows).
+		WithPermissions(dbPermissions)
+
+	captureManager := NewManager(writeoutHandler)
+	for _, opt := range opts {
+		opt(captureManager)
+	}
+
+	// no captures are being deleted here, so we can safely discard the channel we pass
+	logger.Debug("updating capture manager configuration")
+
+	captureManager.Update(ctx, config.Interfaces)
+	captureManager.ScheduleWriteouts(ctx, time.Duration(goDB.DBWriteInterval)*time.Second)
+
+	return captureManager, nil
+}
+
 // NewManager creates a new Manager
-func NewManager(ctx context.Context, writeoutHandler writeout.Handler) *Manager {
+func NewManager(writeoutHandler writeout.Handler) *Manager {
 	return &Manager{
 		captures:        make(map[string]*Capture),
 		writeoutHandler: writeoutHandler,
@@ -85,6 +119,14 @@ func (cm *Manager) ScheduleWriteouts(ctx context.Context, interval time.Duration
 		}
 	}()
 
+}
+
+type ManagerOption func(cm *Manager)
+
+func WithSourceInitFn(fn sourceInitFn) ManagerOption {
+	return func(cm *Manager) {
+		cm.SetSourceInitFn(fn)
+	}
 }
 
 // SetSourceInitFn sets a custom function used to initialize a new capture

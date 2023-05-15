@@ -24,11 +24,11 @@ import (
 	"github.com/els0r/goProbe/cmd/goQuery/cmd"
 
 	// "github.com/els0r/goProbe/cmd/goQuery/commands"
+
 	"github.com/els0r/goProbe/pkg/capture"
 	"github.com/els0r/goProbe/pkg/capture/capturetypes"
 	"github.com/els0r/goProbe/pkg/goDB"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
-	"github.com/els0r/goProbe/pkg/goprobe/writeout"
 	"github.com/els0r/goProbe/pkg/results"
 	"github.com/els0r/goProbe/pkg/types"
 	jsoniter "github.com/json-iterator/go"
@@ -157,7 +157,6 @@ func testE2E(t *testing.T, datasets ...[]byte) {
 	if err != nil {
 		panic(err)
 	}
-	config.SetRuntimeDBPath(tempDir)
 	defer require.Nil(t, os.RemoveAll(tempDir))
 
 	// Define mock interfaces
@@ -170,8 +169,8 @@ func testE2E(t *testing.T, datasets ...[]byte) {
 	runGoProbe(t, tempDir, setupSources(t, mockIfaces))
 
 	// Run GoQuery and build reference results from tracking
-	resGoQuery := runGoQuery(t, mockIfaces, 100000)
-	resReference := mockIfaces.BuildResults(t, resGoQuery)
+	resGoQuery := runGoQuery(t, tempDir, mockIfaces, 100000)
+	resReference := mockIfaces.BuildResults(t, tempDir, resGoQuery)
 
 	// Counter consistency checks
 	require.Equal(t, mockIfaces.NProcessed(), int(resGoQuery.Summary.Totals.PacketsRcvd))
@@ -210,21 +209,21 @@ func runGoProbe(t *testing.T, testDir string, sourceInitFn func() (mockIfaces, f
 
 	mockIfaces, initFn := sourceInitFn()
 
-	// Start goroutine for writeouts
-	writeoutHandler := writeout.NewGoDBHandler(testDir, encoders.EncoderTypeLZ4).
-		WithPermissions(goDB.DefaultPermissions)
-
-	// Start writeout handler
-	// writeoutChan := writeoutHandler.HandleWriteouts()
-
-	captureManager := capture.NewManager(ctx, writeoutHandler).SetSourceInitFn(initFn)
 	ifaceConfigs := make(config.Ifaces)
 	for _, iface := range mockIfaces {
 		ifaceConfigs[iface.name] = defaultCaptureConfig
 	}
-	captureManager.Update(ctx, ifaceConfigs)
-
-	captureManager.ScheduleWriteouts(ctx, time.Second)
+	captureManager, err := capture.InitManager(ctx, &config.Config{
+		DB: config.DBConfig{
+			Path:        testDir,
+			EncoderType: encoders.EncoderTypeLZ4.String(),
+			Permissions: goDB.DefaultPermissions,
+		},
+		Interfaces: ifaceConfigs,
+		Logging:    config.LogConfig{},
+	}, capture.WithSourceInitFn(initFn))
+	require.Nil(t, err)
+	captureManager.SetSourceInitFn(initFn)
 
 	// Wait until goProbe is done processing all packets, then kill it in the
 	// background via the SIGUSR2 signal
@@ -244,7 +243,7 @@ func runGoProbe(t *testing.T, testDir string, sourceInitFn func() (mockIfaces, f
 	cancel()
 }
 
-func runGoQuery(t *testing.T, mockIfaces mockIfaces, maxEntries int) results.Result {
+func runGoQuery(t *testing.T, testDir string, mockIfaces mockIfaces, maxEntries int) results.Result {
 
 	buf := bytes.NewBuffer(nil)
 	old := os.Stdout // keep backup of STDOUT
@@ -266,7 +265,7 @@ func runGoQuery(t *testing.T, mockIfaces mockIfaces, maxEntries int) results.Res
 		"-i", strings.Join(mockIfaces.Names(), ","),
 		"-e", "json",
 		"-l", time.Now().Add(time.Hour).Format(time.ANSIC),
-		"-d", config.RuntimeDBPath(),
+		"-d", testDir,
 		"-n", strconv.Itoa(maxEntries),
 		"-s", "packets",
 		"sip,dip,dport,proto",

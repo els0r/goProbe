@@ -16,8 +16,9 @@ import (
 )
 
 const (
-	// Snaplen sets the amount of bytes captured from a packet
-	Snaplen = 128
+
+	// MaxIfaces is the maximum number of interfaces we can monitor
+	MaxIfaces = 1024
 
 	// ErrorThreshold is the maximum amount of consecutive errors that can occur on an interface before capturing is halted.
 	ErrorThreshold = 10000
@@ -179,7 +180,7 @@ func (c *Capture) process(ctx context.Context) <-chan error {
 		c.errCount = 0
 
 		// Reusable packet buffer for in-place population
-		pkt := make(capture.Packet, Snaplen+6)
+		pkt := c.captureHandle.NewPacket()
 
 		// Main packet capture loop which an interface should be in most of the time
 		for {

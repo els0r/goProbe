@@ -2,7 +2,6 @@ package e2etest
 
 import (
 	"context"
-	"fmt"
 	"io/fs"
 	"os"
 	"sync"
@@ -10,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/els0r/goProbe/cmd/goProbe/config"
 	"github.com/els0r/goProbe/pkg/capture"
 	"github.com/els0r/goProbe/pkg/capture/capturetypes"
 	"github.com/els0r/goProbe/pkg/goDB/info"
@@ -92,7 +90,7 @@ func (m mockIfaces) NErr() (res int) {
 	return
 }
 
-func (m mockIfaces) BuildResults(t *testing.T, resGoQuery results.Result) results.Result {
+func (m mockIfaces) BuildResults(t *testing.T, testDir string, resGoQuery results.Result) results.Result {
 
 	res := results.Result{
 		Status: results.Status{
@@ -131,7 +129,7 @@ func (m mockIfaces) BuildResults(t *testing.T, resGoQuery results.Result) result
 	hostname, err := os.Hostname()
 	require.Nil(t, err)
 	for i := 0; i < len(res.Rows); i++ {
-		res.Rows[i].Labels.HostID = info.GetHostID(config.RuntimeDBPath())
+		res.Rows[i].Labels.HostID = info.GetHostID(testDir)
 		res.Rows[i].Labels.Hostname = hostname
 	}
 
@@ -144,19 +142,6 @@ func (m mockIfaces) BuildResults(t *testing.T, resGoQuery results.Result) result
 }
 
 func (m mockIfaces) KillGoProbeOnceDone(cm *capture.Manager) {
-
-	// Wait until all mock captures are in capturing state and
-	// All structures are initialized
-	// outer:
-	// 	for {
-	// 		for _, st := range cm.Status() {
-	// 			if st.State != capturetypes.StateCapturing {
-	// 				time.Sleep(10 * time.Millisecond)
-	// 				goto outer
-	// 			}
-	// 		}
-	// 		break
-	// 	}
 
 	// Wait until all mock data has been consumed (e.g. from a pcap file)
 	m.WaitUntilDoneReading()
@@ -172,7 +157,6 @@ func (m mockIfaces) KillGoProbeOnceDone(cm *capture.Manager) {
 		for _, st := range cm.Status(ctx) {
 			nProcessed += st.ProcessedTotal
 		}
-		fmt.Println(nRead, nProcessed)
 		if nRead == 0 || nProcessed != nRead {
 			continue
 		}

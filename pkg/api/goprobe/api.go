@@ -21,13 +21,6 @@ type response struct {
 	Error      string `json:"error,omitempty"`
 }
 
-const FlowsRoute = "/flows"
-
-type FlowsResponse struct {
-	response
-	Flows map[string]capturetypes.FlowInfos `json:"flows"`
-}
-
 const StatusRoute = "/status"
 
 type StatusResponse struct {

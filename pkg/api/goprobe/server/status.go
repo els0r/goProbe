@@ -15,7 +15,7 @@ func (server *Server) getStatus(c *gin.Context) {
 
 	resp := &gpapi.StatusResponse{}
 	resp.StatusCode = http.StatusOK
-	resp.LastWriteout = server.writeoutHandler.LastRotation
+	resp.LastWriteout = server.captureManager.LastRotation()
 
 	var err error
 	ifaces, err = url.QueryUnescape(ifaces)
@@ -27,15 +27,17 @@ func (server *Server) getStatus(c *gin.Context) {
 		return
 	}
 
+	ctx := c.Request.Context()
+
 	if iface != "" {
-		resp.Statuses = server.captureManager.Status(iface)
+		resp.Statuses = server.captureManager.Status(ctx, iface)
 	} else {
 		if ifaces != "" {
 			// fetch all specified
-			resp.Statuses = server.captureManager.Status(strings.Split(ifaces, ",")...)
+			resp.Statuses = server.captureManager.Status(ctx, strings.Split(ifaces, ",")...)
 		} else {
 			// otherwise, fetch all
-			resp.Statuses = server.captureManager.Status()
+			resp.Statuses = server.captureManager.Status(ctx)
 		}
 	}
 
