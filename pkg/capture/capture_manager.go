@@ -15,6 +15,8 @@ import (
 	"golang.org/x/exp/slog"
 )
 
+const allowedWriteoutDurationFraction = 0.1
+
 // Manager manages a set of Capture instances.
 // Each interface can be associated with up to one Capture.
 type Manager struct {
@@ -23,13 +25,15 @@ type Manager struct {
 	writeoutHandler writeout.Handler
 	captures        map[string]*Capture
 	sourceInitFn    sourceInitFn
-	lastRotation    time.Time
+
+	lastRotation time.Time
 }
 
+// InitManager initializes a CaptureManager and the underlying writeout logic
+// Used as primary entrypoint for the goProbe binary and E2E tests
 func InitManager(ctx context.Context, config *config.Config, opts ...ManagerOption) (*Manager, error) {
 
-	logger := logging.FromContext(ctx)
-
+	// Setup database compression and permissions
 	encoderType, err := encoders.GetTypeByString(config.DB.EncoderType)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get encoder type from %s: %w", config.DB.EncoderType, err)
@@ -39,33 +43,36 @@ func InitManager(ctx context.Context, config *config.Config, opts ...ManagerOpti
 		dbPermissions = config.DB.Permissions
 	}
 
+	// Initialize the DB writeout handler
 	writeoutHandler := writeout.NewGoDBHandler(config.DB.Path, encoderType).
 		WithSyslogWriting(config.SyslogFlows).
 		WithPermissions(dbPermissions)
 
-	captureManager := NewManager(writeoutHandler)
-	for _, opt := range opts {
-		opt(captureManager)
-	}
+		// Initialize the CaptureManager
+	captureManager := NewManager(writeoutHandler, opts...)
 
-	// no captures are being deleted here, so we can safely discard the channel we pass
-	logger.Debug("updating capture manager configuration")
-
+	// Update (i.e. start) all capture routines (implicitly by reloading all configurations) and schedule
+	// DB writeouts
 	captureManager.Update(ctx, config.Interfaces)
 	captureManager.ScheduleWriteouts(ctx, time.Duration(goDB.DBWriteInterval)*time.Second)
 
 	return captureManager, nil
 }
 
-// NewManager creates a new Manager
-func NewManager(writeoutHandler writeout.Handler) *Manager {
-	return &Manager{
+// NewManager creates a new CaptureManager
+func NewManager(writeoutHandler writeout.Handler, opts ...ManagerOption) *Manager {
+	captureManager := &Manager{
 		captures:        make(map[string]*Capture),
 		writeoutHandler: writeoutHandler,
 		sourceInitFn:    defaultSourceInitFn,
 	}
+	for _, opt := range opts {
+		opt(captureManager)
+	}
+	return captureManager
 }
 
+// LastRotation returns the timestamp of the last DB writeout / rotation
 func (cm *Manager) LastRotation() (t time.Time) {
 	cm.RLock()
 	t = cm.lastRotation
@@ -74,8 +81,9 @@ func (cm *Manager) LastRotation() (t time.Time) {
 	return
 }
 
+// ScheduleWriteouts creates a new goroutine that executes a DB writeout in defined time
+// intervals
 func (cm *Manager) ScheduleWriteouts(ctx context.Context, interval time.Duration) {
-
 	go func() {
 		logger := logging.FromContext(ctx)
 
@@ -104,49 +112,49 @@ func (cm *Manager) ScheduleWriteouts(ctx context.Context, interval time.Duration
 				return
 			default:
 
+				t0 := time.Now()
 				cm.performWriteout(ctx, t)
-				// 	if len(h.writeoutsChan) > 2 {
-				// 		log := logger.With("queue_length", len(h.writeoutsChan))
-				// 		if len(h.writeoutsChan) > capture.WriteoutsChanDepth {
-				// 			log.Fatalf("writeouts are lagging behind too much")
-				// 		}
-				// 		log.Warn("writeouts are lagging behind")
-				// 	}
+				if elapsed := float64(time.Since(t0)); elapsed > allowedWriteoutDurationFraction*float64(interval) {
+					logger.Warnf("writeouts took longer than %.1f%% of the writeout interval (%.1f%%)",
+						100*allowedWriteoutDurationFraction,
+						100.*elapsed/float64(interval))
+				}
 
 				// wait for the the next ticker to complete
 				t = <-ticker.C
 			}
 		}
 	}()
-
 }
 
+// ManagerOption denotes a functional option for any CaptureManager
 type ManagerOption func(cm *Manager)
 
+// WithSourceInitFn sets a custom function used to initialize a new capture
 func WithSourceInitFn(fn sourceInitFn) ManagerOption {
 	return func(cm *Manager) {
-		cm.SetSourceInitFn(fn)
+		cm.sourceInitFn = fn
 	}
 }
 
-// SetSourceInitFn sets a custom function used to initialize a new capture
-func (cm *Manager) SetSourceInitFn(fn sourceInitFn) *Manager {
-	cm.sourceInitFn = fn
-	return cm
-}
-
 // Status fetches the current capture stats from all (or a set of) interfaces
-func (cm *Manager) Status(ctx context.Context, ifaces ...string) map[string]capturetypes.CaptureStats {
+func (cm *Manager) Status(ctx context.Context, ifaces ...string) (statusmap map[string]capturetypes.CaptureStats) {
 
-	statusmapMutex := sync.Mutex{}
-	statusmap := make(map[string]capturetypes.CaptureStats)
+	logger, t0 := logging.FromContext(ctx), time.Now()
 
-	var rg RunGroup
-	cmCopy := cm.capturesCopy()
+	statusmap = make(map[string]capturetypes.CaptureStats)
 
 	// Build list of interfaces to process (either from all interfaces or from explicit list)
-	ifaces = buildIfaces(cmCopy, ifaces...)
+	// If none are provided / are available, return empty map
+	cmCopy := cm.capturesCopy()
+	if ifaces = buildIfaces(cmCopy, ifaces...); len(ifaces) == 0 {
+		return
+	}
 
+	var (
+		statusmapMutex = sync.Mutex{}
+		rg             RunGroup
+	)
 	for _, iface := range ifaces {
 		iface := iface
 		mc, exists := cm.captures[iface]
@@ -154,7 +162,6 @@ func (cm *Manager) Status(ctx context.Context, ifaces ...string) map[string]capt
 			rg.Run(func() {
 
 				runCtx := logging.WithFields(ctx, slog.String("iface", iface))
-				logger := logging.FromContext(runCtx)
 
 				// Lock the running capture and extract the status
 				mc.lock()
@@ -165,7 +172,7 @@ func (cm *Manager) Status(ctx context.Context, ifaces ...string) map[string]capt
 				mc.unlock()
 
 				if err != nil {
-					logger.Errorf("failed to get capture stats: %v", err)
+					logging.FromContext(runCtx).Errorf("failed to get capture stats: %v", err)
 					return
 				}
 
@@ -177,40 +184,53 @@ func (cm *Manager) Status(ctx context.Context, ifaces ...string) map[string]capt
 	}
 	rg.Wait()
 
-	return statusmap
+	logger.With(
+		"elapsed", time.Since(t0).Round(time.Millisecond).String(),
+		"ifaces", ifaces,
+	).Debug("retrieved interface status")
+
+	return
 }
 
+// Update the configuration for all (or a set of) interfaces
 // TODO: Ensure Update() and Close() cannot be called in parallel
 func (cm *Manager) Update(ctx context.Context, ifaces config.Ifaces) {
 
-	logger := logging.FromContext(ctx)
-	t0 := time.Now()
+	logger, t0 := logging.FromContext(ctx), time.Now()
 
 	cmCopy := cm.capturesCopy()
 
-	ifaceSet := make(map[string]struct{})
-	var enableIfaces []string
+	// Build set of interfaces to enable / disable
+	var (
+		ifaceSet                    = make(map[string]struct{})
+		enableIfaces, disableIfaces []string
+	)
 	for iface := range ifaces {
 		ifaceSet[iface] = struct{}{}
-
 		if _, exists := cmCopy[iface]; !exists {
 			enableIfaces = append(enableIfaces, iface)
 		}
 	}
+	for iface := range cmCopy {
+		if _, exists := ifaceSet[iface]; !exists {
+			disableIfaces = append(disableIfaces, iface)
+		}
+	}
 
+	// Enable any interfaces present in the positive list
 	var rg RunGroup
 	for _, iface := range enableIfaces {
 		iface := iface
 		rg.Run(func() {
 
 			runCtx := logging.WithFields(ctx, slog.String("iface", iface))
-			logger := logging.FromContext(runCtx)
 
 			cap := newCapture(iface, ifaces[iface]).SetSourceInitFn(cm.sourceInitFn)
 			if err := cap.run(runCtx); err != nil {
-				logger.Errorf("failed to start capture: %s", err)
+				logging.FromContext(runCtx).Errorf("failed to start capture: %s", err)
 				return
 			}
+
 			cm.Lock()
 			cm.captures[iface] = cap
 			cm.Unlock()
@@ -218,44 +238,48 @@ func (cm *Manager) Update(ctx context.Context, ifaces config.Ifaces) {
 	}
 	rg.Wait()
 
-	// Contains the names of all interfaces we are shutting down and deleting.
-	var disableIfaces []string
-	for iface := range cmCopy {
-		if _, exists := ifaceSet[iface]; !exists {
-			disableIfaces = append(disableIfaces, iface)
-		}
-	}
+	// Disable any interfaces present in the negative list
 	if len(disableIfaces) > 0 {
 		cm.Close(ctx, disableIfaces...)
 	}
 
 	logger.With("elapsed", time.Since(t0).Round(time.Millisecond).String()).Debug("updated interface list")
+	logger.With(
+		"elapsed", time.Since(t0).Round(time.Millisecond).String(),
+		"ifaces_added", enableIfaces,
+		"ifaces_removed", disableIfaces,
+	).Debug("updated interface configuration")
 }
 
+// Close stops / closes all (or a set of) interfaces
 func (cm *Manager) Close(ctx context.Context, ifaces ...string) {
 
-	// Execute a final writeout of all interfaces
-	cm.performWriteout(ctx, time.Now().Add(time.Second), ifaces...)
-
-	var rg RunGroup
-	cmCopy := cm.capturesCopy()
+	logger, t0 := logging.FromContext(ctx), time.Now()
 
 	// Build list of interfaces to process (either from all interfaces or from explicit list)
-	ifaces = buildIfaces(cmCopy, ifaces...)
+	// If none are provided / are available, return empty map
+	cmCopy := cm.capturesCopy()
+	if ifaces = buildIfaces(cmCopy, ifaces...); len(ifaces) == 0 {
+		return
+	}
 
-	// Close all interfaces
+	// Execute a final writeout of all interfaces in the list
+	cm.performWriteout(ctx, time.Now().Add(time.Second), ifaces...)
+
+	// Close all interfaces in the list
+	var rg RunGroup
 	for _, iface := range ifaces {
 		iface := iface
 		mc, exists := cmCopy[iface]
 		if exists {
 			rg.Run(func() {
 				runCtx := logging.WithFields(ctx, slog.String("iface", iface))
-				logger := logging.FromContext(runCtx)
 
 				if err := mc.close(); err != nil {
-					logger.Errorf("failed to close capture: %s", err)
+					logging.FromContext(runCtx).Errorf("failed to close capture: %s", err)
 					return
 				}
+
 				cm.Lock()
 				delete(cm.captures, iface)
 				cm.Unlock()
@@ -263,24 +287,32 @@ func (cm *Manager) Close(ctx context.Context, ifaces ...string) {
 		}
 	}
 	rg.Wait()
+
+	logger.With(
+		"elapsed", time.Since(t0).Round(time.Millisecond).String(),
+		"ifaces", ifaces,
+	).Debug("closed interfaces")
 }
 
 func (cm *Manager) rotate(ctx context.Context, writeoutChan chan<- capturetypes.TaggedAggFlowMap, ifaces ...string) {
 
-	var rg RunGroup
-	cmCopy := cm.capturesCopy()
+	logger, t0 := logging.FromContext(ctx), time.Now()
 
 	// Build list of interfaces to process (either from all interfaces or from explicit list)
-	ifaces = buildIfaces(cmCopy, ifaces...)
+	// If none are provided / are available, return empty map
+	cmCopy := cm.capturesCopy()
+	if ifaces = buildIfaces(cmCopy, ifaces...); len(ifaces) == 0 {
+		return
+	}
 
+	var rg RunGroup
 	for _, iface := range ifaces {
 		iface := iface
-		mc, exists := cm.captures[iface]
+		mc, exists := cmCopy[iface]
 		if exists {
 			rg.Run(func() {
 
 				runCtx := logging.WithFields(ctx, slog.String("iface", iface))
-				logger := logging.FromContext(runCtx)
 
 				// Lock the running capture and perform the rotation
 				mc.lock()
@@ -291,7 +323,7 @@ func (cm *Manager) rotate(ctx context.Context, writeoutChan chan<- capturetypes.
 				// from the individual interfaces (and unlock no matter what)
 				stats, err := mc.status()
 				if err != nil {
-					logger.Errorf("failed to get capture stats: %v", err)
+					logging.FromContext(runCtx).Errorf("failed to get capture stats: %v", err)
 				}
 				mc.unlock()
 
@@ -304,6 +336,11 @@ func (cm *Manager) rotate(ctx context.Context, writeoutChan chan<- capturetypes.
 		}
 	}
 	rg.Wait()
+
+	logger.With(
+		"elapsed", time.Since(t0).Round(time.Millisecond).String(),
+		"ifaces", ifaces,
+	).Debug("rotated interfaces")
 }
 
 func (cm *Manager) performWriteout(ctx context.Context, timestamp time.Time, ifaces ...string) {

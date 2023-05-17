@@ -41,8 +41,6 @@ type sourceInitFn func(*Capture) (capture.Source, error)
 // spawned at creation time. To avoid leaking this goroutine,
 // be sure to call Close() when you're done with a Capture.
 //
-// Each Capture is a finite state machine.
-
 // Each capture is associated with a network interface when created. This interface
 // can never be changed.
 //
@@ -74,12 +72,12 @@ type Capture struct {
 // newCapture creates a new Capture associated with the given iface.
 func newCapture(iface string, config config.CaptureConfig) *Capture {
 	return &Capture{
-		iface:   iface,
-		config:  config,
-		capLock: newCaptureLock(),
-		flowLog: capturetypes.NewFlowLog(),
-		errMap:  make(map[string]int),
-		// sourceInitFn: defaultSourceInitFn,
+		iface:        iface,
+		config:       config,
+		capLock:      newCaptureLock(),
+		flowLog:      capturetypes.NewFlowLog(),
+		errMap:       make(map[string]int),
+		sourceInitFn: defaultSourceInitFn,
 	}
 }
 
@@ -89,6 +87,7 @@ func (c *Capture) SetSourceInitFn(fn sourceInitFn) *Capture {
 	return c
 }
 
+// Iface returns the name of the interface
 func (c *Capture) Iface() string {
 	return c.iface
 }
@@ -105,48 +104,12 @@ func (c *Capture) run(ctx context.Context) (err error) {
 		return fmt.Errorf("failed to initialize capture: %w", err)
 	}
 
+	// Start up processing and error handling / logging in the
+	// background
 	go logErrors(ctx,
 		c.process(ctx))
 
 	return
-}
-
-func logErrors(ctx context.Context, errsChan <-chan error) {
-
-	logger := logging.FromContext(ctx)
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case err := <-errsChan:
-			logger.Error(err)
-			return
-		}
-	}
-}
-
-func (c *Capture) lock() {
-
-	// Notify the capture that a rotation is about to begin, then unblock
-	// the capture potentially being in a blocking PPOLL syscall
-	// Channel has a depth of one and hence this push is non-blocking. Since
-	// we wait for confirmation there is no possibility of repeated attempts
-	// or race conditions
-	c.capLock.request <- struct{}{}
-	if err := c.captureHandle.Unblock(); err != nil {
-		panic(fmt.Sprintf("unexpectedly failed to unblock capture handle, deadlock inevitable: %s", err))
-	}
-
-	// Wait for confirmation of reception from the processing routine, then
-	// commit the rotation
-	<-c.capLock.confirm
-}
-
-func (c *Capture) unlock() {
-
-	// Signal that the rotation is complete, releasing the processing routine
-	c.capLock.done <- struct{}{}
 }
 
 func (c *Capture) close() error {
@@ -282,6 +245,29 @@ func (c *Capture) status() (*capturetypes.CaptureStats, error) {
 	return &res, nil
 }
 
+func (c *Capture) lock() {
+
+	// Notify the capture that a locked interaction is about to begin, then
+	// unblock the capture potentially being in a blocking PPOLL syscall
+	// Channel has a depth of one and hence this push is non-blocking. Since
+	// we wait for confirmation there is no possibility of repeated attempts
+	// or race conditions
+	c.capLock.request <- struct{}{}
+	if err := c.captureHandle.Unblock(); err != nil {
+		panic(fmt.Sprintf("unexpectedly failed to unblock capture handle, deadlock inevitable: %s", err))
+	}
+
+	// Wait for confirmation of reception from the processing routine, then
+	// commit the rotation
+	<-c.capLock.confirm
+}
+
+func (c *Capture) unlock() {
+
+	// Signal that the rotation is complete, releasing the processing routine
+	c.capLock.done <- struct{}{}
+}
+
 type captureLock struct {
 	request chan struct{}
 	confirm chan struct{}
@@ -293,5 +279,18 @@ func newCaptureLock() *captureLock {
 		request: make(chan struct{}, 1),
 		confirm: make(chan struct{}),
 		done:    make(chan struct{}),
+	}
+}
+
+func logErrors(ctx context.Context, errsChan <-chan error) {
+	logger := logging.FromContext(ctx)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case err := <-errsChan:
+			logger.Error(err)
+			return
+		}
 	}
 }
