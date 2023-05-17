@@ -55,7 +55,7 @@ func runBenchmarkCaptureThroughput(t *testing.T, runtime time.Duration, randomiz
 	writeoutHandler := writeout.NewGoDBHandler(tempDir, encoders.EncoderTypeLZ4).
 		WithPermissions(goDB.DefaultPermissions)
 
-	captureManager := capture.NewManager(writeoutHandler).SetSourceInitFn(setupSyntheticUnblockingSource(t, randomize))
+	captureManager := capture.NewManager(writeoutHandler, capture.WithSourceInitFn(setupSyntheticUnblockingSource(t, randomize)))
 	captureManager.Update(ctx, config.Ifaces{
 		"mock": defaultCaptureConfig,
 	})
@@ -85,7 +85,7 @@ func runBenchmarkCaptureThroughput(t *testing.T, runtime time.Duration, randomiz
 func setupSyntheticUnblockingSource(t testing.TB, randomize bool) func(c *capture.Capture) (slimcap.Source, error) {
 	return func(c *capture.Capture) (slimcap.Source, error) {
 
-		mockSrc, err := afring.NewMockSource(c.Iface(),
+		mockSrc, err := afring.NewMockSourceNoDrain(c.Iface(),
 			afring.CaptureLength(link.CaptureLengthMinimalIPv6Transport),
 			afring.Promiscuous(false),
 			afring.BufferSize(1024*1024, 4),
@@ -123,7 +123,7 @@ func setupSyntheticUnblockingSource(t testing.TB, randomize bool) func(c *captur
 			}
 		}
 
-		mockSrc.RunNoDrain(time.Microsecond)
+		mockSrc.Run(time.Microsecond)
 
 		return mockSrc, nil
 	}

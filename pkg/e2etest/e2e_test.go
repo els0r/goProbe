@@ -223,7 +223,6 @@ func runGoProbe(t *testing.T, testDir string, sourceInitFn func() (mockIfaces, f
 		Logging:    config.LogConfig{},
 	}, capture.WithSourceInitFn(initFn))
 	require.Nil(t, err)
-	captureManager.SetSourceInitFn(initFn)
 
 	// Wait until goProbe is done processing all packets, then kill it in the
 	// background via the SIGUSR2 signal
