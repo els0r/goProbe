@@ -8,48 +8,6 @@ import (
 	"github.com/els0r/goProbe/pkg/types/hashmap"
 )
 
-// State enumerates the activity states of a capture
-// type State byte
-
-// const (
-// 	// StateInitializing means that the capture is setting up
-// 	StateInitializing State = iota + 1
-// 	// StateCapturing means that the capture is actively capturing packets
-// 	StateCapturing
-// 	// StateClosing means that the capture is fully terminating and it's held resources are
-// 	// cleaned up
-// 	StateClosing
-// 	// StateError means that the capture has hit the error threshold on the interface (set by ErrorThreshold)
-// 	StateError
-// )
-
-// func (cs State) String() string {
-// 	switch cs {
-// 	case StateInitializing:
-// 		return "initializing"
-// 	case StateCapturing:
-// 		return "capturing"
-// 	case StateClosing:
-// 		return "closing"
-// 	case StateError:
-// 		return "inError"
-// 	default:
-// 		return "unknown"
-// 	}
-// }
-
-// PacketStats stores the packet statistics of the capture
-// type PacketStats struct {
-// 	*CaptureStats
-// 	PacketsCapturedOverall int
-// }
-
-// // InterfaceStatus stores both the capture's state and statistics
-// type InterfaceStatus struct {
-// 	// State       State       `json:"state"`
-// 	PacketStats PacketStats `json:"packet_stats"`
-// }
-
 // TaggedAggFlowMap represents an aggregated
 // flow map tagged with Stats and an
 // an interface name.

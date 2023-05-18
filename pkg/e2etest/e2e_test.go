@@ -228,15 +228,10 @@ func runGoProbe(t *testing.T, testDir string, sourceInitFn func() (mockIfaces, f
 	// background via the SIGUSR2 signal
 	go mockIfaces.KillGoProbeOnceDone(captureManager)
 
-	// Start regular rotations (minimum one second to avoid timestamp duplicates)
-	// writeoutHandler.HandleRotations(ctx, time.Second)
-
 	// Wait for the interrupt signal
 	<-ctx.Done()
 
 	// Finish up
-	// writeoutHandler.Close()
-	// <-writeoutChan
 	shutDownCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	captureManager.Close(shutDownCtx)
 	cancel()
