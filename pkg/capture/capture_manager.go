@@ -161,7 +161,7 @@ func (cm *Manager) Status(ctx context.Context, ifaces ...string) (statusmap map[
 		}
 		rg.Run(func() {
 
-			runCtx := logging.WithFields(ctx, slog.String("iface", iface))
+			runCtx := logging.WithFields(ctx, slog.String("iface", mc.iface))
 
 			// Lock the running capture and extract the status
 			mc.lock()
@@ -177,7 +177,7 @@ func (cm *Manager) Status(ctx context.Context, ifaces ...string) (statusmap map[
 			}
 
 			statusmapMutex.Lock()
-			statusmap[iface] = *status
+			statusmap[mc.iface] = *status
 			statusmapMutex.Unlock()
 		})
 	}
@@ -244,21 +244,20 @@ func (cm *Manager) update(ctx context.Context, ifaces config.Ifaces, enable, dis
 
 	// Disable any interfaces present in the negative list
 	for _, iface := range disable {
-		iface := iface
 		mc, exists := cm.captures.Get(iface)
 		if !exists {
 			continue
 		}
 		rg.Run(func() {
 
-			runCtx := logging.WithFields(ctx, slog.String("iface", iface))
+			runCtx := logging.WithFields(ctx, slog.String("iface", mc.iface))
 
 			if err := mc.close(); err != nil {
 				logging.FromContext(runCtx).Errorf("failed to close capture: %s", err)
 				return
 			}
 
-			cm.captures.Delete(iface)
+			cm.captures.Delete(mc.iface)
 		})
 	}
 	rg.Wait()
@@ -306,12 +305,11 @@ func (cm *Manager) rotate(ctx context.Context, writeoutChan chan<- capturetypes.
 
 	var rg RunGroup
 	for _, iface := range ifaces {
-		iface := iface
 		mc, exists := cm.captures.Get(iface)
 		if exists {
 			rg.Run(func() {
 
-				runCtx := logging.WithFields(ctx, slog.String("iface", iface))
+				runCtx := logging.WithFields(ctx, slog.String("iface", mc.iface))
 
 				// Lock the running capture and perform the rotation
 				mc.lock()
@@ -329,7 +327,7 @@ func (cm *Manager) rotate(ctx context.Context, writeoutChan chan<- capturetypes.
 				writeoutChan <- capturetypes.TaggedAggFlowMap{
 					Map:   rotateResult,
 					Stats: *stats,
-					Iface: iface,
+					Iface: mc.iface,
 				}
 			})
 		}

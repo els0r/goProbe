@@ -66,7 +66,7 @@ func TestE2EBasic(t *testing.T) {
 func TestE2EMultipleIfaces(t *testing.T) {
 
 	// Load identical data several times
-	ifaceData := make([][]byte, 3)
+	ifaceData := make([][]byte, 5)
 	for i := 0; i < len(ifaceData); i++ {
 		pcapData, err := pcaps.ReadFile(filepath.Join(testDataPath, defaultPcapTestFile))
 		require.Nil(t, err)
