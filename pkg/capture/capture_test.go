@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand"
 	"net"
 	"os"
 	"sync"
@@ -20,14 +21,64 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestConcurrentMethodAccess(t *testing.T) {
+const randSeed = 10000
 
-	ifaceConfig := config.Ifaces{
-		"mock": config.CaptureConfig{
-			Promisc:             false,
-			RingBufferBlockSize: config.DefaultRingBufferSize,
-			RingBufferNumBlocks: 4,
-		},
+var prng *rand.Rand
+
+var defaultMockIfaceConfig = config.CaptureConfig{
+	Promisc:             false,
+	RingBufferBlockSize: config.DefaultRingBufferSize,
+	RingBufferNumBlocks: 4,
+}
+
+type testMockSrc struct {
+	src     *afring.MockSourceNoDrain
+	errChan <-chan error
+}
+
+type testMockSrcs map[string]testMockSrc
+
+func (t testMockSrcs) Done() {
+	for _, src := range t {
+		src.src.Done()
+	}
+}
+
+func (t testMockSrcs) Wait() error {
+	for _, src := range t {
+		if err := <-src.errChan; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func TestMain(m *testing.M) {
+	prng = rand.New(rand.NewSource(randSeed)) // #nosec G404
+	os.Exit(m.Run())
+}
+
+func TestConcurrentMethodAccess(t *testing.T) {
+	for _, i := range []int{1, 2, 3, 10} {
+		t.Run(fmt.Sprintf("%d ifaces", i), func(t *testing.T) {
+			testConcurrentMethodAccess(t, i, 1000)
+		})
+	}
+
+	if !testing.Short() {
+		for _, i := range []int{100} {
+			t.Run(fmt.Sprintf("%d ifaces", i), func(t *testing.T) {
+				testConcurrentMethodAccess(t, i, 1000)
+			})
+		}
+	}
+}
+
+func testConcurrentMethodAccess(t *testing.T, nIfaces, nIterations int) {
+
+	ifaceConfigs := make(config.Ifaces)
+	for i := 0; i < nIfaces; i++ {
+		ifaceConfigs[fmt.Sprintf("mock%00d", i)] = defaultMockIfaceConfig
 	}
 
 	// Setup a temporary directory for the test DB
@@ -37,34 +88,40 @@ func TestConcurrentMethodAccess(t *testing.T) {
 	}
 	defer require.Nil(t, os.RemoveAll(tempDir))
 
-	testPacket, err := genDummyPacket()
-	require.Nil(t, err)
-
-	mockSrc, err := afring.NewMockSourceNoDrain("mock",
-		afring.CaptureLength(link.CaptureLengthMinimalIPv4Transport),
-	)
-	require.Nil(t, err)
-	for mockSrc.CanAddPackets() {
-		require.Nil(t, mockSrc.AddPacket(testPacket))
+	// Build / initialize mock sources for all interfaces
+	testMockSrcs := make(testMockSrcs)
+	for iface := range ifaceConfigs {
+		mockSrc, errChan := initMockSrc(t, iface)
+		testMockSrcs[iface] = testMockSrc{
+			src:     mockSrc,
+			errChan: errChan,
+		}
 	}
-	errChan := mockSrc.Run(time.Microsecond)
 
 	// Initialize the CaptureManager
 	captureManager := NewManager(
 		writeout.NewGoDBHandler(tempDir, encoders.EncoderTypeLZ4),
 		WithSourceInitFn(func(c *Capture) (capture.Source, error) {
-			return mockSrc, nil
+			src, exists := testMockSrcs[c.Iface()]
+			if !exists {
+				return nil, fmt.Errorf("failed to initialize missing interface %s", c.Iface())
+			}
+
+			return src.src, nil
 		}),
 	)
-	captureManager.Update(context.Background(), ifaceConfig)
+	captureManager.Update(context.Background(), ifaceConfigs)
+
+	time.Sleep(time.Second)
 
 	wg := sync.WaitGroup{}
 	wg.Add(3)
 
 	go func() {
 		ctx := context.Background()
-		for i := 0; i < 10000; i++ {
-			captureManager.Status(ctx, "mock")
+		for i := 0; i < nIterations; i++ {
+			ifaceIdx := prng.Int63n(int64(nIfaces))
+			captureManager.Status(ctx, fmt.Sprintf("mock%00d", ifaceIdx))
 		}
 		wg.Done()
 	}()
@@ -72,8 +129,9 @@ func TestConcurrentMethodAccess(t *testing.T) {
 	go func() {
 		ctx := context.Background()
 		writeoutChan := make(chan capturetypes.TaggedAggFlowMap, 1)
-		for i := 0; i < 10000; i++ {
-			captureManager.rotate(ctx, writeoutChan, "mock")
+		for i := 0; i < nIterations; i++ {
+			ifaceIdx := prng.Int63n(int64(nIfaces))
+			captureManager.rotate(ctx, writeoutChan, fmt.Sprintf("mock%00d", ifaceIdx))
 			<-writeoutChan
 		}
 		wg.Done()
@@ -81,16 +139,16 @@ func TestConcurrentMethodAccess(t *testing.T) {
 
 	go func() {
 		ctx := context.Background()
-		for i := 0; i < 10000; i++ {
-			captureManager.Update(ctx, ifaceConfig)
+		for i := 0; i < nIterations; i++ {
+			captureManager.Update(ctx, ifaceConfigs)
 		}
 		wg.Done()
 	}()
 
 	wg.Wait()
 
-	mockSrc.Done()
-	<-errChan
+	testMockSrcs.Done()
+	require.Nil(t, testMockSrcs.Wait())
 
 	captureManager.Close(context.Background())
 }
@@ -261,4 +319,20 @@ func genDummyPacket() (capture.Packet, error) {
 		1,
 		2,
 		6, []byte{1, 2}, capture.PacketOutgoing, 128)
+}
+
+func initMockSrc(t *testing.T, iface string) (*afring.MockSourceNoDrain, <-chan error) {
+
+	testPacket, err := genDummyPacket()
+	require.Nil(t, err)
+
+	mockSrc, err := afring.NewMockSourceNoDrain(iface,
+		afring.CaptureLength(link.CaptureLengthMinimalIPv4Transport),
+	)
+	require.Nil(t, err)
+	for mockSrc.CanAddPackets() {
+		require.Nil(t, mockSrc.AddPacket(testPacket))
+	}
+
+	return mockSrc, mockSrc.Run(100 * time.Millisecond)
 }
