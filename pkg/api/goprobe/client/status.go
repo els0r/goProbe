@@ -12,7 +12,7 @@ import (
 )
 
 // GetInterfaceStatus returns the interface capture stats from the running goProbe instance
-func (c *Client) GetInterfaceStatus(ctx context.Context, ifaces ...string) (statuses map[string]capturetypes.InterfaceStatus, lastWriteout time.Time, err error) {
+func (c *Client) GetInterfaceStatus(ctx context.Context, ifaces ...string) (statuses map[string]capturetypes.CaptureStats, lastWriteout time.Time, err error) {
 	var res = new(gpapi.StatusResponse)
 
 	url := c.NewURL(gpapi.StatusRoute)

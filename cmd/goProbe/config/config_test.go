@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -34,7 +35,7 @@ func TestValidate(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			// create reader to parse config
 			path := fmt.Sprintf("testdata/%d.json", i)
-			r, err := os.OpenFile(path, os.O_RDONLY, 0755)
+			r, err := os.OpenFile(filepath.Clean(path), os.O_RDONLY, 0600)
 
 			assert.Nil(t, err, "failed to open test file at %s: %v", path, err)
 
@@ -52,9 +53,9 @@ func TestValidate(t *testing.T) {
 				t.Fatalf("[%d] couldn't parse config: %s", i, err)
 			}
 
-			p := RuntimeDBPath()
+			p := cfg.DB.Path
 			if p == "" {
-				t.Fatalf("[%d] the runtime DB path should never be empty after parsing a config", i)
+				t.Fatalf("[%d] the config DB path should never be empty after parsing a config", i)
 			}
 		})
 	}

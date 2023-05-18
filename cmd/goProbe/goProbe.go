@@ -26,9 +26,6 @@ import (
 	"github.com/els0r/goProbe/cmd/goProbe/flags"
 	"github.com/els0r/goProbe/pkg/api/goprobe/server"
 	"github.com/els0r/goProbe/pkg/capture"
-	"github.com/els0r/goProbe/pkg/goDB"
-	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
-	"github.com/els0r/goProbe/pkg/goprobe/writeout"
 	"github.com/els0r/goProbe/pkg/logging"
 	"github.com/els0r/goProbe/pkg/version"
 
@@ -37,66 +34,25 @@ import (
 
 const shutdownGracePeriod = 30 * time.Second
 
-var (
-	// cfg may be potentially accessed from multiple goroutines,
-	// so we need to synchronize access.
-	config *capconfig.Config
-
-	// captureManager may also be accessed
-	// from multiple goroutines, so we need to synchronize access.
-	captureManager *capture.Manager
-)
-
 func main() {
-	var err error
 
 	// A general note on error handling: Any errors encountered during startup that make it
 	// impossible to run are logged to stderr before the program terminates with a
 	// non-zero exit code.
 	// Issues encountered during capture will be logged to syslog by default
 
-	// get flags
-	err = flags.Read()
-	if err != nil {
+	// Read / parse command-line flags
+	if err := flags.Read(); err != nil {
 		os.Exit(1)
 	}
-
 	appVersion := version.Short()
-
 	if flags.CmdLine.Version {
 		fmt.Printf("goProbe\n%s", version.Version())
 		os.Exit(0)
 	}
 
-	// CPU profiling
-	if flags.CmdLine.ProfilingOutputDir != "" {
-		dirPath := flags.CmdLine.ProfilingOutputDir
-		err := os.MkdirAll(dirPath, 0755)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "failed to create pprof directory: %v\n", err)
-			os.Exit(1)
-		}
-
-		f, perr := os.Create(filepath.Join(dirPath, "goprobe_cpu_profile.pprof"))
-		if perr != nil {
-			fmt.Fprintf(os.Stderr, "failed to create CPU profile file: %v\n", perr)
-			os.Exit(1)
-		}
-		pprof.StartCPUProfile(f)
-		defer pprof.StopCPUProfile()
-
-		defer func() {
-			f2, err := os.Create(filepath.Join(dirPath, "goprobe_mem_profile.pprof"))
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "failed to create memory profile file: %v\n", err)
-				os.Exit(1)
-			}
-			pprof.Lookup("allocs").WriteTo(f2, 0)
-		}()
-	}
-
-	// Config file
-	config, err = capconfig.ParseFile(flags.CmdLine.Config)
+	// Read / parse config file
+	config, err := capconfig.ParseFile(flags.CmdLine.Config)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to load config file: %v\n", err)
 		os.Exit(1)
@@ -114,6 +70,18 @@ func main() {
 	logger := logging.Logger()
 	logger.Info("loaded configuration")
 
+	// Setup profiling (if enabled)
+	if flags.CmdLine.ProfilingOutputDir != "" {
+		if err := startProfiling(flags.CmdLine.ProfilingOutputDir); err != nil {
+			logger.Fatal(err)
+		}
+		defer func() {
+			if err := stopProfiling(flags.CmdLine.ProfilingOutputDir); err != nil {
+				logger.Fatal(err)
+			}
+		}()
+	}
+
 	// It doesn't make sense to monitor zero interfaces
 	if len(config.Interfaces) == 0 {
 		logger.Fatalf("no interfaces have been specified in the configuration file")
@@ -129,17 +97,8 @@ func main() {
 	defer stop()
 
 	// Create DB directory if it doesn't exist already.
-	if err := os.MkdirAll(capconfig.RuntimeDBPath(), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Clean(config.DB.Path), 0755); err != nil {
 		logger.Fatalf("failed to create database directory: %v", err)
-	}
-
-	encoderType, err := encoders.GetTypeByString(config.DB.EncoderType)
-	if err != nil {
-		logger.Fatalf("failed to get encoder type from %s: %v", config.DB.EncoderType, err)
-	}
-	dbPermissions := goDB.DefaultPermissions
-	if config.DB.Permissions != 0 {
-		dbPermissions = config.DB.Permissions
 	}
 
 	// Initialize packet logger
@@ -152,13 +111,10 @@ func main() {
 
 	// None of the initialization steps failed.
 	logger.Info("started goProbe")
-
-	captureManager = capture.NewManager(ctx)
-
-	// no captures are being deleted here, so we can safely discard the channel we pass
-	logger.Debug("updating capture manager configuration")
-
-	captureManager.Update(config.Interfaces, nil)
+	captureManager, err := capture.InitManager(ctx, config)
+	if err != nil {
+		logger.Fatal(err)
+	}
 
 	// configure api server
 	var (
@@ -198,21 +154,10 @@ func main() {
 	// 	apiOptions = append(apiOptions, api.WithDiscoveryConfigUpdate(discoveryConfigUpdate))
 	// }
 
-	// start goroutine for writeouts
-	writeoutHandler := writeout.NewHandler(captureManager, encoderType).
-		WithSyslogWriting(config.SyslogFlows).
-		WithPermissions(dbPermissions)
-
-	// start writeout handler
-	doneWriting := writeoutHandler.HandleWriteouts()
-
-	// start regular rotations
-	writeoutHandler.HandleRotations(ctx, time.Duration(goDB.DBWriteInterval)*time.Second)
-
 	// create server and start listening for requests
 	if config.API != nil {
 		addr := fmt.Sprintf("%s:%s", config.API.Host, config.API.Port)
-		apiServer = server.New(addr, captureManager, writeoutHandler, apiOptions...)
+		apiServer = server.New(addr, captureManager, apiOptions...)
 
 		logger.With("addr", addr).Info("starting API server")
 		go func() {
@@ -243,22 +188,43 @@ func main() {
 		}
 	}
 
-	// one last writeout
-	writeoutHandler.FullWriteout(fallbackCtx, time.Now())
-	writeoutHandler.Close()
-
 	// if discoveryConfigUpdate != nil {
 	// 	close(discoveryConfigUpdate)
 	// }
 
-	captureManager.CloseAll()
+	captureManager.Close(fallbackCtx)
+	logger.Info("graceful shut down completed")
+}
 
-	select {
-	case <-doneWriting:
-		logger.Info("graceful shut down completed")
-	case <-fallbackCtx.Done():
-		logger.Error("forced shutdown")
+func startProfiling(dirPath string) error {
+
+	err := os.MkdirAll(dirPath, 0750)
+	if err != nil {
+		return fmt.Errorf("failed to create pprof directory: %w", err)
 	}
 
-	return
+	f, err := os.Create(filepath.Join(filepath.Clean(dirPath), "goprobe_cpu_profile.pprof"))
+	if err != nil {
+		return fmt.Errorf("failed to create CPU profile file: %w", err)
+	}
+	if err := pprof.StartCPUProfile(f); err != nil {
+		return fmt.Errorf("failed to start CPU profiling: %w", err)
+	}
+
+	return nil
+}
+
+func stopProfiling(dirPath string) error {
+
+	pprof.StopCPUProfile()
+
+	f, err := os.Create(filepath.Join(filepath.Clean(dirPath), "goprobe_mem_profile.pprof"))
+	if err != nil {
+		return fmt.Errorf("failed to create memory profile file: %w", err)
+	}
+	if err := pprof.Lookup("allocs").WriteTo(f, 0); err != nil {
+		return fmt.Errorf("failed to start memory profiling: %w", err)
+	}
+
+	return nil
 }

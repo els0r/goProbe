@@ -1,8 +1,7 @@
-//go:build !race
-
 package e2etest
 
 import (
+	"context"
 	"io/fs"
 	"os"
 	"sync"
@@ -10,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/els0r/goProbe/cmd/goProbe/config"
 	"github.com/els0r/goProbe/pkg/capture"
 	"github.com/els0r/goProbe/pkg/capture/capturetypes"
 	"github.com/els0r/goProbe/pkg/goDB/info"
@@ -92,7 +90,7 @@ func (m mockIfaces) NErr() (res int) {
 	return
 }
 
-func (m mockIfaces) BuildResults(t *testing.T, resGoQuery results.Result) results.Result {
+func (m mockIfaces) BuildResults(t *testing.T, testDir string, resGoQuery results.Result) results.Result {
 
 	res := results.Result{
 		Status: results.Status{
@@ -131,7 +129,7 @@ func (m mockIfaces) BuildResults(t *testing.T, resGoQuery results.Result) result
 	hostname, err := os.Hostname()
 	require.Nil(t, err)
 	for i := 0; i < len(res.Rows); i++ {
-		res.Rows[i].Labels.HostID = info.GetHostID(config.RuntimeDBPath())
+		res.Rows[i].Labels.HostID = info.GetHostID(testDir)
 		res.Rows[i].Labels.Hostname = hostname
 	}
 
@@ -145,33 +143,21 @@ func (m mockIfaces) BuildResults(t *testing.T, resGoQuery results.Result) result
 
 func (m mockIfaces) KillGoProbeOnceDone(cm *capture.Manager) {
 
-	// Wait until all mock captures are in capturing state and
-	// All structures are initialized
-outer:
-	for {
-		for _, st := range cm.Status() {
-			if st.State != capturetypes.StateCapturing {
-				time.Sleep(10 * time.Millisecond)
-				goto outer
-			}
-		}
-		break
-	}
-
 	// Wait until all mock data has been consumed (e.g. from a pcap file)
 	m.WaitUntilDoneReading()
 	nRead := m.NRead()
 
+	ctx := context.Background()
 	for {
 		time.Sleep(50 * time.Millisecond)
 
 		// Grab the number of overall received / processed packets in all captures and
 		// wait until they match the number of read packets
-		var nReceived int
-		for _, st := range cm.Status() {
-			nReceived += st.PacketStats.PacketsCapturedOverall
+		var nProcessed int
+		for _, st := range cm.Status(ctx) {
+			nProcessed += st.ProcessedTotal
 		}
-		if nReceived != nRead {
+		if nRead == 0 || nProcessed != nRead {
 			continue
 		}
 

@@ -27,6 +27,9 @@ jobs:
 
     - name: Test
       run: |
-        go test -race -v ./...
         go test -v ./... -covermode=atomic -coverprofile=coverage.out
         go tool cover -func=coverage.out -o=coverage.out
+
+    - name: Race Detector
+      run: |
+        go test -race -v ./...

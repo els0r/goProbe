@@ -1,21 +1,9 @@
-/////////////////////////////////////////////////////////////////////////////////
-//
-// capture.go
-//
-// Written by Lorenz Breidenbach lob@open.ch, December 2015
-// Copyright (c) 2015 Open Systems AG, Switzerland
-// All Rights Reserved.
-//
-/////////////////////////////////////////////////////////////////////////////////
-
 package capture
 
 import (
 	"context"
 	"errors"
 	"fmt"
-	"sort"
-	"strings"
 	"sync"
 
 	"github.com/els0r/goProbe/cmd/goProbe/config"
@@ -25,11 +13,13 @@ import (
 	"github.com/fako1024/slimcap/capture"
 	"github.com/fako1024/slimcap/capture/afpacket/afring"
 	"github.com/fako1024/slimcap/link"
+	"golang.org/x/exp/slog"
 )
 
 const (
-	// Snaplen sets the amount of bytes captured from a packet
-	Snaplen = 128
+
+	// MaxIfaces is the maximum number of interfaces we can monitor
+	MaxIfaces = 1024
 
 	// ErrorThreshold is the maximum amount of consecutive errors that can occur on an interface before capturing is halted.
 	ErrorThreshold = 10000
@@ -43,131 +33,59 @@ var defaultSourceInitFn = func(c *Capture) (capture.Source, error) {
 	)
 }
 
-//////////////////////// Ancillary capturetypes ////////////////////////
+// sourceInitFn denotes the function used to initialize a capture source,
+// providing the ability to override the default behavior, e.g. in mock tests
+type sourceInitFn func(*Capture) (capture.Source, error)
 
-// ErrorMap stores all encountered pcap errors and their number of occurrence
-type ErrorMap map[string]int
-
-// String prints the errors that occurred during capturing
-func (e ErrorMap) String() string {
-	var errs = make([]string, len(e))
-
-	i := 0
-	for err, count := range e {
-		errs[i] = fmt.Sprintf("%s (%d)", err, count)
-		i++
-	}
-	sort.Slice(errs, func(i, j int) bool {
-		return errs[i] < errs[j]
-	})
-	return strings.Join(errs, "; ")
+// Captures denotes a named set of Capture instances, wrapping a map and the
+// required synchronization of all its actions
+type captures struct {
+	Map map[string]*Capture
+	sync.RWMutex
 }
 
-// ////////////////////// rotation state machine ////////////////////////
-
-type rotationState struct {
-	request chan struct{}
-	confirm chan struct{}
-	done    chan struct{}
-}
-
-func newRotationState() *rotationState {
-	return &rotationState{
-		request: make(chan struct{}, 1),
-		confirm: make(chan struct{}),
-		done:    make(chan struct{}),
+// NewCaptures instantiates a new, empty set of Captures
+func NewCaptures() *captures {
+	return &captures{
+		Map:     make(map[string]*Capture),
+		RWMutex: sync.RWMutex{},
 	}
 }
 
-//////////////////////// capture commands ////////////////////////
-
-// captureCommand is an interface implemented by (you guessed it...)
-// all capture commands. A capture command is sent to the process() of
-// a Capture over the Capture's cmdChan. The captureCommand's execute()
-// method is then executed by process() (and in process()'s goroutine).
-// As a result we don't have to worry about synchronization of the
-// Capture's pcap handle inside the execute() methods.
-type captureCommand interface {
-	// executes the command on the provided capture instance. It can, but
-	// must not provide access to the next state based on its execution
-	execute(c *Capture) stateFn
-}
-
-// commands for runtime information
-type captureCommandStatus struct {
-	returnChan chan<- capturetypes.InterfaceStatus
-}
-type captureCommandErrors struct{ returnChan chan<- ErrorMap }
-type captureCommandFlows struct{ returnChan chan<- *capturetypes.FlowLog }
-
-func (cmd captureCommandStatus) execute(c *Capture) stateFn {
-
-	c.stateMutex.RLock()
-	state := c.state
-	c.stateMutex.RUnlock()
-
-	var result = capturetypes.InterfaceStatus{
-		State: state,
-		PacketStats: capturetypes.PacketStats{
-			CaptureStats:           c.tryGetCaptureStats(),
-			PacketsCapturedOverall: c.packetsCaptured,
-		},
+// Ifaces return the list of names of all interfaces in the set
+func (c *captures) Ifaces(ifaces ...string) []string {
+	if len(ifaces) == 0 {
+		c.RLock()
+		ifaces = make([]string, 0, len(c.Map))
+		for iface := range c.Map {
+			ifaces = append(ifaces, iface)
+		}
+		c.RUnlock()
 	}
-	cmd.returnChan <- result
-	return nil
+
+	return ifaces
 }
 
-func (cmd captureCommandErrors) execute(c *Capture) stateFn {
-	cmd.returnChan <- c.errMap
-	return nil
+// Get safely returns a Capture by name (and an indicator if it exists)
+func (c *captures) Get(iface string) (capture *Capture, exists bool) {
+	c.RLock()
+	capture, exists = c.Map[iface]
+	c.RUnlock()
+	return
 }
 
-func (cmd captureCommandFlows) execute(c *Capture) stateFn {
-	cmd.returnChan <- c.flowLog
-	return nil
+// Set safely adds / overwrites a Capture by name
+func (c *captures) Set(iface string, capture *Capture) {
+	c.Lock()
+	c.Map[iface] = capture
+	c.Unlock()
 }
 
-type capturecommandEnable struct{}
-
-func (cmd capturecommandEnable) execute(c *Capture) stateFn {
-	return initializing
-}
-
-type captureCommandUpdate struct {
-	config config.CaptureConfig
-	done   context.CancelFunc
-}
-
-func (cmd captureCommandUpdate) execute(c *Capture) stateFn {
-	defer cmd.done()
-
-	logger := logging.FromContext(c.ctx)
-
-	if c.needReinitialization(cmd.config) {
-		logger.Infof("interface received updated configuration")
-
-		c.reset()
-		c.config = cmd.config
-
-		return initializing
-	}
-	return nil
-}
-
-// helper struct to bundle up the multiple return values
-// of Rotate
-type rotateResult struct {
-	agg   *hashmap.AggFlowMap
-	stats capturetypes.PacketStats
-}
-
-type captureCommandRotate struct {
-	returnChan chan<- rotateResult
-}
-
-func (cmd captureCommandRotate) execute(c *Capture) stateFn {
-	cmd.returnChan <- c.rotate()
-	return nil
+// Delete safely removes a Capture from the set by name
+func (c *captures) Delete(iface string) {
+	c.Lock()
+	delete(c.Map, iface)
+	c.Unlock()
 }
 
 // Capture captures and logs flow data for all traffic on a
@@ -175,40 +93,20 @@ func (cmd captureCommandRotate) execute(c *Capture) stateFn {
 // spawned at creation time. To avoid leaking this goroutine,
 // be sure to call Close() when you're done with a Capture.
 //
-// Each Capture is a finite state machine.
-
 // Each capture is associated with a network interface when created. This interface
 // can never be changed.
 //
 // All public methods of Capture are threadsafe.
 type Capture struct {
 	iface string
-	// synchronizes all access to the Capture's public methods
-	mutex sync.Mutex
-
-	// has Close been called on the Capture?
-	closed bool
-
-	state      capturetypes.State
-	stateMutex sync.RWMutex
 
 	config config.CaptureConfig
 
-	// channel over which commands are passed to process()
-	// close(cmdChan) is used to tell process() to stop
-	cmdChan       chan captureCommand
-	captureErrors chan error
-
 	// stats from the last rotation or reset (needed for Status)
-	lastRotationStats capturetypes.PacketStats
+	stats capturetypes.CaptureStats
 
 	// Rotation state synchronization
-	rotationState *rotationState
-	closeState    chan struct{}
-
-	// Counts the total number of captured packets
-	// (since the creation of the Capture instance)
-	packetsCaptured, packetsCapturedTmp int
+	capLock *captureLock
 
 	// Logged flows since creation of the capture (note that some
 	// flows are retained even after Rotate has been called)
@@ -219,41 +117,20 @@ type Capture struct {
 	sourceInitFn  sourceInitFn
 
 	// error map for logging errors more properly
-	errMap   ErrorMap
+	errMap   capturetypes.ErrorMap
 	errCount int
-
-	// context for cancellation
-	ctx context.Context
 }
 
-// NewCapture creates a new Capture associated with the given iface.
-func NewCapture(ctx context.Context, iface string, config config.CaptureConfig) *Capture {
-	// make sure that the interface is set for all log messages using
-	// this context
-	capCtx := logging.WithFields(ctx, "iface", iface)
-
+// newCapture creates a new Capture associated with the given iface.
+func newCapture(iface string, config config.CaptureConfig) *Capture {
 	return &Capture{
-		iface:         iface,
-		mutex:         sync.Mutex{},
-		stateMutex:    sync.RWMutex{},
-		config:        config,
-		cmdChan:       make(chan captureCommand),
-		captureErrors: make(chan error),
-		lastRotationStats: capturetypes.PacketStats{
-			CaptureStats: &capturetypes.CaptureStats{},
-		},
-		rotationState: newRotationState(),
-		closeState:    make(chan struct{}, 1),
-		flowLog:       capturetypes.NewFlowLog(),
-		errMap:        make(map[string]int),
-		ctx:           capCtx,
-		sourceInitFn:  defaultSourceInitFn,
+		iface:        iface,
+		config:       config,
+		capLock:      newCaptureLock(),
+		flowLog:      capturetypes.NewFlowLog(),
+		errMap:       make(map[string]int),
+		sourceInitFn: defaultSourceInitFn,
 	}
-}
-
-// Iface returns the interface name of the Capture
-func (c *Capture) Iface() string {
-	return c.iface
 }
 
 // SetSourceInitFn sets a custom function used to initialize a new capture
@@ -262,161 +139,104 @@ func (c *Capture) SetSourceInitFn(fn sourceInitFn) *Capture {
 	return c
 }
 
-// stateFn enables the implementation of the state machine
-type stateFn func(*Capture) stateFn
-
-// sourceInitFn denotes the function used to initialize a capture source,
-// providing the ability to override the default behavior, e.g. in mock tests
-type sourceInitFn func(*Capture) (capture.Source, error)
-
-// setState provides write access to the state field of
-// a Capture. It also logs the state change.
-func (c *Capture) setState(s capturetypes.State) {
-
-	c.stateMutex.Lock()
-	c.state = s
-	c.stateMutex.Unlock()
-
-	c.ctx = logging.WithFields(c.ctx, "state", s.String())
-
-	// log state transition
-	logger := logging.FromContext(c.ctx)
-	logger.Debugf("interface state transition")
+// Iface returns the name of the interface
+func (c *Capture) Iface() string {
+	return c.iface
 }
 
-// Run spawns the capture state machine
-func (c *Capture) Run() {
-	go func() {
-		logger := logging.FromContext(c.ctx)
+func (c *Capture) run(ctx context.Context) (err error) {
 
-		if c.closed {
-			logger.Errorf("unable to run closed capture")
-			return
-		}
+	ctx = logging.WithFields(ctx, slog.String("iface", c.iface))
+	logger := logging.FromContext(ctx)
+	logger.Info("initializing capture / running packet processing")
 
-		for state := initializing; state != nil; {
-			state = state(c)
-		}
-	}()
-}
-
-func initializing(c *Capture) stateFn {
-	c.setState(capturetypes.StateInitializing)
-
-	logger := logging.FromContext(c.ctx)
-	logger.Info("initializing capture")
-
-	// set up the packet source
-	var err error
+	// Set up the packet source and capturing
 	c.captureHandle, err = c.sourceInitFn(c)
 	if err != nil {
-		logger.Errorf("failed to create new packet source: %v", err)
-		return inError
+		return fmt.Errorf("failed to initialize capture: %w", err)
 	}
-	return capturing
+
+	// Start up processing and error handling / logging in the
+	// background
+	go logErrors(ctx,
+		c.process(ctx))
+
+	return
 }
 
-func capturing(c *Capture) stateFn {
-	c.setState(capturetypes.StateCapturing)
+func (c *Capture) close() error {
+	return c.captureHandle.Close()
+}
 
-	logger := logging.FromContext(c.ctx)
-	logger.Info("capturing packets")
+func (c *Capture) rotate(ctx context.Context) (agg *hashmap.AggFlowMap) {
 
-	// packet capturing
-	go c.process()
+	logger := logging.FromContext(ctx)
 
-	// blocking select to wait for tear down or commands
-	for {
-		select {
-		case <-c.ctx.Done():
-			return closing
-		case cmd := <-c.cmdChan:
-			switch cmd.(type) {
-			// ignore enable commands
-			case capturecommandEnable:
-				continue
+	if c.flowLog.Len() == 0 {
+		logger.Debug("there are currently no flow records available")
+		return
+	}
+	agg = c.flowLog.Rotate()
+
+	return
+}
+
+// process is the heart of the Capture. It listens for network traffic on the
+// network interface and logs the corresponding flows.
+//
+// process keeps running until Close is called on its capture handle or it encounters
+// a serious capture error
+func (c *Capture) process(ctx context.Context) <-chan error {
+
+	captureErrors := make(chan error, 64)
+
+	go func() {
+		logger := logging.FromContext(ctx)
+		c.errCount = 0
+
+		// Reusable packet buffer for in-place population
+		pkt := c.captureHandle.NewPacket()
+
+		// Main packet capture loop which an interface should be in most of the time
+		for {
+
+			// map access needs to be synchronized. This will incur a performance hit, but less so
+			// than locking the data structure itself (mutex causes about 40% drop in throughput)
+			select {
+
+			// Lock state synchronization
+			case <-c.capLock.request:
+				c.capLock.confirm <- struct{}{} // Confirm that process() is not processing
+				<-c.capLock.done
+
+			// Normal processing
 			default:
-				nextState := cmd.execute(c)
-				if nextState != nil {
-					return nextState
+				err := c.capturePacket(pkt)
+				if err != nil {
+					if errors.Is(err, capture.ErrCaptureUnblock) { // capture unblocked (e.g. during rotation)
+						continue
+					}
+					if errors.Is(err, capture.ErrCaptureStopped) { // capture stopped gracefully
+						if err := c.captureHandle.Free(); err != nil {
+							logger.Errorf("failed to free capture resources: %s", err)
+						}
+						c.captureHandle = nil
+
+						return
+					}
+
+					captureErrors <- err
+					return
 				}
 			}
-		case err := <-c.captureErrors:
-			logger.Error(err)
-			return inError
 		}
-	}
-}
+	}()
 
-func inError(c *Capture) stateFn {
-	c.setState(capturetypes.StateError)
-
-	logger := logging.FromContext(c.ctx)
-	logger.Infof("waiting for configuration update to re-initialize")
-
-	// wait until the capture is closed or an update/re-init command is
-	// received
-	for {
-		select {
-		case <-c.ctx.Done():
-			return closing
-		case cmd := <-c.cmdChan:
-			nextState := cmd.execute(c)
-			if nextState != nil {
-				return nextState
-			}
-		}
-	}
-}
-
-func closing(c *Capture) stateFn {
-	c.setState(capturetypes.StateClosing)
-
-	// close the capture and reset fields
-	c.reset()
-
-	// make sure no more commands can be received
-	close(c.cmdChan)
-	c.closed = true
-
-	// free resources of the capture handle
-	<-c.closeState
-	if err := c.captureHandle.Free(); err != nil {
-		logging.FromContext(c.ctx).Errorf("failed to free capture resources: %s", err)
-	}
-	c.captureHandle = nil
-
-	// exit the state machine
-	return nil
-}
-
-// reset unites logic used in both recoverError and uninitialize
-// in a single method.
-func (c *Capture) reset() {
-	logger := logging.FromContext(c.ctx)
-
-	if c.captureHandle != nil {
-		logger.Infof("closing capture handle")
-
-		err := c.captureHandle.Close()
-		if err != nil {
-			// for now, just log. We may want to add some additional logic if the close
-			// didn't work (which it really shouldn't)
-			logger.Error(err)
-		}
-	}
-
-	// We reset the capture stats because we will create
-	// a new capture handle with new counts when the Capture is next
-	// initialized.
-	c.lastRotationStats.CaptureStats = &capturetypes.CaptureStats{}
-
-	// reset the error map. The GC will take care of the previous
-	// one
-	c.errMap = make(map[string]int)
+	return captureErrors
 }
 
 func (c *Capture) capturePacket(pkt capture.Packet) (err error) {
+
 	// Fetch the next packet form the wire
 	_, err = c.captureHandle.NextPacket(pkt)
 	if err != nil {
@@ -425,7 +245,6 @@ func (c *Capture) capturePacket(pkt capture.Packet) (err error) {
 		// ErrCaptureUnblock in case the PPOLL was unblocked
 		return fmt.Errorf("capture error: %w", err)
 	}
-	c.packetsCapturedTmp++
 
 	// Populate the capturetypes.GPPacket
 	// Instead of reusing an instance of capture.Packet over and over again a new
@@ -435,254 +254,95 @@ func (c *Capture) capturePacket(pkt capture.Packet) (err error) {
 	var gppacket capturetypes.GPPacket
 	if err = Populate(&gppacket, pkt); err == nil {
 		c.flowLog.Add(&gppacket)
+		c.stats.Processed++
 		c.errCount = 0
-	} else {
-		c.errCount++
-		c.errMap[err.Error()]++
+		return nil
+	}
 
-		// Shut down the interface thread if too many consecutive decoding failures
-		// have been encountered
-		if c.errCount > ErrorThreshold {
-			return fmt.Errorf("the last %d packets could not be decoded: [%s]",
-				ErrorThreshold,
-				c.errMap.String(),
-			)
-		}
+	c.stats.Processed++
+	c.errCount++
+	c.errMap[err.Error()]++
+
+	// Shut down the interface thread if too many consecutive decoding failures
+	// have been encountered
+	if c.errCount > ErrorThreshold {
+		return fmt.Errorf("the last %d packets could not be decoded: [%s]",
+			ErrorThreshold,
+			c.errMap.String(),
+		)
 	}
 
 	return nil
 }
 
-// process is the heart of the Capture. It listens for network traffic on the
-// network interface and logs the corresponding flows.
-//
-// process keeps running until Close is called on its capture handle or it encounters
-// a serious capture error
-func (c *Capture) process() {
-	logger := logging.FromContext(c.ctx)
+func (c *Capture) status() (*capturetypes.CaptureStats, error) {
 
-	c.errCount = 0
-
-	// Reusable packet buffer for in-place population
-	pkt := make(capture.Packet, Snaplen+6)
-
-	defer func() {
-		c.closeState <- struct{}{} // Confirm that process() is done
-	}()
-
-	// Main packet capture loop which an interface should be in most of the time
-	for {
-
-		// map access needs to be synchronized. This will incur a performance hit, but less so
-		// than locking the data structure itself (mutex causes about 40% drop in throughput)
-		select {
-
-		// Rotation state synchronization
-		case <-c.rotationState.request:
-			c.rotationState.confirm <- struct{}{} // Confirm that process() is not processing
-			select {
-			case <-c.rotationState.done: // Rotation is done, continue with processing
-				continue
-			case <-c.ctx.Done():
-				logger.Debug("context cancelled during rotation. Exiting")
-				return
-			}
-
-		// Normal processing
-		default:
-			err := c.capturePacket(pkt)
-			if err != nil {
-				if errors.Is(err, capture.ErrCaptureUnblock) { // capture unblocked (e.g. during rotation)
-					continue
-				}
-				if errors.Is(err, capture.ErrCaptureStopped) { // capture stopped gracefully
-					return
-				}
-
-				c.captureErrors <- err
-				return
-			}
-		}
+	stats, err := c.captureHandle.Stats()
+	if err != nil {
+		return nil, err
 	}
+
+	c.stats.ReceivedTotal += stats.PacketsReceived
+	c.stats.ProcessedTotal += c.stats.Processed
+
+	res := capturetypes.CaptureStats{
+		Received:       stats.PacketsReceived,
+		ReceivedTotal:  c.stats.ReceivedTotal,
+		Dropped:        stats.PacketsDropped,
+		Processed:      c.stats.Processed,
+		ProcessedTotal: c.stats.ProcessedTotal,
+	}
+	c.stats.Processed = 0
+
+	return &res, nil
 }
 
-func (c *Capture) rotate() (result rotateResult) {
+func (c *Capture) lock() {
 
-	logger := logging.FromContext(c.ctx)
-
-	// Notify the capture that a rotation is about to begin, then unblock
-	// the capture potentially being in a blocking PPOLL syscall
+	// Notify the capture that a locked interaction is about to begin, then
+	// unblock the capture potentially being in a blocking PPOLL syscall
 	// Channel has a depth of one and hence this push is non-blocking. Since
 	// we wait for confirmation there is no possibility of repeated attempts
 	// or race conditions
-	c.rotationState.request <- struct{}{}
+	c.capLock.request <- struct{}{}
 	if err := c.captureHandle.Unblock(); err != nil {
-		logger.Fatalf("unexpectedly failed to unblock capture handle, deadlock likely: %v", err)
+		panic(fmt.Sprintf("unexpectedly failed to unblock capture handle, deadlock inevitable: %s", err))
 	}
 
 	// Wait for confirmation of reception from the processing routine, then
 	// commit the rotation
-	<-c.rotationState.confirm
+	<-c.capLock.confirm
+}
 
-	if c.flowLog.Len() == 0 {
-		logger.Debug("there are currently no flow records available")
-	} else {
-
-		result.agg = c.flowLog.Rotate()
-
-		stats := c.tryGetCaptureStats()
-		lastRotationStats := *stats
-
-		capturetypes.SubStats(stats, c.lastRotationStats.CaptureStats)
-
-		c.packetsCaptured = c.packetsCapturedTmp
-		result.stats = capturetypes.PacketStats{
-			CaptureStats:           stats,
-			PacketsCapturedOverall: c.packetsCapturedTmp,
-		}
-		c.lastRotationStats = capturetypes.PacketStats{
-			CaptureStats: &lastRotationStats,
-		}
-	}
+func (c *Capture) unlock() {
 
 	// Signal that the rotation is complete, releasing the processing routine
-	c.rotationState.done <- struct{}{}
-
-	return
+	c.capLock.done <- struct{}{}
 }
 
-//////////////////////// utilities ////////////////////////
-
-// needReinitialization checks whether we need to reinitialize the capture
-// to apply the given config.
-func (c *Capture) needReinitialization(config config.CaptureConfig) bool {
-	return c.config != config
+type captureLock struct {
+	request chan struct{}
+	confirm chan struct{}
+	done    chan struct{}
 }
 
-func (c *Capture) tryGetCaptureStats() *capturetypes.CaptureStats {
-	logger := logging.FromContext(c.ctx)
+func newCaptureLock() *captureLock {
+	return &captureLock{
+		request: make(chan struct{}, 1),
+		confirm: make(chan struct{}),
+		done:    make(chan struct{}),
+	}
+}
 
-	var (
-		stats capture.Stats
-		err   error
-	)
-	if c.captureHandle != nil {
-		stats, err = c.captureHandle.Stats()
-		if err != nil {
-			logger.Errorf("failed to get capture stats: %v", err)
+func logErrors(ctx context.Context, errsChan <-chan error) {
+	logger := logging.FromContext(ctx)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case err := <-errsChan:
+			logger.Error(err)
+			return
 		}
 	}
-	return &capturetypes.CaptureStats{
-		Received: stats.PacketsReceived,
-		Dropped:  stats.PacketsDropped,
-	}
-}
-
-//////////////////////// public functions ////////////////////////
-
-// Enable instructs the capture to initialize itself. This command
-// has no effect if the capture is already running
-func (c *Capture) Enable() {
-	logger := logging.FromContext(c.ctx)
-
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-
-	if c.closed {
-		logger.Errorf("cannot enable closed capture")
-		return
-	}
-
-	c.cmdChan <- capturecommandEnable{}
-}
-
-// Status returns the current State as well as the statistics
-// collected since the last call to Rotate()
-func (c *Capture) Status() (result capturetypes.InterfaceStatus) {
-	logger := logging.FromContext(c.ctx)
-
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-
-	if c.closed {
-		logger.Errorf("cannot get status of closed capture")
-		return
-	}
-
-	ch := make(chan capturetypes.InterfaceStatus, 1)
-	c.cmdChan <- captureCommandStatus{ch}
-	return <-ch
-}
-
-// Errors implements the status call to return all interface errors
-func (c *Capture) Errors() (result ErrorMap) {
-	logger := logging.FromContext(c.ctx)
-
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-
-	if c.closed {
-		logger.Errorf("cannot get status of closed capture")
-		return
-	}
-
-	ch := make(chan ErrorMap, 1)
-	c.cmdChan <- captureCommandErrors{ch}
-	return <-ch
-}
-
-// Flows impolements the status call to return the contents of the active flow log
-func (c *Capture) Flows() (result *capturetypes.FlowLog) {
-	logger := logging.FromContext(c.ctx)
-
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-
-	if c.closed {
-		logger.Errorf("cannot get flows from closed capture")
-		return
-	}
-
-	ch := make(chan *capturetypes.FlowLog, 1)
-	c.cmdChan <- captureCommandFlows{ch}
-	return <-ch
-}
-
-// Update will attempt to put the Capture instance into
-// StateActive with the given config.
-// If the Capture is already active with the given config
-// Update will detect this and do no work.
-func (c *Capture) Update(config config.CaptureConfig) {
-	logger := logging.FromContext(c.ctx)
-
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-
-	if c.closed {
-		logger.Errorf("cannot get status of closed capture")
-		return
-	}
-
-	updateCtx, done := context.WithCancel(c.ctx)
-	c.cmdChan <- captureCommandUpdate{config, done}
-
-	// wait until the operation completes
-	<-updateCtx.Done()
-}
-
-// Rotate performs a rotation of the underlying flow log and
-// returns an AggFlowMap with all flows that have been collected
-// since the last call to Rotate(). It also returns capture statistics
-// collected since the last call to Rotate().
-//
-// Note: stats.Pcap may be null if there was an error fetching the
-// stats of the underlying pcap handle.
-func (c *Capture) Rotate() (agg *hashmap.AggFlowMap, stats capturetypes.PacketStats) {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-
-	ch := make(chan rotateResult, 1)
-	c.cmdChan <- captureCommandRotate{ch}
-	result := <-ch
-	return result.agg, result.stats
 }

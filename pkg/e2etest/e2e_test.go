@@ -1,5 +1,3 @@
-//go:build !race
-
 package e2etest
 
 import (
@@ -26,11 +24,11 @@ import (
 	"github.com/els0r/goProbe/cmd/goQuery/cmd"
 
 	// "github.com/els0r/goProbe/cmd/goQuery/commands"
+
 	"github.com/els0r/goProbe/pkg/capture"
 	"github.com/els0r/goProbe/pkg/capture/capturetypes"
 	"github.com/els0r/goProbe/pkg/goDB"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
-	"github.com/els0r/goProbe/pkg/goprobe/writeout"
 	"github.com/els0r/goProbe/pkg/results"
 	"github.com/els0r/goProbe/pkg/types"
 	jsoniter "github.com/json-iterator/go"
@@ -68,7 +66,7 @@ func TestE2EBasic(t *testing.T) {
 func TestE2EMultipleIfaces(t *testing.T) {
 
 	// Load identical data several times
-	ifaceData := make([][]byte, 3)
+	ifaceData := make([][]byte, 5)
 	for i := 0; i < len(ifaceData); i++ {
 		pcapData, err := pcaps.ReadFile(filepath.Join(testDataPath, defaultPcapTestFile))
 		require.Nil(t, err)
@@ -159,7 +157,6 @@ func testE2E(t *testing.T, datasets ...[]byte) {
 	if err != nil {
 		panic(err)
 	}
-	config.SetRuntimeDBPath(tempDir)
 	defer require.Nil(t, os.RemoveAll(tempDir))
 
 	// Define mock interfaces
@@ -169,11 +166,11 @@ func testE2E(t *testing.T, datasets ...[]byte) {
 	}
 
 	// Run GoProbe
-	runGoProbe(t, setupSources(t, mockIfaces))
+	runGoProbe(t, tempDir, setupSources(t, mockIfaces))
 
 	// Run GoQuery and build reference results from tracking
-	resGoQuery := runGoQuery(t, mockIfaces, 100000)
-	resReference := mockIfaces.BuildResults(t, resGoQuery)
+	resGoQuery := runGoQuery(t, tempDir, mockIfaces, 100000)
+	resReference := mockIfaces.BuildResults(t, tempDir, resGoQuery)
 
 	// Counter consistency checks
 	require.Equal(t, mockIfaces.NProcessed(), int(resGoQuery.Summary.Totals.PacketsRcvd))
@@ -203,7 +200,7 @@ func testE2E(t *testing.T, datasets ...[]byte) {
 	require.EqualValues(t, refRows, resRows)
 }
 
-func runGoProbe(t *testing.T, sourceInitFn func() (mockIfaces, func(c *capture.Capture) (slimcap.Source, error))) {
+func runGoProbe(t *testing.T, testDir string, sourceInitFn func() (mockIfaces, func(c *capture.Capture) (slimcap.Source, error))) {
 
 	// We quit on encountering SIGUSR2 (instead of the ususal SIGTERM or SIGINT)
 	// to avoid killing the test
@@ -211,39 +208,36 @@ func runGoProbe(t *testing.T, sourceInitFn func() (mockIfaces, func(c *capture.C
 	defer stop()
 
 	mockIfaces, initFn := sourceInitFn()
-	captureManager := capture.NewManager(ctx).SetSourceInitFn(initFn)
 
 	ifaceConfigs := make(config.Ifaces)
 	for _, iface := range mockIfaces {
 		ifaceConfigs[iface.name] = defaultCaptureConfig
 	}
+	captureManager, err := capture.InitManager(ctx, &config.Config{
+		DB: config.DBConfig{
+			Path:        testDir,
+			EncoderType: encoders.EncoderTypeLZ4.String(),
+			Permissions: goDB.DefaultPermissions,
+		},
+		Interfaces: ifaceConfigs,
+		Logging:    config.LogConfig{},
+	}, capture.WithSourceInitFn(initFn))
+	require.Nil(t, err)
 
 	// Wait until goProbe is done processing all packets, then kill it in the
 	// background via the SIGUSR2 signal
 	go mockIfaces.KillGoProbeOnceDone(captureManager)
 
-	captureManager.Update(ifaceConfigs, nil)
-
-	// Start goroutine for writeouts
-	writeoutHandler := writeout.NewHandler(captureManager, encoders.EncoderTypeLZ4).
-		WithPermissions(goDB.DefaultPermissions)
-
-	// Start writeout handler
-	writeoutChan := writeoutHandler.HandleWriteouts()
-
-	// Start regular rotations (minimum one second to avoid timestamp duplicates)
-	writeoutHandler.HandleRotations(ctx, time.Second)
-
 	// Wait for the interrupt signal
 	<-ctx.Done()
 
 	// Finish up
-	writeoutHandler.Close()
-	<-writeoutChan
-	captureManager.CloseAll()
+	shutDownCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	captureManager.Close(shutDownCtx)
+	cancel()
 }
 
-func runGoQuery(t *testing.T, mockIfaces mockIfaces, maxEntries int) results.Result {
+func runGoQuery(t *testing.T, testDir string, mockIfaces mockIfaces, maxEntries int) results.Result {
 
 	buf := bytes.NewBuffer(nil)
 	old := os.Stdout // keep backup of STDOUT
@@ -265,7 +259,7 @@ func runGoQuery(t *testing.T, mockIfaces mockIfaces, maxEntries int) results.Res
 		"-i", strings.Join(mockIfaces.Names(), ","),
 		"-e", "json",
 		"-l", time.Now().Add(time.Hour).Format(time.ANSIC),
-		"-d", config.RuntimeDBPath(),
+		"-d", testDir,
 		"-n", strconv.Itoa(maxEntries),
 		"-s", "packets",
 		"sip,dip,dport,proto",
