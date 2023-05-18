@@ -23,7 +23,7 @@ type Manager struct {
 	sync.RWMutex
 
 	writeoutHandler writeout.Handler
-	captures        map[string]*Capture
+	captures        *Captures
 	sourceInitFn    sourceInitFn
 
 	lastRotation time.Time
@@ -48,7 +48,7 @@ func InitManager(ctx context.Context, config *config.Config, opts ...ManagerOpti
 		WithSyslogWriting(config.SyslogFlows).
 		WithPermissions(dbPermissions)
 
-		// Initialize the CaptureManager
+	// Initialize the CaptureManager
 	captureManager := NewManager(writeoutHandler, opts...)
 
 	// Update (i.e. start) all capture routines (implicitly by reloading all configurations) and schedule
@@ -62,7 +62,7 @@ func InitManager(ctx context.Context, config *config.Config, opts ...ManagerOpti
 // NewManager creates a new CaptureManager
 func NewManager(writeoutHandler writeout.Handler, opts ...ManagerOption) *Manager {
 	captureManager := &Manager{
-		captures:        make(map[string]*Capture),
+		captures:        NewCaptures(),
 		writeoutHandler: writeoutHandler,
 		sourceInitFn:    defaultSourceInitFn,
 	}
@@ -146,8 +146,7 @@ func (cm *Manager) Status(ctx context.Context, ifaces ...string) (statusmap map[
 
 	// Build list of interfaces to process (either from all interfaces or from explicit list)
 	// If none are provided / are available, return empty map
-	cmCopy := cm.capturesCopy()
-	if ifaces = buildIfaces(cmCopy, ifaces...); len(ifaces) == 0 {
+	if ifaces = cm.captures.Ifaces(ifaces...); len(ifaces) == 0 {
 		return
 	}
 
@@ -156,31 +155,31 @@ func (cm *Manager) Status(ctx context.Context, ifaces ...string) (statusmap map[
 		rg             RunGroup
 	)
 	for _, iface := range ifaces {
-		iface := iface
-		mc, exists := cm.captures[iface]
-		if exists {
-			rg.Run(func() {
-
-				runCtx := logging.WithFields(ctx, slog.String("iface", iface))
-
-				// Lock the running capture and extract the status
-				mc.lock()
-
-				// Since the capture is locked we can safely extract the (capture) status
-				// from the individual interfaces (and unlock no matter what)
-				status, err := mc.status()
-				mc.unlock()
-
-				if err != nil {
-					logging.FromContext(runCtx).Errorf("failed to get capture stats: %v", err)
-					return
-				}
-
-				statusmapMutex.Lock()
-				statusmap[iface] = *status
-				statusmapMutex.Unlock()
-			})
+		mc, exists := cm.captures.Get(iface)
+		if !exists {
+			continue
 		}
+		rg.Run(func() {
+
+			runCtx := logging.WithFields(ctx, slog.String("iface", iface))
+
+			// Lock the running capture and extract the status
+			mc.lock()
+
+			// Since the capture is locked we can safely extract the (capture) status
+			// from the individual interfaces (and unlock no matter what)
+			status, err := mc.status()
+			mc.unlock()
+
+			if err != nil {
+				logging.FromContext(runCtx).Errorf("failed to get capture stats: %v", err)
+				return
+			}
+
+			statusmapMutex.Lock()
+			statusmap[iface] = *status
+			statusmapMutex.Unlock()
+		})
 	}
 	rg.Wait()
 
@@ -193,12 +192,7 @@ func (cm *Manager) Status(ctx context.Context, ifaces ...string) (statusmap map[
 }
 
 // Update the configuration for all (or a set of) interfaces
-// TODO: Ensure Update() and Close() cannot be called in parallel
 func (cm *Manager) Update(ctx context.Context, ifaces config.Ifaces) {
-
-	logger, t0 := logging.FromContext(ctx), time.Now()
-
-	cmCopy := cm.capturesCopy()
 
 	// Build set of interfaces to enable / disable
 	var (
@@ -207,19 +201,31 @@ func (cm *Manager) Update(ctx context.Context, ifaces config.Ifaces) {
 	)
 	for iface := range ifaces {
 		ifaceSet[iface] = struct{}{}
-		if _, exists := cmCopy[iface]; !exists {
+		if _, exists := cm.captures.Get(iface); !exists {
 			enableIfaces = append(enableIfaces, iface)
 		}
 	}
-	for iface := range cmCopy {
+	for iface := range cm.captures.Map {
 		if _, exists := ifaceSet[iface]; !exists {
 			disableIfaces = append(disableIfaces, iface)
 		}
 	}
 
+	cm.update(ctx, ifaces, enableIfaces, disableIfaces)
+}
+
+func (cm *Manager) update(ctx context.Context, ifaces config.Ifaces, enable, disable []string) {
+
+	logger, t0 := logging.FromContext(ctx), time.Now()
+
+	// To avoid any interference the update() logic is protected as a whole
+	// This also allows us to interace with the captures without copying (creating potential races)
+	cm.Lock()
+	defer cm.Unlock()
+
 	// Enable any interfaces present in the positive list
 	var rg RunGroup
-	for _, iface := range enableIfaces {
+	for _, iface := range enable {
 		iface := iface
 		rg.Run(func() {
 
@@ -231,23 +237,37 @@ func (cm *Manager) Update(ctx context.Context, ifaces config.Ifaces) {
 				return
 			}
 
-			cm.Lock()
-			cm.captures[iface] = cap
-			cm.Unlock()
+			cm.captures.Set(iface, cap)
 		})
 	}
 	rg.Wait()
 
 	// Disable any interfaces present in the negative list
-	if len(disableIfaces) > 0 {
-		cm.Close(ctx, disableIfaces...)
+	for _, iface := range disable {
+		iface := iface
+		mc, exists := cm.captures.Get(iface)
+		if !exists {
+			continue
+		}
+		rg.Run(func() {
+
+			runCtx := logging.WithFields(ctx, slog.String("iface", iface))
+
+			if err := mc.close(); err != nil {
+				logging.FromContext(runCtx).Errorf("failed to close capture: %s", err)
+				return
+			}
+
+			cm.captures.Delete(iface)
+		})
 	}
+	rg.Wait()
 
 	logger.With("elapsed", time.Since(t0).Round(time.Millisecond).String()).Debug("updated interface list")
 	logger.With(
 		"elapsed", time.Since(t0).Round(time.Millisecond).String(),
-		"ifaces_added", enableIfaces,
-		"ifaces_removed", disableIfaces,
+		"ifaces_added", enable,
+		"ifaces_removed", disable,
 	).Debug("updated interface configuration")
 }
 
@@ -257,36 +277,16 @@ func (cm *Manager) Close(ctx context.Context, ifaces ...string) {
 	logger, t0 := logging.FromContext(ctx), time.Now()
 
 	// Build list of interfaces to process (either from all interfaces or from explicit list)
-	// If none are provided / are available, return empty map
-	cmCopy := cm.capturesCopy()
-	if ifaces = buildIfaces(cmCopy, ifaces...); len(ifaces) == 0 {
+	if ifaces = cm.captures.Ifaces(ifaces...); len(ifaces) == 0 {
 		return
 	}
 
 	// Execute a final writeout of all interfaces in the list
 	cm.performWriteout(ctx, time.Now().Add(time.Second), ifaces...)
 
-	// Close all interfaces in the list
-	var rg RunGroup
-	for _, iface := range ifaces {
-		iface := iface
-		mc, exists := cmCopy[iface]
-		if exists {
-			rg.Run(func() {
-				runCtx := logging.WithFields(ctx, slog.String("iface", iface))
-
-				if err := mc.close(); err != nil {
-					logging.FromContext(runCtx).Errorf("failed to close capture: %s", err)
-					return
-				}
-
-				cm.Lock()
-				delete(cm.captures, iface)
-				cm.Unlock()
-			})
-		}
-	}
-	rg.Wait()
+	// Close all interfaces in the list using update() with the respective list of
+	// interfaces to remove
+	cm.update(ctx, nil, nil, ifaces)
 
 	logger.With(
 		"elapsed", time.Since(t0).Round(time.Millisecond).String(),
@@ -300,15 +300,14 @@ func (cm *Manager) rotate(ctx context.Context, writeoutChan chan<- capturetypes.
 
 	// Build list of interfaces to process (either from all interfaces or from explicit list)
 	// If none are provided / are available, return empty map
-	cmCopy := cm.capturesCopy()
-	if ifaces = buildIfaces(cmCopy, ifaces...); len(ifaces) == 0 {
+	if ifaces = cm.captures.Ifaces(ifaces...); len(ifaces) == 0 {
 		return
 	}
 
 	var rg RunGroup
 	for _, iface := range ifaces {
 		iface := iface
-		mc, exists := cmCopy[iface]
+		mc, exists := cm.captures.Get(iface)
 		if exists {
 			rg.Run(func() {
 
@@ -355,27 +354,4 @@ func (cm *Manager) performWriteout(ctx context.Context, timestamp time.Time, ifa
 	cm.Lock()
 	cm.lastRotation = timestamp
 	cm.Unlock()
-}
-
-func (cm *Manager) capturesCopy() map[string]*Capture {
-	copyMap := make(map[string]*Capture)
-
-	cm.Lock()
-	for iface, capture := range cm.captures {
-		copyMap[iface] = capture
-	}
-	cm.Unlock()
-
-	return copyMap
-}
-
-func buildIfaces(captures map[string]*Capture, ifaces ...string) []string {
-	if len(ifaces) == 0 {
-		ifaces = make([]string, 0, len(captures))
-		for iface := range captures {
-			ifaces = append(ifaces, iface)
-		}
-	}
-
-	return ifaces
 }

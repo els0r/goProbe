@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/els0r/goProbe/cmd/goProbe/config"
 	"github.com/els0r/goProbe/pkg/capture/capturetypes"
@@ -35,6 +36,57 @@ var defaultSourceInitFn = func(c *Capture) (capture.Source, error) {
 // sourceInitFn denotes the function used to initialize a capture source,
 // providing the ability to override the default behavior, e.g. in mock tests
 type sourceInitFn func(*Capture) (capture.Source, error)
+
+// Captures denotes a named set of Capture instances, wrapping a map and the
+// required synchronization of all its actions
+type Captures struct {
+	Map map[string]*Capture
+	sync.RWMutex
+}
+
+// NewCaptures instantiates a new, empty set of Captures
+func NewCaptures() *Captures {
+	return &Captures{
+		Map:     make(map[string]*Capture),
+		RWMutex: sync.RWMutex{},
+	}
+}
+
+// Ifaces return the list of names of all interfaces in the set
+func (c *Captures) Ifaces(ifaces ...string) []string {
+	if len(ifaces) == 0 {
+		c.RLock()
+		ifaces = make([]string, 0, len(c.Map))
+		for iface := range c.Map {
+			ifaces = append(ifaces, iface)
+		}
+		c.RUnlock()
+	}
+
+	return ifaces
+}
+
+// Get safely returns a Capture by name (and an indicator if it exists)
+func (c *Captures) Get(iface string) (capture *Capture, exists bool) {
+	c.RLock()
+	capture, exists = c.Map[iface]
+	c.RUnlock()
+	return
+}
+
+// Set safely adds / overwrites a Capture by name
+func (c *Captures) Set(iface string, capture *Capture) {
+	c.Lock()
+	c.Map[iface] = capture
+	c.Unlock()
+}
+
+// Delete safely removes a Capture from the set by name
+func (c *Captures) Delete(iface string) {
+	c.Lock()
+	delete(c.Map, iface)
+	c.Unlock()
+}
 
 // Capture captures and logs flow data for all traffic on a
 // given network interface. For each Capture, a goroutine is
