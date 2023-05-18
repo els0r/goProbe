@@ -96,11 +96,11 @@ func TestResolveInConditional(t *testing.T) {
 			}
 		} else {
 			if err != nil {
-				t.Errorf("Unexpectedly failed on input %v. The error is: %s",
+				t.Fatalf("Unexpectedly failed on input %v. The error is: %s",
 					test.conditional, err)
 			}
 			if resolvedNode.String() != test.output {
-				t.Errorf("Expected output: %s. Actual output: %s",
+				t.Fatalf("Expected output: %s. Actual output: %s",
 					test.output, resolvedNode)
 			}
 		}
