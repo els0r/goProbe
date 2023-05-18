@@ -39,21 +39,21 @@ type sourceInitFn func(*Capture) (capture.Source, error)
 
 // Captures denotes a named set of Capture instances, wrapping a map and the
 // required synchronization of all its actions
-type Captures struct {
+type captures struct {
 	Map map[string]*Capture
 	sync.RWMutex
 }
 
 // NewCaptures instantiates a new, empty set of Captures
-func NewCaptures() *Captures {
-	return &Captures{
+func NewCaptures() *captures {
+	return &captures{
 		Map:     make(map[string]*Capture),
 		RWMutex: sync.RWMutex{},
 	}
 }
 
 // Ifaces return the list of names of all interfaces in the set
-func (c *Captures) Ifaces(ifaces ...string) []string {
+func (c *captures) Ifaces(ifaces ...string) []string {
 	if len(ifaces) == 0 {
 		c.RLock()
 		ifaces = make([]string, 0, len(c.Map))
@@ -67,7 +67,7 @@ func (c *Captures) Ifaces(ifaces ...string) []string {
 }
 
 // Get safely returns a Capture by name (and an indicator if it exists)
-func (c *Captures) Get(iface string) (capture *Capture, exists bool) {
+func (c *captures) Get(iface string) (capture *Capture, exists bool) {
 	c.RLock()
 	capture, exists = c.Map[iface]
 	c.RUnlock()
@@ -75,14 +75,14 @@ func (c *Captures) Get(iface string) (capture *Capture, exists bool) {
 }
 
 // Set safely adds / overwrites a Capture by name
-func (c *Captures) Set(iface string, capture *Capture) {
+func (c *captures) Set(iface string, capture *Capture) {
 	c.Lock()
 	c.Map[iface] = capture
 	c.Unlock()
 }
 
 // Delete safely removes a Capture from the set by name
-func (c *Captures) Delete(iface string) {
+func (c *captures) Delete(iface string) {
 	c.Lock()
 	delete(c.Map, iface)
 	c.Unlock()

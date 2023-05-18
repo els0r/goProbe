@@ -23,7 +23,7 @@ type Manager struct {
 	sync.RWMutex
 
 	writeoutHandler writeout.Handler
-	captures        *Captures
+	captures        *captures
 	sourceInitFn    sourceInitFn
 
 	lastRotation time.Time
@@ -262,7 +262,6 @@ func (cm *Manager) update(ctx context.Context, ifaces config.Ifaces, enable, dis
 	}
 	rg.Wait()
 
-	logger.With("elapsed", time.Since(t0).Round(time.Millisecond).String()).Debug("updated interface list")
 	logger.With(
 		"elapsed", time.Since(t0).Round(time.Millisecond).String(),
 		"ifaces_added", enable,
