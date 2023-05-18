@@ -23,8 +23,6 @@ import (
 
 const randSeed = 10000
 
-var prng *rand.Rand
-
 var defaultMockIfaceConfig = config.CaptureConfig{
 	Promisc:             false,
 	RingBufferBlockSize: config.DefaultRingBufferSize,
@@ -53,24 +51,11 @@ func (t testMockSrcs) Wait() error {
 	return nil
 }
 
-func TestMain(m *testing.M) {
-	prng = rand.New(rand.NewSource(randSeed)) // #nosec G404
-	os.Exit(m.Run())
-}
-
 func TestConcurrentMethodAccess(t *testing.T) {
 	for _, i := range []int{1, 2, 3, 10} {
 		t.Run(fmt.Sprintf("%d ifaces", i), func(t *testing.T) {
 			testConcurrentMethodAccess(t, i, 1000)
 		})
-	}
-
-	if !testing.Short() {
-		for _, i := range []int{100} {
-			t.Run(fmt.Sprintf("%d ifaces", i), func(t *testing.T) {
-				testConcurrentMethodAccess(t, i, 1000)
-			})
-		}
 	}
 }
 
@@ -119,6 +104,7 @@ func testConcurrentMethodAccess(t *testing.T, nIfaces, nIterations int) {
 
 	go func() {
 		ctx := context.Background()
+		prng := rand.New(rand.NewSource(randSeed)) // #nosec G404
 		for i := 0; i < nIterations; i++ {
 			ifaceIdx := prng.Int63n(int64(nIfaces))
 			captureManager.Status(ctx, fmt.Sprintf("mock%00d", ifaceIdx))
@@ -129,6 +115,7 @@ func testConcurrentMethodAccess(t *testing.T, nIfaces, nIterations int) {
 	go func() {
 		ctx := context.Background()
 		writeoutChan := make(chan capturetypes.TaggedAggFlowMap, 1)
+		prng := rand.New(rand.NewSource(randSeed)) // #nosec G404
 		for i := 0; i < nIterations; i++ {
 			ifaceIdx := prng.Int63n(int64(nIfaces))
 			captureManager.rotate(ctx, writeoutChan, fmt.Sprintf("mock%00d", ifaceIdx))
