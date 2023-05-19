@@ -88,8 +88,9 @@ func (server *Server) registerRoutes() {
 
 	// config
 	configRoutes := server.router.Group(gpapi.ConfigRoute)
-	configRoutes.POST("", server.postConfig)
-	configRoutes.POST("/:"+ifaceKey, server.postConfig)
+	configRoutes.GET("", server.getConfig)
+	configRoutes.GET("/:"+ifaceKey, server.getConfig)
+	configRoutes.POST("", server.putConfig)
 }
 
 const headerTimeout = 30 * time.Second

@@ -169,16 +169,21 @@ func (c CaptureConfig) validate() error {
 
 func (i Ifaces) validate() error {
 	if len(i) == 0 {
-		return fmt.Errorf("No interfaces were specified")
+		return fmt.Errorf("no interfaces were specified")
 	}
 
 	for iface, cc := range i {
 		err := cc.validate()
 		if err != nil {
-			return fmt.Errorf("Interface '%s' has invalid configuration: %s", iface, err)
+			return fmt.Errorf("%s: %w", iface, err)
 		}
 	}
 	return nil
+}
+
+// Validate validates the interfaces configuration
+func (i Ifaces) Validate() error {
+	return i.validate()
 }
 
 func (d DBConfig) validate() error {
