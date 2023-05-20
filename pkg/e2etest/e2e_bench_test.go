@@ -82,8 +82,8 @@ func runBenchmarkCaptureThroughput(t *testing.T, runtime time.Duration, randomiz
 	cancel()
 }
 
-func setupSyntheticUnblockingSource(t testing.TB, randomize bool) func(c *capture.Capture) (slimcap.Source, error) {
-	return func(c *capture.Capture) (slimcap.Source, error) {
+func setupSyntheticUnblockingSource(t testing.TB, randomize bool) func(c *capture.Capture) (slimcap.SourceZeroCopy, error) {
+	return func(c *capture.Capture) (slimcap.SourceZeroCopy, error) {
 
 		mockSrc, err := afring.NewMockSourceNoDrain(c.Iface(),
 			afring.CaptureLength(link.CaptureLengthMinimalIPv6Transport),

@@ -14,27 +14,25 @@ const (
 	ipLayerTypeV6 = 0x06 // 6
 )
 
-// populate takes a raw packet and populates a GPPacket structure from it.
-func Populate(p *capturetypes.GPPacket, pkt capture.Packet) error {
-	// Extract the IP layer of the packet
-	srcPacket := pkt.IPLayer()
+// Populate takes a raw packet and populates a GPPacket structure from it.
+func Populate(p *capturetypes.GPPacket, ipLayer capture.IPLayer, pktType capture.PacketType, pktTotalLen uint32) error {
 
 	// Ascertain the direction from which the packet entered the interface
-	p.DirInbound = pkt.IsInbound()
-	p.NumBytes = pkt.TotalLen()
+	p.DirInbound = pktType != capture.PacketOutgoing
+	p.NumBytes = pktTotalLen
 	var protocol byte
 
-	if ipLayerType := srcPacket.Type(); ipLayerType == ipLayerTypeV4 {
+	if ipLayerType := ipLayer.Type(); ipLayerType == ipLayerTypeV4 {
 
 		p.IsIPv4 = true
 
 		// Parse IPv4 packet information
-		copy(p.EPHash[0:4], srcPacket[12:16])
-		copy(p.EPHash[16:20], srcPacket[16:20])
+		copy(p.EPHash[0:4], ipLayer[12:16])
+		copy(p.EPHash[16:20], ipLayer[16:20])
 		copy(p.EPHashReverse[0:4], p.EPHash[16:20])
 		copy(p.EPHashReverse[16:20], p.EPHash[0:4])
 
-		protocol = srcPacket[9]
+		protocol = ipLayer[9]
 
 		// only run the fragmentation checks on fragmented TCP/UDP packets. For
 		// ESP, we don't have any transport layer information so there's no
@@ -45,8 +43,8 @@ func Populate(p *capturetypes.GPPacket, pkt capture.Packet) error {
 		if protocol != capturetypes.ESP {
 
 			// check for IP fragmentation
-			fragBits := (0xe0 & srcPacket[6]) >> 5
-			fragOffset := (uint16(0x1f&srcPacket[6]) << 8) | uint16(srcPacket[7])
+			fragBits := (0xe0 & ipLayer[6]) >> 5
+			fragOffset := (uint16(0x1f&ipLayer[6]) << 8) | uint16(ipLayer[7])
 
 			// return decoding error if the packet carries anything other than the
 			// first fragment, i.e. if the packet lacks a transport layer header
@@ -57,8 +55,8 @@ func Populate(p *capturetypes.GPPacket, pkt capture.Packet) error {
 
 		if protocol == capturetypes.TCP || protocol == capturetypes.UDP {
 
-			dport := srcPacket[ipv4.HeaderLen+2 : ipv4.HeaderLen+4]
-			sport := srcPacket[ipv4.HeaderLen : ipv4.HeaderLen+2]
+			dport := ipLayer[ipv4.HeaderLen+2 : ipv4.HeaderLen+4]
+			sport := ipLayer[ipv4.HeaderLen : ipv4.HeaderLen+2]
 
 			// If session based traffic is observed, the source port is taken
 			// into account. A major exception is traffic over port 53 as
@@ -74,13 +72,13 @@ func Populate(p *capturetypes.GPPacket, pkt capture.Packet) error {
 			}
 
 			if protocol == capturetypes.TCP {
-				if len(srcPacket) < ipv4.HeaderLen+13 {
+				if len(ipLayer) < ipv4.HeaderLen+13 {
 					return fmt.Errorf("tcp packet too short")
 				}
-				p.AuxInfo = srcPacket[ipv4.HeaderLen+13] // store TCP flags
+				p.AuxInfo = ipLayer[ipv4.HeaderLen+13] // store TCP flags
 			}
 		} else if protocol == capturetypes.ICMP {
-			p.AuxInfo = srcPacket[ipv4.HeaderLen] // store ICMP type
+			p.AuxInfo = ipLayer[ipv4.HeaderLen] // store ICMP type
 		}
 
 	} else if ipLayerType == ipLayerTypeV6 {
@@ -88,16 +86,16 @@ func Populate(p *capturetypes.GPPacket, pkt capture.Packet) error {
 		p.IsIPv4 = false
 
 		// Parse IPv6 packet information
-		copy(p.EPHash[0:16], srcPacket[8:24])
-		copy(p.EPHash[16:32], srcPacket[24:40])
+		copy(p.EPHash[0:16], ipLayer[8:24])
+		copy(p.EPHash[16:32], ipLayer[24:40])
 		copy(p.EPHashReverse[0:16], p.EPHash[16:32])
 		copy(p.EPHashReverse[16:32], p.EPHash[0:16])
 
-		protocol = srcPacket[6]
+		protocol = ipLayer[6]
 		if protocol == capturetypes.TCP || protocol == capturetypes.UDP {
 
-			dport := srcPacket[ipv6.HeaderLen+2 : ipv6.HeaderLen+4]
-			sport := srcPacket[ipv6.HeaderLen : ipv6.HeaderLen+2]
+			dport := ipLayer[ipv6.HeaderLen+2 : ipv6.HeaderLen+4]
+			sport := ipLayer[ipv6.HeaderLen : ipv6.HeaderLen+2]
 
 			// If session based traffic is observed, the source port is taken
 			// into account. A major exception is traffic over port 53 as
@@ -113,17 +111,17 @@ func Populate(p *capturetypes.GPPacket, pkt capture.Packet) error {
 			}
 
 			if protocol == capturetypes.TCP {
-				if len(srcPacket) < ipv6.HeaderLen+13 {
+				if len(ipLayer) < ipv6.HeaderLen+13 {
 					return fmt.Errorf("tcp packet too short")
 				}
-				p.AuxInfo = srcPacket[ipv6.HeaderLen+13] // store TCP flags
+				p.AuxInfo = ipLayer[ipv6.HeaderLen+13] // store TCP flags
 			}
 		} else if protocol == capturetypes.ICMPv6 {
-			p.AuxInfo = srcPacket[ipv6.HeaderLen] // store ICMP type
+			p.AuxInfo = ipLayer[ipv6.HeaderLen] // store ICMP type
 		}
 
 	} else {
-		return fmt.Errorf("received neither IPv4 nor IPv6 IP header: %v", srcPacket)
+		return fmt.Errorf("received neither IPv4 nor IPv6 IP header: %v", ipLayer)
 	}
 
 	p.EPHash[36], p.EPHashReverse[36] = protocol, protocol

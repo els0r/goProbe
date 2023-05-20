@@ -86,7 +86,7 @@ func testConcurrentMethodAccess(t *testing.T, nIfaces, nIterations int) {
 	// Initialize the CaptureManager
 	captureManager := NewManager(
 		writeout.NewGoDBHandler(tempDir, encoders.EncoderTypeLZ4),
-		WithSourceInitFn(func(c *Capture) (capture.Source, error) {
+		WithSourceInitFn(func(c *Capture) (capture.SourceZeroCopy, error) {
 			src, exists := testMockSrcs[c.Iface()]
 			if !exists {
 				return nil, fmt.Errorf("failed to initialize missing interface %s", c.Iface())

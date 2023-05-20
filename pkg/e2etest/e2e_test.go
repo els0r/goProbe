@@ -200,7 +200,7 @@ func testE2E(t *testing.T, datasets ...[]byte) {
 	require.EqualValues(t, refRows, resRows)
 }
 
-func runGoProbe(t *testing.T, testDir string, sourceInitFn func() (mockIfaces, func(c *capture.Capture) (slimcap.Source, error))) {
+func runGoProbe(t *testing.T, testDir string, sourceInitFn func() (mockIfaces, func(c *capture.Capture) (slimcap.SourceZeroCopy, error))) {
 
 	// We quit on encountering SIGUSR2 (instead of the ususal SIGTERM or SIGINT)
 	// to avoid killing the test
@@ -276,15 +276,15 @@ func runGoQuery(t *testing.T, testDir string, mockIfaces mockIfaces, maxEntries 
 	return res
 }
 
-func setupSources(t testing.TB, ifaces mockIfaces) func() (mockIfaces, func(c *capture.Capture) (slimcap.Source, error)) {
+func setupSources(t testing.TB, ifaces mockIfaces) func() (mockIfaces, func(c *capture.Capture) (slimcap.SourceZeroCopy, error)) {
 
-	fnMap := make(map[string]func(c *capture.Capture) (slimcap.Source, error))
+	fnMap := make(map[string]func(c *capture.Capture) (slimcap.SourceZeroCopy, error))
 	for _, mockIface := range ifaces {
 		fnMap[mockIface.name] = mockIface.sourceInitFn
 	}
 
-	return func() (mockIfaces, func(c *capture.Capture) (slimcap.Source, error)) {
-		return ifaces, func(c *capture.Capture) (slimcap.Source, error) {
+	return func() (mockIfaces, func(c *capture.Capture) (slimcap.SourceZeroCopy, error)) {
+		return ifaces, func(c *capture.Capture) (slimcap.SourceZeroCopy, error) {
 			mockIfaceFn, ok := fnMap[c.Iface()]
 			if !ok {
 				return nil, fmt.Errorf("unable to find interface `%s` in list of mock interfaces", c.Iface())
@@ -307,7 +307,7 @@ func newPcapSource(t testing.TB, name string, data []byte) (res *mockIface) {
 		RWMutex: sync.RWMutex{},
 	}
 
-	res.sourceInitFn = func(c *capture.Capture) (slimcap.Source, error) {
+	res.sourceInitFn = func(c *capture.Capture) (slimcap.SourceZeroCopy, error) {
 
 		res.Lock()
 		defer res.Unlock()
@@ -338,7 +338,7 @@ func newPcapSource(t testing.TB, name string, data []byte) (res *mockIface) {
 
 			pkt = slimcap.NewIPPacket(pkt, payload, pktType, int(totalLen), ipLayerOffset)
 			var p capturetypes.GPPacket
-			if err := capture.Populate(&p, pkt); err != nil {
+			if err := capture.Populate(&p, pkt.IPLayer(), pkt.Type(), pkt.TotalLen()); err != nil {
 				res.tracking.nErr++
 				return
 			}
@@ -412,7 +412,7 @@ func newSyntheticSource(t testing.TB, name string, nPkts int) (res *mockIface) {
 		RWMutex:  sync.RWMutex{},
 	}
 
-	res.sourceInitFn = func(c *capture.Capture) (slimcap.Source, error) {
+	res.sourceInitFn = func(c *capture.Capture) (slimcap.SourceZeroCopy, error) {
 
 		res.Lock()
 		defer res.Unlock()
@@ -434,7 +434,7 @@ func newSyntheticSource(t testing.TB, name string, nPkts int) (res *mockIface) {
 
 			pkt := slimcap.NewIPPacket(nil, payload, pktType, int(totalLen), ipLayerOffset)
 			p := capturetypes.GPPacket{}
-			if err := capture.Populate(&p, pkt); err != nil {
+			if err := capture.Populate(&p, pkt.IPLayer(), pkt.Type(), pkt.TotalLen()); err != nil {
 				res.tracking.nErr++
 				return
 			}

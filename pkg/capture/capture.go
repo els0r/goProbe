@@ -25,7 +25,7 @@ const (
 	ErrorThreshold = 10000
 )
 
-var defaultSourceInitFn = func(c *Capture) (capture.Source, error) {
+var defaultSourceInitFn = func(c *Capture) (capture.SourceZeroCopy, error) {
 	return afring.NewSource(c.iface,
 		afring.CaptureLength(link.CaptureLengthMinimalIPv6Transport),
 		afring.BufferSize(c.config.RingBufferBlockSize, c.config.RingBufferNumBlocks),
@@ -35,7 +35,7 @@ var defaultSourceInitFn = func(c *Capture) (capture.Source, error) {
 
 // sourceInitFn denotes the function used to initialize a capture source,
 // providing the ability to override the default behavior, e.g. in mock tests
-type sourceInitFn func(*Capture) (capture.Source, error)
+type sourceInitFn func(*Capture) (capture.SourceZeroCopy, error)
 
 // Captures denotes a named set of Capture instances, wrapping a map and the
 // required synchronization of all its actions
@@ -113,7 +113,7 @@ type Capture struct {
 	flowLog *capturetypes.FlowLog
 
 	// Generic handle / source for packet capture
-	captureHandle capture.Source
+	captureHandle capture.SourceZeroCopy
 	sourceInitFn  sourceInitFn
 
 	// error map for logging errors more properly
@@ -195,7 +195,7 @@ func (c *Capture) process(ctx context.Context) <-chan error {
 		c.errCount = 0
 
 		// Reusable packet buffer for in-place population
-		pkt := c.captureHandle.NewPacket()
+		// pkt := c.captureHandle.NextIPPacketZeroCopy()
 
 		// Main packet capture loop which an interface should be in most of the time
 		for {
@@ -211,8 +211,7 @@ func (c *Capture) process(ctx context.Context) <-chan error {
 
 			// Normal processing
 			default:
-				err := c.capturePacket(pkt)
-				if err != nil {
+				if err := c.capturePacket(); err != nil {
 					if errors.Is(err, capture.ErrCaptureUnblock) { // capture unblocked (e.g. during rotation)
 						continue
 					}
@@ -235,10 +234,10 @@ func (c *Capture) process(ctx context.Context) <-chan error {
 	return captureErrors
 }
 
-func (c *Capture) capturePacket(pkt capture.Packet) (err error) {
+func (c *Capture) capturePacket() (err error) {
 
 	// Fetch the next packet form the wire
-	_, err = c.captureHandle.NextPacket(pkt)
+	ipLayer, pktType, pktSize, err := c.captureHandle.NextIPPacketZeroCopy()
 	if err != nil {
 
 		// NextPacket should return a ErrCaptureStopped in case the handle is closed or
@@ -252,7 +251,7 @@ func (c *Capture) capturePacket(pkt capture.Packet) (err error) {
 	// allocated on the stack and hence does not cause any GC overhead (and allocating is
 	// actually faster than resetting its fields, plus in that case it escapes to the heap)
 	var gppacket capturetypes.GPPacket
-	if err = Populate(&gppacket, pkt); err == nil {
+	if err = Populate(&gppacket, ipLayer, pktType, pktSize); err == nil {
 		c.flowLog.Add(&gppacket)
 		c.stats.Processed++
 		c.errCount = 0
