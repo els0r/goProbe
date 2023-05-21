@@ -110,7 +110,7 @@ type Capture struct {
 
 	// Logged flows since creation of the capture (note that some
 	// flows are retained even after Rotate has been called)
-	flowLog *capturetypes.FlowLog
+	flowLog *FlowLog
 
 	// Generic handle / source for packet capture
 	captureHandle capture.SourceZeroCopy
@@ -127,7 +127,7 @@ func newCapture(iface string, config config.CaptureConfig) *Capture {
 		iface:        iface,
 		config:       config,
 		capLock:      newCaptureLock(),
-		flowLog:      capturetypes.NewFlowLog(),
+		flowLog:      NewFlowLog(),
 		errMap:       make(map[string]int),
 		sourceInitFn: defaultSourceInitFn,
 	}
@@ -245,16 +245,11 @@ func (c *Capture) capturePacket() (err error) {
 		return fmt.Errorf("capture error: %w", err)
 	}
 
-	// Populate the capturetypes.GPPacket
-	// Instead of reusing an instance of capture.Packet over and over again a new
-	// one is allocated for each run on capturePacket(). Since it does not escape it is
-	// allocated on the stack and hence does not cause any GC overhead (and allocating is
-	// actually faster than resetting its fields, plus in that case it escapes to the heap)
-	var gppacket capturetypes.GPPacket
-	if err = Populate(&gppacket, ipLayer, pktType, pktSize); err == nil {
-		c.flowLog.Add(&gppacket)
+	// Parse / add the received data to the map of flows
+	if err = c.flowLog.Add(ipLayer, pktType, pktSize); err == nil {
 		c.stats.Processed++
 		c.errCount = 0
+
 		return nil
 	}
 

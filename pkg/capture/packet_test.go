@@ -1,15 +1,3 @@
-/////////////////////////////////////////////////////////////////////////////////
-//
-// capturetypes.GPPacket.go
-//
-// Testing file for capturetypes.GPPacket allocation and handling
-//
-// Written by Fabian Kohn fko@open.ch, June 2015
-// Copyright (c) 2015 Open Systems AG, Switzerland
-// All Rights Reserved.
-//
-/////////////////////////////////////////////////////////////////////////////////
-
 package capture
 
 import (
@@ -95,11 +83,13 @@ func TestPopulation(t *testing.T) {
 	for _, params := range testCases {
 		t.Run(params.String(), func(t *testing.T) {
 			testPacket := params.genDummyPacket(0)
-			testHash, IsIPv4 := params.genEPHash()
-			var pkt capturetypes.GPPacket
-			require.Nil(t, Populate(&pkt, testPacket.IPLayer(), testPacket.Type(), testPacket.TotalLen()), "population error")
-			require.Equal(t, testHash, pkt.EPHash)
-			require.Equal(t, IsIPv4, pkt.IsIPv4)
+			refHash, refIsIPv4 := params.genEPHash()
+
+			epHash, isIPv4, _, err := ParsePacket(testPacket.IPLayer(), testPacket.Type(), testPacket.TotalLen())
+			require.Nil(t, err, "population error")
+
+			require.Equal(t, refHash, epHash)
+			require.Equal(t, refIsIPv4, isIPv4)
 		})
 	}
 }
@@ -108,12 +98,7 @@ func TestClassification(t *testing.T) {
 	for _, params := range testCases {
 		t.Run(params.String(), func(t *testing.T) {
 			testCase := params.genTestCase()
-			pkt := &capturetypes.GPPacket{
-				IsIPv4:  testCase.IsIPv4,
-				EPHash:  testCase.EPHash,
-				AuxInfo: testCase.input.AuxInfo,
-			}
-			require.Equal(t, params.expectedDirection, capturetypes.ClassifyPacketDirection(pkt), "classification mismatch")
+			require.Equal(t, params.expectedDirection, capturetypes.ClassifyPacketDirection(testCase.EPHash, testCase.IsIPv4, testCase.input.AuxInfo), "classification mismatch")
 		})
 	}
 }
@@ -126,9 +111,7 @@ func BenchmarkPopulation(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				var pkt capturetypes.GPPacket
-				Populate(&pkt, testPacket.IPLayer(), testPacket.Type(), testPacket.TotalLen())
-				doSomethingWithPacket(&pkt)
+				_, _, _, _ = ParsePacket(testPacket.IPLayer(), testPacket.Type(), testPacket.TotalLen())
 			}
 		})
 	}
@@ -138,42 +121,14 @@ func BenchmarkClassification(b *testing.B) {
 	for _, params := range testCases {
 		b.Run(params.String(), func(b *testing.B) {
 			testCase := params.genTestCase()
-			pkt := &capturetypes.GPPacket{
-				IsIPv4:  testCase.IsIPv4,
-				EPHash:  testCase.EPHash,
-				AuxInfo: testCase.input.AuxInfo,
-			}
+
 			b.ReportAllocs()
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				capturetypes.ClassifyPacketDirection(pkt)
+				capturetypes.ClassifyPacketDirection(testCase.EPHash, testCase.IsIPv4, testCase.input.AuxInfo)
 			}
 		})
 	}
-}
-
-func BenchmarkAllocateIn(b *testing.B) {
-	var g *capturetypes.GPPacket
-	for i := 0; i < b.N; i++ {
-		g = &capturetypes.GPPacket{
-			NumBytes:   100,
-			DirInbound: true,
-		}
-	}
-
-	_ = g
-}
-
-func BenchmarkAllocateOut(b *testing.B) {
-	var g *capturetypes.GPPacket
-	for i := 0; i < b.N; i++ {
-		g = &capturetypes.GPPacket{
-			NumBytes:   100,
-			DirInbound: false,
-		}
-	}
-
-	_ = g
 }
 
 func (p testParams) genTestCase() testCase {
@@ -238,43 +193,8 @@ func (p testParams) genDummyPacket(pktType capture.PacketType) capture.Packet {
 	return capture.NewIPPacket(nil, data, pktType, 128, 0)
 }
 
-type dummyPacket struct {
-	data    []byte
-	pktType capture.PacketType
-}
-
-// TotalLen returnsthe total packet length, including all headers
-func (d *dummyPacket) TotalLen() uint32 {
-	return uint32(len(d.data))
-}
-
-// Len returns the actual data length of the packet as consumed from the wire
-func (d *dummyPacket) Len() int {
-	return len(d.data)
-}
-
-// IPLayer returns the raw payload of the packet (up to snaplen, if set), including all received layers
-func (d *dummyPacket) Payload() []byte {
-	return d.data
-}
-
-// IIPLayer returns the IP layer of the packet (up to snaplen, if set)
-func (d *dummyPacket) IPLayer() capture.IPLayer {
-	return d.data
-}
-
-// Type denotes the packet type (i.e. the packet direction w.r.t. the interface)
-func (d *dummyPacket) Type() capture.PacketType {
-	return d.pktType
-}
-
 func uint16ToPort(p uint16) (res []byte) {
 	res = make([]byte, 2)
 	binary.BigEndian.PutUint16(res, p)
 	return
-}
-
-// Stub to simulate operation in function
-func doSomethingWithPacket(pkt *capturetypes.GPPacket) {
-	_ = pkt
 }

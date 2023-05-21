@@ -337,16 +337,16 @@ func newPcapSource(t testing.TB, name string, data []byte) (res *mockIface) {
 			defer res.Unlock()
 
 			pkt = slimcap.NewIPPacket(pkt, payload, pktType, int(totalLen), ipLayerOffset)
-			var p capturetypes.GPPacket
-			if err := capture.Populate(&p, pkt.IPLayer(), pkt.Type(), pkt.TotalLen()); err != nil {
+			hash, isIPv4, auxInfo, err := capture.ParsePacket(pkt.IPLayer(), pkt.Type(), pkt.TotalLen())
+			if err != nil {
 				res.tracking.nErr++
 				return
 			}
 
-			hash, hashReverse := p.EPHash, p.EPHashReverse
-			if direction := capturetypes.ClassifyPacketDirection(&p); direction != capturetypes.DirectionUnknown {
+			hashReverse := hash.Reverse()
+			if direction := capturetypes.ClassifyPacketDirection(hash, isIPv4, auxInfo); direction != capturetypes.DirectionUnknown {
 				if direction == capturetypes.DirectionReverts || direction == capturetypes.DirectionMaybeReverts {
-					hash, hashReverse = p.EPHashReverse, p.EPHash
+					hash, hashReverse = hashReverse, hash
 				}
 			}
 
@@ -354,7 +354,7 @@ func newPcapSource(t testing.TB, name string, data []byte) (res *mockIface) {
 			hashReverse[34], hashReverse[35] = 0, 0
 
 			if flow, exists := (*res.flows)[hash]; exists {
-				if p.DirInbound {
+				if pkt.Type() != slimcap.PacketOutgoing {
 					(*res.flows)[hash] = flow.Add(types.Counters{
 						PacketsRcvd: 1,
 						BytesRcvd:   uint64(totalLen),
@@ -366,7 +366,7 @@ func newPcapSource(t testing.TB, name string, data []byte) (res *mockIface) {
 					})
 				}
 			} else if flow, exists = (*res.flows)[hashReverse]; exists {
-				if p.DirInbound {
+				if pkt.Type() != slimcap.PacketOutgoing {
 					(*res.flows)[hashReverse] = flow.Add(types.Counters{
 						PacketsRcvd: 1,
 						BytesRcvd:   uint64(totalLen),
@@ -378,7 +378,7 @@ func newPcapSource(t testing.TB, name string, data []byte) (res *mockIface) {
 					})
 				}
 			} else {
-				if p.DirInbound {
+				if pkt.Type() != slimcap.PacketOutgoing {
 					(*res.flows)[hash] = types.Counters{
 						PacketsRcvd: 1,
 						BytesRcvd:   uint64(totalLen),
@@ -433,16 +433,16 @@ func newSyntheticSource(t testing.TB, name string, nPkts int) (res *mockIface) {
 			defer res.Unlock()
 
 			pkt := slimcap.NewIPPacket(nil, payload, pktType, int(totalLen), ipLayerOffset)
-			p := capturetypes.GPPacket{}
-			if err := capture.Populate(&p, pkt.IPLayer(), pkt.Type(), pkt.TotalLen()); err != nil {
+			hash, isIPv4, auxInfo, err := capture.ParsePacket(pkt.IPLayer(), pkt.Type(), pkt.TotalLen())
+			if err != nil {
 				res.tracking.nErr++
 				return
 			}
 
-			hash, hashReverse := p.EPHash, p.EPHashReverse
-			if direction := capturetypes.ClassifyPacketDirection(&p); direction != capturetypes.DirectionUnknown {
+			hashReverse := hash.Reverse()
+			if direction := capturetypes.ClassifyPacketDirection(hash, isIPv4, auxInfo); direction != capturetypes.DirectionUnknown {
 				if direction == capturetypes.DirectionReverts || direction == capturetypes.DirectionMaybeReverts {
-					hash, hashReverse = p.EPHashReverse, p.EPHash
+					hash, hashReverse = hashReverse, hash
 				}
 			}
 
@@ -450,7 +450,7 @@ func newSyntheticSource(t testing.TB, name string, nPkts int) (res *mockIface) {
 			hashReverse[34], hashReverse[35] = 0, 0
 
 			if flow, exists := (*res.flows)[hash]; exists {
-				if p.DirInbound {
+				if pkt.Type() != slimcap.PacketOutgoing {
 					(*res.flows)[hash] = flow.Add(types.Counters{
 						PacketsRcvd: 1,
 						BytesRcvd:   uint64(totalLen),
@@ -462,7 +462,7 @@ func newSyntheticSource(t testing.TB, name string, nPkts int) (res *mockIface) {
 					})
 				}
 			} else if flow, exists = (*res.flows)[hashReverse]; exists {
-				if p.DirInbound {
+				if pkt.Type() != slimcap.PacketOutgoing {
 					(*res.flows)[hashReverse] = flow.Add(types.Counters{
 						PacketsRcvd: 1,
 						BytesRcvd:   uint64(totalLen),
@@ -474,7 +474,7 @@ func newSyntheticSource(t testing.TB, name string, nPkts int) (res *mockIface) {
 					})
 				}
 			} else {
-				if p.DirInbound {
+				if pkt.Type() != slimcap.PacketOutgoing {
 					(*res.flows)[hash] = types.Counters{
 						PacketsRcvd: 1,
 						BytesRcvd:   uint64(totalLen),
