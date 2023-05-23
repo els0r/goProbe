@@ -13,6 +13,7 @@ package capture
 //
 /////////////////////////////////////////////////////////////////////////////////
 import (
+	"errors"
 	"fmt"
 	"io"
 	"text/tabwriter"
@@ -31,6 +32,16 @@ import (
 const (
 	ipLayerTypeV4 = 0x04 // 4
 	ipLayerTypeV6 = 0x06 // 6
+)
+
+var (
+
+	// ErrInvalidIPHeader indicates that neither IPv4 nor IPv6 header / packet was received
+	ErrInvalidIPHeader = errors.New("received neither IPv4 nor IPv6 IP header")
+
+	// ErrPacketTruncated indicates that a packet was too short to complete analysis
+	// (e.g. a TCP packet truncated before the TCP flag byte)
+	ErrPacketTruncated = errors.New("packet too short / truncated")
 )
 
 // FlowLog stores flows. It is NOT threadsafe.
@@ -113,7 +124,7 @@ func ParsePacket(ipLayer capture.IPLayer, pktType capture.PacketType, pktTotalLe
 
 			if protocol == capturetypes.TCP {
 				if len(ipLayer) < ipv4.HeaderLen+13 {
-					err = fmt.Errorf("tcp packet too short (len %d)", len(ipLayer))
+					err = ErrPacketTruncated
 					return
 				}
 				auxInfo = ipLayer[ipv4.HeaderLen+13] // store TCP flags
@@ -148,7 +159,7 @@ func ParsePacket(ipLayer capture.IPLayer, pktType capture.PacketType, pktTotalLe
 
 			if protocol == capturetypes.TCP {
 				if len(ipLayer) < ipv6.HeaderLen+13 {
-					err = fmt.Errorf("tcp packet too short (len %d)", len(ipLayer))
+					err = ErrPacketTruncated
 					return
 				}
 				auxInfo = ipLayer[ipv6.HeaderLen+13] // store TCP flags
@@ -158,7 +169,7 @@ func ParsePacket(ipLayer capture.IPLayer, pktType capture.PacketType, pktTotalLe
 		}
 
 	} else {
-		err = fmt.Errorf("received neither IPv4 nor IPv6 IP header: %v", ipLayer)
+		err = ErrInvalidIPHeader
 		return
 	}
 

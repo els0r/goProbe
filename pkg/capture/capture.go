@@ -194,9 +194,6 @@ func (c *Capture) process(ctx context.Context) <-chan error {
 		logger := logging.FromContext(ctx)
 		c.errCount = 0
 
-		// Reusable packet buffer for in-place population
-		// pkt := c.captureHandle.NextIPPacketZeroCopy()
-
 		// Main packet capture loop which an interface should be in most of the time
 		for {
 
