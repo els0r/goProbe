@@ -156,10 +156,9 @@ func main() {
 
 	// create server and start listening for requests
 	if config.API != nil {
-		addr := fmt.Sprintf("%s:%s", config.API.Host, config.API.Port)
-		apiServer = server.New(addr, captureManager, apiOptions...)
+		apiServer = server.New(config.API.Addr, captureManager, apiOptions...)
 
-		logger.With("addr", addr).Info("starting API server")
+		logger.With("addr", config.API.Addr).Info("starting API server")
 		go func() {
 			err = apiServer.Serve()
 			if err != nil && !errors.Is(err, http.ErrServerClosed) {

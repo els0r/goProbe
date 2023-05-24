@@ -90,7 +90,7 @@ func (server *Server) registerRoutes() {
 	configRoutes := server.router.Group(gpapi.ConfigRoute)
 	configRoutes.GET("", server.getConfig)
 	configRoutes.GET("/:"+ifaceKey, server.getConfig)
-	configRoutes.POST("", server.putConfig)
+	configRoutes.PUT("", server.putConfig)
 }
 
 const headerTimeout = 30 * time.Second

@@ -146,11 +146,14 @@ func WithSourceInitFn(fn sourceInitFn) ManagerOption {
 // Config returns the runtime config of the capture manager for all (or a set of) interfaces
 func (cm *Manager) Config(ctx context.Context, ifaces ...string) (ifaceConfigs config.Ifaces) {
 	cm.RLock()
+	defer cm.RUnlock()
 
 	// Build list of interfaces to process (either from all interfaces or from explicit list)
 	if ifaces = cm.captures.Ifaces(ifaces...); len(ifaces) == 0 {
 		return
 	}
+
+	ifaceConfigs = make(config.Ifaces)
 
 	for _, iface := range ifaces {
 		cfg, exists := cm.lastAppliedConfig[iface]
@@ -158,7 +161,6 @@ func (cm *Manager) Config(ctx context.Context, ifaces ...string) (ifaceConfigs c
 			ifaceConfigs[iface] = cfg
 		}
 	}
-	cm.RUnlock()
 	return
 }
 
@@ -187,7 +189,7 @@ func (cm *Manager) Status(ctx context.Context, ifaces ...string) (statusmap map[
 		}
 		rg.Run(func() {
 
-			runCtx := logging.WithFields(ctx, slog.String("iface", mc.iface))
+			runCtx := logging.WithFields(ctx, "iface", iface)
 
 			// Lock the running capture and extract the status
 			mc.lock()
@@ -259,6 +261,14 @@ func (cm *Manager) update(ctx context.Context, ifaces config.Ifaces, enable, upd
 
 	logger, t0 := logging.FromContext(ctx), time.Now()
 
+	var disableIfaces = append(disable, update...)
+	var enableIfaces = append(enable, update...)
+
+	// execute a final writeout of all disabled interfaces in the list
+	if len(disableIfaces) > 0 {
+		cm.performWriteout(ctx, time.Now().Add(time.Second), disableIfaces...)
+	}
+
 	// To avoid any interference the update() logic is protected as a whole
 	// This also allows us to interace with the captures without copying (creating potential races)
 	cm.Lock()
@@ -267,55 +277,59 @@ func (cm *Manager) update(ctx context.Context, ifaces config.Ifaces, enable, upd
 	// store the configuration so that changes can be communicated
 	cm.lastAppliedConfig = ifaces
 
-	// this is a little trick to ensure that the updated interfaces are first disabled
-	// and then enabled because their configuration has changed
-	disable = append(disable, update...)
-	enable = append(enable, update...)
-
-	// execute a final writeout of all disabled interfaces in the list
-	cm.performWriteout(ctx, time.Now().Add(time.Second), disable...)
-
 	// Disable any interfaces present in the negative list
-	var rg RunGroup
-	for _, iface := range disable {
+	var disableRg RunGroup
+	for _, iface := range disableIfaces {
 		iface := iface
 
 		mc, exists := cm.captures.Get(iface)
 		if !exists {
 			continue
 		}
-		rg.Run(func() {
+		disableRg.Run(func() {
 
-			runCtx := logging.WithFields(ctx, slog.String("iface", mc.iface))
+			runCtx := logging.WithFields(ctx, "iface", mc.iface)
+
+			logger := logging.FromContext(runCtx)
+			logger.Info("closing capture / stopping packet processing")
 
 			if err := mc.close(); err != nil {
-				logging.FromContext(runCtx).Errorf("failed to close capture: %s", err)
+				logger.Errorf("failed to close capture: %s", err)
 				return
 			}
 
 			cm.captures.Delete(mc.iface)
 		})
 	}
-	rg.Wait()
+	disableRg.Wait()
 
+	// NOTE: make sure to use a different run group than disable's. Not doing it
+	// lead to captures being enabled while they were closed, leading to
+	//
+	// "failed to free capture resources: cannot call Free() on open capture source, call Close() first"
+	// errors
+	var enableRg RunGroup
 	// Enable any interfaces present in the positive list
-	for _, iface := range enable {
+	for _, iface := range enableIfaces {
 		iface := iface
 
-		rg.Run(func() {
+		enableRg.Run(func() {
 
-			runCtx := logging.WithFields(ctx, slog.String("iface", iface))
+			runCtx := logging.WithFields(ctx, "iface", iface)
+			logger := logging.FromContext(runCtx)
+
+			logger.Info("initializing capture / running packet processing")
 
 			cap := newCapture(iface, ifaces[iface]).SetSourceInitFn(cm.sourceInitFn)
 			if err := cap.run(runCtx); err != nil {
-				logging.FromContext(runCtx).Errorf("failed to start capture: %s", err)
+				logger.Errorf("failed to start capture: %s", err)
 				return
 			}
 
 			cm.captures.Set(iface, cap)
 		})
 	}
-	rg.Wait()
+	enableRg.Wait()
 
 	logger.With(
 		"elapsed", time.Since(t0).Round(time.Millisecond).String(),
@@ -365,7 +379,7 @@ func (cm *Manager) rotate(ctx context.Context, writeoutChan chan<- capturetypes.
 		if exists {
 			rg.Run(func() {
 
-				runCtx := logging.WithFields(ctx, slog.String("iface", mc.iface))
+				runCtx := logging.WithFields(ctx, "iface", mc.iface)
 
 				// Lock the running capture and perform the rotation
 				mc.lock()

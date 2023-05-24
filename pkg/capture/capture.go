@@ -13,7 +13,6 @@ import (
 	"github.com/fako1024/slimcap/capture"
 	"github.com/fako1024/slimcap/capture/afpacket/afring"
 	"github.com/fako1024/slimcap/link"
-	"golang.org/x/exp/slog"
 )
 
 const (
@@ -149,9 +148,12 @@ func (c *Capture) Iface() string {
 
 func (c *Capture) run(ctx context.Context) (err error) {
 
+<<<<<<< HEAD
 	ctx = logging.WithFields(ctx, slog.String("iface", c.iface))
 	logging.FromContext(ctx).Info("initializing capture / running packet processing")
 
+=======
+>>>>>>> 10861a3 (Fix deadlock in capture_manager)
 	// Set up the packet source and capturing
 	c.captureHandle, err = c.sourceInitFn(c)
 	if err != nil {

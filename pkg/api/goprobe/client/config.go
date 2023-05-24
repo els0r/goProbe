@@ -37,7 +37,7 @@ func (c *Client) GetInterfaceConfig(ctx context.Context, ifaces ...string) (ifac
 	return res.Ifaces, nil
 }
 
-func (c *Client) UpdateInterfaceConfigs(ctx context.Context, ifaceConfigs config.Ifaces) (updated, disabled []string, err error) {
+func (c *Client) UpdateInterfaceConfigs(ctx context.Context, ifaceConfigs config.Ifaces) (enabled, updated, disabled []string, err error) {
 	var res = new(gpapi.ConfigUpdateResponse)
 
 	url := c.NewURL(gpapi.ConfigRoute)
@@ -54,5 +54,5 @@ func (c *Client) UpdateInterfaceConfigs(ctx context.Context, ifaceConfigs config
 		}
 		return
 	}
-	return res.Disabled, res.Updated, nil
+	return res.Enabled, res.Updated, res.Disabled, nil
 }
