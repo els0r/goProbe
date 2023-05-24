@@ -195,35 +195,43 @@ func (c *Capture) process(ctx context.Context) <-chan error {
 		c.errCount = 0
 
 		// Main packet capture loop which an interface should be in most of the time
+		captureUnlocked := false
 		for {
 
-			// map access needs to be synchronized. This will incur a performance hit, but less so
-			// than locking the data structure itself (mutex causes about 40% drop in throughput)
-			select {
-
-			// Lock state synchronization
-			case <-c.capLock.request:
+			// Since lock confirmation is only done from a single goroutine (this one)
+			// tracking if the capture source was unblocked is safe and can act as flag when to
+			// read from the lock request channel (which in turn is atomic).
+			// Similarly, once this goroutine observes that the channel length is 1 it is guaranteed
+			// that there is a request on the channel that can be read on the next line.
+			// This logic may be slightly more contrived than a select{} statement but it increases
+			// packet throughput by several percent points
+			if len(c.capLock.request) > 0 || captureUnlocked {
+				<-c.capLock.request             // Consume the request
 				c.capLock.confirm <- struct{}{} // Confirm that process() is not processing
-				<-c.capLock.done
+				<-c.capLock.done                // Consume the request to continue normal processing
+				captureUnlocked = false
+			}
 
-			// Normal processing
-			default:
-				if err := c.capturePacket(); err != nil {
-					if errors.Is(err, capture.ErrCaptureUnblock) { // capture unblocked (e.g. during rotation)
-						continue
+			// Fetch the next packet or PPOLL even from the source
+			if err := c.capturePacket(); err != nil {
+				if errors.Is(err, capture.ErrCaptureUnblock) { // capture unblocked (during lock)
+
+					// Advance to the next loop iteration (during which the pending lock will be
+					// consumed / acted on)
+					captureUnlocked = true
+					continue
+				}
+				if errors.Is(err, capture.ErrCaptureStopped) { // capture stopped gracefully
+					if err := c.captureHandle.Free(); err != nil {
+						logger.Errorf("failed to free capture resources: %s", err)
 					}
-					if errors.Is(err, capture.ErrCaptureStopped) { // capture stopped gracefully
-						if err := c.captureHandle.Free(); err != nil {
-							logger.Errorf("failed to free capture resources: %s", err)
-						}
-						c.captureHandle = nil
+					c.captureHandle = nil
 
-						return
-					}
-
-					captureErrors <- err
 					return
 				}
+
+				captureErrors <- err
+				return
 			}
 		}
 	}()
