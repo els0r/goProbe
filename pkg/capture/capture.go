@@ -44,8 +44,8 @@ type captures struct {
 	sync.RWMutex
 }
 
-// NewCaptures instantiates a new, empty set of Captures
-func NewCaptures() *captures {
+// newCaptures instantiates a new, empty set of Captures
+func newCaptures() *captures {
 	return &captures{
 		Map:     make(map[string]*Capture),
 		RWMutex: sync.RWMutex{},
@@ -231,7 +231,7 @@ func (c *Capture) process(ctx context.Context) <-chan error {
 	return captureErrors
 }
 
-func (c *Capture) capturePacket() (err error) {
+func (c *Capture) capturePacket() error {
 
 	// Fetch the next packet form the wire
 	ipLayer, pktType, pktSize, err := c.captureHandle.NextIPPacketZeroCopy()
