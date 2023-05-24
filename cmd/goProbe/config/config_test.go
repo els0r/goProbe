@@ -18,7 +18,7 @@ var tests = []struct {
 	{"valid configuration (api, logging)", false},
 	{"fails on API section", true},
 	{"missing iface config", true},
-	{"missing API port", true},
+	{"missing server addr", true},
 	{"insecure API key", true},
 	{"faulty json", true},
 	// this is ok, since the default DB path is assigned

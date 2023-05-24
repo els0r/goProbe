@@ -104,14 +104,9 @@ func New() *Config {
 			EncoderType: "lz4",
 		},
 		Interfaces: make(Ifaces),
-		// default config is syslog
 		Logging: LogConfig{
 			Encoding: "logfmt",
 			Level:    "info",
-		},
-		// default API config
-		API: &APIConfig{
-			Addr: "localhost:6060",
 		},
 	}
 }
