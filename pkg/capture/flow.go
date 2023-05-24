@@ -80,6 +80,8 @@ func ParsePacket(ipLayer capture.IPLayer, pktType capture.PacketType, pktTotalLe
 	var protocol byte
 	if ipLayerType := ipLayer.Type(); ipLayerType == ipLayerTypeV4 {
 
+		_ = ipLayer[ipv4.HeaderLen] // bounds check hint to compiler
+
 		isIPv4, protocol = true, ipLayer[9]
 
 		// Parse IPv4 packet information
@@ -134,6 +136,8 @@ func ParsePacket(ipLayer capture.IPLayer, pktType capture.PacketType, pktTotalLe
 		}
 
 	} else if ipLayerType == ipLayerTypeV6 {
+
+		_ = ipLayer[ipv6.HeaderLen] // bounds check hint to compiler
 
 		protocol = ipLayer[6]
 
