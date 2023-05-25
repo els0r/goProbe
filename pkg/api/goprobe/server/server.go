@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"net"
 	"net/http"
 	"time"
 
@@ -25,9 +26,11 @@ type Server struct {
 	// TODO: authorize API access
 	keys []string
 
-	addr string
+	addr           string
+	unixSocketFile string
 
-	srv    *http.Server
+	srv *http.Server
+
 	router *gin.Engine
 }
 
@@ -50,6 +53,9 @@ func New(addr string, captureManager *capture.Manager, opts ...Option) *Server {
 	router.MaxMultipartMemory = 32 << 20 // 32 MiB
 
 	router.Use(gin.Recovery())
+
+	// make sure that unix sockets are handled if they are provided
+	server.unixSocketFile = api.ExtractUnixSocket(addr)
 
 	server.router = router
 	for _, opt := range opts {
@@ -91,10 +97,21 @@ const headerTimeout = 30 * time.Second
 // Serve starts the API server after adding additional (optional) routes
 func (server *Server) Serve() error {
 	server.srv = &http.Server{
-		Addr:              server.addr,
-		Handler:           server.router,
+		Handler:           server.router.Handler(),
 		ReadHeaderTimeout: headerTimeout,
 	}
+
+	// listen on UNIX socket
+	if server.unixSocketFile != "" {
+		listener, err := net.Listen("unix", server.unixSocketFile)
+		if err != nil {
+			return err
+		}
+		return server.srv.Serve(listener)
+	}
+
+	// listen on address
+	server.srv.Addr = server.addr
 	return server.srv.ListenAndServe()
 }
 

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/els0r/goProbe/cmd/gpctl/pkg/conf"
+	"github.com/els0r/goProbe/pkg/api"
 	"github.com/els0r/goProbe/pkg/logging"
 	"github.com/els0r/goProbe/pkg/version"
 	"github.com/spf13/cobra"
@@ -95,6 +96,11 @@ func verifyArgs(_ *cobra.Command, _ []string) error {
 		return fmt.Errorf("%s: empty", conf.GoProbeServerAddr)
 	}
 
+	unixSocketFile := api.ExtractUnixSocket(serverAddr)
+	if unixSocketFile != "" {
+		return nil
+	}
+
 	_, _, err := net.SplitHostPort(serverAddr)
 	if err != nil {
 		return fmt.Errorf("%s: %w", conf.GoProbeServerAddr, err)
@@ -120,5 +126,4 @@ func wrapCancellationContext(timeout time.Duration, f entrypointE) runE {
 
 		return f(ctx, cmd, args)
 	}
-
 }

@@ -3,9 +3,11 @@ package client
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
 	"time"
 
+	"github.com/els0r/goProbe/pkg/api"
 	"github.com/els0r/goProbe/pkg/logging"
 	"github.com/els0r/goProbe/pkg/version"
 	"github.com/fako1024/httpc"
@@ -30,14 +32,17 @@ type DefaultClient struct {
 	requestLogging bool
 }
 
+// Option configures the client
 type Option func(*DefaultClient)
 
+// WithRequestLogging enables logging of client requests
 func WithRequestLogging(b bool) Option {
 	return func(c *DefaultClient) {
 		c.requestLogging = true
 	}
 }
 
+// WithRequestTimeout sets the timeout for every request
 func WithRequestTimeout(timeout time.Duration) Option {
 	return func(c *DefaultClient) {
 		if timeout > 0 {
@@ -46,6 +51,7 @@ func WithRequestTimeout(timeout time.Duration) Option {
 	}
 }
 
+// WithAPIKey sets the API key to be presented to the API server
 func WithAPIKey(key string) Option {
 	return func(c *DefaultClient) {
 		if key != "" {
@@ -54,6 +60,7 @@ func WithAPIKey(key string) Option {
 	}
 }
 
+// WithScheme sets the scheme for client requests. http is the default
 func WithScheme(scheme string) Option {
 	return func(c *DefaultClient) {
 		if scheme != "" {
@@ -62,6 +69,7 @@ func WithScheme(scheme string) Option {
 	}
 }
 
+// WithName sets the name which is included in the User-Agent header
 func WithName(name string) Option {
 	return func(c *DefaultClient) {
 		if name != "" {
@@ -83,7 +91,7 @@ const (
 func NewDefault(addr string, opts ...Option) *DefaultClient {
 	c := &DefaultClient{
 		client:   http.DefaultClient,
-		scheme:   "http",
+		scheme:   "http://",
 		hostAddr: addr,
 		timeout:  defaultRequestTimeout,
 		name:     defaultClientName,
@@ -96,10 +104,30 @@ func NewDefault(addr string, opts ...Option) *DefaultClient {
 	for _, opt := range opts {
 		opt(c)
 	}
+
+	t := http.DefaultTransport
+
+	// change transport to dial to the unix socket instead
+	unixSocketFile := api.ExtractUnixSocket(addr)
+	unixIdent := "unix"
+	if unixSocketFile != "" {
+		t = &http.Transport{
+			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+				var d net.Dialer
+				return d.DialContext(ctx, unixIdent, unixSocketFile)
+			},
+		}
+		// also make sure to unset the address and modify the scheme so the calls to NewURL
+		// don't append the filename of the unix socket
+		c.hostAddr = ""
+		c.scheme = c.scheme + unixIdent
+	}
+
 	c.client = &http.Client{
+		// trace propagation is enabled by default
 		Transport: &transport{
 			rt: otelhttp.NewTransport(
-				http.DefaultTransport,
+				t,
 			),
 			requestLogging: c.requestLogging,
 			clientName:     c.name,
@@ -108,6 +136,7 @@ func NewDefault(addr string, opts ...Option) *DefaultClient {
 	return c
 }
 
+// Client returns the client's *http.Client
 func (c *DefaultClient) Client() *http.Client {
 	return c.client
 }
@@ -118,6 +147,8 @@ type transport struct {
 	clientName     string
 }
 
+// RoundTrip implements the http.RoundTripper interface, adding tracing and
+// logging (if enabled) to a client request
 func (t *transport) RoundTrip(r *http.Request) (*http.Response, error) {
 	start := time.Now()
 
@@ -163,6 +194,7 @@ func (t *transport) RoundTrip(r *http.Request) (*http.Response, error) {
 	return resp, err
 }
 
+// Modify activates retry behavior, timeout handling and authorization via the stored key
 func (c *DefaultClient) Modify(ctx context.Context, req *httpc.Request) *httpc.Request {
 	// retry any request that isn't 2xx
 	if c.retry {
@@ -189,6 +221,12 @@ func (c *DefaultClient) Modify(ctx context.Context, req *httpc.Request) *httpc.R
 	return req
 }
 
+// NewURL synthesizes a new URL for a given path depending on how the
+// client was configured.
+//
+// Example:
+//
+//	http://localhost:8145/status
 func (c *DefaultClient) NewURL(path string) string {
-	return fmt.Sprintf("%s://%s%s", c.scheme, c.hostAddr, path)
+	return fmt.Sprintf("%s%s%s", c.scheme, c.hostAddr, path)
 }
