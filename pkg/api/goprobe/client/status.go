@@ -15,10 +15,7 @@ import (
 func (c *Client) GetInterfaceStatus(ctx context.Context, ifaces ...string) (statuses map[string]capturetypes.CaptureStats, lastWriteout time.Time, err error) {
 	var res = new(gpapi.StatusResponse)
 
-	url := c.NewURL(gpapi.StatusRoute)
-	if len(ifaces) == 1 {
-		url += "/" + ifaces[0]
-	}
+	url := c.NewURL(addIfaceToPath(gpapi.StatusRoute, ifaces...))
 
 	req := c.Modify(ctx,
 		httpc.NewWithClient("GET", url, c.Client()).

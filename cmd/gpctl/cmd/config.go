@@ -110,6 +110,12 @@ func updateConfig(ctx context.Context, file string, silent bool) error {
 		return fmt.Errorf("failed to load goprobe's config file %s: %w", file, err)
 	}
 
+	// validate config before sending it
+	err = gpConfig.Validate()
+	if err != nil {
+		return fmt.Errorf("invalid configuration provided: %w", err)
+	}
+
 	// send update call
 	enabled, updated, disabled, err := client.UpdateInterfaceConfigs(ctx, gpConfig.Interfaces)
 	if err != nil {

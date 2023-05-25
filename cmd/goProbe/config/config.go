@@ -12,7 +12,7 @@
 package config
 
 import (
-	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -21,6 +21,7 @@ import (
 
 	"github.com/els0r/goProbe/pkg/defaults"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
+	json "github.com/json-iterator/go"
 	"gopkg.in/yaml.v3"
 )
 
@@ -117,7 +118,7 @@ func (l LogConfig) validate() error {
 
 func (a APIConfig) validate() error {
 	if a.Addr == "" {
-		return fmt.Errorf("No address specified for API server")
+		return errors.New("no address specified for API server")
 	}
 	for _, key := range a.Keys {
 		err := checkKeyConstraints(key)
@@ -127,7 +128,7 @@ func (a APIConfig) validate() error {
 	}
 	// check API key constraints
 	if a.Timeout < 0 {
-		return fmt.Errorf("The request timeout must be a positive number > 0")
+		return errors.New("the request timeout must be a positive number > 0")
 	}
 
 	// check discovery config
@@ -139,25 +140,32 @@ func (a APIConfig) validate() error {
 
 func (d DiscoveryConfig) validate() error {
 	if d.Endpoint == "" {
-		return fmt.Errorf("Each probe must publish it's config with a non-empty endpoint on which the API can be reached")
+		return errors.New("each probe must publish it's config with a non-empty endpoint on which the API can be reached")
 	}
 	if d.Identifier == "" {
-		return fmt.Errorf("Each probe must publish it's config with a non-empty identifier if service discvoery is enabled")
+		return errors.New("each probe must publish it's config with a non-empty identifier if service discvoery is enabled")
 	}
 	if d.Registry == "" {
-		return fmt.Errorf("The registry endpoint (configuration store) needs to be specified. Usually this will be a FQDN or an IP:Port pair")
+		return errors.New("the registry endpoint (configuration store) needs to be specified. Usually this will be a FQDN or an IP:Port pair")
 	}
 	return nil
 }
 
 func (c CaptureConfig) validate() error {
 	if c.RingBufferBlockSize <= 0 {
-		return fmt.Errorf("ring buffer block size must be a postive number")
+		return errors.New("ring buffer block size must be a postive number")
 	}
 	if c.RingBufferNumBlocks <= 0 {
-		return fmt.Errorf("ring buffer num blocks must be a postive number")
+		return errors.New("ring buffer num blocks must be a postive number")
 	}
 	return nil
+}
+
+// Equals compares c to cfg and returns true if all fields are identical
+func (c CaptureConfig) Equals(cfg CaptureConfig) bool {
+	return c.Promisc == cfg.Promisc &&
+		c.RingBufferBlockSize == cfg.RingBufferBlockSize &&
+		c.RingBufferNumBlocks == cfg.RingBufferNumBlocks
 }
 
 func (i Ifaces) validate() error {
@@ -181,7 +189,7 @@ func (i Ifaces) Validate() error {
 
 func (d DBConfig) validate() error {
 	if d.Path == "" {
-		return fmt.Errorf("Database path must not be empty")
+		return errors.New("database path must not be empty")
 	}
 	_, err := encoders.GetTypeByString(d.EncoderType)
 	if err != nil {
@@ -256,7 +264,5 @@ func checkKeyConstraints(key string) error {
 	if usedIt {
 		return fmt.Errorf("API key '%s' considered compromised: identical to demo-key in README.md", key)
 	}
-
-	// TODO: consider to check entropy of key
 	return nil
 }

@@ -65,6 +65,16 @@ func (server *Server) putConfig(c *gin.Context) {
 		return
 	}
 
+	// validate config before processing it
+	err = ifaceConfigs.Validate()
+	if err != nil {
+		resp.StatusCode = http.StatusBadRequest
+		resp.Error = err.Error()
+
+		c.AbortWithStatusJSON(resp.StatusCode, resp)
+		return
+	}
+
 	// update the captures
 	ctx := c.Request.Context()
 

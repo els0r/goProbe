@@ -10,13 +10,12 @@ import (
 	"github.com/fako1024/httpc"
 )
 
+// GetInterfaceConfig returns goprobe's runtime configuration for the queried interfaces. If ifaces
+// is empty or omitted, the runtime configuration for all interfaces is returned
 func (c *Client) GetInterfaceConfig(ctx context.Context, ifaces ...string) (ifaceConfigs config.Ifaces, err error) {
 	var res = new(gpapi.ConfigResponse)
 
-	url := c.NewURL(gpapi.ConfigRoute)
-	if len(ifaces) == 1 {
-		url += "/" + ifaces[0]
-	}
+	url := c.NewURL(addIfaceToPath(gpapi.ConfigRoute, ifaces...))
 
 	req := c.Modify(ctx,
 		httpc.NewWithClient("GET", url, c.Client()).
@@ -37,6 +36,7 @@ func (c *Client) GetInterfaceConfig(ctx context.Context, ifaces ...string) (ifac
 	return res.Ifaces, nil
 }
 
+// UpdateInterfaceConfigs updates goprobe's runtime configuration for the provided interfaces
 func (c *Client) UpdateInterfaceConfigs(ctx context.Context, ifaceConfigs config.Ifaces) (enabled, updated, disabled []string, err error) {
 	var res = new(gpapi.ConfigUpdateResponse)
 

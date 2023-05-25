@@ -80,8 +80,6 @@ func WithName(name string) Option {
 }
 
 // TODO: support for unix sockets
-// TODO: DELETE for config
-// TODO: get rid of the Responses when returning data from the client (remove the HTTP part)
 
 const (
 	defaultRequestTimeout = 30 * time.Second
@@ -161,14 +159,16 @@ func (t *transport) RoundTrip(r *http.Request) (*http.Response, error) {
 	duration := time.Since(start)
 
 	if t.requestLogging {
-		logger := logging.FromContext(r.Context()).With("req", slog.GroupValue(
+		ctx := r.Context()
+
+		logger := logging.FromContext(ctx).With("req", slog.GroupValue(
 			slog.String("method", r.Method),
 			slog.String("url", r.URL.String()),
 			slog.String("user_agent", r.UserAgent()),
 			slog.Duration("duration", duration),
 		))
 		// log trace ID if it is present
-		sc := trace.SpanContextFromContext(r.Context())
+		sc := trace.SpanContextFromContext(ctx)
 		if sc.HasTraceID() {
 			logger = logger.With(slog.String("traceID", sc.TraceID().String()))
 		}

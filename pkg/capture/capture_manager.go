@@ -3,7 +3,6 @@ package capture
 import (
 	"context"
 	"fmt"
-	"reflect"
 	"sync"
 	"time"
 
@@ -182,14 +181,13 @@ func (cm *Manager) Status(ctx context.Context, ifaces ...string) (statusmap map[
 		rg             RunGroup
 	)
 	for _, iface := range ifaces {
-		iface := iface
 		mc, exists := cm.captures.Get(iface)
 		if !exists {
 			continue
 		}
 		rg.Run(func() {
 
-			runCtx := logging.WithFields(ctx, "iface", iface)
+			runCtx := logging.WithFields(ctx, "iface", mc.iface)
 
 			// Lock the running capture and extract the status
 			mc.lock()
@@ -227,11 +225,15 @@ func (cm *Manager) Update(ctx context.Context, ifaces config.Ifaces) (enabled, u
 		return
 	}
 
+	logger, t0 := logging.FromContext(ctx), time.Now()
+
 	// Build set of interfaces to enable / disable
 	var (
 		ifaceSet                                  = make(map[string]struct{})
 		enableIfaces, updateIfaces, disableIfaces []string
 	)
+
+	cm.Lock()
 	for iface, cfg := range ifaces {
 		ifaceSet[iface] = struct{}{}
 		if _, exists := cm.captures.Get(iface); !exists {
@@ -241,32 +243,42 @@ func (cm *Manager) Update(ctx context.Context, ifaces config.Ifaces) (enabled, u
 			runtimeCfg := cm.lastAppliedConfig[iface]
 
 			// take care of parameter updates to an interface that exists already
-			if !reflect.DeepEqual(updatedCfg, runtimeCfg) {
+			if !updatedCfg.Equals(runtimeCfg) {
 				updateIfaces = append(updateIfaces, iface)
 			}
 		}
 	}
+	cm.Unlock()
+
 	for iface := range cm.captures.Map {
 		if _, exists := ifaceSet[iface]; !exists {
 			disableIfaces = append(disableIfaces, iface)
 		}
 	}
 
-	cm.update(ctx, ifaces, enableIfaces, updateIfaces, disableIfaces)
+	var disable = append(disableIfaces, updateIfaces...)
+	var enable = append(enableIfaces, updateIfaces...)
+
+	cm.update(ctx, ifaces, enable, disable)
+
+	logger.With(
+		"elapsed", time.Since(t0).Round(time.Millisecond).String(),
+		slog.Group("ifaces",
+			"added", enableIfaces,
+			"updated", updateIfaces,
+			"removed", disableIfaces,
+		),
+	).Debug("updated interface configuration")
 
 	return enableIfaces, updateIfaces, disableIfaces, nil
+
 }
 
-func (cm *Manager) update(ctx context.Context, ifaces config.Ifaces, enable, update, disable []string) {
-
-	logger, t0 := logging.FromContext(ctx), time.Now()
-
-	var disableIfaces = append(disable, update...)
-	var enableIfaces = append(enable, update...)
+func (cm *Manager) update(ctx context.Context, ifaces config.Ifaces, enable, disable []string) {
 
 	// execute a final writeout of all disabled interfaces in the list
-	if len(disableIfaces) > 0 {
-		cm.performWriteout(ctx, time.Now().Add(time.Second), disableIfaces...)
+	if len(disable) > 0 {
+		cm.performWriteout(ctx, time.Now().Add(time.Second), disable...)
 	}
 
 	// To avoid any interference the update() logic is protected as a whole
@@ -279,9 +291,7 @@ func (cm *Manager) update(ctx context.Context, ifaces config.Ifaces, enable, upd
 
 	// Disable any interfaces present in the negative list
 	var disableRg RunGroup
-	for _, iface := range disableIfaces {
-		iface := iface
-
+	for _, iface := range disable {
 		mc, exists := cm.captures.Get(iface)
 		if !exists {
 			continue
@@ -310,7 +320,7 @@ func (cm *Manager) update(ctx context.Context, ifaces config.Ifaces, enable, upd
 	// errors
 	var enableRg RunGroup
 	// Enable any interfaces present in the positive list
-	for _, iface := range enableIfaces {
+	for _, iface := range enable {
 		iface := iface
 
 		enableRg.Run(func() {
@@ -331,14 +341,6 @@ func (cm *Manager) update(ctx context.Context, ifaces config.Ifaces, enable, upd
 	}
 	enableRg.Wait()
 
-	logger.With(
-		"elapsed", time.Since(t0).Round(time.Millisecond).String(),
-		slog.Group("ifaces",
-			"added", enable,
-			"updated", update,
-			"removed", disable,
-		),
-	).Debug("updated interface configuration")
 }
 
 // Close stops / closes all (or a set of) interfaces
@@ -353,7 +355,7 @@ func (cm *Manager) Close(ctx context.Context, ifaces ...string) {
 
 	// Close all interfaces in the list using update() with the respective list of
 	// interfaces to remove
-	cm.update(ctx, nil, nil, nil, ifaces)
+	cm.update(ctx, nil, nil, ifaces)
 
 	logger.With(
 		"elapsed", time.Since(t0).Round(time.Millisecond).String(),
@@ -373,8 +375,6 @@ func (cm *Manager) rotate(ctx context.Context, writeoutChan chan<- capturetypes.
 
 	var rg RunGroup
 	for _, iface := range ifaces {
-		iface := iface
-
 		mc, exists := cm.captures.Get(iface)
 		if exists {
 			rg.Run(func() {
