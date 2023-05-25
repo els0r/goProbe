@@ -44,12 +44,13 @@ func instrument(node Node) (Node, error) {
 // during query evaluation.
 func generateCompareValue(condition *conditionNode) error {
 	var (
-		value   []byte
-		netmask int
-		err     error
+		value     []byte
+		netmask   int
+		ipVersion types.IPVersion
+		err       error
 	)
 
-	if value, netmask, err = conditionBytesAndNetmask(*condition); err != nil {
+	if value, netmask, ipVersion, err = conditionBytesAndNetmask(*condition); err != nil {
 		return err
 	}
 
@@ -58,6 +59,7 @@ func generateCompareValue(condition *conditionNode) error {
 	// overhead induced by a for loop
 	switch condition.attribute {
 	case "sip":
+		condition.ipVersion = ipVersion
 		switch condition.comparator {
 		case "=":
 			condition.compareValue = func(currentValue types.Key) bool {
@@ -73,6 +75,7 @@ func generateCompareValue(condition *conditionNode) error {
 			return fmt.Errorf("comparator %q not allowed for attribute %q", condition.comparator, condition.attribute)
 		}
 	case "dip":
+		condition.ipVersion = ipVersion
 		switch condition.comparator {
 		case "=":
 			condition.compareValue = func(currentValue types.Key) bool {
@@ -88,6 +91,7 @@ func generateCompareValue(condition *conditionNode) error {
 			return fmt.Errorf("comparator %q not allowed for attribute %q", condition.comparator, condition.attribute)
 		}
 	case "snet":
+		condition.ipVersion = ipVersion
 		// in case of matching networks, only the relevant bytes (e.g. those
 		// at which the netmask is non-zero) have to be checked. This form of
 		// lazy checking can be applied to both IPv4 and IPv6 networks
@@ -146,6 +150,7 @@ func generateCompareValue(condition *conditionNode) error {
 			}
 		}
 	case "dnet":
+		condition.ipVersion = ipVersion
 		// in case of matching networks, only the relevant bytes (e.g. those
 		// at which the netmask is non-zero) have to be checked. This form of
 		// lazy checking can be applied to both IPv4 and IPv6 networks
@@ -293,7 +298,7 @@ func generateCompareValue(condition *conditionNode) error {
 //	int:          (Optionally) if the attribute of condition is a CIDR (e.g. 192.168.0.0/18)
 //	              the length of the netmask (18 in this case)
 //	error:        message whenever a condition was incorrectly specified
-func conditionBytesAndNetmask(condition conditionNode) ([]byte, int, error) {
+func conditionBytesAndNetmask(condition conditionNode) ([]byte, int, types.IPVersion, error) {
 
 	// translate the indicated value into bytes
 	var (
@@ -301,6 +306,8 @@ func conditionBytesAndNetmask(condition conditionNode) ([]byte, int, error) {
 		num       uint64
 		isIn      bool
 		netmask   int64
+		isIPv4    bool
+		ipVersion types.IPVersion
 		condBytes []byte
 	)
 
@@ -310,18 +317,24 @@ func conditionBytesAndNetmask(condition conditionNode) ([]byte, int, error) {
 	case "=", "!=", "<", ">", "<=", ">=":
 		switch attribute {
 		case "dip", "sip":
-			if condBytes, err = types.IPStringToBytes(value); err != nil {
-				return nil, 0, fmt.Errorf("could not parse IP address: %s", value)
+			condBytes, isIPv4, err = types.IPStringToBytes(value)
+			if err != nil {
+				return nil, 0, types.IPVersionNone, fmt.Errorf("could not parse IP address: %s", value)
+			}
+			if isIPv4 {
+				ipVersion = types.IPVersionV4
+			} else {
+				ipVersion = types.IPVersionV6
 			}
 		case "dnet", "snet":
 			cidr := strings.Split(value, "/")
 			if len(cidr) < 2 {
-				return nil, 0, errors.New("could not get netmask. Use CIDR notation. Example: 192.168.1.17/25")
+				return nil, 0, types.IPVersionNone, errors.New("could not get netmask. Use CIDR notation. Example: 192.168.1.17/25")
 			}
 
 			// parse netmask and run sanity checks
 			if netmask, err = strconv.ParseInt(cidr[1], 10, 32); err != nil {
-				return nil, 0, fmt.Errorf("failed to parse netmask %s. Use CIDR notation. Example: 192.168.1.17/25", cidr[1])
+				return nil, 0, types.IPVersionNone, fmt.Errorf("failed to parse netmask %s. Use CIDR notation. Example: 192.168.1.17/25", cidr[1])
 			}
 
 			// check if the netmask is within allowed bounds
@@ -329,17 +342,19 @@ func conditionBytesAndNetmask(condition conditionNode) ([]byte, int, error) {
 
 			if isIPv6Address {
 				if netmask > 128 {
-					return nil, 0, errors.New("incorrect netmask. Maximum possible value is 128 for IPv6 networks")
+					return nil, 0, types.IPVersionNone, errors.New("incorrect netmask. Maximum possible value is 128 for IPv6 networks")
 				}
+				ipVersion = types.IPVersionV6
 			} else {
 				if netmask > 32 {
-					return nil, 0, errors.New("incorrect netmask. Maximum possible value is 32 for IPv4 networks")
+					return nil, 0, types.IPVersionNone, errors.New("incorrect netmask. Maximum possible value is 32 for IPv4 networks")
 				}
+				ipVersion = types.IPVersionV4
 			}
 
 			// get ip bytes and apply netmask
-			if condBytes, err = types.IPStringToBytes(cidr[0]); err != nil {
-				return nil, 0, fmt.Errorf("could not parse IP address: %s", value)
+			if condBytes, _, err = types.IPStringToBytes(cidr[0]); err != nil {
+				return nil, 0, types.IPVersionNone, fmt.Errorf("could not parse IP address: %s", value)
 			}
 
 			maskWidth := int64(4)
@@ -359,23 +374,23 @@ func conditionBytesAndNetmask(condition conditionNode) ([]byte, int, error) {
 		case "proto":
 			if num, err = strconv.ParseUint(value, 10, 8); err != nil {
 				if num, isIn = protocols.GetIPProtoID(value); !isIn {
-					return nil, 0, fmt.Errorf("could not parse protocol value: %w", err)
+					return nil, 0, types.IPVersionNone, fmt.Errorf("could not parse protocol value: %w", err)
 				}
 			}
 
 			condBytes = []byte{uint8(num & 0xff)}
 		case "dport":
 			if num, err = strconv.ParseUint(value, 10, 16); err != nil {
-				return nil, 0, fmt.Errorf("could not parse dport value: %w", err)
+				return nil, 0, types.IPVersionNone, fmt.Errorf("could not parse dport value: %w", err)
 			}
 
 			condBytes = []byte{uint8(num >> 8), uint8(num & 0xff)}
 		default:
-			return nil, 0, fmt.Errorf("unknown attribute: %s", attribute)
+			return nil, 0, types.IPVersionNone, fmt.Errorf("unknown attribute: %s", attribute)
 		}
 	default:
-		return nil, 0, fmt.Errorf("unknown comparator: %s", comparator)
+		return nil, 0, types.IPVersionNone, fmt.Errorf("unknown comparator: %s", comparator)
 	}
 
-	return condBytes, int(netmask), nil
+	return condBytes, int(netmask), ipVersion, nil
 }

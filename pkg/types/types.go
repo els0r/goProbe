@@ -7,6 +7,39 @@ import (
 	"strings"
 )
 
+// IPVersion denotes the IP layer version (if any) of a conditional node
+type IPVersion int
+
+const (
+	IPVersionNone IPVersion = iota // IPVersionNone : Not an IP related node
+	IPVersionBoth                  // IPVersionBoth : Node contains subnodes with both IP layer versions
+
+	IPVersionV4 // IPVersionV4 : IPv4 related node
+	IPVersionV6 // IPVersionV6 : IPv6 related node
+)
+
+// Merge combines two IPVersion instances
+func (v IPVersion) Merge(v2 IPVersion) IPVersion {
+
+	if v == IPVersionNone || v2 == IPVersionBoth {
+		return v2
+	}
+	if v2 == IPVersionNone || v == IPVersionBoth {
+		return v
+	}
+
+	if v != v2 {
+		return IPVersionBoth
+	}
+
+	return v
+}
+
+// IsLimited returns if the IP layer version is limited (i.e. not none or both)
+func (v IPVersion) IsLimited() bool {
+	return v >= IPVersionV4
+}
+
 type Status string
 
 const (
@@ -86,15 +119,15 @@ func numZeros(ip []byte) uint8 {
 }
 
 // IPStringToBytes creates a goDB compatible bytes slice from an IP address string
-func IPStringToBytes(ip string) ([]byte, error) {
+func IPStringToBytes(ip string) ([]byte, bool, error) {
 	var isIPv4 = strings.Contains(ip, ".")
 
 	ipaddr := net.ParseIP(ip)
 	if len(ipaddr) == 0 {
-		return nil, errors.New("IP parse: incorrect format")
+		return nil, false, errors.New("IP parse: incorrect format")
 	}
 	if isIPv4 {
-		return []byte{ipaddr[12], ipaddr[13], ipaddr[14], ipaddr[15]}, nil
+		return []byte{ipaddr[12], ipaddr[13], ipaddr[14], ipaddr[15]}, true, nil
 	}
-	return ipaddr, nil
+	return ipaddr, false, nil
 }

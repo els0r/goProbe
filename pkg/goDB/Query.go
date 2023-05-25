@@ -32,6 +32,7 @@ type Query struct {
 	hasAttrTime, hasAttrIface                          bool
 	hasAttrSip, hasAttrDip, hasAttrDport, hasAttrProto bool
 	hasCondSip, hasCondDip, hasCondDport, hasCondProto bool
+	ipVersion                                          types.IPVersion
 
 	// Each of the following slices represents a set in the sense that each column index can occur at most once in each slice.
 	// They are populated during the call to NewQuery
@@ -118,11 +119,12 @@ func NewQuery(attributes []types.Attribute, conditional node.Node, selector type
 	}
 
 	if q.Conditional != nil {
-		for attribName := range q.Conditional.Attributes() {
+		for attribName, ipVersion := range q.Conditional.Attributes() {
 			colIdx := conditionalAttributeNameToColumnIndex(attribName)
 			q.conditionalAttributeIndices = append(q.conditionalAttributeIndices, colIdx)
 			isAttributeIndex[colIdx] = true
 			queryConditionalColumnFlagSetters[colIdx](q)
+			q.ipVersion = q.ipVersion.Merge(ipVersion)
 		}
 	}
 	for colIdx := types.ColumnIndex(0); colIdx < types.ColIdxAttributeCount; colIdx++ {

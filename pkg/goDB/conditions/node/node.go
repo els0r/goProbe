@@ -77,19 +77,20 @@ type Node interface {
 	Evaluate(types.Key) bool
 
 	// Returns the set of attributes used in the conditional.
-	Attributes() map[string]struct{}
+	Attributes() map[string]types.IPVersion
 }
 
 type conditionNode struct {
 	attribute    string
 	comparator   string
 	value        string
+	ipVersion    types.IPVersion
 	currentValue []byte
 	compareValue func(types.Key) bool
 }
 
 func newConditionNode(attribute, comparator, value string) conditionNode {
-	return conditionNode{attribute, comparator, value, nil, nil}
+	return conditionNode{attribute, comparator, value, types.IPVersionNone, nil, nil}
 }
 func (n conditionNode) String() string {
 	return fmt.Sprintf("%s %s %s", n.attribute, n.comparator, n.value)
@@ -107,9 +108,9 @@ func (n conditionNode) instrument() (Node, error) {
 func (n conditionNode) Evaluate(comparisonValue types.Key) bool {
 	return n.compareValue(comparisonValue)
 }
-func (n conditionNode) Attributes() map[string]struct{} {
-	return map[string]struct{}{
-		n.attribute: {},
+func (n conditionNode) Attributes() map[string]types.IPVersion {
+	return map[string]types.IPVersion{
+		n.attribute: n.ipVersion,
 	}
 }
 
@@ -134,7 +135,7 @@ func (n notNode) transform(transformer func(conditionNode) (Node, error)) (Node,
 func (n notNode) Evaluate(comparisonValue types.Key) bool {
 	return !n.node.Evaluate(comparisonValue)
 }
-func (n notNode) Attributes() map[string]struct{} {
+func (n notNode) Attributes() map[string]types.IPVersion {
 	return n.node.Attributes()
 }
 
@@ -169,10 +170,10 @@ func (n andNode) transform(transformer func(conditionNode) (Node, error)) (Node,
 func (n andNode) Evaluate(comparisonValue types.Key) bool {
 	return n.left.Evaluate(comparisonValue) && n.right.Evaluate(comparisonValue)
 }
-func (n andNode) Attributes() map[string]struct{} {
+func (n andNode) Attributes() map[string]types.IPVersion {
 	result := n.left.Attributes()
-	for attribute := range n.right.Attributes() {
-		result[attribute] = struct{}{}
+	for attribute, ipVersion := range n.right.Attributes() {
+		result[attribute] = result[attribute].Merge(ipVersion)
 	}
 	return result
 }
@@ -210,10 +211,10 @@ func (n orNode) Evaluate(comparisonValue types.Key) bool {
 	return n.left.Evaluate(comparisonValue) || n.right.Evaluate(comparisonValue)
 }
 
-func (n orNode) Attributes() map[string]struct{} {
+func (n orNode) Attributes() map[string]types.IPVersion {
 	result := n.left.Attributes()
-	for attribute := range n.right.Attributes() {
-		result[attribute] = struct{}{}
+	for attribute, ipVersion := range n.right.Attributes() {
+		result[attribute] = result[attribute].Merge(ipVersion)
 	}
 	return result
 }

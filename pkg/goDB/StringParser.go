@@ -116,7 +116,7 @@ func (n *NOPStringParser) ParseVal(element string, val *types.Counters) error {
 
 // ParseKey parses a source IP string and writes it to the source IP key slice
 func (s *SipStringParser) ParseKey(element string, key *types.ExtendedKey) error {
-	ipBytes, err := types.IPStringToBytes(element)
+	ipBytes, _, err := types.IPStringToBytes(element)
 	if err != nil {
 		return fmt.Errorf("could not parse 'sip' attribute: %w", err)
 	}
@@ -130,7 +130,7 @@ func (s *SipStringParser) ParseKey(element string, key *types.ExtendedKey) error
 
 // ParseKey parses a destination IP string and writes it to the desintation IP key slice
 func (d *DipStringParser) ParseKey(element string, key *types.ExtendedKey) error {
-	ipBytes, err := types.IPStringToBytes(element)
+	ipBytes, _, err := types.IPStringToBytes(element)
 	if err != nil {
 		return fmt.Errorf("could not parse 'dip' attribute: %w", err)
 	}
