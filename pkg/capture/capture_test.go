@@ -86,7 +86,7 @@ func testConcurrentMethodAccess(t *testing.T, nIfaces, nIterations int) {
 	// Initialize the CaptureManager
 	captureManager := NewManager(
 		writeout.NewGoDBHandler(tempDir, encoders.EncoderTypeLZ4),
-		WithSourceInitFn(func(c *Capture) (capture.Source, error) {
+		WithSourceInitFn(func(c *Capture) (capture.SourceZeroCopy, error) {
 			src, exists := testMockSrcs[c.Iface()]
 			if !exists {
 				return nil, fmt.Errorf("failed to initialize missing interface %s", c.Iface())
@@ -184,7 +184,7 @@ func TestMockPacketCapturePerformance(t *testing.T) {
 	mockC.lock()
 	flows := mockC.flowLog.Flows()
 	for _, v := range flows {
-		fmt.Printf("Packets processed after %v: %d (%v/pkt)\n", runtime, v.PacketsSent(), runtime/time.Duration(v.PacketsSent()))
+		fmt.Printf("Packets processed after %v: %d (%v/pkt)\n", runtime, v.packetsSent, runtime/time.Duration(v.packetsSent))
 	}
 	mockC.unlock()
 
@@ -293,7 +293,7 @@ func newMockCapture(src capture.SourceZeroCopy) *Capture {
 	return &Capture{
 		iface:         src.Link().Name,
 		capLock:       newCaptureLock(),
-		flowLog:       capturetypes.NewFlowLog(),
+		flowLog:       NewFlowLog(),
 		errMap:        make(map[string]int),
 		captureHandle: src,
 	}

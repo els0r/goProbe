@@ -25,7 +25,7 @@ const (
 	ErrorThreshold = 10000
 )
 
-var defaultSourceInitFn = func(c *Capture) (capture.Source, error) {
+var defaultSourceInitFn = func(c *Capture) (capture.SourceZeroCopy, error) {
 	return afring.NewSource(c.iface,
 		afring.CaptureLength(link.CaptureLengthMinimalIPv6Transport),
 		afring.BufferSize(c.config.RingBufferBlockSize, c.config.RingBufferNumBlocks),
@@ -35,7 +35,7 @@ var defaultSourceInitFn = func(c *Capture) (capture.Source, error) {
 
 // sourceInitFn denotes the function used to initialize a capture source,
 // providing the ability to override the default behavior, e.g. in mock tests
-type sourceInitFn func(*Capture) (capture.Source, error)
+type sourceInitFn func(*Capture) (capture.SourceZeroCopy, error)
 
 // Captures denotes a named set of Capture instances, wrapping a map and the
 // required synchronization of all its actions
@@ -44,8 +44,8 @@ type captures struct {
 	sync.RWMutex
 }
 
-// NewCaptures instantiates a new, empty set of Captures
-func NewCaptures() *captures {
+// newCaptures instantiates a new, empty set of Captures
+func newCaptures() *captures {
 	return &captures{
 		Map:     make(map[string]*Capture),
 		RWMutex: sync.RWMutex{},
@@ -110,10 +110,10 @@ type Capture struct {
 
 	// Logged flows since creation of the capture (note that some
 	// flows are retained even after Rotate has been called)
-	flowLog *capturetypes.FlowLog
+	flowLog *FlowLog
 
 	// Generic handle / source for packet capture
-	captureHandle capture.Source
+	captureHandle capture.SourceZeroCopy
 	sourceInitFn  sourceInitFn
 
 	// error map for logging errors more properly
@@ -127,7 +127,7 @@ func newCapture(iface string, config config.CaptureConfig) *Capture {
 		iface:        iface,
 		config:       config,
 		capLock:      newCaptureLock(),
-		flowLog:      capturetypes.NewFlowLog(),
+		flowLog:      NewFlowLog(),
 		errMap:       make(map[string]int),
 		sourceInitFn: defaultSourceInitFn,
 	}
@@ -194,40 +194,44 @@ func (c *Capture) process(ctx context.Context) <-chan error {
 		logger := logging.FromContext(ctx)
 		c.errCount = 0
 
-		// Reusable packet buffer for in-place population
-		pkt := c.captureHandle.NewPacket()
-
 		// Main packet capture loop which an interface should be in most of the time
+		captureUnlocked := false
 		for {
 
-			// map access needs to be synchronized. This will incur a performance hit, but less so
-			// than locking the data structure itself (mutex causes about 40% drop in throughput)
-			select {
-
-			// Lock state synchronization
-			case <-c.capLock.request:
+			// Since lock confirmation is only done from a single goroutine (this one)
+			// tracking if the capture source was unblocked is safe and can act as flag when to
+			// read from the lock request channel (which in turn is atomic).
+			// Similarly, once this goroutine observes that the channel length is 1 it is guaranteed
+			// that there is a request on the channel that can be read on the next line.
+			// This logic may be slightly more contrived than a select{} statement but it increases
+			// packet throughput by several percent points
+			if len(c.capLock.request) > 0 || captureUnlocked {
+				<-c.capLock.request             // Consume the request
 				c.capLock.confirm <- struct{}{} // Confirm that process() is not processing
-				<-c.capLock.done
+				<-c.capLock.done                // Consume the request to continue normal processing
+				captureUnlocked = false
+			}
 
-			// Normal processing
-			default:
-				err := c.capturePacket(pkt)
-				if err != nil {
-					if errors.Is(err, capture.ErrCaptureUnblock) { // capture unblocked (e.g. during rotation)
-						continue
+			// Fetch the next packet or PPOLL even from the source
+			if err := c.capturePacket(); err != nil {
+				if errors.Is(err, capture.ErrCaptureUnblocked) { // capture unblocked (during lock)
+
+					// Advance to the next loop iteration (during which the pending lock will be
+					// consumed / acted on)
+					captureUnlocked = true
+					continue
+				}
+				if errors.Is(err, capture.ErrCaptureStopped) { // capture stopped gracefully
+					if err := c.captureHandle.Free(); err != nil {
+						logger.Errorf("failed to free capture resources: %s", err)
 					}
-					if errors.Is(err, capture.ErrCaptureStopped) { // capture stopped gracefully
-						if err := c.captureHandle.Free(); err != nil {
-							logger.Errorf("failed to free capture resources: %s", err)
-						}
-						c.captureHandle = nil
+					c.captureHandle = nil
 
-						return
-					}
-
-					captureErrors <- err
 					return
 				}
+
+				captureErrors <- err
+				return
 			}
 		}
 	}()
@@ -235,10 +239,10 @@ func (c *Capture) process(ctx context.Context) <-chan error {
 	return captureErrors
 }
 
-func (c *Capture) capturePacket(pkt capture.Packet) (err error) {
+func (c *Capture) capturePacket() error {
 
 	// Fetch the next packet form the wire
-	_, err = c.captureHandle.NextPacket(pkt)
+	ipLayer, pktType, pktSize, err := c.captureHandle.NextIPPacketZeroCopy()
 	if err != nil {
 
 		// NextPacket should return a ErrCaptureStopped in case the handle is closed or
@@ -246,16 +250,11 @@ func (c *Capture) capturePacket(pkt capture.Packet) (err error) {
 		return fmt.Errorf("capture error: %w", err)
 	}
 
-	// Populate the capturetypes.GPPacket
-	// Instead of reusing an instance of capture.Packet over and over again a new
-	// one is allocated for each run on capturePacket(). Since it does not escape it is
-	// allocated on the stack and hence does not cause any GC overhead (and allocating is
-	// actually faster than resetting its fields, plus in that case it escapes to the heap)
-	var gppacket capturetypes.GPPacket
-	if err = Populate(&gppacket, pkt); err == nil {
-		c.flowLog.Add(&gppacket)
+	// Parse / add the received data to the map of flows
+	if err = c.flowLog.Add(ipLayer, pktType, pktSize); err == nil {
 		c.stats.Processed++
 		c.errCount = 0
+
 		return nil
 	}
 

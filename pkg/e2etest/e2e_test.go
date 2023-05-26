@@ -200,7 +200,7 @@ func testE2E(t *testing.T, datasets ...[]byte) {
 	require.EqualValues(t, refRows, resRows)
 }
 
-func runGoProbe(t *testing.T, testDir string, sourceInitFn func() (mockIfaces, func(c *capture.Capture) (slimcap.Source, error))) {
+func runGoProbe(t *testing.T, testDir string, sourceInitFn func() (mockIfaces, func(c *capture.Capture) (slimcap.SourceZeroCopy, error))) {
 
 	// We quit on encountering SIGUSR2 (instead of the ususal SIGTERM or SIGINT)
 	// to avoid killing the test
@@ -276,15 +276,15 @@ func runGoQuery(t *testing.T, testDir string, mockIfaces mockIfaces, maxEntries 
 	return res
 }
 
-func setupSources(t testing.TB, ifaces mockIfaces) func() (mockIfaces, func(c *capture.Capture) (slimcap.Source, error)) {
+func setupSources(t testing.TB, ifaces mockIfaces) func() (mockIfaces, func(c *capture.Capture) (slimcap.SourceZeroCopy, error)) {
 
-	fnMap := make(map[string]func(c *capture.Capture) (slimcap.Source, error))
+	fnMap := make(map[string]func(c *capture.Capture) (slimcap.SourceZeroCopy, error))
 	for _, mockIface := range ifaces {
 		fnMap[mockIface.name] = mockIface.sourceInitFn
 	}
 
-	return func() (mockIfaces, func(c *capture.Capture) (slimcap.Source, error)) {
-		return ifaces, func(c *capture.Capture) (slimcap.Source, error) {
+	return func() (mockIfaces, func(c *capture.Capture) (slimcap.SourceZeroCopy, error)) {
+		return ifaces, func(c *capture.Capture) (slimcap.SourceZeroCopy, error) {
 			mockIfaceFn, ok := fnMap[c.Iface()]
 			if !ok {
 				return nil, fmt.Errorf("unable to find interface `%s` in list of mock interfaces", c.Iface())
@@ -307,7 +307,7 @@ func newPcapSource(t testing.TB, name string, data []byte) (res *mockIface) {
 		RWMutex: sync.RWMutex{},
 	}
 
-	res.sourceInitFn = func(c *capture.Capture) (slimcap.Source, error) {
+	res.sourceInitFn = func(c *capture.Capture) (slimcap.SourceZeroCopy, error) {
 
 		res.Lock()
 		defer res.Unlock()
@@ -337,16 +337,16 @@ func newPcapSource(t testing.TB, name string, data []byte) (res *mockIface) {
 			defer res.Unlock()
 
 			pkt = slimcap.NewIPPacket(pkt, payload, pktType, int(totalLen), ipLayerOffset)
-			var p capturetypes.GPPacket
-			if err := capture.Populate(&p, pkt); err != nil {
+			hash, isIPv4, auxInfo, err := capture.ParsePacket(pkt.IPLayer(), pkt.Type(), pkt.TotalLen())
+			if err != nil {
 				res.tracking.nErr++
 				return
 			}
 
-			hash, hashReverse := p.EPHash, p.EPHashReverse
-			if direction := capturetypes.ClassifyPacketDirection(&p); direction != capturetypes.DirectionUnknown {
+			hashReverse := hash.Reverse()
+			if direction := capturetypes.ClassifyPacketDirection(hash, isIPv4, auxInfo); direction != capturetypes.DirectionUnknown {
 				if direction == capturetypes.DirectionReverts || direction == capturetypes.DirectionMaybeReverts {
-					hash, hashReverse = p.EPHashReverse, p.EPHash
+					hash, hashReverse = hashReverse, hash
 				}
 			}
 
@@ -354,7 +354,7 @@ func newPcapSource(t testing.TB, name string, data []byte) (res *mockIface) {
 			hashReverse[34], hashReverse[35] = 0, 0
 
 			if flow, exists := (*res.flows)[hash]; exists {
-				if p.DirInbound {
+				if pkt.Type() != slimcap.PacketOutgoing {
 					(*res.flows)[hash] = flow.Add(types.Counters{
 						PacketsRcvd: 1,
 						BytesRcvd:   uint64(totalLen),
@@ -366,7 +366,7 @@ func newPcapSource(t testing.TB, name string, data []byte) (res *mockIface) {
 					})
 				}
 			} else if flow, exists = (*res.flows)[hashReverse]; exists {
-				if p.DirInbound {
+				if pkt.Type() != slimcap.PacketOutgoing {
 					(*res.flows)[hashReverse] = flow.Add(types.Counters{
 						PacketsRcvd: 1,
 						BytesRcvd:   uint64(totalLen),
@@ -378,7 +378,7 @@ func newPcapSource(t testing.TB, name string, data []byte) (res *mockIface) {
 					})
 				}
 			} else {
-				if p.DirInbound {
+				if pkt.Type() != slimcap.PacketOutgoing {
 					(*res.flows)[hash] = types.Counters{
 						PacketsRcvd: 1,
 						BytesRcvd:   uint64(totalLen),
@@ -412,7 +412,7 @@ func newSyntheticSource(t testing.TB, name string, nPkts int) (res *mockIface) {
 		RWMutex:  sync.RWMutex{},
 	}
 
-	res.sourceInitFn = func(c *capture.Capture) (slimcap.Source, error) {
+	res.sourceInitFn = func(c *capture.Capture) (slimcap.SourceZeroCopy, error) {
 
 		res.Lock()
 		defer res.Unlock()
@@ -433,16 +433,16 @@ func newSyntheticSource(t testing.TB, name string, nPkts int) (res *mockIface) {
 			defer res.Unlock()
 
 			pkt := slimcap.NewIPPacket(nil, payload, pktType, int(totalLen), ipLayerOffset)
-			p := capturetypes.GPPacket{}
-			if err := capture.Populate(&p, pkt); err != nil {
+			hash, isIPv4, auxInfo, err := capture.ParsePacket(pkt.IPLayer(), pkt.Type(), pkt.TotalLen())
+			if err != nil {
 				res.tracking.nErr++
 				return
 			}
 
-			hash, hashReverse := p.EPHash, p.EPHashReverse
-			if direction := capturetypes.ClassifyPacketDirection(&p); direction != capturetypes.DirectionUnknown {
+			hashReverse := hash.Reverse()
+			if direction := capturetypes.ClassifyPacketDirection(hash, isIPv4, auxInfo); direction != capturetypes.DirectionUnknown {
 				if direction == capturetypes.DirectionReverts || direction == capturetypes.DirectionMaybeReverts {
-					hash, hashReverse = p.EPHashReverse, p.EPHash
+					hash, hashReverse = hashReverse, hash
 				}
 			}
 
@@ -450,7 +450,7 @@ func newSyntheticSource(t testing.TB, name string, nPkts int) (res *mockIface) {
 			hashReverse[34], hashReverse[35] = 0, 0
 
 			if flow, exists := (*res.flows)[hash]; exists {
-				if p.DirInbound {
+				if pkt.Type() != slimcap.PacketOutgoing {
 					(*res.flows)[hash] = flow.Add(types.Counters{
 						PacketsRcvd: 1,
 						BytesRcvd:   uint64(totalLen),
@@ -462,7 +462,7 @@ func newSyntheticSource(t testing.TB, name string, nPkts int) (res *mockIface) {
 					})
 				}
 			} else if flow, exists = (*res.flows)[hashReverse]; exists {
-				if p.DirInbound {
+				if pkt.Type() != slimcap.PacketOutgoing {
 					(*res.flows)[hashReverse] = flow.Add(types.Counters{
 						PacketsRcvd: 1,
 						BytesRcvd:   uint64(totalLen),
@@ -474,7 +474,7 @@ func newSyntheticSource(t testing.TB, name string, nPkts int) (res *mockIface) {
 					})
 				}
 			} else {
-				if p.DirInbound {
+				if pkt.Type() != slimcap.PacketOutgoing {
 					(*res.flows)[hash] = types.Counters{
 						PacketsRcvd: 1,
 						BytesRcvd:   uint64(totalLen),

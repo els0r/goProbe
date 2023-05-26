@@ -2,6 +2,7 @@ package hashmap
 
 import (
 	"encoding/binary"
+	"fmt"
 	"testing"
 
 	"github.com/els0r/goProbe/pkg/types"
@@ -124,7 +125,7 @@ func TestLinearHashMapOperations(t *testing.T) {
 		testMap.Set(temp, types.Counters{BytesRcvd: uint64(i), BytesSent: 0, PacketsRcvd: 0, PacketsSent: 0})
 	}
 
-	require.Equal(t, 100000, int(testMap.Len()))
+	require.Equal(t, 100000, testMap.Len())
 
 	for i := 0; i < 100000; i++ {
 		temp := make([]byte, 8)
@@ -149,8 +150,8 @@ func TestMerge(t *testing.T) {
 		}
 	}
 
-	require.Equal(t, 100000, int(testMap.Len()))
-	require.Equal(t, 60000, int(testMap2.Len()))
+	require.Equal(t, 100000, testMap.Len())
+	require.Equal(t, 60000, testMap2.Len())
 
 	var (
 		mergeMap = New()
@@ -159,15 +160,15 @@ func TestMerge(t *testing.T) {
 
 	mergeMap.Merge(testMap, &totals)
 
-	require.Equal(t, int(testMap.Len()), int(mergeMap.Len()))
-	require.Equal(t, 100000, int(testMap.Len()))
-	require.Equal(t, 60000, int(testMap2.Len()))
+	require.Equal(t, testMap.Len(), mergeMap.Len())
+	require.Equal(t, 100000, testMap.Len())
+	require.Equal(t, 60000, testMap2.Len())
 
 	mergeMap.Merge(testMap2, &totals)
 
-	require.Equal(t, 110000, int(mergeMap.Len()))
-	require.Equal(t, 100000, int(testMap.Len()))
-	require.Equal(t, 60000, int(testMap2.Len()))
+	require.Equal(t, 110000, mergeMap.Len())
+	require.Equal(t, 100000, testMap.Len())
+	require.Equal(t, 60000, testMap2.Len())
 }
 
 func TestJSONMarshalAggFlowMap(t *testing.T) {
@@ -184,55 +185,55 @@ func TestJSONMarshalAggFlowMap(t *testing.T) {
 	_ = b
 }
 
+var globalV types.Counters
+var globalExists bool
+
 func BenchmarkHashMapAccesses(b *testing.B) {
+	for _, nElem := range []int{8, 100000} {
+		b.Run(fmt.Sprintf("%d elem", nElem), func(b *testing.B) {
+			testMap := New()
+			for i := 0; i < nElem; i++ {
+				temp := make([]byte, 8)
+				binary.BigEndian.PutUint64(temp, uint64(i))
+				testMap.Set(temp, types.Counters{BytesRcvd: uint64(i), BytesSent: 0, PacketsRcvd: 0, PacketsSent: 0})
+			}
 
-	testMap := New()
-	for i := 0; i < 100000; i++ {
-		temp := make([]byte, 8)
-		binary.BigEndian.PutUint64(temp, uint64(i))
-		testMap.Set(temp, types.Counters{BytesRcvd: uint64(i), BytesSent: 0, PacketsRcvd: 0, PacketsSent: 0})
-	}
+			testKey := make([]byte, 8)
+			binary.BigEndian.PutUint64(testKey, 42)
 
-	var res types.Counters
-	var ex bool
-	testKey := make([]byte, 8)
-	binary.BigEndian.PutUint64(testKey, 42)
-
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		v, exists := testMap.Get(testKey)
-		res = v
-		ex = exists
-		_ = res
-		_ = ex
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				v, exists := testMap.Get(testKey)
+				globalV = v
+				globalExists = exists
+			}
+		})
 	}
 }
 
 func BenchmarkHashMapMisses(b *testing.B) {
+	for _, nElem := range []int{8, 100000} {
+		b.Run(fmt.Sprintf("%d elem", nElem), func(b *testing.B) {
+			testMap := New()
+			for i := 0; i < nElem; i++ {
+				temp := make([]byte, 8)
+				binary.BigEndian.PutUint64(temp, uint64(i))
+				testMap.Set(temp, types.Counters{BytesRcvd: uint64(i), BytesSent: 0, PacketsRcvd: 0, PacketsSent: 0})
+			}
 
-	testMap := New()
-	for i := 0; i < 100000; i++ {
-		temp := make([]byte, 8)
-		binary.BigEndian.PutUint64(temp, uint64(i))
-		testMap.Set(temp, types.Counters{BytesRcvd: uint64(i), BytesSent: 0, PacketsRcvd: 0, PacketsSent: 0})
+			testKey := make([]byte, 8)
+			binary.BigEndian.PutUint64(testKey, 1000000)
+
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				v, exists := testMap.Get(testKey)
+				globalV = v
+				globalExists = exists
+			}
+		})
 	}
-
-	var res types.Counters
-	var ex bool
-	testKey := make([]byte, 8)
-	binary.BigEndian.PutUint64(testKey, 1000000)
-
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		v, exists := testMap.Get(testKey)
-		res = v
-		ex = exists
-		_ = res
-		_ = ex
-	}
-
 }
 
 func BenchmarkHashMapIterator(b *testing.B) {
@@ -255,52 +256,50 @@ func BenchmarkHashMapIterator(b *testing.B) {
 }
 
 func BenchmarkNativeMapAccesses(b *testing.B) {
+	for _, nElem := range []int{8, 100000} {
+		b.Run(fmt.Sprintf("%d elem", nElem), func(b *testing.B) {
+			testMap := make(map[string]types.Counters)
+			for i := 0; i < nElem; i++ {
+				temp := make([]byte, 8)
+				binary.BigEndian.PutUint64(temp, uint64(i))
+				testMap[string(temp)] = types.Counters{BytesRcvd: uint64(i), BytesSent: 0, PacketsRcvd: 0, PacketsSent: 0}
+			}
 
-	testMap := make(map[string]types.Counters)
-	for i := 0; i < 100000; i++ {
-		temp := make([]byte, 8)
-		binary.BigEndian.PutUint64(temp, uint64(i))
-		testMap[string(temp)] = types.Counters{BytesRcvd: uint64(i), BytesSent: 0, PacketsRcvd: 0, PacketsSent: 0}
-	}
+			testKey := make([]byte, 8)
+			binary.BigEndian.PutUint64(testKey, 42)
 
-	testKey := make([]byte, 8)
-	binary.BigEndian.PutUint64(testKey, 42)
-	var res types.Counters
-	var ex bool
-
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		v, exists := testMap[string(testKey)]
-		res = v
-		ex = exists
-		_ = res
-		_ = ex
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				v, exists := testMap[string(testKey)]
+				globalV = v
+				globalExists = exists
+			}
+		})
 	}
 }
 
 func BenchmarkNativeMapMisses(b *testing.B) {
+	for _, nElem := range []int{8, 100000} {
+		b.Run(fmt.Sprintf("%d elem", nElem), func(b *testing.B) {
+			testMap := make(map[string]types.Counters)
+			for i := 0; i < nElem; i++ {
+				temp := make([]byte, 8)
+				binary.BigEndian.PutUint64(temp, uint64(i))
+				testMap[string(temp)] = types.Counters{BytesRcvd: uint64(i), BytesSent: 0, PacketsRcvd: 0, PacketsSent: 0}
+			}
 
-	testMap := make(map[string]types.Counters)
-	for i := 0; i < 100000; i++ {
-		temp := make([]byte, 8)
-		binary.BigEndian.PutUint64(temp, uint64(i))
-		testMap[string(temp)] = types.Counters{BytesRcvd: uint64(i), BytesSent: 0, PacketsRcvd: 0, PacketsSent: 0}
-	}
+			testKey := make([]byte, 8)
+			binary.BigEndian.PutUint64(testKey, 1000000)
 
-	testKey := make([]byte, 8)
-	binary.BigEndian.PutUint64(testKey, 1000000)
-	var res types.Counters
-	var ex bool
-
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		v, exists := testMap[string(testKey)]
-		res = v
-		ex = exists
-		_ = res
-		_ = ex
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				v, exists := testMap[string(testKey)]
+				globalV = v
+				globalExists = exists
+			}
+		})
 	}
 }
 

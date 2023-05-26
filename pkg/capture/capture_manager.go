@@ -62,7 +62,7 @@ func InitManager(ctx context.Context, config *config.Config, opts ...ManagerOpti
 // NewManager creates a new CaptureManager
 func NewManager(writeoutHandler writeout.Handler, opts ...ManagerOption) *Manager {
 	captureManager := &Manager{
-		captures:        NewCaptures(),
+		captures:        newCaptures(),
 		writeoutHandler: writeoutHandler,
 		sourceInitFn:    defaultSourceInitFn,
 	}
