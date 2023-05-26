@@ -214,7 +214,7 @@ func (c *Capture) process(ctx context.Context) <-chan error {
 
 			// Fetch the next packet or PPOLL even from the source
 			if err := c.capturePacket(); err != nil {
-				if errors.Is(err, capture.ErrCaptureUnblock) { // capture unblocked (during lock)
+				if errors.Is(err, capture.ErrCaptureUnblocked) { // capture unblocked (during lock)
 
 					// Advance to the next loop iteration (during which the pending lock will be
 					// consumed / acted on)

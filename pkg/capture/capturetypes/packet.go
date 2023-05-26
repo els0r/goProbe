@@ -33,12 +33,11 @@ func (d Direction) IsConfidenceHigh() bool {
 
 // Enumeration of the most common IP protocols
 const (
-	ICMP   byte = 0x01 //  1
-	TCP         = 0x06 //  6
-	UDP         = 0x11 // 17
-	ESP         = 0x32 // 50
-	ICMPv6      = 0x3A // 58
-
+	ICMP   = 0x01 // ICMP : 1
+	TCP    = 0x06 // TCP :  6
+	UDP    = 0x11 // UDP : 17
+	ESP    = 0x32 // ESP : 50
+	ICMPv6 = 0x3A // ICMPv6 : 58
 )
 
 // EPHash is a typedef that allows us to replace the type of hash
@@ -126,22 +125,40 @@ func classifyUDP(epHash EPHash, isIPv4 bool) Direction {
 	return classifyByPorts(epHash)
 }
 
+const (
+	icmpV4EchoReply              = 0x00
+	icmpV4DestinationUnreachable = 0x03
+	icmpV4EchoRrequest           = 0x08
+	icmpV4TimeExceeded           = 0x0B
+	icmpV4ParameterProblem       = 0x0C
+	icmpV4TimestampRequest       = 0x0D
+	icmpV4TimestampReply         = 0x0E
+)
+
 func classifyICMPv4(icmpType byte) Direction {
 
 	// Check the ICMPv4 Type parameter
 	switch icmpType {
 
-	// EchoReply, DestinationUnreachable, TimeExceeded, ParameterProblem, TimestampReply
-	case 0x00, 0x03, 0x0B, 0x0C, 0x0E:
+	// Reply-type ICMP v4 messages
+	case icmpV4EchoReply, icmpV4DestinationUnreachable, icmpV4TimeExceeded, icmpV4ParameterProblem, icmpV4TimestampReply:
 		return DirectionReverts
 
-	// EchoRrequest, TimestampRequest
-	case 0x08, 0x0D:
+	// Request-type ICMP v4 messages
+	case icmpV4EchoRrequest, icmpV4TimestampRequest:
 		return DirectionRemains
 	}
 
 	return DirectionUnknown
 }
+
+const (
+	icmpV6EchoReply              = 0x81
+	icmpV6DestinationUnreachable = 0x01
+	icmpV6TimeExceeded           = 0x03
+	icmpV6ParameterProblem       = 0x04
+	icmpV6EchoRrequest           = 0x80
+)
 
 func classifyICMPv6(epHash EPHash, icmpType byte) Direction {
 
@@ -154,12 +171,12 @@ func classifyICMPv6(epHash EPHash, icmpType byte) Direction {
 	// Check the ICMPv6 Type parameter
 	switch icmpType {
 
-	// EchoReply, DestinationUnreachable, TimeExceeded, ParameterProblem
-	case 0x81, 0x01, 0x03, 0x04:
+	// Reply-type ICMP v6 messages
+	case icmpV6EchoReply, icmpV6DestinationUnreachable, icmpV6TimeExceeded, icmpV6ParameterProblem:
 		return DirectionReverts
 
-	// EchoRequest
-	case 0x80:
+	// Request-type ICMP v6 messages
+	case icmpV6EchoRrequest:
 		return DirectionRemains
 	}
 
