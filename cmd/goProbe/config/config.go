@@ -107,7 +107,7 @@ func New() *Config {
 		Interfaces: make(Ifaces),
 		// default config is syslog
 		Logging: LogConfig{
-			Encoding: "console",
+			Encoding: "logfmt",
 			Level:    "info",
 		},
 		// default API config
