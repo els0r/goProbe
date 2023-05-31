@@ -56,13 +56,16 @@ type DBConfig struct {
 
 type CaptureConfig struct {
 	Promisc bool `json:"promisc" yaml:"promisc"`
+	// used by the ring buffer in capture
+	RingBuffer *RingBufferConfig `json:"ring_buffer" yaml:"ring_buffer"`
+}
 
-	// used by the ring buffer
-	// RingBufferBlockSize specifies the size of a block, which defines, how many packets
+type RingBufferConfig struct {
+	// BlockSize specifies the size of a block, which defines, how many packets
 	// can be held within a block
-	RingBufferBlockSize int `json:"ring_buffer_block_size" yaml:"ring_buffer_block_size"`
-	// RingBufferNumBlocks guides how many blocks are part of the ring buffer
-	RingBufferNumBlocks int `json:"ring_buffer_num_blocks" yaml:"ring_buffer_num_blocks"`
+	BlockSize int `json:"block_size" yaml:"block_size"`
+	// NumBlocks guides how many blocks are part of the ring buffer
+	NumBlocks int `json:"num_blocks" yaml:"num_blocks"`
 }
 
 const (
@@ -152,10 +155,17 @@ func (d DiscoveryConfig) validate() error {
 }
 
 func (c CaptureConfig) validate() error {
-	if c.RingBufferBlockSize <= 0 {
+	if c.RingBuffer == nil {
+		return errors.New("ring buffer configuration not set")
+	}
+	return c.RingBuffer.validate()
+}
+
+func (r *RingBufferConfig) validate() error {
+	if r.BlockSize <= 0 {
 		return errors.New("ring buffer block size must be a postive number")
 	}
-	if c.RingBufferNumBlocks <= 0 {
+	if r.NumBlocks <= 0 {
 		return errors.New("ring buffer num blocks must be a postive number")
 	}
 	return nil
@@ -163,9 +173,15 @@ func (c CaptureConfig) validate() error {
 
 // Equals compares c to cfg and returns true if all fields are identical
 func (c CaptureConfig) Equals(cfg CaptureConfig) bool {
-	return c.Promisc == cfg.Promisc &&
-		c.RingBufferBlockSize == cfg.RingBufferBlockSize &&
-		c.RingBufferNumBlocks == cfg.RingBufferNumBlocks
+	return c.Promisc == cfg.Promisc && c.RingBuffer.Equals(cfg.RingBuffer)
+}
+
+// Equals compares r to cfg and returns true if all fields are identical
+func (r *RingBufferConfig) Equals(cfg *RingBufferConfig) bool {
+	if cfg == nil {
+		return false
+	}
+	return r.BlockSize == cfg.BlockSize && r.NumBlocks == cfg.NumBlocks
 }
 
 func (i Ifaces) validate() error {

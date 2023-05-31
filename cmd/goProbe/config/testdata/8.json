@@ -2,8 +2,10 @@
   "db": {},
   "interfaces": {
     "en0": {
-      "ring_buffer_block_size": 1048576,
-      "ring_buffer_num_blocks": 2,
+      "ring_buffer" : {
+        "block_size": 1048576,
+        "num_blocks": 2
+      },
       "promisc": true
     }
   },
