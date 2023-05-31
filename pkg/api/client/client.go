@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"path/filepath"
 	"time"
 
 	"github.com/els0r/goProbe/pkg/api"
@@ -85,6 +86,8 @@ func WithName(name string) Option {
 const (
 	defaultRequestTimeout = 30 * time.Second
 	defaultClientName     = "default-client"
+
+	unixIdent = "unix"
 )
 
 // NewDefault creates a new default client that can be used for all calls to goProbe APIs
@@ -109,7 +112,6 @@ func NewDefault(addr string, opts ...Option) *DefaultClient {
 
 	// change transport to dial to the unix socket instead
 	unixSocketFile := api.ExtractUnixSocket(addr)
-	unixIdent := "unix"
 	if unixSocketFile != "" {
 		t = &http.Transport{
 			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
@@ -228,5 +230,5 @@ func (c *DefaultClient) Modify(ctx context.Context, req *httpc.Request) *httpc.R
 //
 //	http://localhost:8145/status
 func (c *DefaultClient) NewURL(path string) string {
-	return fmt.Sprintf("%s%s%s", c.scheme, c.hostAddr, path)
+	return c.scheme + filepath.Join(c.hostAddr, path)
 }
