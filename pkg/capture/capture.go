@@ -213,7 +213,7 @@ func (c *Capture) process(ctx context.Context) <-chan error {
 			default:
 				err := c.capturePacket(pkt)
 				if err != nil {
-					if errors.Is(err, capture.ErrCaptureUnblock) { // capture unblocked (e.g. during rotation)
+					if errors.Is(err, capture.ErrCaptureUnblocked) { // capture unblocked (e.g. during rotation)
 						continue
 					}
 					if errors.Is(err, capture.ErrCaptureStopped) { // capture stopped gracefully
