@@ -91,8 +91,8 @@ func configEntrypoint(ctx context.Context, cmd *cobra.Command, args []string) er
 	for _, icfg := range allConfigs {
 		fmt.Fprintf(tw, "\t%s\t%t\t%d\t%d\t\n", icfg.iface,
 			icfg.cfg.Promisc,
-			icfg.cfg.RingBufferBlockSize,
-			icfg.cfg.RingBufferNumBlocks,
+			icfg.cfg.RingBuffer.BlockSize,
+			icfg.cfg.RingBuffer.NumBlocks,
 		)
 	}
 	tw.Flush()
