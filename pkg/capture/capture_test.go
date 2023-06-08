@@ -71,7 +71,7 @@ func testConcurrentMethodAccess(t *testing.T, nIfaces, nIterations int) {
 	if err != nil {
 		panic(err)
 	}
-	defer require.Nil(t, os.RemoveAll(tempDir))
+	defer os.RemoveAll(tempDir)
 
 	// Build / initialize mock sources for all interfaces
 	testMockSrcs := make(testMockSrcs)
@@ -172,7 +172,8 @@ func TestMockPacketCapturePerformance(t *testing.T) {
 	for mockSrc.CanAddPackets() {
 		require.Nil(t, mockSrc.AddPacket(testPacket))
 	}
-	errChan := mockSrc.Run(time.Microsecond)
+	errChan, err := mockSrc.Run(time.Microsecond)
+	require.Nil(t, err)
 
 	runtime := 10 * time.Second
 	mockC.process(ctx)
@@ -256,7 +257,8 @@ func testDeadlockHighTraffic(t *testing.T) {
 	for mockSrc.CanAddPackets() {
 		require.Nil(t, mockSrc.AddPacket(testPacket))
 	}
-	errChan := mockSrc.Run(time.Microsecond)
+	errChan, err := mockSrc.Run(time.Microsecond)
+	require.Nil(t, err)
 
 	mockC.process(ctx)
 
@@ -321,5 +323,8 @@ func initMockSrc(t *testing.T, iface string) (*afring.MockSourceNoDrain, <-chan 
 		require.Nil(t, mockSrc.AddPacket(testPacket))
 	}
 
-	return mockSrc, mockSrc.Run(100 * time.Millisecond)
+	errChan, err := mockSrc.Run(100 * time.Millisecond)
+	require.Nil(t, err)
+
+	return mockSrc, errChan
 }

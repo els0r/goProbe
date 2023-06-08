@@ -69,7 +69,7 @@ func testStartStop(t *testing.T) {
 	if err != nil {
 		panic(err)
 	}
-	defer require.Nil(t, os.RemoveAll(tempDir))
+	defer os.RemoveAll(tempDir)
 
 	// We quit on encountering SIGUSR2 (instead of the ususal SIGTERM or SIGINT)
 	// to avoid killing the test
@@ -221,7 +221,7 @@ func testE2E(t *testing.T, datasets ...[]byte) {
 	if err != nil {
 		panic(err)
 	}
-	defer require.Nil(t, os.RemoveAll(tempDir))
+	defer os.RemoveAll(tempDir)
 
 	// Define mock interfaces
 	var mockIfaces mockIfaces
