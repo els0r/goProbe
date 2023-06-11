@@ -27,7 +27,7 @@ const (
 var defaultSourceInitFn = func(c *Capture) (capture.SourceZeroCopy, error) {
 	return afring.NewSource(c.iface,
 		afring.CaptureLength(link.CaptureLengthMinimalIPv6Transport),
-		afring.BufferSize(c.config.RingBufferBlockSize, c.config.RingBufferNumBlocks),
+		afring.BufferSize(c.config.RingBuffer.BlockSize, c.config.RingBuffer.NumBlocks),
 		afring.Promiscuous(c.config.Promisc),
 	)
 }
