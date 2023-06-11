@@ -77,7 +77,7 @@ func TestLogConcurrent(t *testing.T) {
 	}
 
 	t.Run("samectxhierarchy", func(t *testing.T) {
-		ctx := WithFields(context.Background(), "hello", "world")
+		ctx := WithFields(context.Background(), slog.String("hello", "world"))
 		numConcurrent := 32
 
 		logger := FromContext(ctx)
@@ -89,7 +89,7 @@ func TestLogConcurrent(t *testing.T) {
 			go func(n int, ctx context.Context) {
 				defer wg.Done()
 
-				f1ctx := WithFields(ctx, "fval", n)
+				f1ctx := WithFields(ctx, slog.Int("fval", n))
 				l2 := FromContext(f1ctx)
 				l2.Infof("f%d", n)
 			}(i, ctx)
@@ -355,12 +355,6 @@ func TestCustomLogMessages(t *testing.T) {
 // tests the edge cases in context creation
 func TestNewContext(t *testing.T) {
 	ctx := WithFields(nil)
-	require.NotNil(t, ctx)
-
-	ctx = WithFields(nil, "hello")
-	require.NotNil(t, ctx)
-
-	ctx = WithFields(nil, 3, "hello")
 	require.NotNil(t, ctx)
 }
 

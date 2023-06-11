@@ -168,7 +168,7 @@ func getHandler(w io.Writer, encoding Encoding, hopts slog.HandlerOptions) (th s
 	case EncodingJSON:
 		th = slog.NewJSONHandler(w, &hopts)
 	case EncodingLogfmt:
-		th = slog.NewJSONHandler(w, &hopts)
+		th = slog.NewTextHandler(w, &hopts)
 	case EncodingPlain:
 		th = newPlainHandler(w, hopts.Level.Level())
 	default:
@@ -220,18 +220,13 @@ func getFields(ctx context.Context) (loggerFields, bool) {
 // the context-enriched logger.
 //
 // The strength of this approach is that labels set in parent context are accessible
-func WithFields(ctx context.Context, fields ...interface{}) context.Context {
+func WithFields(ctx context.Context, fields ...slog.Attr) context.Context {
 	var (
 		newFields loggerFields = newLoggerFields()
 	)
 
 	if ctx == nil {
 		ctx = context.Background()
-	}
-
-	// ignore malformed fields as the logging implementation wouldn't accept them anyhow
-	if !(len(fields) >= 2 && (len(fields)%2 == 0)) {
-		return ctx
 	}
 
 	lf, ok := getFields(ctx)
@@ -242,16 +237,9 @@ func WithFields(ctx context.Context, fields ...interface{}) context.Context {
 	}
 
 	// de-duplicate fields and add any that aren't present in the fields map yet
-	for i := 1; i < len(fields); i = i + 2 {
-		keyStr, ok := fields[i-1].(string)
-
-		// skip fields that aren't a string key
-		if !ok {
-			continue
-		}
-
+	for _, field := range fields {
 		// either the key doesn't exist yet or it is overwritten
-		newFields.fields[keyStr] = fields[i]
+		newFields.fields[field.Key] = field
 	}
 	return context.WithValue(ctx, fieldsKey, newFields)
 }
@@ -275,7 +263,7 @@ func fromContext(ctx context.Context, logger *L) *L {
 		}
 		sort.Strings(keys)
 		for _, k := range keys {
-			fields = append(fields, k, ctxLoggerFields.fields[k])
+			fields = append(fields, ctxLoggerFields.fields[k])
 		}
 		ctxLoggerFields.mu.RUnlock()
 
