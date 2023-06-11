@@ -108,9 +108,11 @@ func New(level slog.Level, encoding Encoding, opts ...Option) (*L, error) {
 		case slog.SourceKey:
 			a.Key = "caller"
 
+			source := a.Value.Any().(*slog.Source)
+
 			// only returns the pkg name, file and line number
-			dir, file := filepath.Split(a.Value.String())
-			a.Value = slog.StringValue(filepath.Join(filepath.Base(dir), file))
+			dir, file := filepath.Split(source.File)
+			source.File = filepath.Join(filepath.Base(dir), file)
 		}
 		return a
 	}

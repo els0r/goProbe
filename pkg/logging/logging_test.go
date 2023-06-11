@@ -128,7 +128,7 @@ func TestCaller(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 	logger := Logger()
-	logger.Error(errors.New("testing plain error aller"))
+	logger.Error(errors.New("testing plain error caller"))
 
 	// shouldn't show up
 	logger.Info("the things you do for love")
