@@ -77,7 +77,7 @@ func TestLogConcurrent(t *testing.T) {
 	}
 
 	t.Run("samectxhierarchy", func(t *testing.T) {
-		ctx := WithFields(context.Background(), "hello", "world")
+		ctx := WithFields(context.Background(), slog.String("hello", "world"))
 		numConcurrent := 32
 
 		logger := FromContext(ctx)
@@ -89,7 +89,7 @@ func TestLogConcurrent(t *testing.T) {
 			go func(n int, ctx context.Context) {
 				defer wg.Done()
 
-				f1ctx := WithFields(ctx, "fval", n)
+				f1ctx := WithFields(ctx, slog.Int("fval", n))
 				l2 := FromContext(f1ctx)
 				l2.Infof("f%d", n)
 			}(i, ctx)
@@ -128,7 +128,7 @@ func TestCaller(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 	logger := Logger()
-	logger.Error(errors.New("testing plain error aller"))
+	logger.Error(errors.New("testing plain error caller"))
 
 	// shouldn't show up
 	logger.Info("the things you do for love")
@@ -357,10 +357,10 @@ func TestNewContext(t *testing.T) {
 	ctx := WithFields(nil)
 	require.NotNil(t, ctx)
 
-	ctx = WithFields(nil, "hello")
+	ctx = WithFields(ctx, slog.Attr{})
 	require.NotNil(t, ctx)
 
-	ctx = WithFields(nil, 3, "hello")
+	ctx = WithFields(ctx, slog.String("key", "value"))
 	require.NotNil(t, ctx)
 }
 
