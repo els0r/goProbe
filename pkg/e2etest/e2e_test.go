@@ -56,6 +56,70 @@ var defaultCaptureConfig = config.CaptureConfig{
 
 var externalPCAPPath string
 
+func TestStartStop(t *testing.T) {
+	for i := 0; i < 1000; i++ {
+		testStartStop(t)
+	}
+}
+
+func testStartStop(t *testing.T) {
+
+	// Setup a temporary directory for the test DB
+	tempDir, err := os.MkdirTemp(os.TempDir(), "goprobe_e2e_startstop")
+	if err != nil {
+		panic(err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// We quit on encountering SIGUSR2 (instead of the ususal SIGTERM or SIGINT)
+	// to avoid killing the test
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGUSR2)
+	defer stop()
+
+	ifaces := config.Ifaces{
+		"mock1": defaultCaptureConfig,
+		"mock2": defaultCaptureConfig,
+	}
+
+	captureManager, err := capture.InitManager(ctx, &config.Config{
+		DB: config.DBConfig{
+			Path:        tempDir,
+			EncoderType: encoders.EncoderTypeLZ4.String(),
+			Permissions: goDB.DefaultPermissions,
+		},
+		Interfaces: ifaces,
+		Logging: config.LogConfig{
+			Destination: "logfmt",
+			Level:       "warn",
+		},
+	}, capture.WithSourceInitFn(func(c *capture.Capture) (slimcap.SourceZeroCopy, error) {
+		mockSrc, err := afring.NewMockSource(c.Iface(),
+			afring.CaptureLength(link.CaptureLengthMinimalIPv6Transport),
+			afring.Promiscuous(false),
+			afring.BufferSize(1024*1024, 4),
+		)
+		require.Nil(t, err)
+		return mockSrc, nil
+	}))
+	require.Nil(t, err)
+
+	// Wait until goProbe is done processing all packets, then kill it in the
+	// background via the SIGUSR2 signal
+	// Send the termination signal to goProbe
+	if err := syscall.Kill(syscall.Getpid(), syscall.SIGUSR2); err != nil {
+		panic(err)
+	}
+
+	// Wait for the interrupt signal
+	<-ctx.Done()
+
+	// Finish up
+	shutDownCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	captureManager.Close(shutDownCtx)
+
+	cancel()
+}
+
 func TestE2EBasic(t *testing.T) {
 	pcapData, err := pcaps.ReadFile(filepath.Join(testDataPath, defaultPcapTestFile))
 	require.Nil(t, err)
@@ -157,7 +221,7 @@ func testE2E(t *testing.T, datasets ...[]byte) {
 	if err != nil {
 		panic(err)
 	}
-	defer require.Nil(t, os.RemoveAll(tempDir))
+	defer os.RemoveAll(tempDir)
 
 	// Define mock interfaces
 	var mockIfaces mockIfaces

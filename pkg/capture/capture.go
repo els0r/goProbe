@@ -116,9 +116,12 @@ type Capture struct {
 	captureHandle capture.SourceZeroCopy
 	sourceInitFn  sourceInitFn
 
-	// error map for logging errors more properly
+	// Error map for logging errors more properly
 	errMap   capturetypes.ErrorMap
 	errCount int
+
+	// WaitGroup tracking active processing
+	wgProc sync.WaitGroup
 }
 
 // newCapture creates a new Capture associated with the given iface.
@@ -147,8 +150,7 @@ func (c *Capture) Iface() string {
 func (c *Capture) run(ctx context.Context) (err error) {
 
 	ctx = logging.WithFields(ctx, slog.String("iface", c.iface))
-	logger := logging.FromContext(ctx)
-	logger.Info("initializing capture / running packet processing")
+	logging.FromContext(ctx).Info("initializing capture / running packet processing")
 
 	// Set up the packet source and capturing
 	c.captureHandle, err = c.sourceInitFn(c)
@@ -165,7 +167,19 @@ func (c *Capture) run(ctx context.Context) (err error) {
 }
 
 func (c *Capture) close() error {
-	return c.captureHandle.Close()
+	if err := c.captureHandle.Close(); err != nil {
+		return err
+	}
+
+	// Wait until processing has concluded
+	c.wgProc.Wait()
+
+	// Setting the handle to nil isn't stricly necessary, but it's an additional
+	// guard against races (because it allows the race detector to pick up more
+	// easily on potential concurrent accesses) and might trigger a crash on any
+	// unwanted access
+	c.captureHandle = nil
+	return nil
 }
 
 func (c *Capture) rotate(ctx context.Context) (agg *hashmap.AggFlowMap) {
@@ -190,12 +204,12 @@ func (c *Capture) process(ctx context.Context) <-chan error {
 
 	captureErrors := make(chan error, 64)
 
+	c.wgProc.Add(1)
 	go func() {
-		logger := logging.FromContext(ctx)
-		c.errCount = 0
+
+		defer c.wgProc.Done()
 
 		// Main packet capture loop which an interface should be in most of the time
-		captureUnlocked := false
 		for {
 
 			// Since lock confirmation is only done from a single goroutine (this one)
@@ -205,11 +219,10 @@ func (c *Capture) process(ctx context.Context) <-chan error {
 			// that there is a request on the channel that can be read on the next line.
 			// This logic may be slightly more contrived than a select{} statement but it increases
 			// packet throughput by several percent points
-			if len(c.capLock.request) > 0 || captureUnlocked {
+			if len(c.capLock.request) > 0 {
 				<-c.capLock.request             // Consume the request
 				c.capLock.confirm <- struct{}{} // Confirm that process() is not processing
 				<-c.capLock.done                // Consume the request to continue normal processing
-				captureUnlocked = false
 			}
 
 			// Fetch the next packet or PPOLL even from the source
@@ -218,15 +231,9 @@ func (c *Capture) process(ctx context.Context) <-chan error {
 
 					// Advance to the next loop iteration (during which the pending lock will be
 					// consumed / acted on)
-					captureUnlocked = true
 					continue
 				}
 				if errors.Is(err, capture.ErrCaptureStopped) { // capture stopped gracefully
-					if err := c.captureHandle.Free(); err != nil {
-						logger.Errorf("failed to free capture resources: %s", err)
-					}
-					c.captureHandle = nil
-
 					return
 				}
 
