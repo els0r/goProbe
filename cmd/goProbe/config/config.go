@@ -221,11 +221,22 @@ func (c *Config) Validate() error {
 		c.DB,
 		c.Interfaces,
 		c.Logging,
-		c.API,
 	} {
 		err := section.validate()
 		if err != nil {
 			return err
+		}
+	}
+
+	// run all config subsection validators for optional sections
+	for _, section := range []validator{
+		c.API,
+	} {
+		if section != nil {
+			err := section.validate()
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return nil
