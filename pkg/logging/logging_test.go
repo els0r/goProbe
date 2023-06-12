@@ -356,6 +356,12 @@ func TestCustomLogMessages(t *testing.T) {
 func TestNewContext(t *testing.T) {
 	ctx := WithFields(nil)
 	require.NotNil(t, ctx)
+
+	ctx = WithFields(ctx, slog.Attr{})
+	require.NotNil(t, ctx)
+
+	ctx = WithFields(ctx, slog.String("key", "value"))
+	require.NotNil(t, ctx)
 }
 
 func BenchmarkSimpleLogging(b *testing.B) {
