@@ -187,7 +187,7 @@ func (cm *Manager) Status(ctx context.Context, ifaces ...string) (statusmap map[
 		}
 		rg.Run(func() {
 
-			runCtx := logging.WithFields(ctx, "iface", mc.iface)
+			runCtx := withIfaceContext(ctx, mc.iface)
 
 			// Lock the running capture and extract the status
 			mc.lock()
@@ -298,7 +298,7 @@ func (cm *Manager) update(ctx context.Context, ifaces config.Ifaces, enable, dis
 		}
 		disableRg.Run(func() {
 
-			runCtx := logging.WithFields(ctx, "iface", mc.iface)
+			runCtx := withIfaceContext(ctx, mc.iface)
 
 			logger := logging.FromContext(runCtx)
 			logger.Info("closing capture / stopping packet processing")
@@ -325,7 +325,7 @@ func (cm *Manager) update(ctx context.Context, ifaces config.Ifaces, enable, dis
 
 		enableRg.Run(func() {
 
-			runCtx := logging.WithFields(ctx, "iface", iface)
+			runCtx := withIfaceContext(ctx, iface)
 			logger := logging.FromContext(runCtx)
 
 			logger.Info("initializing capture / running packet processing")
@@ -363,6 +363,10 @@ func (cm *Manager) Close(ctx context.Context, ifaces ...string) {
 	).Debug("closed interfaces")
 }
 
+func withIfaceContext(ctx context.Context, iface string) context.Context {
+	return logging.WithFields(ctx, slog.String("iface", iface))
+}
+
 func (cm *Manager) rotate(ctx context.Context, writeoutChan chan<- capturetypes.TaggedAggFlowMap, ifaces ...string) {
 
 	logger, t0 := logging.FromContext(ctx), time.Now()
@@ -379,7 +383,7 @@ func (cm *Manager) rotate(ctx context.Context, writeoutChan chan<- capturetypes.
 		if exists {
 			rg.Run(func() {
 
-				runCtx := logging.WithFields(ctx, "iface", mc.iface)
+				runCtx := withIfaceContext(ctx, mc.iface)
 
 				// Lock the running capture and perform the rotation
 				mc.lock()
