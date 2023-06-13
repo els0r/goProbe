@@ -290,13 +290,13 @@ func (cm *Manager) update(ctx context.Context, ifaces config.Ifaces, enable, dis
 	cm.lastAppliedConfig = ifaces
 
 	// Disable any interfaces present in the negative list
-	var disableRg RunGroup
+	var rg RunGroup
 	for _, iface := range disable {
 		mc, exists := cm.captures.Get(iface)
 		if !exists {
 			continue
 		}
-		disableRg.Run(func() {
+		rg.Run(func() {
 
 			runCtx := withIfaceContext(ctx, mc.iface)
 
@@ -311,19 +311,13 @@ func (cm *Manager) update(ctx context.Context, ifaces config.Ifaces, enable, dis
 			cm.captures.Delete(mc.iface)
 		})
 	}
-	disableRg.Wait()
+	rg.Wait()
 
-	// NOTE: make sure to use a different run group than disable's. Not doing it
-	// lead to captures being enabled while they were closed, leading to
-	//
-	// "failed to free capture resources: cannot call Free() on open capture source, call Close() first"
-	// errors
-	var enableRg RunGroup
 	// Enable any interfaces present in the positive list
 	for _, iface := range enable {
 		iface := iface
 
-		enableRg.Run(func() {
+		rg.Run(func() {
 
 			runCtx := withIfaceContext(ctx, iface)
 			logger := logging.FromContext(runCtx)
@@ -339,8 +333,7 @@ func (cm *Manager) update(ctx context.Context, ifaces config.Ifaces, enable, dis
 			cm.captures.Set(iface, cap)
 		})
 	}
-	enableRg.Wait()
-
+	rg.Wait()
 }
 
 // Close stops / closes all (or a set of) interfaces
