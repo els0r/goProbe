@@ -13,7 +13,6 @@ import (
 	"github.com/fako1024/slimcap/capture"
 	"github.com/fako1024/slimcap/capture/afpacket/afring"
 	"github.com/fako1024/slimcap/link"
-	"golang.org/x/exp/slog"
 )
 
 const (
@@ -28,7 +27,7 @@ const (
 var defaultSourceInitFn = func(c *Capture) (capture.SourceZeroCopy, error) {
 	return afring.NewSource(c.iface,
 		afring.CaptureLength(link.CaptureLengthMinimalIPv6Transport),
-		afring.BufferSize(c.config.RingBufferBlockSize, c.config.RingBufferNumBlocks),
+		afring.BufferSize(c.config.RingBuffer.BlockSize, c.config.RingBuffer.NumBlocks),
 		afring.Promiscuous(c.config.Promisc),
 	)
 }
@@ -148,9 +147,6 @@ func (c *Capture) Iface() string {
 }
 
 func (c *Capture) run(ctx context.Context) (err error) {
-
-	ctx = logging.WithFields(ctx, slog.String("iface", c.iface))
-	logging.FromContext(ctx).Info("initializing capture / running packet processing")
 
 	// Set up the packet source and capturing
 	c.captureHandle, err = c.sourceInitFn(c)

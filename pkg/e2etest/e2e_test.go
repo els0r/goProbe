@@ -49,9 +49,11 @@ const (
 var pcaps embed.FS
 
 var defaultCaptureConfig = config.CaptureConfig{
-	Promisc:             false,
-	RingBufferBlockSize: 1048576,
-	RingBufferNumBlocks: 4,
+	Promisc: false,
+	RingBuffer: &config.RingBufferConfig{
+		BlockSize: 1048576,
+		NumBlocks: 4,
+	},
 }
 
 var externalPCAPPath string

@@ -2,7 +2,7 @@ module github.com/els0r/goProbe
 
 require (
 	github.com/els0r/status v1.0.0
-	github.com/fako1024/httpc v1.0.14
+	github.com/fako1024/httpc v1.0.15-0.20230527113611-da5628ef596d
 	github.com/fako1024/slimcap v0.0.0-20230611191315-b410f996b186
 	github.com/gin-gonic/gin v1.9.1
 	github.com/json-iterator/go v1.1.12
@@ -25,12 +25,12 @@ require (
 	github.com/felixge/httpsnoop v1.0.3 // indirect
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.2 // indirect
-	github.com/getkin/kin-openapi v0.116.0 // indirect
+	github.com/getkin/kin-openapi v0.118.0 // indirect
 	github.com/gin-contrib/sse v0.1.0 // indirect
 	github.com/go-logr/logr v1.2.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-openapi/jsonpointer v0.19.6 // indirect
-	github.com/go-openapi/swag v0.22.3 // indirect
+	github.com/go-openapi/swag v0.22.4 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect
 	github.com/go-playground/validator/v10 v10.14.0 // indirect

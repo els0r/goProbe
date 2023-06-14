@@ -71,3 +71,10 @@ func NewFromConfigFile(path string) (*Client, error) {
 
 	return NewFromReader(f)
 }
+
+func addIfaceToPath(path string, ifaces ...string) string {
+	if len(ifaces) == 1 {
+		path = filepath.Join(path, ifaces[0])
+	}
+	return path
+}

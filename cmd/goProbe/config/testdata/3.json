@@ -4,8 +4,10 @@
   },
   "interfaces": {
     "en0": {
-      "ring_buffer_block_size": 1048576,
-      "ring_buffer_num_blocks": 2,
+      "ring_buffer" : {
+        "block_size": 1048576,
+        "num_blocks": 2
+      },
       "promisc": true
     },
     "en1": {
@@ -19,7 +21,7 @@
     "level": "debug"
   },
   "api": {
-    "port": "6060",
+    "addr": "6060",
     "request_logging": true,
     "keys": [
       "da53ae3fb482db63d9606a9324a694bf51f7ad47623c04ab7b97a811f2a78e05",

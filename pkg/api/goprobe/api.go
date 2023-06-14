@@ -3,6 +3,7 @@ package goprobe
 import (
 	"time"
 
+	"github.com/els0r/goProbe/cmd/goProbe/config"
 	"github.com/els0r/goProbe/pkg/capture/capturetypes"
 )
 
@@ -31,5 +32,16 @@ type StatusResponse struct {
 
 const ConfigRoute = "/config"
 
-type ConfigRequest struct {
+type ConfigResponse struct {
+	response
+	Ifaces config.Ifaces `json:"ifaces"`
 }
+
+type ConfigUpdateResponse struct {
+	response
+	Enabled  []string `json:"enabled"`
+	Updated  []string `json:"updated"`
+	Disabled []string `json:"disabled"`
+}
+
+type ConfigUpdateRequest config.Ifaces

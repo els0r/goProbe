@@ -24,9 +24,11 @@ import (
 const randSeed = 10000
 
 var defaultMockIfaceConfig = config.CaptureConfig{
-	Promisc:             false,
-	RingBufferBlockSize: config.DefaultRingBufferSize,
-	RingBufferNumBlocks: 4,
+	Promisc: false,
+	RingBuffer: &config.RingBufferConfig{
+		BlockSize: config.DefaultRingBufferSize,
+		NumBlocks: 4,
+	},
 }
 
 type testMockSrc struct {
