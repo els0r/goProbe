@@ -22,8 +22,8 @@ type RunGroup struct {
 func (rg *RunGroup) Run(f func()) {
 	rg.wg.Add(1)
 	go func() {
-		defer rg.wg.Done()
 		f()
+		rg.wg.Done()
 	}()
 }
 
