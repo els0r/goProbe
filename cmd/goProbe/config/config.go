@@ -161,12 +161,17 @@ func (c CaptureConfig) validate() error {
 	return c.RingBuffer.validate()
 }
 
+var (
+	errorRingBufferBlockSize         = errors.New("ring buffer block size must be a postive number")
+	errorRingBufferNumBlocksNegative = errors.New("ring buffer num blocks must be a postive number")
+)
+
 func (r *RingBufferConfig) validate() error {
 	if r.BlockSize <= 0 {
-		return errors.New("ring buffer block size must be a postive number")
+		return errorRingBufferBlockSize
 	}
 	if r.NumBlocks <= 0 {
-		return errors.New("ring buffer num blocks must be a postive number")
+		return errorRingBufferNumBlocksNegative
 	}
 	return nil
 }
@@ -184,9 +189,13 @@ func (r *RingBufferConfig) Equals(cfg *RingBufferConfig) bool {
 	return r.BlockSize == cfg.BlockSize && r.NumBlocks == cfg.NumBlocks
 }
 
+var (
+	errorNoInterfacesSpecified = errors.New("no interfaces specified")
+)
+
 func (i Ifaces) validate() error {
 	if len(i) == 0 {
-		return fmt.Errorf("no interfaces were specified")
+		return errorNoInterfacesSpecified
 	}
 
 	for iface, cc := range i {
@@ -229,14 +238,14 @@ func (c *Config) Validate() error {
 	}
 
 	// run all config subsection validators for optional sections
-	for _, section := range []validator{
-		c.API,
-	} {
-		if section != nil {
-			err := section.validate()
-			if err != nil {
-				return err
-			}
+	optValidators := []validator{}
+	if c.API != nil {
+		optValidators = append(optValidators, c.API)
+	}
+	for _, section := range optValidators {
+		err := section.validate()
+		if err != nil {
+			return err
 		}
 	}
 	return nil
