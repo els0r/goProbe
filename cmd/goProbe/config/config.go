@@ -85,19 +85,10 @@ type LogConfig struct {
 
 // APIConfig stores goProbe's API configuration
 type APIConfig struct {
-	Addr      string           `json:"addr" yaml:"addr"`
-	Metrics   bool             `json:"metrics" yaml:"metrics"`
-	Timeout   int              `json:"request_timeout" yaml:"request_timeout"`
-	Keys      []string         `json:"keys" yaml:"keys"`
-	Discovery *DiscoveryConfig `json:"service_discovery,omitempty" yaml:"service_discovery,omitempty"`
-}
-
-// DiscoveryConfig stores access parameters in case goProbe should publish it's API configuration so other services can discover it
-type DiscoveryConfig struct {
-	Endpoint   string `json:"endpoint" yaml:"endpoint"`
-	Identifier string `json:"probe_identifier" yaml:"probe_identifier"`
-	Registry   string `json:"registry" yaml:"registry"`
-	SkipVerify bool   `json:"skip_verify" yaml:"skip_verify"`
+	Addr    string   `json:"addr" yaml:"addr"`
+	Metrics bool     `json:"metrics" yaml:"metrics"`
+	Timeout int      `json:"request_timeout" yaml:"request_timeout"`
+	Keys    []string `json:"keys" yaml:"keys"`
 }
 
 // New creates a new configuration struct with default settings
@@ -119,9 +110,14 @@ func (l LogConfig) validate() error {
 	return nil
 }
 
+var (
+	errorNoAPIAddrSpecified = errors.New("no API address specified")
+	errorInvalidAPITimeout  = errors.New("the request timeout must be a positive number")
+)
+
 func (a APIConfig) validate() error {
 	if a.Addr == "" {
-		return errors.New("no address specified for API server")
+		return errorNoAPIAddrSpecified
 	}
 	for _, key := range a.Keys {
 		err := checkKeyConstraints(key)
@@ -131,39 +127,25 @@ func (a APIConfig) validate() error {
 	}
 	// check API key constraints
 	if a.Timeout < 0 {
-		return errors.New("the request timeout must be a positive number > 0")
-	}
-
-	// check discovery config
-	if a.Discovery != nil {
-		return a.Discovery.validate()
+		return errorInvalidAPITimeout
 	}
 	return nil
 }
 
-func (d DiscoveryConfig) validate() error {
-	if d.Endpoint == "" {
-		return errors.New("each probe must publish it's config with a non-empty endpoint on which the API can be reached")
-	}
-	if d.Identifier == "" {
-		return errors.New("each probe must publish it's config with a non-empty identifier if service discvoery is enabled")
-	}
-	if d.Registry == "" {
-		return errors.New("the registry endpoint (configuration store) needs to be specified. Usually this will be a FQDN or an IP:Port pair")
-	}
-	return nil
-}
+var (
+	errorNoRingBufferConfig = errors.New("no ring buffer configuration specified")
+)
 
 func (c CaptureConfig) validate() error {
 	if c.RingBuffer == nil {
-		return errors.New("ring buffer configuration not set")
+		return errorNoRingBufferConfig
 	}
 	return c.RingBuffer.validate()
 }
 
 var (
-	errorRingBufferBlockSize         = errors.New("ring buffer block size must be a postive number")
-	errorRingBufferNumBlocksNegative = errors.New("ring buffer num blocks must be a postive number")
+	errorRingBufferBlockSize = errors.New("ring buffer block size must be a postive number")
+	errorRingBufferNumBlocks = errors.New("ring buffer num blocks must be a postive number")
 )
 
 func (r *RingBufferConfig) validate() error {
@@ -171,7 +153,7 @@ func (r *RingBufferConfig) validate() error {
 		return errorRingBufferBlockSize
 	}
 	if r.NumBlocks <= 0 {
-		return errorRingBufferNumBlocksNegative
+		return errorRingBufferNumBlocks
 	}
 	return nil
 }
@@ -212,9 +194,13 @@ func (i Ifaces) Validate() error {
 	return i.validate()
 }
 
+var (
+	errorEmptyDBPath = errors.New("database path must not be empty")
+)
+
 func (d DBConfig) validate() error {
 	if d.Path == "" {
-		return errors.New("database path must not be empty")
+		return errorEmptyDBPath
 	}
 	_, err := encoders.GetTypeByString(d.EncoderType)
 	if err != nil {
@@ -263,6 +249,10 @@ func ParseFile(path string) (*Config, error) {
 	return Parse(fd)
 }
 
+var (
+	errorUnmarshalConfig = errors.New("failed to unmarshal config")
+)
+
 // Parse attempts to read the configuration from an io.Reader
 func Parse(src io.Reader) (*Config, error) {
 	config := New()
@@ -277,7 +267,7 @@ func Parse(src io.Reader) (*Config, error) {
 	if jsonErr := json.Unmarshal(b, config); jsonErr != nil {
 		yamlErr := yaml.Unmarshal(b, config)
 		if yamlErr != nil {
-			return nil, fmt.Errorf("failed to unmarshal config: JSON: %v; YAML: %v", jsonErr, yamlErr)
+			return nil, fmt.Errorf("%w: JSON: %v; YAML: %v", errorUnmarshalConfig, jsonErr, yamlErr)
 		}
 	}
 
