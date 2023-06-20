@@ -38,20 +38,33 @@ func init() {
 
 const (
 	receivedCol = "RECEIVED"
+	deltaCol    = "+"
 	droppedCol  = "DROPPED"
 
 	colDistance = 4
 )
 
 func printHeader() {
-	fmt.Println(strings.Repeat(" ", 2+status.StatusLineIndent+8+1) + receivedCol + strings.Repeat(" ", colDistance) + droppedCol)
+	fmt.Println(strings.Repeat(" ", 2+status.StatusLineIndent+8+1) +
+		receivedCol +
+		strings.Repeat(" ", colDistance) +
+		deltaCol +
+		strings.Repeat(" ", colDistance) +
+		droppedCol,
+	)
 }
 
 func printStats(stats capturetypes.CaptureStats) {
-	rcvdStr := fmt.Sprint(stats.Received)
+	rcvdStr := fmt.Sprint(stats.ReceivedTotal)
+	deltaStr := fmt.Sprint(stats.Received)
 	droppedStr := fmt.Sprint(stats.Dropped)
 
-	status.Okf("%s%s%s", rcvdStr, strings.Repeat(" ", len(receivedCol)+colDistance-len(rcvdStr)), droppedStr)
+	status.Okf("%s%s%s%s%s", rcvdStr,
+		strings.Repeat(" ", len(receivedCol)+colDistance-len(rcvdStr)),
+		deltaStr,
+		strings.Repeat(" ", len(deltaCol)+colDistance-len(deltaStr)),
+		droppedStr,
+	)
 }
 
 func statusEntrypoint(ctx context.Context, cmd *cobra.Command, args []string) error {
@@ -65,6 +78,7 @@ func statusEntrypoint(ctx context.Context, cmd *cobra.Command, args []string) er
 	}
 
 	var (
+		runtimeTotalReceived        int64
 		totalReceived, totalDropped int64
 		totalActive, totalIfaces    int = 0, len(statuses)
 	)
@@ -95,6 +109,8 @@ func statusEntrypoint(ctx context.Context, cmd *cobra.Command, args []string) er
 
 		ifaceStatus := st.status
 
+		runtimeTotalReceived += int64(ifaceStatus.ReceivedTotal)
+
 		totalReceived += int64(ifaceStatus.Received)
 		totalDropped += int64(ifaceStatus.Dropped)
 		totalActive++
@@ -116,11 +132,12 @@ func statusEntrypoint(ctx context.Context, cmd *cobra.Command, args []string) er
 	fmt.Printf(`Totals:
     Last writeout: %s (%s ago)
     Packets
-      Received: %d
-      Dropped:  %d		(%.2f %%)
+      Received: %d (+%d)
+      Dropped:  %d
 
 `, lastWriteoutStr, ago,
-		totalReceived, totalDropped, float64(totalDropped)/float64(totalReceived)*100)
+		runtimeTotalReceived,
+		totalReceived, totalDropped)
 
 	return nil
 }
