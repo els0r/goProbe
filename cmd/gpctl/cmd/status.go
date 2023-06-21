@@ -136,7 +136,7 @@ func statusEntrypoint(ctx context.Context, cmd *cobra.Command, args []string) er
     Packets
        Received: %s / + %s
       Processed: %s / + %s
-        Dropped: %d
+        Dropped: + %d
 
 `, lastWriteoutStr, ago,
 		formatting.Countable(runtimeTotalReceived), formatting.Countable(totalReceived),
