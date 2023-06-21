@@ -11,6 +11,7 @@ import (
 	"github.com/els0r/goProbe/cmd/global-query/pkg/conf"
 	"github.com/els0r/goProbe/pkg/api/globalquery/server"
 	"github.com/els0r/goProbe/pkg/logging"
+	"github.com/gin-gonic/gin"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -49,6 +50,11 @@ func serverEntrypoint(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		logger.Errorf("failed to set up queriers: %v", err)
 		return err
+	}
+
+	// Set the release mode of GIN depending on the log level
+	if logging.LevelFromString(viper.GetString(conf.LogLevel)) != logging.LevelDebug {
+		gin.SetMode(gin.ReleaseMode)
 	}
 
 	// set up the API server
