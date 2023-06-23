@@ -29,6 +29,7 @@ type Manager struct {
 	lastAppliedConfig config.Ifaces
 
 	lastRotation time.Time
+	startedAt    time.Time
 }
 
 // InitManager initializes a CaptureManager and the underlying writeout logic
@@ -59,6 +60,10 @@ func InitManager(ctx context.Context, config *config.Config, opts ...ManagerOpti
 	if err != nil {
 		return nil, err
 	}
+
+	// this is the first time the capture manager is started and is important to report program runtime
+	captureManager.startedAt = time.Now()
+
 	captureManager.ScheduleWriteouts(ctx, time.Duration(goDB.DBWriteInterval)*time.Second)
 
 	return captureManager, nil

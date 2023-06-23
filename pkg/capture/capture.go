@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/els0r/goProbe/cmd/goProbe/config"
 	"github.com/els0r/goProbe/pkg/capture/capturetypes"
@@ -121,6 +122,9 @@ type Capture struct {
 
 	// WaitGroup tracking active processing
 	wgProc sync.WaitGroup
+
+	// startedAt tracks when the capture was started
+	startedAt time.Time
 }
 
 // newCapture creates a new Capture associated with the given iface.
@@ -153,6 +157,9 @@ func (c *Capture) run(ctx context.Context) (err error) {
 	if err != nil {
 		return fmt.Errorf("failed to initialize capture: %w", err)
 	}
+
+	// make sure to store when the capture started
+	c.startedAt = time.Now()
 
 	// Start up processing and error handling / logging in the
 	// background
@@ -288,6 +295,7 @@ func (c *Capture) status() (*capturetypes.CaptureStats, error) {
 	c.stats.ProcessedTotal += c.stats.Processed
 
 	res := capturetypes.CaptureStats{
+		StartedAt:      c.startedAt,
 		Received:       stats.PacketsReceived,
 		ReceivedTotal:  c.stats.ReceivedTotal,
 		Dropped:        stats.PacketsDropped,

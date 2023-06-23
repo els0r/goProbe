@@ -80,11 +80,11 @@ func statusEntrypoint(ctx context.Context, cmd *cobra.Command, args []string) er
 	table.UTF8Box()
 	table.AddTitle(bold.Sprint("Interface Statuses"))
 
-	table.AddRow("", "total", "", "total", "", "")
+	table.AddRow("", "total", "", "total", "", "", "active")
 	table.AddRow("iface",
 		"received", "+ received",
 		"processed", "+ processed",
-		"dropped",
+		"dropped", "since",
 	)
 	table.AddSeparator()
 
@@ -108,6 +108,7 @@ func statusEntrypoint(ctx context.Context, cmd *cobra.Command, args []string) er
 			formatting.Countable(ifaceStatus.ReceivedTotal), formatting.Countable(ifaceStatus.Received),
 			formatting.Countable(ifaceStatus.ProcessedTotal), formatting.Countable(ifaceStatus.Processed),
 			dropped,
+			time.Since(ifaceStatus.StartedAt).Round(time.Second).String(),
 		)
 	}
 
