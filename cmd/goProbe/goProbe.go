@@ -119,7 +119,13 @@ func main() {
 	// configure api server
 	var (
 		apiServer  *server.Server
-		apiOptions = []server.Option{server.WithDBPath(config.DB.Path)}
+		apiOptions = []server.Option{
+			server.WithDBPath(config.DB.Path),
+			// Set the release mode of GIN depending on the log level
+			server.WithDebugMode(
+				logging.LevelFromString(config.Logging.Level) == logging.LevelDebug,
+			),
+		}
 	)
 
 	// if config.API.Metrics {
