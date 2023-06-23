@@ -11,7 +11,6 @@ import (
 	"github.com/els0r/goProbe/cmd/global-query/pkg/conf"
 	"github.com/els0r/goProbe/pkg/api/globalquery/server"
 	"github.com/els0r/goProbe/pkg/logging"
-	"github.com/gin-gonic/gin"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -52,14 +51,14 @@ func serverEntrypoint(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Set the release mode of GIN depending on the log level
-	if logging.LevelFromString(viper.GetString(conf.LogLevel)) != logging.LevelDebug {
-		gin.SetMode(gin.ReleaseMode)
-	}
-
 	// set up the API server
 	addr := viper.GetString(conf.ServerAddr)
-	apiServer := server.NewServer(addr, hostListResolver, querier)
+	apiServer := server.NewServer(addr, hostListResolver, querier,
+		// Set the release mode of GIN depending on the log level
+		server.WithDebugMode(
+			logging.LevelFromString(viper.GetString(conf.LogLevel)) == logging.LevelDebug,
+		),
+	)
 
 	// initializing the server in a goroutine so that it won't block the graceful
 	// shutdown handling below

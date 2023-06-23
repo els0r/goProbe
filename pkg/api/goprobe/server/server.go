@@ -26,6 +26,8 @@ type Server struct {
 	// TODO: authorize API access
 	keys []string
 
+	debug bool
+
 	addr           string
 	unixSocketFile string
 
@@ -34,14 +36,21 @@ type Server struct {
 	router *gin.Engine
 }
 
+// WithDBPath sets the path to the database directory
 func WithDBPath(path string) Option {
 	return func(server *Server) {
 		server.dbPath = path
 	}
 }
 
-// TODO: support for unix sockets
+// WithDebugMode runs the gin server in debug mode (e.g. not setting the release mode)
+func WithDebugMode(b bool) Option {
+	return func(server *Server) {
+		server.debug = b
+	}
+}
 
+// New creates a new API server
 func New(addr string, captureManager *capture.Manager, opts ...Option) *Server {
 	server := &Server{
 		addr:           addr,
@@ -60,6 +69,10 @@ func New(addr string, captureManager *capture.Manager, opts ...Option) *Server {
 	server.router = router
 	for _, opt := range opts {
 		opt(server)
+	}
+
+	if !server.debug {
+		gin.SetMode(gin.ReleaseMode)
 	}
 
 	server.registerMiddlewares()
