@@ -28,7 +28,6 @@ import (
 	"github.com/els0r/goProbe/pkg/capture"
 	"github.com/els0r/goProbe/pkg/logging"
 	"github.com/els0r/goProbe/pkg/version"
-	"github.com/gin-gonic/gin"
 
 	capconfig "github.com/els0r/goProbe/cmd/goProbe/config"
 )
@@ -81,11 +80,6 @@ func main() {
 				logger.Fatal(err)
 			}
 		}()
-	}
-
-	// Set the release mode of GIN depending on the log level
-	if logging.LevelFromString(config.Logging.Level) != logging.LevelDebug {
-		gin.SetMode(gin.ReleaseMode)
 	}
 
 	// It doesn't make sense to monitor zero interfaces
