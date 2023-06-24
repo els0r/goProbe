@@ -218,21 +218,37 @@ func BenchmarkRotation(b *testing.B) {
 		flow.directionConfidenceHigh = true
 	}
 
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	b.Run("rotation", func(b *testing.B) {
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			testLog := flowLog.clone()
+
+			// Run best-case scenario (keep all flows)
+			aggMap := testLog.transferAndAggregate()
+			require.EqualValues(b, nFlows, len(testLog.flowMap))
+			require.EqualValues(b, nFlows, aggMap.Len())
+
+			// Run worst-case scenario (keep no flows)
+			aggMap = testLog.transferAndAggregate()
+			require.EqualValues(b, 0, len(testLog.flowMap))
+			require.EqualValues(b, 0, aggMap.Len())
+		}
+	})
+
+	b.Run("post_add", func(b *testing.B) {
 		testLog := flowLog.clone()
 
-		// Run best-case scenario (keep all flows)
-		aggMap := testLog.transferAndAggregate()
-		require.EqualValues(b, nFlows, len(testLog.flowMap))
-		require.EqualValues(b, nFlows, aggMap.Len())
+		testLog.transferAndAggregate()
+		testLog.transferAndAggregate()
 
-		// Run worst-case scenario (keep no flows)
-		aggMap = testLog.transferAndAggregate()
-		require.EqualValues(b, 0, len(testLog.flowMap))
-		require.EqualValues(b, 0, aggMap.Len())
-	}
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			require.Nil(b, testLog.Add(pkt.IPLayer(), capture.PacketOutgoing, 128))
+		}
+	})
+
 }
 
 func testDeadlockLowTraffic(t *testing.T, maxPkts int) {

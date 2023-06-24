@@ -217,7 +217,7 @@ func (f *FlowLog) Rotate() *hashmap.AggFlowMap {
 }
 
 func (f *FlowLog) transferAndAggregate() (agg *hashmap.AggFlowMap) {
-	agg = hashmap.NewAggFlowMap(len(f.flowMap))
+	agg = hashmap.NewAggFlowMap()
 
 	// Reusable key conversion buffers
 	keyBufV4, keyBufV6 := types.NewEmptyV4Key(), types.NewEmptyV6Key()
