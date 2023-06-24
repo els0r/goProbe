@@ -123,7 +123,11 @@ func dbData(iface string, timestamp int64, aggFlowMap *hashmap.AggFlowMap) ([typ
 
 	// loop through the v4 & v6 flow maps to extract the relevant
 	// values into database blocks.
-	var bytesRcvd, bytesSent, pktsRcvd, pktsSent []uint64
+	bytesRcvd, bytesSent, pktsRcvd, pktsSent :=
+		make([]uint64, 0, len(v4List)+len(v6List)),
+		make([]uint64, 0, len(v4List)+len(v6List)),
+		make([]uint64, 0, len(v4List)+len(v6List)),
+		make([]uint64, 0, len(v4List)+len(v6List))
 	for _, list := range []hashmap.List{v4List, v6List} {
 		for _, flow := range list {
 
