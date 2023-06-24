@@ -1,62 +1,189 @@
 package config
 
 import (
-	"fmt"
-	"os"
-	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/els0r/goProbe/pkg/defaults"
 	"github.com/stretchr/testify/assert"
 )
 
-var tests = []struct {
-	name       string
-	shouldFail bool
-}{
-	{"wrong discovery config", true},
-	{"valid configuration (api, logging, discovery)", false},
-	{"valid configuration (api, logging)", false},
-	{"fails on API section", true},
-	{"missing iface config", true},
-	{"missing server addr", true},
-	{"insecure API key", true},
-	{"faulty json", true},
-	// this is ok, since the default DB path is assigned
-	{"empty DB path", false},
-	{"broken interface config", true},
-	{"negative timeout", true},
-	{"unknown encoder", true},
-}
-
 func TestValidate(t *testing.T) {
+	var tests = []struct {
+		name        string
+		input       *Config
+		expectedErr error
+	}{
+		{"new", New(), errorNoInterfacesSpecified},
+		{"valid config",
+			&Config{
+				DB: DBConfig{
+					Path: defaults.DBPath,
+				},
+				Interfaces: Ifaces{
+					"eth0": CaptureConfig{
+						RingBuffer: &RingBufferConfig{
+							BlockSize: 1024 * 1024,
+							NumBlocks: 2,
+						},
+					},
+				},
+			},
+			nil,
+		},
+		{"valid config extended",
+			&Config{
+				DB: DBConfig{Path: defaults.DBPath},
+				Interfaces: Ifaces{
+					"eth0": CaptureConfig{
+						RingBuffer: &RingBufferConfig{BlockSize: 1024 * 1024, NumBlocks: 2},
+					},
+				},
+				Logging: LogConfig{Level: "debug", Encoding: "logfmt"},
+				API: &APIConfig{
+					Addr: "unix:/var/run/goprobe.sock",
+					Keys: []string{"testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest"},
+				},
+			},
+			nil,
+		},
+		{"empty DB path",
+			&Config{
+				DB: DBConfig{},
+				Interfaces: Ifaces{
+					"eth0": CaptureConfig{
+						RingBuffer: &RingBufferConfig{
+							BlockSize: 1024 * 1024,
+							NumBlocks: 2,
+						},
+					},
+				},
+			},
+			errorEmptyDBPath,
+		},
+		{"no iface config provided",
+			&Config{
+				DB:         DBConfig{Path: defaults.DBPath},
+				Interfaces: Ifaces{},
+			},
+			errorNoInterfacesSpecified,
+		},
+		{"no ring buffer config",
+			&Config{
+				DB: DBConfig{Path: defaults.DBPath},
+				Interfaces: Ifaces{
+					"eth0": CaptureConfig{
+						Promisc: true,
+					},
+				},
+			},
+			errorNoRingBufferConfig,
+		},
+		{"faulty ring buffer config",
+			&Config{
+				DB: DBConfig{Path: defaults.DBPath},
+				Interfaces: Ifaces{
+					"eth0": CaptureConfig{
+						RingBuffer: &RingBufferConfig{},
+					},
+				},
+			},
+			errorRingBufferBlockSize,
+		},
+		{"faulty ring buffer config: empty num blocks",
+			&Config{
+				DB: DBConfig{Path: defaults.DBPath},
+				Interfaces: Ifaces{
+					"eth0": CaptureConfig{
+						RingBuffer: &RingBufferConfig{BlockSize: 1024 * 1024},
+					},
+				},
+			},
+			errorRingBufferNumBlocks,
+		},
+		{"missing API addr",
+			&Config{
+				DB: DBConfig{Path: defaults.DBPath},
+				Interfaces: Ifaces{
+					"eth0": CaptureConfig{
+						RingBuffer: &RingBufferConfig{BlockSize: 1024 * 1024, NumBlocks: 2},
+					},
+				},
+				Logging: LogConfig{Level: "debug", Encoding: "logfmt"},
+				API: &APIConfig{
+					Keys: []string{"testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest"},
+				},
+			},
+			errorNoAPIAddrSpecified,
+		},
+	}
+
 	// run tests
-	for i, test := range tests {
+	for _, test := range tests {
+		test := test
 		// run each case as a sub test
 		t.Run(test.name, func(t *testing.T) {
-			// create reader to parse config
-			path := fmt.Sprintf("testdata/%d.json", i)
-			r, err := os.OpenFile(filepath.Clean(path), os.O_RDONLY, 0600)
+			err := test.input.Validate()
+			assert.ErrorIs(t, err, test.expectedErr)
+		})
+	}
+}
 
-			assert.Nil(t, err, "failed to open test file at %s: %v", path, err)
+func TestParse(t *testing.T) {
+	var tests = []struct {
+		name        string
+		input       string
+		expectedErr error
+	}{
+		{"valid config YAML",
+			`db:
+  path: /var/lib/goprobe/goprobe.db
+interfaces:
+  eth0:
+   promisc: true
+   ring_buffer:
+      block_size: 1048576
+      num_blocks: 2
+`,
+			nil,
+		},
+		{
+			"valid config JSON",
+			`
+{
+	"db": {
+		"path": "/var/lib/goprobe/goprobe.db"
+	},
+	"interfaces": {
+		"eth0": {
+			"promisc": true,
+			"ring_buffer": {
+				"block_size": 1048576,
+				"num_blocks": 2
+			}
+		}
+	}
+}
+`,
+			nil,
+		},
+		{"malformed",
+			`db`,
+			errorUnmarshalConfig,
+		},
+		{"invalid",
+			`db:`,
+			// when parse is used, the default DB path is set. Hence, the next error
+			// that can occur is the empty interface error
+			errorNoInterfacesSpecified,
+		},
+	}
 
-			// parse config
-			cfg, err := Parse(r)
-			if test.shouldFail {
-				if err == nil {
-					t.Log(cfg)
-					t.Fatalf("[%d] config parsing should have failed but didn't", i)
-				}
-				t.Logf("[%d] provoked expected error: %s", i, err)
-				return
-			}
-			if err != nil {
-				t.Fatalf("[%d] couldn't parse config: %s", i, err)
-			}
-
-			p := cfg.DB.Path
-			if p == "" {
-				t.Fatalf("[%d] the config DB path should never be empty after parsing a config", i)
-			}
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			_, err := Parse(strings.NewReader(test.input))
+			assert.ErrorIs(t, err, test.expectedErr)
 		})
 	}
 }
