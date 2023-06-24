@@ -10,6 +10,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"unsafe"
 
 	"github.com/els0r/goProbe/cmd/goProbe/config"
 	"github.com/els0r/goProbe/pkg/capture/capturetypes"
@@ -192,6 +193,33 @@ func TestMockPacketCapturePerformance(t *testing.T) {
 	mockC.unlock()
 
 	require.Nil(t, mockC.close())
+}
+
+func BenchmarkRotation(b *testing.B) {
+
+	pkt, err := capture.BuildPacket(
+		net.ParseIP("1.2.3.4"),
+		net.ParseIP("4.5.6.7"),
+		1,
+		2,
+		17, []byte{1, 2}, capture.PacketOutgoing, 128)
+
+	require.Nil(b, err)
+	ipLayer := pkt.IPLayer()
+
+	flowLog := NewFlowLog()
+	for i := uint64(0); i < 100000; i++ {
+		*(*uint64)(unsafe.Pointer(&ipLayer[16])) = i
+		require.Nil(b, flowLog.Add(ipLayer, capture.PacketOutgoing, 128))
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		testLog := flowLog.clone()
+		newMap, aggMap := testLog.transferAndAggregate()
+		_, _ = newMap, aggMap
+	}
 }
 
 func testDeadlockLowTraffic(t *testing.T, maxPkts int) {

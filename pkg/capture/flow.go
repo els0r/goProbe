@@ -219,7 +219,7 @@ func (f *FlowLog) Rotate() (agg *hashmap.AggFlowMap) {
 
 func (f *FlowLog) transferAndAggregate() (newFlowMap map[string]*Flow, agg *hashmap.AggFlowMap) {
 	newFlowMap = make(map[string]*Flow)
-	agg = hashmap.NewAggFlowMap()
+	agg = hashmap.NewAggFlowMap(len(f.flowMap))
 
 	// Reusable key conversion buffers
 	keyBufV4, keyBufV6 := types.NewEmptyV4Key(), types.NewEmptyV6Key()
@@ -249,6 +249,15 @@ func (f *FlowLog) transferAndAggregate() (newFlowMap map[string]*Flow, agg *hash
 				newFlowMap[k] = v
 			}
 		}
+	}
+	return
+}
+
+func (f *FlowLog) clone() (f2 *FlowLog) {
+	f2 = NewFlowLog()
+	for k, v := range f.flowMap {
+		vCopy := *v
+		f2.flowMap[k] = &vCopy
 	}
 	return
 }
