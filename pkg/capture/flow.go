@@ -212,13 +212,11 @@ func (f *FlowLog) Add(ipLayer capture.IPLayer, pktType capture.PacketType, pktTo
 // are discarded.
 //
 // Returns an AggFlowMap containing all flows since the last call to Rotate.
-func (f *FlowLog) Rotate() (agg *hashmap.AggFlowMap) {
-	f.flowMap, agg = f.transferAndAggregate()
-	return
+func (f *FlowLog) Rotate() *hashmap.AggFlowMap {
+	return f.transferAndAggregate()
 }
 
-func (f *FlowLog) transferAndAggregate() (newFlowMap map[string]*Flow, agg *hashmap.AggFlowMap) {
-	newFlowMap = make(map[string]*Flow)
+func (f *FlowLog) transferAndAggregate() (agg *hashmap.AggFlowMap) {
 	agg = hashmap.NewAggFlowMap(len(f.flowMap))
 
 	// Reusable key conversion buffers
@@ -244,12 +242,16 @@ func (f *FlowLog) transferAndAggregate() (newFlowMap map[string]*Flow, agg *hash
 			// or thrown away
 			if v.IsWorthKeeping() {
 
-				// Reset and insert the flow into the new flow matrix
+				// Reset the flow
 				v.Reset()
-				newFlowMap[k] = v
+			} else {
+				delete(f.flowMap, k)
 			}
+		} else {
+			delete(f.flowMap, k)
 		}
 	}
+
 	return
 }
 

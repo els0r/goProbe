@@ -197,6 +197,8 @@ func TestMockPacketCapturePerformance(t *testing.T) {
 
 func BenchmarkRotation(b *testing.B) {
 
+	nFlows := uint64(100000)
+
 	pkt, err := capture.BuildPacket(
 		net.ParseIP("1.2.3.4"),
 		net.ParseIP("4.5.6.7"),
@@ -208,17 +210,28 @@ func BenchmarkRotation(b *testing.B) {
 	ipLayer := pkt.IPLayer()
 
 	flowLog := NewFlowLog()
-	for i := uint64(0); i < 100000; i++ {
+	for i := uint64(0); i < nFlows; i++ {
 		*(*uint64)(unsafe.Pointer(&ipLayer[16])) = i
 		require.Nil(b, flowLog.Add(ipLayer, capture.PacketOutgoing, 128))
+	}
+	for _, flow := range flowLog.flowMap {
+		flow.directionConfidenceHigh = true
 	}
 
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		testLog := flowLog.clone()
-		newMap, aggMap := testLog.transferAndAggregate()
-		_, _ = newMap, aggMap
+
+		// Run best-case scenario (keep all flows)
+		aggMap := testLog.transferAndAggregate()
+		require.EqualValues(b, nFlows, len(testLog.flowMap))
+		require.EqualValues(b, nFlows, aggMap.Len())
+
+		// Run worst-case scenario (keep no flows)
+		aggMap = testLog.transferAndAggregate()
+		require.EqualValues(b, 0, len(testLog.flowMap))
+		require.EqualValues(b, 0, aggMap.Len())
 	}
 }
 
