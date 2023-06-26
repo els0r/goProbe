@@ -114,11 +114,9 @@ func statusEntrypoint(ctx context.Context, cmd *cobra.Command, args []string) er
 
 	// set alignment before rendering
 	table.SetAlign(tablewriter.AlignLeft, 1)
-	table.SetAlign(tablewriter.AlignRight, 2)
-	table.SetAlign(tablewriter.AlignRight, 3)
-	table.SetAlign(tablewriter.AlignRight, 4)
-	table.SetAlign(tablewriter.AlignRight, 5)
-	table.SetAlign(tablewriter.AlignRight, 6)
+	for i := 2; i <= 6; i++ {
+		table.SetAlign(tablewriter.AlignRight, i)
+	}
 
 	fmt.Println(table.Render())
 
