@@ -212,31 +212,54 @@ func (f *FlowLog) Add(ipLayer capture.IPLayer, pktType capture.PacketType, pktTo
 // are discarded.
 //
 // Returns an AggFlowMap containing all flows since the last call to Rotate.
-func (f *FlowLog) Rotate() (agg *hashmap.AggFlowMap) {
-	f.flowMap, agg = f.transferAndAggregate()
-	return
+func (f *FlowLog) Rotate() *hashmap.AggFlowMap {
+	return f.transferAndAggregate()
 }
 
-func (f *FlowLog) transferAndAggregate() (newFlowMap map[string]*Flow, agg *hashmap.AggFlowMap) {
-	newFlowMap = make(map[string]*Flow)
+func (f *FlowLog) transferAndAggregate() (agg *hashmap.AggFlowMap) {
 	agg = hashmap.NewAggFlowMap()
+
+	// Reusable key conversion buffers
+	keyBufV4, keyBufV6 := types.NewEmptyV4Key(), types.NewEmptyV6Key()
+	var goDBKey types.Key
 
 	for k, v := range f.flowMap {
 
-		goDBKey := v.Key()
+		// Populate key buffer according to source flow
+		if v.isIPv4 {
+			keyBufV4.PutAllV4(v.epHash[0:4], v.epHash[16:20], v.epHash[32:34], v.epHash[36])
+			goDBKey = keyBufV4
+		} else {
+			keyBufV6.PutAllV6(v.epHash[0:16], v.epHash[16:32], v.epHash[32:34], v.epHash[36])
+			goDBKey = keyBufV6
+		}
 
-		// check if the flow actually has any interesting information for us
+		// Check if the flow actually has any interesting information for us
 		if !v.HasBeenIdle() {
 			agg.SetOrUpdate(goDBKey, v.isIPv4, v.bytesRcvd, v.bytesSent, v.packetsRcvd, v.packetsSent)
 
-			// check whether the flow should be retained for the next interval
+			// Check whether the flow should be retained for the next interval
 			// or thrown away
 			if v.IsWorthKeeping() {
-				// reset and insert the flow into the new flow matrix
+
+				// Reset the flow
 				v.Reset()
-				newFlowMap[k] = v
+			} else {
+				delete(f.flowMap, k)
 			}
+		} else {
+			delete(f.flowMap, k)
 		}
+	}
+
+	return
+}
+
+func (f *FlowLog) clone() (f2 *FlowLog) {
+	f2 = NewFlowLog()
+	for k, v := range f.flowMap {
+		vCopy := *v
+		f2.flowMap[k] = &vCopy
 	}
 	return
 }
@@ -252,16 +275,6 @@ type Flow struct {
 	packetsSent             uint64
 	directionConfidenceHigh bool
 	isIPv4                  bool
-}
-
-// Key returns a goDB compliant key from the current flow
-func (f *Flow) Key() (key types.Key) {
-	if f.isIPv4 {
-		key = types.NewV4Key(f.epHash[0:4], f.epHash[16:20], f.epHash[32:34], f.epHash[36])
-	} else {
-		key = types.NewV6Key(f.epHash[0:16], f.epHash[16:32], f.epHash[32:34], f.epHash[36])
-	}
-	return
 }
 
 // MarshalJSON implements the Marshaler interface for a flow

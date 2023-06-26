@@ -10,6 +10,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"unsafe"
 
 	"github.com/els0r/goProbe/cmd/goProbe/config"
 	"github.com/els0r/goProbe/pkg/capture/capturetypes"
@@ -192,6 +193,62 @@ func TestMockPacketCapturePerformance(t *testing.T) {
 	mockC.unlock()
 
 	require.Nil(t, mockC.close())
+}
+
+func BenchmarkRotation(b *testing.B) {
+
+	nFlows := uint64(100000)
+
+	pkt, err := capture.BuildPacket(
+		net.ParseIP("1.2.3.4"),
+		net.ParseIP("4.5.6.7"),
+		1,
+		2,
+		17, []byte{1, 2}, capture.PacketOutgoing, 128)
+
+	require.Nil(b, err)
+	ipLayer := pkt.IPLayer()
+
+	flowLog := NewFlowLog()
+	for i := uint64(0); i < nFlows; i++ {
+		*(*uint64)(unsafe.Pointer(&ipLayer[16])) = i
+		require.Nil(b, flowLog.Add(ipLayer, capture.PacketOutgoing, 128))
+	}
+	for _, flow := range flowLog.flowMap {
+		flow.directionConfidenceHigh = true
+	}
+
+	b.Run("rotation", func(b *testing.B) {
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			testLog := flowLog.clone()
+
+			// Run best-case scenario (keep all flows)
+			aggMap := testLog.transferAndAggregate()
+			require.EqualValues(b, nFlows, len(testLog.flowMap))
+			require.EqualValues(b, nFlows, aggMap.Len())
+
+			// Run worst-case scenario (keep no flows)
+			aggMap = testLog.transferAndAggregate()
+			require.EqualValues(b, 0, len(testLog.flowMap))
+			require.EqualValues(b, 0, aggMap.Len())
+		}
+	})
+
+	b.Run("post_add", func(b *testing.B) {
+		testLog := flowLog.clone()
+
+		testLog.transferAndAggregate()
+		testLog.transferAndAggregate()
+
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			require.Nil(b, testLog.Add(pkt.IPLayer(), capture.PacketOutgoing, 128))
+		}
+	})
+
 }
 
 func testDeadlockLowTraffic(t *testing.T, maxPkts int) {

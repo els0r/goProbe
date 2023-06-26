@@ -130,16 +130,23 @@ func TestE2EBasic(t *testing.T) {
 }
 
 func TestE2EMultipleIfaces(t *testing.T) {
+	pcapData, err := pcaps.ReadFile(filepath.Join(testDataPath, defaultPcapTestFile))
+	require.Nil(t, err)
 
-	// Load identical data several times
-	ifaceData := make([][]byte, 5)
-	for i := 0; i < len(ifaceData); i++ {
-		pcapData, err := pcaps.ReadFile(filepath.Join(testDataPath, defaultPcapTestFile))
-		require.Nil(t, err)
-		ifaceData[i] = pcapData
+	for _, n := range []int{
+		2, 3, 5, 10, 21, 100,
+	} {
+		t.Run(fmt.Sprintf("%02d interfaces", n), func(t *testing.T) {
+
+			// Use identical data several times
+			ifaceData := make([][]byte, n)
+			for i := 0; i < len(ifaceData); i++ {
+				ifaceData[i] = pcapData
+			}
+
+			testE2E(t, ifaceData...)
+		})
 	}
-
-	testE2E(t, ifaceData...)
 }
 
 func TestE2EExtended(t *testing.T) {
@@ -228,7 +235,7 @@ func testE2E(t *testing.T, datasets ...[]byte) {
 	// Define mock interfaces
 	var mockIfaces mockIfaces
 	for i, data := range datasets {
-		mockIfaces = append(mockIfaces, newPcapSource(t, fmt.Sprintf("mock%d", i+1), data))
+		mockIfaces = append(mockIfaces, newPcapSource(t, fmt.Sprintf("mock%03d", i+1), data))
 	}
 
 	// Run GoProbe
