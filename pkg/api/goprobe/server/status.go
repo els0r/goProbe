@@ -15,7 +15,7 @@ func (server *Server) getStatus(c *gin.Context) {
 
 	resp := &gpapi.StatusResponse{}
 	resp.StatusCode = http.StatusOK
-	resp.LastWriteout = server.captureManager.LastRotation()
+	resp.StartedAt, resp.LastWriteout = server.captureManager.GetTimestamps()
 
 	var err error
 	ifaces, err = url.QueryUnescape(ifaces)

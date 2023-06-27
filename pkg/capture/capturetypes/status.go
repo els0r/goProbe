@@ -21,6 +21,9 @@ type TaggedAggFlowMap struct {
 	Iface string       `json:"iface"`
 }
 
+// InterfaceStats stores the statistics for each interface
+type InterfaceStats map[string]CaptureStats
+
 // CaptureStats stores the capture stores its statistics
 // TODO: Track errors and similar counters in metrics
 type CaptureStats struct {

@@ -42,7 +42,7 @@ func statusEntrypoint(ctx context.Context, cmd *cobra.Command, args []string) er
 
 	ifaces := args
 
-	statuses, lastWriteout, err := client.GetInterfaceStatus(ctx, ifaces...)
+	statuses, lastWriteout, startedAt, err := client.GetInterfaceStatus(ctx, ifaces...)
 	if err != nil {
 		return fmt.Errorf("failed to fetch status for interfaces %v: %w", ifaces, err)
 	}
@@ -50,7 +50,6 @@ func statusEntrypoint(ctx context.Context, cmd *cobra.Command, args []string) er
 	var (
 		runtimeTotalReceived, runtimeTotalProcessed int64
 		totalReceived, totalProcessed, totalDropped int64
-		totalActive, totalIfaces                    int = 0, len(statuses)
 	)
 
 	fmt.Println()
@@ -84,7 +83,7 @@ func statusEntrypoint(ctx context.Context, cmd *cobra.Command, args []string) er
 	table.AddRow("iface",
 		"received", "+ received",
 		"processed", "+ processed",
-		"dropped", "since",
+		"+ dropped", "for",
 	)
 	table.AddSeparator()
 
@@ -97,7 +96,6 @@ func statusEntrypoint(ctx context.Context, cmd *cobra.Command, args []string) er
 		totalProcessed += int64(ifaceStatus.Processed)
 		totalReceived += int64(ifaceStatus.Received)
 		totalDropped += int64(ifaceStatus.Dropped)
-		totalActive++
 
 		dropped := fmt.Sprint(ifaceStatus.Dropped)
 		if ifaceStatus.Dropped > 0 {
@@ -129,15 +127,21 @@ func statusEntrypoint(ctx context.Context, cmd *cobra.Command, args []string) er
 		ago = time.Since(tLocal).Round(time.Second).String()
 	}
 
-	fmt.Printf("%d/%d interfaces active\n\n", totalActive, totalIfaces)
-	fmt.Printf(`Totals:
+	fmt.Printf(`Runtime info:
+
+    Running since: %s (%s ago)
     Last writeout: %s (%s ago)
+
+Totals:
+
     Packets
        Received: %s / + %s
       Processed: %s / + %s
         Dropped: + %d
 
-`, lastWriteoutStr, ago,
+`,
+		startedAt.Local().Format(types.DefaultTimeOutputFormat), time.Since(startedAt).Round(time.Second).String(),
+		lastWriteoutStr, ago,
 		formatting.Countable(runtimeTotalReceived), formatting.Countable(totalReceived),
 		formatting.Countable(runtimeTotalProcessed), formatting.Countable(totalProcessed),
 		totalDropped,

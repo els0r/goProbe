@@ -91,6 +91,26 @@ func (cm *Manager) LastRotation() (t time.Time) {
 	return
 }
 
+// StartedAt returns the timestamp when the capture manager was initialized
+func (cm *Manager) StartedAt() (t time.Time) {
+	cm.RLock()
+	t = cm.startedAt
+	cm.RUnlock()
+
+	return
+}
+
+// GetTimestamps is a combination of LastRotation() and StartedAt(). It exists to save a lock
+// in case both timestamps are requested
+func (cm *Manager) GetTimestamps() (startedAt, lastRotation time.Time) {
+	cm.RLock()
+	startedAt = cm.startedAt
+	lastRotation = cm.lastRotation
+	cm.RUnlock()
+
+	return
+}
+
 // ScheduleWriteouts creates a new goroutine that executes a DB writeout in defined time
 // intervals
 func (cm *Manager) ScheduleWriteouts(ctx context.Context, interval time.Duration) {
@@ -121,7 +141,6 @@ func (cm *Manager) ScheduleWriteouts(ctx context.Context, interval time.Duration
 				logger.Info("stopping rotation handler")
 				return
 			default:
-
 				t0 := time.Now()
 				cm.performWriteout(ctx, t)
 				if elapsed := float64(time.Since(t0)); elapsed > allowedWriteoutDurationFraction*float64(interval) {
@@ -169,11 +188,11 @@ func (cm *Manager) Config(ctx context.Context, ifaces ...string) (ifaceConfigs c
 }
 
 // Status fetches the current capture stats from all (or a set of) interfaces
-func (cm *Manager) Status(ctx context.Context, ifaces ...string) (statusmap map[string]capturetypes.CaptureStats) {
+func (cm *Manager) Status(ctx context.Context, ifaces ...string) (statusmap capturetypes.InterfaceStats) {
 
 	logger, t0 := logging.FromContext(ctx), time.Now()
 
-	statusmap = make(map[string]capturetypes.CaptureStats)
+	statusmap = make(capturetypes.InterfaceStats)
 
 	// Build list of interfaces to process (either from all interfaces or from explicit list)
 	// If none are provided / are available, return empty map
