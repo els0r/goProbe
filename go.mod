@@ -1,5 +1,7 @@
 module github.com/els0r/goProbe
 
+go 1.18
+
 require (
 	github.com/els0r/status v1.0.0
 	github.com/fako1024/httpc v1.0.15-0.20230527113611-da5628ef596d
@@ -74,4 +76,3 @@ require (
 	gopkg.in/ini.v1 v1.67.0 // indirect
 )
 
-go 1.18

@@ -129,15 +129,15 @@ func statusEntrypoint(ctx context.Context, cmd *cobra.Command, args []string) er
 
 	fmt.Printf(`Runtime info:
 
-    Running since: %s (%s ago)
-    Last writeout: %s (%s ago)
+            Running since: %s (%s ago)
+  Last scheduled writeout: %s (%s ago)
 
 Totals:
 
     Packets
        Received: %s / + %s
       Processed: %s / + %s
-        Dropped: + %d
+        Dropped:      + %d
 
 `,
 		startedAt.Local().Format(types.DefaultTimeOutputFormat), time.Since(startedAt).Round(time.Second).String(),
