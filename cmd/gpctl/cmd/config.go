@@ -6,16 +6,16 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os"
 	"sort"
-	"text/tabwriter"
 	"time"
 
 	"github.com/els0r/goProbe/cmd/goProbe/config"
 	"github.com/els0r/goProbe/cmd/gpctl/pkg/conf"
 	"github.com/els0r/goProbe/pkg/api/goprobe/client"
+	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"github.com/xlab/tablewriter"
 )
 
 const (
@@ -85,18 +85,32 @@ func configEntrypoint(ctx context.Context, cmd *cobra.Command, args []string) er
 	})
 
 	fmt.Println()
-	tw := tabwriter.NewWriter(os.Stdout, 0, 0, 4, ' ', tabwriter.AlignRight)
 
-	fmt.Fprintln(tw, "\tiface\tpromisc\tring_buffer_block_size\tring_buffer_num_blocks\t")
+	bold := color.New(color.Bold, color.FgWhite)
+
+	table := tablewriter.CreateTable()
+	table.UTF8Box()
+	table.AddTitle(bold.Sprint("Interface Configuration"))
+
+	table.AddRow("", "", "ring buffer", "ring buffer")
+	table.AddRow("iface", "promisc", "block size", "num blocks")
+	table.AddSeparator()
+
 	for _, icfg := range allConfigs {
-		fmt.Fprintf(tw, "\t%s\t%t\t%d\t%d\t\n", icfg.iface,
+		table.AddRow(icfg.iface,
 			icfg.cfg.Promisc,
 			icfg.cfg.RingBuffer.BlockSize,
 			icfg.cfg.RingBuffer.NumBlocks,
 		)
 	}
-	tw.Flush()
-	fmt.Println()
+
+	// set alignment before rendering
+	table.SetAlign(tablewriter.AlignLeft, 1)
+	table.SetAlign(tablewriter.AlignLeft, 2)
+	table.SetAlign(tablewriter.AlignRight, 3)
+	table.SetAlign(tablewriter.AlignRight, 4)
+
+	fmt.Println(table.Render())
 
 	return nil
 }
