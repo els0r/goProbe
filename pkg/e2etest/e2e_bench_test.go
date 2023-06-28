@@ -31,15 +31,21 @@ func TestBenchmarkCaptureThroughput(t *testing.T) {
 	}
 
 	t.Run("random", func(t *testing.T) {
-		runBenchmarkCaptureThroughput(t, 10*time.Second, true)
+		runBenchmarkCaptureThroughput(t, 10*time.Second, true, false)
+	})
+	t.Run("random+return", func(t *testing.T) {
+		runBenchmarkCaptureThroughput(t, 10*time.Second, true, true)
 	})
 
 	t.Run("non-random", func(t *testing.T) {
-		runBenchmarkCaptureThroughput(t, 10*time.Second, false)
+		runBenchmarkCaptureThroughput(t, 10*time.Second, false, false)
+	})
+	t.Run("non-random+return", func(t *testing.T) {
+		runBenchmarkCaptureThroughput(t, 10*time.Second, false, true)
 	})
 }
 
-func runBenchmarkCaptureThroughput(t *testing.T, runtime time.Duration, randomize bool) {
+func runBenchmarkCaptureThroughput(t *testing.T, runtime time.Duration, randomize, addReturn bool) {
 
 	// Setup a temporary directory for the test DB
 	tempDir, err := os.MkdirTemp(os.TempDir(), "goprobe_e2e_bench")
@@ -55,7 +61,7 @@ func runBenchmarkCaptureThroughput(t *testing.T, runtime time.Duration, randomiz
 	writeoutHandler := writeout.NewGoDBHandler(tempDir, encoders.EncoderTypeLZ4).
 		WithPermissions(goDB.DefaultPermissions)
 
-	captureManager := capture.NewManager(writeoutHandler, capture.WithSourceInitFn(setupSyntheticUnblockingSource(t, randomize)))
+	captureManager := capture.NewManager(writeoutHandler, capture.WithSourceInitFn(setupSyntheticUnblockingSource(t, randomize, addReturn)))
 	captureManager.Update(ctx, config.Ifaces{
 		"mock": defaultCaptureConfig,
 	})
@@ -82,8 +88,8 @@ func runBenchmarkCaptureThroughput(t *testing.T, runtime time.Duration, randomiz
 	cancel()
 }
 
-func setupSyntheticUnblockingSource(t testing.TB, randomize bool) func(c *capture.Capture) (slimcap.Source, error) {
-	return func(c *capture.Capture) (slimcap.Source, error) {
+func setupSyntheticUnblockingSource(t testing.TB, randomize, addReturn bool) func(c *capture.Capture) (slimcap.SourceZeroCopy, error) {
+	return func(c *capture.Capture) (slimcap.SourceZeroCopy, error) {
 
 		mockSrc, err := afring.NewMockSourceNoDrain(c.Iface(),
 			afring.CaptureLength(link.CaptureLengthMinimalIPv6Transport),
@@ -107,6 +113,19 @@ func setupSyntheticUnblockingSource(t testing.TB, randomize bool) func(c *captur
 
 				require.Nil(t, mockSrc.AddPacket(p))
 				count++
+
+				if addReturn {
+					pRet, err := slimcap.BuildPacket(
+						net.ParseIP(fmt.Sprintf("4.5.6.%d", count%254+1)),
+						net.ParseIP(fmt.Sprintf("1.2.3.%d", (count+1)%254+1)),
+						uint16(count+1)%65535,
+						uint16(count)%65535,
+						6, []byte{byte(count), byte(count)}, byte(count)%5, count+1)
+					require.Nil(t, err)
+
+					require.Nil(t, mockSrc.AddPacket(pRet))
+					count++
+				}
 			}
 		} else {
 			srcIP, dstIP := net.ParseIP("1.2.3.4"), net.ParseIP("4.5.6.7")
@@ -117,9 +136,25 @@ func setupSyntheticUnblockingSource(t testing.TB, randomize bool) func(c *captur
 				80,
 				6, []byte{1, 2, 3, 4}, slimcap.PacketOutgoing, 128)
 			require.Nil(t, err)
+			pRet, err := slimcap.BuildPacket(
+				dstIP,
+				srcIP,
+				80,
+				55555,
+				6, []byte{1, 2, 3, 4}, slimcap.PacketThisHost, 128)
+			require.Nil(t, err)
 
-			for mockSrc.CanAddPackets() {
+			for {
+				if !mockSrc.CanAddPackets() {
+					break
+				}
 				require.Nil(t, mockSrc.AddPacket(p))
+				if addReturn {
+					if !mockSrc.CanAddPackets() {
+						break
+					}
+					require.Nil(t, mockSrc.AddPacket(pRet))
+				}
 			}
 		}
 

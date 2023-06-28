@@ -21,10 +21,19 @@ type Server struct {
 	// TODO: authorize API access
 	keys []string
 
+	debug bool
+
 	addr string
 
 	srv    *http.Server
 	router *gin.Engine
+}
+
+// WithDebugMode runs the gin server in debug mode (e.g. not setting the release mode)
+func WithDebugMode(b bool) Option {
+	return func(server *Server) {
+		server.debug = b
+	}
 }
 
 func NewServer(addr string, resolver hosts.Resolver, querier distributed.Querier, opts ...Option) *Server {
@@ -42,6 +51,10 @@ func NewServer(addr string, resolver hosts.Resolver, querier distributed.Querier
 	server.router = router
 	for _, opt := range opts {
 		opt(server)
+	}
+
+	if !server.debug {
+		gin.SetMode(gin.ReleaseMode)
 	}
 
 	server.registerMiddlewares()

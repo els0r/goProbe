@@ -33,7 +33,7 @@ type mockIface struct {
 	src          *afring.MockSource
 	tracking     *mockTracking
 	flows        *map[capturetypes.EPHash]types.Counters
-	sourceInitFn func(c *capture.Capture) (slimcap.Source, error)
+	sourceInitFn func(c *capture.Capture) (slimcap.SourceZeroCopy, error)
 
 	sync.RWMutex
 }

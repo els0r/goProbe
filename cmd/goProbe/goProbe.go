@@ -119,7 +119,13 @@ func main() {
 	// configure api server
 	var (
 		apiServer  *server.Server
-		apiOptions = []server.Option{server.WithDBPath(config.DB.Path)}
+		apiOptions = []server.Option{
+			server.WithDBPath(config.DB.Path),
+			// Set the release mode of GIN depending on the log level
+			server.WithDebugMode(
+				logging.LevelFromString(config.Logging.Level) == logging.LevelDebug,
+			),
+		}
 	)
 
 	// if config.API.Metrics {
@@ -135,31 +141,11 @@ func main() {
 	// 	apiOptions = append(apiOptions, api.WithTimeout(config.API.Timeout))
 	// }
 
-	// run go-routine to register with discovery service
-	// var (
-	// 	discoveryConfigUpdate chan *discovery.Config
-	// 	discoveryConfig       *discovery.Config
-	// )
-	// if config.API.Discovery != nil {
-	// 	var clientOpts []discovery.Option
-	// 	if config.API.Discovery.SkipVerify {
-	// 		clientOpts = append(clientOpts, discovery.WithAllowSelfSignedCerts())
-	// 	}
-
-	// 	discoveryConfigUpdate = discovery.RunConfigRegistration(
-	// 		discovery.NewClient(config.API.Discovery.Registry, clientOpts...),
-	// 	)
-
-	// 	// allow API to update config
-	// 	apiOptions = append(apiOptions, api.WithDiscoveryConfigUpdate(discoveryConfigUpdate))
-	// }
-
 	// create server and start listening for requests
 	if config.API != nil {
-		addr := fmt.Sprintf("%s:%s", config.API.Host, config.API.Port)
-		apiServer = server.New(addr, captureManager, apiOptions...)
+		apiServer = server.New(config.API.Addr, captureManager, apiOptions...)
 
-		logger.With("addr", addr).Info("starting API server")
+		logger.With("addr", config.API.Addr).Info("starting API server")
 		go func() {
 			err = apiServer.Serve()
 			if err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -187,10 +173,6 @@ func main() {
 			logger.Errorf("forced shut down of goProbe API server: %v", err)
 		}
 	}
-
-	// if discoveryConfigUpdate != nil {
-	// 	close(discoveryConfigUpdate)
-	// }
 
 	captureManager.Close(fallbackCtx)
 	logger.Info("graceful shut down completed")

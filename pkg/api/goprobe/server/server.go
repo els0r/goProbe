@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"net"
 	"net/http"
 	"time"
 
@@ -25,20 +26,31 @@ type Server struct {
 	// TODO: authorize API access
 	keys []string
 
-	addr string
+	debug bool
 
-	srv    *http.Server
+	addr           string
+	unixSocketFile string
+
+	srv *http.Server
+
 	router *gin.Engine
 }
 
+// WithDBPath sets the path to the database directory
 func WithDBPath(path string) Option {
 	return func(server *Server) {
 		server.dbPath = path
 	}
 }
 
-// TODO: support for unix sockets
+// WithDebugMode runs the gin server in debug mode (e.g. not setting the release mode)
+func WithDebugMode(b bool) Option {
+	return func(server *Server) {
+		server.debug = b
+	}
+}
 
+// New creates a new API server
 func New(addr string, captureManager *capture.Manager, opts ...Option) *Server {
 	server := &Server{
 		addr:           addr,
@@ -51,9 +63,16 @@ func New(addr string, captureManager *capture.Manager, opts ...Option) *Server {
 
 	router.Use(gin.Recovery())
 
+	// make sure that unix sockets are handled if they are provided
+	server.unixSocketFile = api.ExtractUnixSocket(addr)
+
 	server.router = router
 	for _, opt := range opts {
 		opt(server)
+	}
+
+	if !server.debug {
+		gin.SetMode(gin.ReleaseMode)
 	}
 
 	server.registerMiddlewares()
@@ -82,8 +101,9 @@ func (server *Server) registerRoutes() {
 
 	// config
 	configRoutes := server.router.Group(gpapi.ConfigRoute)
-	configRoutes.POST("", server.postConfig)
-	configRoutes.POST("/:"+ifaceKey, server.postConfig)
+	configRoutes.GET("", server.getConfig)
+	configRoutes.GET("/:"+ifaceKey, server.getConfig)
+	configRoutes.PUT("", server.putConfig)
 }
 
 const headerTimeout = 30 * time.Second
@@ -91,10 +111,21 @@ const headerTimeout = 30 * time.Second
 // Serve starts the API server after adding additional (optional) routes
 func (server *Server) Serve() error {
 	server.srv = &http.Server{
-		Addr:              server.addr,
-		Handler:           server.router,
+		Handler:           server.router.Handler(),
 		ReadHeaderTimeout: headerTimeout,
 	}
+
+	// listen on UNIX socket
+	if server.unixSocketFile != "" {
+		listener, err := net.Listen("unix", server.unixSocketFile)
+		if err != nil {
+			return err
+		}
+		return server.srv.Serve(listener)
+	}
+
+	// listen on address
+	server.srv.Addr = server.addr
 	return server.srv.ListenAndServe()
 }
 

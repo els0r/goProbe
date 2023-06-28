@@ -33,31 +33,25 @@ func (d Direction) IsConfidenceHigh() bool {
 
 // Enumeration of the most common IP protocols
 const (
-	ICMP   byte = 0x01 //  1
-	TCP         = 0x06 //  6
-	UDP         = 0x11 // 17
-	ESP         = 0x32 // 50
-	ICMPv6      = 0x3A // 58
-
+	ICMP   = 0x01 // ICMP : 1
+	TCP    = 0x06 // TCP :  6
+	UDP    = 0x11 // UDP : 17
+	ESP    = 0x32 // ESP : 50
+	ICMPv6 = 0x3A // ICMPv6 : 58
 )
 
-// GPPacket stores all relevant packet details for a flow
-type GPPacket struct {
-	// packet size
-	NumBytes uint32
+// EPHash is a typedef that allows us to replace the type of hash
+type EPHash [37]byte
 
-	// packet inbound or outbound on interface
-	DirInbound bool
+// Reverse calculates the reverse of an EPHash (i.e. source / destination switched)
+func (h EPHash) Reverse() (rev EPHash) {
+	copy(rev[0:16], h[16:32])
+	copy(rev[16:32], h[0:16])
+	copy(rev[32:34], h[34:36])
+	copy(rev[34:36], h[32:34])
+	rev[36] = h[36]
 
-	// flag to easily determine if a packet is IPv4 or IPv6
-	IsIPv4 bool
-
-	// packet descriptors / hashes
-	EPHash        EPHash
-	EPHashReverse EPHash
-
-	// Auxilliary data (protocol dependent) for further analysis
-	AuxInfo byte
+	return
 }
 
 // ClassifyPacketDirection is responsible for running a variety of heuristics on the packet
@@ -75,17 +69,18 @@ type GPPacket struct {
 //	2: if packet direction is "response" (with high confidence)
 //	3: if packet direction is "request" (with low confidence -> continue to assess)
 //	4: if packet direction is "response" (with low confidence -> continue to assess)
-func ClassifyPacketDirection(packet *GPPacket) Direction {
+func ClassifyPacketDirection(epHash EPHash, isIPv4 bool, auxInfo byte) Direction {
+
 	// Check IP protocol
-	switch packet.EPHash[36] {
+	switch epHash[36] {
 	case TCP:
-		return classifyTCP(packet)
+		return classifyTCP(epHash, auxInfo)
 	case UDP:
-		return classifyUDP(packet)
+		return classifyUDP(epHash, isIPv4)
 	case ICMP:
-		return classifyICMPv4(packet)
+		return classifyICMPv4(auxInfo)
 	case ICMPv6:
-		return classifyICMPv6(packet)
+		return classifyICMPv6(epHash, auxInfo)
 	default:
 	}
 
@@ -98,9 +93,10 @@ const (
 	tcpFlagACK = 0x10
 )
 
-func classifyTCP(packet *GPPacket) Direction {
+func classifyTCP(epHash EPHash, tcpFlags byte) Direction {
+
 	// Use the TCP handshake to determine the direction
-	if tcpFlags := packet.AuxInfo; tcpFlags != 0x00 {
+	if tcpFlags != 0x00 {
 
 		// Handshake stage
 		if tcpFlags&tcpFlagSYN != 0 {
@@ -115,60 +111,81 @@ func classifyTCP(packet *GPPacket) Direction {
 		}
 	}
 
-	return classifyByPorts(packet)
+	return classifyByPorts(epHash)
 }
 
-func classifyUDP(packet *GPPacket) Direction {
-	// handle broadcast / multicast addresses (we do not need to check the
+func classifyUDP(epHash EPHash, isIPv4 bool) Direction {
+
+	// Handle broadcast / multicast addresses (we do not need to check the
 	// inverse direction because it won't be in multicast format)
-	if isBroadcastMulticast(packet.EPHash[16:32], packet.IsIPv4) {
+	if isBroadcastMulticast(epHash[16:32], isIPv4) {
 		return DirectionRemains
 	}
 
-	return classifyByPorts(packet)
+	return classifyByPorts(epHash)
 }
 
-func classifyICMPv4(packet *GPPacket) Direction {
-	// Check the ICMPv4 Type parameter
-	switch packet.AuxInfo {
+const (
+	icmpV4EchoReply              = 0x00
+	icmpV4DestinationUnreachable = 0x03
+	icmpV4EchoRrequest           = 0x08
+	icmpV4TimeExceeded           = 0x0B
+	icmpV4ParameterProblem       = 0x0C
+	icmpV4TimestampRequest       = 0x0D
+	icmpV4TimestampReply         = 0x0E
+)
 
-	// EchoReply, DestinationUnreachable, TimeExceeded, ParameterProblem, TimestampReply
-	case 0x00, 0x03, 0x0B, 0x0C, 0x0E:
+func classifyICMPv4(icmpType byte) Direction {
+
+	// Check the ICMPv4 Type parameter
+	switch icmpType {
+
+	// Reply-type ICMP v4 messages
+	case icmpV4EchoReply, icmpV4DestinationUnreachable, icmpV4TimeExceeded, icmpV4ParameterProblem, icmpV4TimestampReply:
 		return DirectionReverts
 
-	// EchoRrequest, TimestampRequest
-	case 0x08, 0x0D:
+	// Request-type ICMP v4 messages
+	case icmpV4EchoRrequest, icmpV4TimestampRequest:
 		return DirectionRemains
 	}
 
 	return DirectionUnknown
 }
 
-func classifyICMPv6(packet *GPPacket) Direction {
-	// handle broadcast / multicast addresses (we do not need to check the
+const (
+	icmpV6EchoReply              = 0x81
+	icmpV6DestinationUnreachable = 0x01
+	icmpV6TimeExceeded           = 0x03
+	icmpV6ParameterProblem       = 0x04
+	icmpV6EchoRrequest           = 0x80
+)
+
+func classifyICMPv6(epHash EPHash, icmpType byte) Direction {
+
+	// Handle broadcast / multicast addresses (we do not need to check the
 	// inverse direction because it won't be in multicast format)
-	if isBroadcastMulticast(packet.EPHash[16:32], packet.IsIPv4) {
+	if isBroadcastMulticast(epHash[16:32], false) {
 		return DirectionRemains
 	}
 
 	// Check the ICMPv6 Type parameter
-	switch packet.AuxInfo {
+	switch icmpType {
 
-	// EchoReply, DestinationUnreachable, TimeExceeded, ParameterProblem
-	case 0x81, 0x01, 0x03, 0x04:
+	// Reply-type ICMP v6 messages
+	case icmpV6EchoReply, icmpV6DestinationUnreachable, icmpV6TimeExceeded, icmpV6ParameterProblem:
 		return DirectionReverts
 
-	// EchoRequest
-	case 0x80:
+	// Request-type ICMP v6 messages
+	case icmpV6EchoRrequest:
 		return DirectionRemains
 	}
 
 	return DirectionUnknown
 }
 
-func classifyByPorts(packet *GPPacket) Direction {
-	sport := uint16(packet.EPHash[34])<<8 | uint16(packet.EPHash[35])
-	dport := uint16(packet.EPHash[32])<<8 | uint16(packet.EPHash[33])
+func classifyByPorts(epHash EPHash) Direction {
+	sport := uint16(epHash[34])<<8 | uint16(epHash[35])
+	dport := uint16(epHash[32])<<8 | uint16(epHash[33])
 
 	// Source port is ephemeral
 	if isEphemeralPort(sport) {

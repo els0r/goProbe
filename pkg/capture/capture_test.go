@@ -10,6 +10,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"unsafe"
 
 	"github.com/els0r/goProbe/cmd/goProbe/config"
 	"github.com/els0r/goProbe/pkg/capture/capturetypes"
@@ -24,9 +25,11 @@ import (
 const randSeed = 10000
 
 var defaultMockIfaceConfig = config.CaptureConfig{
-	Promisc:             false,
-	RingBufferBlockSize: config.DefaultRingBufferSize,
-	RingBufferNumBlocks: 4,
+	Promisc: false,
+	RingBuffer: &config.RingBufferConfig{
+		BlockSize: config.DefaultRingBufferSize,
+		NumBlocks: 4,
+	},
 }
 
 type testMockSrc struct {
@@ -71,7 +74,7 @@ func testConcurrentMethodAccess(t *testing.T, nIfaces, nIterations int) {
 	if err != nil {
 		panic(err)
 	}
-	defer require.Nil(t, os.RemoveAll(tempDir))
+	defer os.RemoveAll(tempDir)
 
 	// Build / initialize mock sources for all interfaces
 	testMockSrcs := make(testMockSrcs)
@@ -86,7 +89,7 @@ func testConcurrentMethodAccess(t *testing.T, nIfaces, nIterations int) {
 	// Initialize the CaptureManager
 	captureManager := NewManager(
 		writeout.NewGoDBHandler(tempDir, encoders.EncoderTypeLZ4),
-		WithSourceInitFn(func(c *Capture) (capture.Source, error) {
+		WithSourceInitFn(func(c *Capture) (capture.SourceZeroCopy, error) {
 			src, exists := testMockSrcs[c.Iface()]
 			if !exists {
 				return nil, fmt.Errorf("failed to initialize missing interface %s", c.Iface())
@@ -172,7 +175,8 @@ func TestMockPacketCapturePerformance(t *testing.T) {
 	for mockSrc.CanAddPackets() {
 		require.Nil(t, mockSrc.AddPacket(testPacket))
 	}
-	errChan := mockSrc.Run(time.Microsecond)
+	errChan, err := mockSrc.Run(time.Microsecond)
+	require.Nil(t, err)
 
 	runtime := 10 * time.Second
 	mockC.process(ctx)
@@ -184,11 +188,67 @@ func TestMockPacketCapturePerformance(t *testing.T) {
 	mockC.lock()
 	flows := mockC.flowLog.Flows()
 	for _, v := range flows {
-		fmt.Printf("Packets processed after %v: %d (%v/pkt)\n", runtime, v.PacketsSent(), runtime/time.Duration(v.PacketsSent()))
+		fmt.Printf("Packets processed after %v: %d (%v/pkt)\n", runtime, v.packetsSent, runtime/time.Duration(v.packetsSent))
 	}
 	mockC.unlock()
 
 	require.Nil(t, mockC.close())
+}
+
+func BenchmarkRotation(b *testing.B) {
+
+	nFlows := uint64(100000)
+
+	pkt, err := capture.BuildPacket(
+		net.ParseIP("1.2.3.4"),
+		net.ParseIP("4.5.6.7"),
+		1,
+		2,
+		17, []byte{1, 2}, capture.PacketOutgoing, 128)
+
+	require.Nil(b, err)
+	ipLayer := pkt.IPLayer()
+
+	flowLog := NewFlowLog()
+	for i := uint64(0); i < nFlows; i++ {
+		*(*uint64)(unsafe.Pointer(&ipLayer[16])) = i
+		require.Nil(b, flowLog.Add(ipLayer, capture.PacketOutgoing, 128))
+	}
+	for _, flow := range flowLog.flowMap {
+		flow.directionConfidenceHigh = true
+	}
+
+	b.Run("rotation", func(b *testing.B) {
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			testLog := flowLog.clone()
+
+			// Run best-case scenario (keep all flows)
+			aggMap := testLog.transferAndAggregate()
+			require.EqualValues(b, nFlows, len(testLog.flowMap))
+			require.EqualValues(b, nFlows, aggMap.Len())
+
+			// Run worst-case scenario (keep no flows)
+			aggMap = testLog.transferAndAggregate()
+			require.EqualValues(b, 0, len(testLog.flowMap))
+			require.EqualValues(b, 0, aggMap.Len())
+		}
+	})
+
+	b.Run("post_add", func(b *testing.B) {
+		testLog := flowLog.clone()
+
+		testLog.transferAndAggregate()
+		testLog.transferAndAggregate()
+
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			require.Nil(b, testLog.Add(pkt.IPLayer(), capture.PacketOutgoing, 128))
+		}
+	})
+
 }
 
 func testDeadlockLowTraffic(t *testing.T, maxPkts int) {
@@ -256,7 +316,8 @@ func testDeadlockHighTraffic(t *testing.T) {
 	for mockSrc.CanAddPackets() {
 		require.Nil(t, mockSrc.AddPacket(testPacket))
 	}
-	errChan := mockSrc.Run(time.Microsecond)
+	errChan, err := mockSrc.Run(time.Microsecond)
+	require.Nil(t, err)
 
 	mockC.process(ctx)
 
@@ -293,7 +354,7 @@ func newMockCapture(src capture.SourceZeroCopy) *Capture {
 	return &Capture{
 		iface:         src.Link().Name,
 		capLock:       newCaptureLock(),
-		flowLog:       capturetypes.NewFlowLog(),
+		flowLog:       NewFlowLog(),
 		errMap:        make(map[string]int),
 		captureHandle: src,
 	}
@@ -321,5 +382,8 @@ func initMockSrc(t *testing.T, iface string) (*afring.MockSourceNoDrain, <-chan 
 		require.Nil(t, mockSrc.AddPacket(testPacket))
 	}
 
-	return mockSrc, mockSrc.Run(100 * time.Millisecond)
+	errChan, err := mockSrc.Run(100 * time.Millisecond)
+	require.Nil(t, err)
+
+	return mockSrc, errChan
 }

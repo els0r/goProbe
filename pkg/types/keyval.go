@@ -36,11 +36,7 @@ func NewV4KeyStatic(sip, dip [4]byte, dport []byte, proto byte) Key {
 // NewV4Key creates and populates a new key for IPv4
 func NewV4Key(sip, dip, dport []byte, proto byte) (key Key) {
 	key = NewEmptyV4Key()
-
-	key.PutSip(sip)
-	key.PutDip(dip)
-	key.PutDport(dport)
-	key.PutProto(proto)
+	key.PutAllV4(sip, dip, dport, proto)
 
 	return
 }
@@ -58,11 +54,7 @@ func NewV6KeyStatic(sip, dip [16]byte, dport []byte, proto byte) Key {
 // NewV6Key creates and populates a new key for IPv6
 func NewV6Key(sip, dip, dport []byte, proto byte) (key Key) {
 	key = NewEmptyV6Key()
-
-	key.PutSip(sip)
-	key.PutDip(dip)
-	key.PutDport(dport)
-	key.PutProto(proto)
+	key.PutAllV6(sip, dip, dport, proto)
 
 	return
 }
@@ -75,15 +67,10 @@ func NewKey(sip, dip, dport []byte, proto byte) (key Key) {
 	}
 
 	if len(sip) == IPv4Width {
-		key = NewEmptyV4Key()
+		key = NewV4Key(sip, dip, dport, proto)
 	} else {
-		key = NewEmptyV6Key()
+		key = NewV6Key(sip, dip, dport, proto)
 	}
-
-	key.PutSip(sip)
-	key.PutDip(dip)
-	key.PutDport(dport)
-	key.PutProto(proto)
 
 	return
 }
@@ -111,22 +98,30 @@ func (k Key) Len() int {
 	return len(k)
 }
 
+// PutAllV4 stores all elements into an existing key (assuming it is an IPv4 key)
+func (k Key) PutAllV4(sip, dip, dport []byte, proto byte) {
+	k.PutSip(sip)
+	k.PutDipV4(dip)
+	k.PutDportV4(dport)
+	k.PutProtoV4(proto)
+}
+
+// PutAllV6 stores all elements into an existing key (assuming it is an IPv6 key)
+func (k Key) PutAllV6(sip, dip, dport []byte, proto byte) {
+	k.PutSip(sip)
+	k.PutDipV6(dip)
+	k.PutDportV6(dport)
+	k.PutProtoV6(proto)
+}
+
 // PutDport stores a destination port in the key
 func (k Key) PutDport(dport []byte) {
-	if k.IsIPv4() {
-		copy(k[dportPosIPv4:dportPosIPv4+DPortWidth], dport)
-	} else {
-		copy(k[dportPosIPv6:dportPosIPv6+DPortWidth], dport)
-	}
+	k.PutDportV(dport, k.IsIPv4())
 }
 
 // PutProto stores a protocol in the key
 func (k Key) PutProto(proto byte) {
-	if k.IsIPv4() {
-		k[protoPosIPv4] = proto
-	} else {
-		k[protoPosIPv6] = proto
-	}
+	k.PutProtoV(proto, k.IsIPv4())
 }
 
 // PutSip stores a source IP in the key
@@ -136,11 +131,64 @@ func (k Key) PutSip(sip []byte) {
 
 // PutDip stores a destination IP in the key
 func (k Key) PutDip(dip []byte) {
-	if k.IsIPv4() {
-		copy(k[dipPosIPv4:dipPosIPv4+IPv4Width], dip)
+	k.PutDipV(dip, k.IsIPv4())
+}
+
+// PutDipV stores a destination IP in the key (depending on the IP protocol version)
+func (k Key) PutDipV(dip []byte, isIPv4 bool) {
+	if isIPv4 {
+		k.PutDipV4(dip)
 	} else {
-		copy(k[dipPosIPv6:dipPosIPv6+IPv6Width], dip)
+		k.PutDipV6(dip)
 	}
+}
+
+// PutDportV stores a destination port in the key (depending on the IP protocol version)
+func (k Key) PutDportV(dport []byte, isIPv4 bool) {
+	if isIPv4 {
+		k.PutDportV4(dport)
+	} else {
+		k.PutDportV6(dport)
+	}
+}
+
+// PutProtoV stores a protocol in the key (depending on the IP protocol version)
+func (k Key) PutProtoV(proto byte, isIPv4 bool) {
+	if isIPv4 {
+		k.PutProtoV4(proto)
+	} else {
+		k.PutProtoV6(proto)
+	}
+}
+
+// PutDportV4 stores a destination port in the key (assuming it is an IPv4 key)
+func (k Key) PutDportV4(dport []byte) {
+	copy(k[dportPosIPv4:dportPosIPv4+DPortWidth], dport)
+}
+
+// PutProtoV4 stores a protocol in the key (assuming it is an IPv4 key)
+func (k Key) PutProtoV4(proto byte) {
+	k[protoPosIPv4] = proto
+}
+
+// PutDipV4 stores a destination IP in the key (assuming it is an IPv4 key)
+func (k Key) PutDipV4(dip []byte) {
+	copy(k[dipPosIPv4:dipPosIPv4+IPv4Width], dip)
+}
+
+// PutDportV6 stores a destination port in the key (assuming it is an IPv6 key)
+func (k Key) PutDportV6(dport []byte) {
+	copy(k[dportPosIPv6:dportPosIPv6+DPortWidth], dport)
+}
+
+// PutProtoV6 stores a protocol in the key (assuming it is an IPv6 key)
+func (k Key) PutProtoV6(proto byte) {
+	k[protoPosIPv6] = proto
+}
+
+// PutDipV6 stores a destination IP in the key (assuming it is an IPv6 key)
+func (k Key) PutDipV6(dip []byte) {
+	copy(k[dipPosIPv6:dipPosIPv6+IPv6Width], dip)
 }
 
 // GetDport retrieves the destination port from the key
@@ -253,7 +301,7 @@ func (e ExtendedKey) PutProto(proto byte) {
 	e.PutProtoV(proto, e.IsIPv4())
 }
 
-// PutDip stores a destination IP in the key (depending on the IP protocol version)
+// PutDipV stores a destination IP in the key (depending on the IP protocol version)
 func (e ExtendedKey) PutDipV(dip []byte, isIPv4 bool) {
 	if isIPv4 {
 		e.PutDipV4(dip)
@@ -262,7 +310,7 @@ func (e ExtendedKey) PutDipV(dip []byte, isIPv4 bool) {
 	}
 }
 
-// PutDport stores a destination port in the key (depending on the IP protocol version)
+// PutDportV stores a destination port in the key (depending on the IP protocol version)
 func (e ExtendedKey) PutDportV(dport []byte, isIPv4 bool) {
 	if isIPv4 {
 		e.PutDportV4(dport)
@@ -271,7 +319,7 @@ func (e ExtendedKey) PutDportV(dport []byte, isIPv4 bool) {
 	}
 }
 
-// PutProto stores a protocol in the key (depending on the IP protocol version)
+// PutProtoV stores a protocol in the key (depending on the IP protocol version)
 func (e ExtendedKey) PutProtoV(proto byte, isIPv4 bool) {
 	if isIPv4 {
 		e.PutProtoV4(proto)
@@ -280,32 +328,32 @@ func (e ExtendedKey) PutProtoV(proto byte, isIPv4 bool) {
 	}
 }
 
-// PutDip stores a destination IP in the key (assuming it is an IPv4 key)
+// PutDipV4 stores a destination IP in the key (assuming it is an IPv4 key)
 func (e ExtendedKey) PutDipV4(dip []byte) {
 	copy(e[dipPosIPv4:dipPosIPv4+IPv4Width], dip)
 }
 
-// PutDport stores a destination port in the key (assuming it is an IPv4 key)
+// PutDportV4 stores a destination port in the key (assuming it is an IPv4 key)
 func (e ExtendedKey) PutDportV4(dport []byte) {
 	copy(e[dportPosIPv4:dportPosIPv4+DPortWidth], dport)
 }
 
-// PutProto stores a protocol in the key (assuming it is an IPv4 key)
+// PutProtoV4 stores a protocol in the key (assuming it is an IPv4 key)
 func (e ExtendedKey) PutProtoV4(proto byte) {
 	e[protoPosIPv4] = proto
 }
 
-// PutDip stores a destination IP in the key (assuming it is an IPv6 key)
+// PutDipV6 stores a destination IP in the key (assuming it is an IPv6 key)
 func (e ExtendedKey) PutDipV6(dip []byte) {
 	copy(e[dipPosIPv6:dipPosIPv6+IPv6Width], dip)
 }
 
-// PutDport stores a destination port in the key (assuming it is an IPv6 key)
+// PutDportV6 stores a destination port in the key (assuming it is an IPv6 key)
 func (e ExtendedKey) PutDportV6(dport []byte) {
 	copy(e[dportPosIPv6:dportPosIPv6+DPortWidth], dport)
 }
 
-// PutProto stores a protocol in the key (assuming it is an IPv6 key)
+// PutProtoV6 stores a protocol in the key (assuming it is an IPv6 key)
 func (e ExtendedKey) PutProtoV6(proto byte) {
 	e[protoPosIPv6] = proto
 }

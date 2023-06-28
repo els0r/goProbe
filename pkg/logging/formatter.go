@@ -56,7 +56,7 @@ func (f *formatter) Debugf(format string, args ...interface{}) {
 	_ = f.l.Handler().Handle(enableCtx, r)
 }
 
-// Info will emit a log message with level warn
+// Info will emit a log message with level info
 func (f *formatter) Info(args ...interface{}) {
 	if !f.l.Enabled(enableCtx, slog.LevelInfo) {
 		return
@@ -101,7 +101,7 @@ func (f *formatter) Error(args ...interface{}) {
 	_ = f.l.Handler().Handle(enableCtx, r)
 }
 
-// Errorf allows writing of formatted messages to the logger. It's variadic
+// Errorf allows writing of formatted error messages to the logger. It's variadic
 // arguments will _not_ add key-value pairs to the message, but be used
 // as part of the msg's format string
 func (f *formatter) Errorf(format string, args ...interface{}) {

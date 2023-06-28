@@ -12,7 +12,7 @@
 package config
 
 import (
-	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -21,6 +21,8 @@ import (
 
 	"github.com/els0r/goProbe/pkg/defaults"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
+	json "github.com/json-iterator/go"
+	"gopkg.in/yaml.v3"
 )
 
 // demoKeys stores the API keys that should, under no circumstance, be used in production.
@@ -39,28 +41,31 @@ type validator interface {
 // Config stores goProbe's configuration
 type Config struct {
 	sync.Mutex
-	DB          DBConfig   `json:"db"`
-	Interfaces  Ifaces     `json:"interfaces"`
-	SyslogFlows bool       `json:"syslog_flows"`
-	Logging     LogConfig  `json:"logging"`
-	API         *APIConfig `json:"api"`
+	DB          DBConfig   `json:"db" yaml:"db"`
+	Interfaces  Ifaces     `json:"interfaces" yaml:"interfaces"`
+	SyslogFlows bool       `json:"syslog_flows" yaml:"syslog_flows"`
+	Logging     LogConfig  `json:"logging" yaml:"logging"`
+	API         *APIConfig `json:"api" yaml:"api"`
 }
 
 type DBConfig struct {
-	Path        string      `json:"path"`
-	EncoderType string      `json:"encoder_type"`
-	Permissions fs.FileMode `json:"permissions"`
+	Path        string      `json:"path" yaml:"path"`
+	EncoderType string      `json:"encoder_type" yaml:"encoder_type"`
+	Permissions fs.FileMode `json:"permissions" yaml:"permissions"`
 }
 
 type CaptureConfig struct {
-	Promisc bool `json:"promisc"`
+	Promisc bool `json:"promisc" yaml:"promisc"`
+	// used by the ring buffer in capture
+	RingBuffer *RingBufferConfig `json:"ring_buffer" yaml:"ring_buffer"`
+}
 
-	// used by the ring buffer
-	// RingBufferBlockSize specifies the size of a block, which defines, how many packets
+type RingBufferConfig struct {
+	// BlockSize specifies the size of a block, which defines, how many packets
 	// can be held within a block
-	RingBufferBlockSize int `json:"ring_buffer_block_size"`
-	// RingBufferNumBlocks guides how many blocks are part of the ring buffer
-	RingBufferNumBlocks int `json:"ring_buffer_num_blocks"`
+	BlockSize int `json:"block_size" yaml:"block_size"`
+	// NumBlocks guides how many blocks are part of the ring buffer
+	NumBlocks int `json:"num_blocks" yaml:"num_blocks"`
 }
 
 const (
@@ -73,28 +78,17 @@ type Ifaces map[string]CaptureConfig
 
 // LogConfig stores the logging configuration
 type LogConfig struct {
-	Destination string `json:"destination"`
-	Level       string `json:"level"`
-	Encoding    string `json:"encoding"`
+	Destination string `json:"destination" yaml:"destination"`
+	Level       string `json:"level" yaml:"level"`
+	Encoding    string `json:"encoding" yaml:"encoding"`
 }
 
 // APIConfig stores goProbe's API configuration
 type APIConfig struct {
-	Host      string           `json:"host"`
-	Port      string           `json:"port"`
-	Metrics   bool             `json:"metrics"`
-	Logging   bool             `json:"request_logging"`
-	Timeout   int              `json:"request_timeout"`
-	Keys      []string         `json:"keys"`
-	Discovery *DiscoveryConfig `json:"service_discovery,omitempty"`
-}
-
-// DiscoveryConfig stores access parameters in case goProbe should publish it's API configuration so other services can discover it
-type DiscoveryConfig struct {
-	Endpoint   string `json:"endpoint"`
-	Identifier string `json:"probe_identifier"`
-	Registry   string `json:"registry"`
-	SkipVerify bool   `json:"skip_verify"`
+	Addr    string   `json:"addr" yaml:"addr"`
+	Metrics bool     `json:"metrics" yaml:"metrics"`
+	Timeout int      `json:"request_timeout" yaml:"request_timeout"`
+	Keys    []string `json:"keys" yaml:"keys"`
 }
 
 // New creates a new configuration struct with default settings
@@ -105,15 +99,9 @@ func New() *Config {
 			EncoderType: "lz4",
 		},
 		Interfaces: make(Ifaces),
-		// default config is syslog
 		Logging: LogConfig{
-			Encoding: "console",
+			Encoding: "logfmt",
 			Level:    "info",
-		},
-		// default API config
-		API: &APIConfig{
-			Host: "localhost",
-			Port: "6060",
 		},
 	}
 }
@@ -122,9 +110,14 @@ func (l LogConfig) validate() error {
 	return nil
 }
 
+var (
+	errorNoAPIAddrSpecified = errors.New("no API address specified")
+	errorInvalidAPITimeout  = errors.New("the request timeout must be a positive number")
+)
+
 func (a APIConfig) validate() error {
-	if a.Port == "" {
-		return fmt.Errorf("No port specified for API server")
+	if a.Addr == "" {
+		return errorNoAPIAddrSpecified
 	}
 	for _, key := range a.Keys {
 		err := checkKeyConstraints(key)
@@ -134,56 +127,80 @@ func (a APIConfig) validate() error {
 	}
 	// check API key constraints
 	if a.Timeout < 0 {
-		return fmt.Errorf("The request timeout must be a positive number > 0")
-	}
-
-	// check discovery config
-	if a.Discovery != nil {
-		return a.Discovery.validate()
+		return errorInvalidAPITimeout
 	}
 	return nil
 }
 
-func (d DiscoveryConfig) validate() error {
-	if d.Endpoint == "" {
-		return fmt.Errorf("Each probe must publish it's config with a non-empty endpoint on which the API can be reached")
-	}
-	if d.Identifier == "" {
-		return fmt.Errorf("Each probe must publish it's config with a non-empty identifier if service discvoery is enabled")
-	}
-	if d.Registry == "" {
-		return fmt.Errorf("The registry endpoint (configuration store) needs to be specified. Usually this will be a FQDN or an IP:Port pair")
-	}
-	return nil
-}
+var (
+	errorNoRingBufferConfig = errors.New("no ring buffer configuration specified")
+)
 
 func (c CaptureConfig) validate() error {
-	if c.RingBufferBlockSize <= 0 {
-		return fmt.Errorf("ring buffer block size must be a postive number")
+	if c.RingBuffer == nil {
+		return errorNoRingBufferConfig
 	}
-	if c.RingBufferNumBlocks <= 0 {
-		return fmt.Errorf("ring buffer num blocks must be a postive number")
+	return c.RingBuffer.validate()
+}
+
+var (
+	errorRingBufferBlockSize = errors.New("ring buffer block size must be a postive number")
+	errorRingBufferNumBlocks = errors.New("ring buffer num blocks must be a postive number")
+)
+
+func (r *RingBufferConfig) validate() error {
+	if r.BlockSize <= 0 {
+		return errorRingBufferBlockSize
+	}
+	if r.NumBlocks <= 0 {
+		return errorRingBufferNumBlocks
 	}
 	return nil
 }
+
+// Equals compares c to cfg and returns true if all fields are identical
+func (c CaptureConfig) Equals(cfg CaptureConfig) bool {
+	return c.Promisc == cfg.Promisc && c.RingBuffer.Equals(cfg.RingBuffer)
+}
+
+// Equals compares r to cfg and returns true if all fields are identical
+func (r *RingBufferConfig) Equals(cfg *RingBufferConfig) bool {
+	if cfg == nil {
+		return false
+	}
+	return r.BlockSize == cfg.BlockSize && r.NumBlocks == cfg.NumBlocks
+}
+
+var (
+	errorNoInterfacesSpecified = errors.New("no interfaces specified")
+)
 
 func (i Ifaces) validate() error {
 	if len(i) == 0 {
-		return fmt.Errorf("No interfaces were specified")
+		return errorNoInterfacesSpecified
 	}
 
 	for iface, cc := range i {
 		err := cc.validate()
 		if err != nil {
-			return fmt.Errorf("Interface '%s' has invalid configuration: %s", iface, err)
+			return fmt.Errorf("%s: %w", iface, err)
 		}
 	}
 	return nil
 }
 
+// Validate validates the interfaces configuration
+func (i Ifaces) Validate() error {
+	return i.validate()
+}
+
+var (
+	errorEmptyDBPath = errors.New("database path must not be empty")
+)
+
 func (d DBConfig) validate() error {
 	if d.Path == "" {
-		return fmt.Errorf("Database path must not be empty")
+		return errorEmptyDBPath
 	}
 	_, err := encoders.GetTypeByString(d.EncoderType)
 	if err != nil {
@@ -199,8 +216,19 @@ func (c *Config) Validate() error {
 		c.DB,
 		c.Interfaces,
 		c.Logging,
-		c.API,
 	} {
+		err := section.validate()
+		if err != nil {
+			return err
+		}
+	}
+
+	// run all config subsection validators for optional sections
+	optValidators := []validator{}
+	if c.API != nil {
+		optValidators = append(optValidators, c.API)
+	}
+	for _, section := range optValidators {
 		err := section.validate()
 		if err != nil {
 			return err
@@ -221,14 +249,29 @@ func ParseFile(path string) (*Config, error) {
 	return Parse(fd)
 }
 
+var (
+	errorUnmarshalConfig = errors.New("failed to unmarshal config")
+)
+
 // Parse attempts to read the configuration from an io.Reader
 func Parse(src io.Reader) (*Config, error) {
 	config := New()
-	if err := json.NewDecoder(src).Decode(config); err != nil {
-		return nil, err
+
+	// we slurp the bytes form the src in order to unmarshal it into JSON or YAML
+	// TODO: protect this method from cases where src contains a very large file
+	b, err := io.ReadAll(src)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read bytes: %w", err)
 	}
 
-	err := config.Validate()
+	if jsonErr := json.Unmarshal(b, config); jsonErr != nil {
+		yamlErr := yaml.Unmarshal(b, config)
+		if yamlErr != nil {
+			return nil, fmt.Errorf("%w: JSON: %v; YAML: %v", errorUnmarshalConfig, jsonErr, yamlErr)
+		}
+	}
+
+	err = config.Validate()
 	if err != nil {
 		return nil, err
 	}
@@ -247,7 +290,5 @@ func checkKeyConstraints(key string) error {
 	if usedIt {
 		return fmt.Errorf("API key '%s' considered compromised: identical to demo-key in README.md", key)
 	}
-
-	// TODO: consider to check entropy of key
 	return nil
 }

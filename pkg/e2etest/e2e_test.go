@@ -49,12 +49,78 @@ const (
 var pcaps embed.FS
 
 var defaultCaptureConfig = config.CaptureConfig{
-	Promisc:             false,
-	RingBufferBlockSize: 1048576,
-	RingBufferNumBlocks: 4,
+	Promisc: false,
+	RingBuffer: &config.RingBufferConfig{
+		BlockSize: 1048576,
+		NumBlocks: 4,
+	},
 }
 
 var externalPCAPPath string
+
+func TestStartStop(t *testing.T) {
+	for i := 0; i < 1000; i++ {
+		testStartStop(t)
+	}
+}
+
+func testStartStop(t *testing.T) {
+
+	// Setup a temporary directory for the test DB
+	tempDir, err := os.MkdirTemp(os.TempDir(), "goprobe_e2e_startstop")
+	if err != nil {
+		panic(err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// We quit on encountering SIGUSR2 (instead of the ususal SIGTERM or SIGINT)
+	// to avoid killing the test
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGUSR2)
+	defer stop()
+
+	ifaces := config.Ifaces{
+		"mock1": defaultCaptureConfig,
+		"mock2": defaultCaptureConfig,
+	}
+
+	captureManager, err := capture.InitManager(ctx, &config.Config{
+		DB: config.DBConfig{
+			Path:        tempDir,
+			EncoderType: encoders.EncoderTypeLZ4.String(),
+			Permissions: goDB.DefaultPermissions,
+		},
+		Interfaces: ifaces,
+		Logging: config.LogConfig{
+			Destination: "logfmt",
+			Level:       "warn",
+		},
+	}, capture.WithSourceInitFn(func(c *capture.Capture) (slimcap.SourceZeroCopy, error) {
+		mockSrc, err := afring.NewMockSource(c.Iface(),
+			afring.CaptureLength(link.CaptureLengthMinimalIPv6Transport),
+			afring.Promiscuous(false),
+			afring.BufferSize(1024*1024, 4),
+		)
+		require.Nil(t, err)
+		return mockSrc, nil
+	}))
+	require.Nil(t, err)
+
+	// Wait until goProbe is done processing all packets, then kill it in the
+	// background via the SIGUSR2 signal
+	// Send the termination signal to goProbe
+	if err := syscall.Kill(syscall.Getpid(), syscall.SIGUSR2); err != nil {
+		panic(err)
+	}
+
+	// Wait for the interrupt signal
+	<-ctx.Done()
+
+	// Finish up
+	shutDownCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	captureManager.Close(shutDownCtx)
+
+	cancel()
+}
 
 func TestE2EBasic(t *testing.T) {
 	pcapData, err := pcaps.ReadFile(filepath.Join(testDataPath, defaultPcapTestFile))
@@ -64,16 +130,23 @@ func TestE2EBasic(t *testing.T) {
 }
 
 func TestE2EMultipleIfaces(t *testing.T) {
+	pcapData, err := pcaps.ReadFile(filepath.Join(testDataPath, defaultPcapTestFile))
+	require.Nil(t, err)
 
-	// Load identical data several times
-	ifaceData := make([][]byte, 5)
-	for i := 0; i < len(ifaceData); i++ {
-		pcapData, err := pcaps.ReadFile(filepath.Join(testDataPath, defaultPcapTestFile))
-		require.Nil(t, err)
-		ifaceData[i] = pcapData
+	for _, n := range []int{
+		2, 3, 5, 10, 21, 100,
+	} {
+		t.Run(fmt.Sprintf("%02d interfaces", n), func(t *testing.T) {
+
+			// Use identical data several times
+			ifaceData := make([][]byte, n)
+			for i := 0; i < len(ifaceData); i++ {
+				ifaceData[i] = pcapData
+			}
+
+			testE2E(t, ifaceData...)
+		})
 	}
-
-	testE2E(t, ifaceData...)
 }
 
 func TestE2EExtended(t *testing.T) {
@@ -157,12 +230,12 @@ func testE2E(t *testing.T, datasets ...[]byte) {
 	if err != nil {
 		panic(err)
 	}
-	defer require.Nil(t, os.RemoveAll(tempDir))
+	defer os.RemoveAll(tempDir)
 
 	// Define mock interfaces
 	var mockIfaces mockIfaces
 	for i, data := range datasets {
-		mockIfaces = append(mockIfaces, newPcapSource(t, fmt.Sprintf("mock%d", i+1), data))
+		mockIfaces = append(mockIfaces, newPcapSource(t, fmt.Sprintf("mock%03d", i+1), data))
 	}
 
 	// Run GoProbe
@@ -200,7 +273,7 @@ func testE2E(t *testing.T, datasets ...[]byte) {
 	require.EqualValues(t, refRows, resRows)
 }
 
-func runGoProbe(t *testing.T, testDir string, sourceInitFn func() (mockIfaces, func(c *capture.Capture) (slimcap.Source, error))) {
+func runGoProbe(t *testing.T, testDir string, sourceInitFn func() (mockIfaces, func(c *capture.Capture) (slimcap.SourceZeroCopy, error))) {
 
 	// We quit on encountering SIGUSR2 (instead of the ususal SIGTERM or SIGINT)
 	// to avoid killing the test
@@ -276,15 +349,15 @@ func runGoQuery(t *testing.T, testDir string, mockIfaces mockIfaces, maxEntries 
 	return res
 }
 
-func setupSources(t testing.TB, ifaces mockIfaces) func() (mockIfaces, func(c *capture.Capture) (slimcap.Source, error)) {
+func setupSources(t testing.TB, ifaces mockIfaces) func() (mockIfaces, func(c *capture.Capture) (slimcap.SourceZeroCopy, error)) {
 
-	fnMap := make(map[string]func(c *capture.Capture) (slimcap.Source, error))
+	fnMap := make(map[string]func(c *capture.Capture) (slimcap.SourceZeroCopy, error))
 	for _, mockIface := range ifaces {
 		fnMap[mockIface.name] = mockIface.sourceInitFn
 	}
 
-	return func() (mockIfaces, func(c *capture.Capture) (slimcap.Source, error)) {
-		return ifaces, func(c *capture.Capture) (slimcap.Source, error) {
+	return func() (mockIfaces, func(c *capture.Capture) (slimcap.SourceZeroCopy, error)) {
+		return ifaces, func(c *capture.Capture) (slimcap.SourceZeroCopy, error) {
 			mockIfaceFn, ok := fnMap[c.Iface()]
 			if !ok {
 				return nil, fmt.Errorf("unable to find interface `%s` in list of mock interfaces", c.Iface())
@@ -307,7 +380,7 @@ func newPcapSource(t testing.TB, name string, data []byte) (res *mockIface) {
 		RWMutex: sync.RWMutex{},
 	}
 
-	res.sourceInitFn = func(c *capture.Capture) (slimcap.Source, error) {
+	res.sourceInitFn = func(c *capture.Capture) (slimcap.SourceZeroCopy, error) {
 
 		res.Lock()
 		defer res.Unlock()
@@ -337,16 +410,16 @@ func newPcapSource(t testing.TB, name string, data []byte) (res *mockIface) {
 			defer res.Unlock()
 
 			pkt = slimcap.NewIPPacket(pkt, payload, pktType, int(totalLen), ipLayerOffset)
-			var p capturetypes.GPPacket
-			if err := capture.Populate(&p, pkt); err != nil {
+			hash, isIPv4, auxInfo, err := capture.ParsePacket(pkt.IPLayer(), pkt.Type(), pkt.TotalLen())
+			if err != nil {
 				res.tracking.nErr++
 				return
 			}
 
-			hash, hashReverse := p.EPHash, p.EPHashReverse
-			if direction := capturetypes.ClassifyPacketDirection(&p); direction != capturetypes.DirectionUnknown {
+			hashReverse := hash.Reverse()
+			if direction := capturetypes.ClassifyPacketDirection(hash, isIPv4, auxInfo); direction != capturetypes.DirectionUnknown {
 				if direction == capturetypes.DirectionReverts || direction == capturetypes.DirectionMaybeReverts {
-					hash, hashReverse = p.EPHashReverse, p.EPHash
+					hash, hashReverse = hashReverse, hash
 				}
 			}
 
@@ -354,7 +427,7 @@ func newPcapSource(t testing.TB, name string, data []byte) (res *mockIface) {
 			hashReverse[34], hashReverse[35] = 0, 0
 
 			if flow, exists := (*res.flows)[hash]; exists {
-				if p.DirInbound {
+				if pkt.Type() != slimcap.PacketOutgoing {
 					(*res.flows)[hash] = flow.Add(types.Counters{
 						PacketsRcvd: 1,
 						BytesRcvd:   uint64(totalLen),
@@ -366,7 +439,7 @@ func newPcapSource(t testing.TB, name string, data []byte) (res *mockIface) {
 					})
 				}
 			} else if flow, exists = (*res.flows)[hashReverse]; exists {
-				if p.DirInbound {
+				if pkt.Type() != slimcap.PacketOutgoing {
 					(*res.flows)[hashReverse] = flow.Add(types.Counters{
 						PacketsRcvd: 1,
 						BytesRcvd:   uint64(totalLen),
@@ -378,7 +451,7 @@ func newPcapSource(t testing.TB, name string, data []byte) (res *mockIface) {
 					})
 				}
 			} else {
-				if p.DirInbound {
+				if pkt.Type() != slimcap.PacketOutgoing {
 					(*res.flows)[hash] = types.Counters{
 						PacketsRcvd: 1,
 						BytesRcvd:   uint64(totalLen),
@@ -412,7 +485,7 @@ func newSyntheticSource(t testing.TB, name string, nPkts int) (res *mockIface) {
 		RWMutex:  sync.RWMutex{},
 	}
 
-	res.sourceInitFn = func(c *capture.Capture) (slimcap.Source, error) {
+	res.sourceInitFn = func(c *capture.Capture) (slimcap.SourceZeroCopy, error) {
 
 		res.Lock()
 		defer res.Unlock()
@@ -433,16 +506,16 @@ func newSyntheticSource(t testing.TB, name string, nPkts int) (res *mockIface) {
 			defer res.Unlock()
 
 			pkt := slimcap.NewIPPacket(nil, payload, pktType, int(totalLen), ipLayerOffset)
-			p := capturetypes.GPPacket{}
-			if err := capture.Populate(&p, pkt); err != nil {
+			hash, isIPv4, auxInfo, err := capture.ParsePacket(pkt.IPLayer(), pkt.Type(), pkt.TotalLen())
+			if err != nil {
 				res.tracking.nErr++
 				return
 			}
 
-			hash, hashReverse := p.EPHash, p.EPHashReverse
-			if direction := capturetypes.ClassifyPacketDirection(&p); direction != capturetypes.DirectionUnknown {
+			hashReverse := hash.Reverse()
+			if direction := capturetypes.ClassifyPacketDirection(hash, isIPv4, auxInfo); direction != capturetypes.DirectionUnknown {
 				if direction == capturetypes.DirectionReverts || direction == capturetypes.DirectionMaybeReverts {
-					hash, hashReverse = p.EPHashReverse, p.EPHash
+					hash, hashReverse = hashReverse, hash
 				}
 			}
 
@@ -450,7 +523,7 @@ func newSyntheticSource(t testing.TB, name string, nPkts int) (res *mockIface) {
 			hashReverse[34], hashReverse[35] = 0, 0
 
 			if flow, exists := (*res.flows)[hash]; exists {
-				if p.DirInbound {
+				if pkt.Type() != slimcap.PacketOutgoing {
 					(*res.flows)[hash] = flow.Add(types.Counters{
 						PacketsRcvd: 1,
 						BytesRcvd:   uint64(totalLen),
@@ -462,7 +535,7 @@ func newSyntheticSource(t testing.TB, name string, nPkts int) (res *mockIface) {
 					})
 				}
 			} else if flow, exists = (*res.flows)[hashReverse]; exists {
-				if p.DirInbound {
+				if pkt.Type() != slimcap.PacketOutgoing {
 					(*res.flows)[hashReverse] = flow.Add(types.Counters{
 						PacketsRcvd: 1,
 						BytesRcvd:   uint64(totalLen),
@@ -474,7 +547,7 @@ func newSyntheticSource(t testing.TB, name string, nPkts int) (res *mockIface) {
 					})
 				}
 			} else {
-				if p.DirInbound {
+				if pkt.Type() != slimcap.PacketOutgoing {
 					(*res.flows)[hash] = types.Counters{
 						PacketsRcvd: 1,
 						BytesRcvd:   uint64(totalLen),
