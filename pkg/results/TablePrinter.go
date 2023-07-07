@@ -618,8 +618,8 @@ func (t *TextTablePrinter) Footer(result *Result) {
 
 	// Summary
 	fmt.Fprintf(t.footwriter, "Timespan / Interface\t: [%s, %s] / %s\n",
-		result.Summary.TimeFirst.Format(types.DefaultTimeOutputFormat),
-		result.Summary.TimeLast.Format(types.DefaultTimeOutputFormat),
+		result.Summary.First.Format(types.DefaultTimeOutputFormat),
+		result.Summary.Last.Format(types.DefaultTimeOutputFormat),
 		strings.Join(result.Summary.Interfaces, ","))
 	fmt.Fprintf(t.footwriter, "Sorted by\t: %s\n",
 		describe(t.sort, t.direction))

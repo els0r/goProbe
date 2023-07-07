@@ -162,6 +162,31 @@ func parseRelativeTime(rtime string) (int64, error) {
 	return (time.Now().Unix() - secBackwards), nil
 }
 
+var (
+	errorInvalidTimeFormat   = errors.New("invalid time format")
+	errorInvalidTimeInterval = errors.New("invalid time interval")
+)
+
+// ParsetimeRange will run ParseTimeArgument for a range and validate if the interval is
+// non-zero
+func ParseTimeRange(firstStr, lastStr string) (first, last int64, err error) {
+	last, err = ParseTimeArgument(firstStr)
+	if err != nil {
+		err = fmt.Errorf("%w for --last: %s", errorInvalidTimeFormat, err)
+		return
+	}
+	first, err = ParseTimeArgument(lastStr)
+	if err != nil {
+		err = fmt.Errorf("%w for --first: %s", errorInvalidTimeFormat, err)
+		return
+	}
+	if last <= first {
+		err = fmt.Errorf("%w: the lower time bound cannot be greater than the upper time bound", errorInvalidTimeInterval)
+		return
+	}
+	return first, last, nil
+}
+
 // ParseTimeArgument is the entry point for external calls and converts valid formats to a unix timtestamp
 func ParseTimeArgument(timeString string) (int64, error) {
 	var (

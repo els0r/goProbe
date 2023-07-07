@@ -40,9 +40,9 @@ var (
 
 // TrafficMetadata denotes a serializable set of metadata information about traffic stats
 type TrafficMetadata struct {
-	NumV4Entries uint64
-	NumV6Entries uint64
-	NumDrops     int
+	NumV4Entries uint64 `json:"num_v4_entries"`
+	NumV6Entries uint64 `json:"num_v6_entries"`
+	NumDrops     int    `json:"num_drops"`
 }
 
 type Stats struct {
@@ -69,6 +69,13 @@ func (t TrafficMetadata) Sub(t2 TrafficMetadata) TrafficMetadata {
 	t.NumV4Entries -= t2.NumV4Entries
 	t.NumV6Entries -= t2.NumV6Entries
 	return t
+}
+
+// Add computes the sum of all counters and traffic metadata for the stats
+func (s Stats) Add(s2 Stats) Stats {
+	s.Counts = s.Counts.Add(s2.Counts)
+	s.Traffic = s.Traffic.Add(s2.Traffic)
+	return s
 }
 
 // Metadata denotes a serializable set of metadata (both globally and per-block)

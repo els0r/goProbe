@@ -34,15 +34,22 @@ type Query struct {
 	Condition  string   `json:"condition,omitempty"`
 }
 
+// TimeRange describes the interval for which data is queried and presented
+type TimeRange struct {
+	// First is the start of the interval
+	First time.Time `json:"time_first"`
+	// Last is the end of the interval
+	Last time.Time `json:"time_last"`
+}
+
 // Summary stores the total traffic volume and packets observed over the
 // queried range and the interfaces that were queried
 type Summary struct {
-	Interfaces []string       `json:"interfaces"`
-	TimeFirst  time.Time      `json:"time_first"`
-	TimeLast   time.Time      `json:"time_last"`
-	Totals     types.Counters `json:"totals"`
-	Timings    Timings        `json:"timings"`
-	Hits       Hits           `json:"hits"`
+	Interfaces []string `json:"interfaces"`
+	TimeRange
+	Totals  types.Counters `json:"totals"`
+	Timings Timings        `json:"timings"`
+	Hits    Hits           `json:"hits"`
 }
 
 type Status struct {
