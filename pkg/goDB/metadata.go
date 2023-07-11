@@ -25,38 +25,46 @@ type InterfaceMetadata struct {
 }
 
 // TableHeader constructs the table header for pretty printing metadata
-func (i *InterfaceMetadata) TableHeader(detailed bool) [2][]string {
-	r0 := []string{"", "", ""}
-	r1 := []string{"iface", "from", "to"}
+func (i *InterfaceMetadata) TableHeader(detailed bool) (headerRows [][]string) {
+	r1 := []string{"iface"}
+	fromTo := []string{"from", "to"}
+
 	if detailed {
-		r0 = append(r0, "bytes", "bytes", "packets", "packets", "# IPv4", "# IPv6", "")
-		r1 = append(r1, "received", "sent", "received", "sent", "flows", "flows", "drops")
+		r0 := []string{"", "packets", "packets", "bytes", "bytes", "# of", "# of", "", "", ""}
+		r1 = append(r1, "in", "out", "in", "out", "IPv4 flows", "IPv6 flows", "drops")
+
+		headerRows = append(headerRows, r0)
 	} else {
-		r0 = append(r0, "bytes", "packets", "#")
-		r1 = append(r1, "sent+rcvd", "sent+rcvd", "flows")
+		r1 = append(r1, "packets", "traffic", "flows")
 	}
-	return [2][]string{r0, r1}
+
+	r1 = append(r1, fromTo...)
+
+	headerRows = append(headerRows, r1)
+	return headerRows
 }
 
 // TableRow puts all attributes of the metadata into a row that can be used for table printing.
 // If detailed is false, the counts and metadata is summarized to their sum (e.g. IPv4 + IPv6 flows = NumFlows).
 // Drops are only printed in detail mode
 func (i *InterfaceMetadata) TableRow(detailed bool) []string {
-	str := []string{i.Iface, i.First.Format(types.DefaultTimeOutputFormat), i.Last.Format(types.DefaultTimeOutputFormat)}
+	str := []string{i.Iface}
+	fromTo := []string{i.First.Format(types.DefaultTimeOutputFormat), i.Last.Format(types.DefaultTimeOutputFormat)}
 	if detailed {
 		str = append(str,
+			formatting.Count(i.Counts.PacketsRcvd), formatting.Count(i.Counts.PacketsSent),
 			formatting.Size(i.Counts.BytesRcvd), formatting.Size(i.Counts.BytesSent),
-			formatting.Count(i.Counts.PacketsRcvd), formatting.Size(i.Counts.PacketsSent),
-			formatting.Count(i.Traffic.NumV4Entries), formatting.Size(i.Traffic.NumV6Entries),
+			formatting.Count(i.Traffic.NumV4Entries), formatting.Count(i.Traffic.NumV6Entries),
 			formatting.Count(uint64(i.Traffic.NumDrops)),
 		)
 	} else {
 		str = append(str,
-			formatting.Size(i.Counts.BytesRcvd+i.Counts.BytesSent),
 			formatting.Count(i.Counts.PacketsRcvd+i.Counts.PacketsSent),
+			formatting.Size(i.Counts.BytesRcvd+i.Counts.BytesSent),
 			formatting.Count(i.Traffic.NumFlows()),
 		)
 
 	}
+	str = append(str, fromTo...)
 	return str
 }

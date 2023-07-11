@@ -170,17 +170,25 @@ var (
 // ParsetimeRange will run ParseTimeArgument for a range and validate if the interval is
 // non-zero
 func ParseTimeRange(firstStr, lastStr string) (first, last int64, err error) {
-	last, err = ParseTimeArgument(firstStr)
-	if err != nil {
-		err = fmt.Errorf("%w for --last: %s", errorInvalidTimeFormat, err)
-		return
+	if firstStr != "" {
+		first, err = ParseTimeArgument(firstStr)
+		if err != nil {
+			err = fmt.Errorf("%w for --first: %s", errorInvalidTimeFormat, err)
+			return
+		}
 	}
-	first, err = ParseTimeArgument(lastStr)
-	if err != nil {
-		err = fmt.Errorf("%w for --first: %s", errorInvalidTimeFormat, err)
-		return
+
+	if lastStr == "" {
+		last = time.Now().Unix()
+	} else {
+		last, err = ParseTimeArgument(lastStr)
+		if err != nil {
+			err = fmt.Errorf("%w for --last: %s", errorInvalidTimeFormat, err)
+			return
+		}
 	}
-	if last <= first {
+
+	if first > last {
 		err = fmt.Errorf("%w: the lower time bound cannot be greater than the upper time bound", errorInvalidTimeInterval)
 		return
 	}

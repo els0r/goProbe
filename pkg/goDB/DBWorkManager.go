@@ -243,7 +243,7 @@ func skipNonMatching(isDir bool, name string) bool {
 }
 
 func (w *DBWorkManager) ReadMetadata(tfirst int64, tlast int64) (*InterfaceMetadata, error) {
-	aggMetadata := &InterfaceMetadata{}
+	aggMetadata := &InterfaceMetadata{Iface: w.iface}
 
 	query := NewMetadataQuery()
 

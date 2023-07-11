@@ -46,8 +46,8 @@ type TrafficMetadata struct {
 }
 
 type Stats struct {
-	Counts  types.Counters
-	Traffic TrafficMetadata
+	Counts  types.Counters  `json:"counts"`
+	Traffic TrafficMetadata `json:"traffic"`
 }
 
 // NumFlows returns the total number of flows

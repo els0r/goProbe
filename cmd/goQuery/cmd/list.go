@@ -29,20 +29,25 @@ are printed.
 Otherwise, all interface statistics are printed. By default, cumulative
 information is printed (sum of flows, sum of ingress and egress traffic)
 `,
-	RunE: func(_ *cobra.Command, args []string) error {
-		return listInterfaces(viper.GetString(conf.QueryDBPath), args...)
-	},
+	RunE: listInterfacesEntrypoint,
 }
 
 var detailed bool
 
 func init() {
-	flags := rootCmd.Flags()
+	rootCmd.AddCommand(listCmd)
+
+	flags := listCmd.Flags()
 
 	flags.BoolVar(&detailed, "detailed", false, `print more information in the list.
 
 If enabled, both directions for packet and byte counters will be printed, the flows will
-be broken up into IPv4 and IPv6 flows and the drops for that interface will be shown.`)
+be broken up into IPv4 and IPv6 flows and the drops for that interface will be shown.
+`)
+}
+
+func listInterfacesEntrypoint(cmd *cobra.Command, args []string) error {
+	return listInterfaces(viper.GetString(conf.QueryDBPath), args...)
 }
 
 // List interfaces for which data is available and show how many flows and
@@ -53,7 +58,6 @@ func listInterfaces(dbPath string, ifaces ...string) error {
 	// TODO: consider making this configurable
 	output := os.Stdout
 
-	fmt.Println("first", queryArgs.First, "last", queryArgs.Last)
 	first, last, err := query.ParseTimeRange(queryArgs.First, queryArgs.Last)
 	if err != nil {
 		return err
@@ -93,33 +97,42 @@ func listInterfaces(dbPath string, ifaces ...string) error {
 	}
 
 	var ifacesMetadata = make([]*goDB.InterfaceMetadata, 0, len(dbWorkerManagers))
-	for i, manager := range dbWorkerManagers {
+	for _, manager := range dbWorkerManagers {
 		manager := manager
 
-		ifacesMetadata[i], err = manager.ReadMetadata(first, last)
+		im, err := manager.ReadMetadata(first, last)
 		if err != nil {
 			return err
 		}
+		ifacesMetadata = append(ifacesMetadata, im)
 	}
 
 	if queryArgs.Format == "json" {
-		err := json.NewEncoder(output).Encode(ifacesMetadata)
-		if err != nil {
-			return err
-		}
+		return json.NewEncoder(output).Encode(ifacesMetadata)
 	}
 
+	// empty line before table header
+	fmt.Println()
+
 	// pretty print the results
-	return printInterfaceStats(output, ifacesMetadata, detailed)
+	err = printInterfaceStats(output, ifacesMetadata, detailed)
+	if err != nil {
+		return err
+	}
+
+	// empty line at bottom
+	fmt.Println()
+
+	return nil
 }
 
 const (
-	tableSep = '\t'
-	itemSep  = string(tableSep)
+	tableSep = ' '
+	itemSep  = "\t"
 )
 
 func printInterfaceStats(w io.Writer, ifaceMetadata []*goDB.InterfaceMetadata, detailed bool) error {
-	tw := tabwriter.NewWriter(w, 4, 4, 0, tableSep, tabwriter.AlignRight)
+	tw := tabwriter.NewWriter(w, 0, 4, 4, tableSep, tabwriter.AlignRight)
 
 	if len(ifaceMetadata) == 0 {
 		return errors.New("no metadata available for printing")
@@ -127,19 +140,31 @@ func printInterfaceStats(w io.Writer, ifaceMetadata []*goDB.InterfaceMetadata, d
 
 	headers := ifaceMetadata[0].TableHeader(detailed)
 
-	fmt.Fprintln(tw, strings.Join(headers[0], itemSep))
-	fmt.Fprintln(tw, strings.Join(headers[1], itemSep))
-
-	seps := make([]string, 0, len(headers[1]))
-	for _, header := range headers[1] {
-		seps = append(seps, strings.Repeat("-", len(header)))
+	for _, headerRow := range headers {
+		fmt.Fprintln(tw, strings.Join(headerRow, itemSep)+itemSep)
 	}
-	fmt.Fprintln(tw, strings.Join(seps, itemSep))
+
+	lowerHeaderRowInd := len(headers) - 1
+
+	// compute the number of dashes to print for the table header
+	fieldLengths := make([]int, len(headers[lowerHeaderRowInd]))
+	for _, header := range headers {
+		for i, field := range header {
+			if len(field) > fieldLengths[i] {
+				fieldLengths[i] = len(field)
+			}
+		}
+	}
+	seps := make([]string, 0, len(headers[lowerHeaderRowInd]))
+	for _, fieldLength := range fieldLengths {
+		seps = append(seps, strings.Repeat("-", fieldLength))
+	}
+	fmt.Fprintln(tw, strings.Join(seps, itemSep)+itemSep)
 
 	var totalsMetadata = &goDB.InterfaceMetadata{}
 
 	for _, metadata := range ifaceMetadata {
-		fmt.Fprintln(tw, strings.Join(metadata.TableRow(detailed), itemSep))
+		fmt.Fprintln(tw, strings.Join(metadata.TableRow(detailed), itemSep)+itemSep)
 
 		// sum across interfaces
 		totalsMetadata.Stats = totalsMetadata.Add(metadata.Stats)
@@ -149,14 +174,19 @@ func printInterfaceStats(w io.Writer, ifaceMetadata []*goDB.InterfaceMetadata, d
 	for i := range seps {
 		seps[i] = ""
 	}
-	fmt.Fprintln(tw, strings.Join(seps, itemSep))
+	fmt.Fprintln(tw, strings.Join(seps, itemSep)+itemSep)
 
 	// sum row
 	sumRow := totalsMetadata.TableRow(detailed)
 	// iface, from, to make no sense in the totals, so remove them
-	sumRow[0], sumRow[1], sumRow[2] = "", "", ""
+	sumRow[0] = "Total"
+	if detailed {
+		sumRow[8], sumRow[9] = "", ""
+	} else {
+		sumRow[4], sumRow[5] = "", ""
+	}
 
-	fmt.Fprintln(tw, strings.Join(sumRow, itemSep))
+	fmt.Fprintln(tw, strings.Join(sumRow, itemSep)+itemSep)
 
 	return tw.Flush()
 }

@@ -31,19 +31,24 @@ var cfgFile string
 var supportedCmds = "{QUERY TYPE|COLUMNS|admin|examples|list|version}"
 
 var rootCmd = &cobra.Command{
-	Use:           "goQuery [flags] [" + supportedCmds + "]",
-	Short:         helpBase,
-	Long:          helpBaseLong,
-	RunE:          entrypoint,
-	SilenceUsage:  true,
-	SilenceErrors: true,
+	Use:              "goQuery [flags] [" + supportedCmds + "]",
+	Short:            helpBase,
+	Long:             helpBaseLong,
+	RunE:             entrypoint,
+	Args:             validatePositionalArgs,
+	SilenceUsage:     true,
+	SilenceErrors:    true,
+	TraverseChildren: false,
 }
-
-// any commands other than query type will be hooked up to this command
-var subRootCmd = &cobra.Command{}
 
 func GetRootCmd() *cobra.Command {
 	return rootCmd
+}
+
+// this is a necessary re-routing, so that the tool can handle commands other than query
+// without complaining that that something like "sip,dip" cannot be found as a command
+func validatePositionalArgs(cmd *cobra.Command, args []string) error {
+	return cobra.ArbitraryArgs(cmd, args)
 }
 
 // Execute is the main entrypoint and runs the CLI tool
@@ -77,14 +82,10 @@ func init() {
 	rootCmd.InitDefaultHelpCmd()
 	rootCmd.InitDefaultHelpFlag()
 
-	subRootCmd.InitDefaultHelpCmd()
-	subRootCmd.InitDefaultHelpFlag()
-
 	flags := rootCmd.Flags()
 	pflags := rootCmd.PersistentFlags()
 
 	flags.BoolVarP(&cmdLineParams.In, "in", "", query.DefaultIn, helpMap["In"])
-	flags.BoolVarP(&cmdLineParams.List, "list", "", false, helpMap["List"])
 	flags.BoolVarP(&cmdLineParams.Out, "out", "", query.DefaultOut, helpMap["Out"])
 	flags.BoolVarP(&cmdLineParams.Sum, "sum", "", false, helpMap["Sum"])
 	flags.BoolVarP(&cmdLineParams.Version, "version", "v", false, "Print version information and exit\n")
@@ -237,7 +238,7 @@ func entrypoint(cmd *cobra.Command, args []string) error {
 
 	// handle the defaults for time
 	if queryArgs.First == "" {
-		// by default, go back one day in time
+		// by default, go back one month in time
 		queryArgs.First = time.Now().AddDate(0, -1, 0).Format(time.ANSIC)
 	}
 	if queryArgs.Last == "" {
@@ -265,21 +266,22 @@ func entrypoint(cmd *cobra.Command, args []string) error {
 			return nil
 		}
 
-		// attach subcommands
-		subRootCmd.AddCommand(
-			adminCmd,
-			exampleCmd,
-			listCmd,
-			versionCmd,
-		)
+		// // attach subcommands and flags
+		// subRootCmd.PersistentFlags().AddFlagSet(cmd.PersistentFlags())
+		// subRootCmd.AddCommand(
+		// 	adminCmd,
+		// 	exampleCmd,
+		// 	listCmd,
+		// 	versionCmd,
+		// )
 
-		// execute subcommands if possible
-		for _, c := range subRootCmd.Commands() {
-			if c.Name() == args[0] {
-				c.SetArgs(args[1:])
-				return c.Execute()
-			}
-		}
+		// // execute subcommands if possible
+		// for _, c := range subRootCmd.Commands() {
+		// 	if c.Name() == args[0] {
+		// 		c.SetArgs(args[1:])
+		// 		return c.Execute()
+		// 	}
+		// }
 
 		// if we didn't find a supported command, we assume this is the query type
 		queryArgs.Query = args[0]
