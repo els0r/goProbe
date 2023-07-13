@@ -31,14 +31,13 @@ var cfgFile string
 var supportedCmds = "{QUERY TYPE|COLUMNS|admin|examples|list|version}"
 
 var rootCmd = &cobra.Command{
-	Use:              "goQuery [flags] [" + supportedCmds + "]",
-	Short:            helpBase,
-	Long:             helpBaseLong,
-	RunE:             entrypoint,
-	Args:             validatePositionalArgs,
-	SilenceUsage:     true,
-	SilenceErrors:    true,
-	TraverseChildren: false,
+	Use:           "goQuery [flags] [" + supportedCmds + "]",
+	Short:         helpBase,
+	Long:          helpBaseLong,
+	RunE:          entrypoint,
+	Args:          validatePositionalArgs,
+	SilenceUsage:  true,
+	SilenceErrors: true,
 }
 
 func GetRootCmd() *cobra.Command {
@@ -175,6 +174,8 @@ goProbe.
 	pflags.String(conf.StoredQuery, "", "Load JSON serialized query arguments from disk and run them\n")
 	pflags.Duration(conf.QueryTimeout, query.DefaultQueryTimeout, "Abort query processing after timeout expires\n")
 
+	pflags.String(conf.LogLevel, logging.LevelWarn.String(), "log level (debug, info, warn, error, fatal, panic)")
+
 	pflags.StringVar(&cfgFile, "config", "", "Config file location\n")
 
 	_ = viper.BindPFlags(pflags)
@@ -183,7 +184,7 @@ goProbe.
 func initLogger() {
 	// since this is a command line tool, only warnings and errors should be printed and they
 	// shouldn't go to a dedicated file
-	err := logging.Init(logging.LevelWarn, logging.EncodingLogfmt,
+	err := logging.Init(logging.LevelFromString(viper.GetString(conf.LogLevel)), logging.EncodingLogfmt,
 		logging.WithVersion(version.Short()),
 		logging.WithOutput(os.Stdout),
 		logging.WithErrorOutput(os.Stderr),

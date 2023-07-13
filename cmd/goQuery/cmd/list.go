@@ -39,7 +39,7 @@ func init() {
 
 	flags := listCmd.Flags()
 
-	flags.BoolVar(&detailed, "detailed", false, `print more information in the list.
+	flags.BoolVarP(&detailed, "detailed", "v", false, `print more information in the list.
 
 If enabled, both directions for packet and byte counters will be printed, the flows will
 be broken up into IPv4 and IPv6 flows and the drops for that interface will be shown.

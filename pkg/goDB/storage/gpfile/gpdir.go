@@ -78,6 +78,13 @@ func (s Stats) Add(s2 Stats) Stats {
 	return s
 }
 
+// Sub computes the sum of all counters and traffic metadata for the stats
+func (s Stats) Sub(s2 Stats) Stats {
+	s.Counts = s.Counts.Sub(s2.Counts)
+	s.Traffic = s.Traffic.Sub(s2.Traffic)
+	return s
+}
+
 // Metadata denotes a serializable set of metadata (both globally and per-block)
 type Metadata struct {
 	BlockMetadata [types.ColIdxCount]*storage.BlockHeader
@@ -185,6 +192,11 @@ func (d *GPDir) Open(options ...Option) error {
 // NumIPv4EntriesAtIndex returns the number of IPv4 entries for a given block index
 func (d *GPDir) NumIPv4EntriesAtIndex(blockIdx int) uint64 {
 	return d.BlockTraffic[blockIdx].NumV4Entries
+}
+
+// NumIPv6EntriesAtIndex returns the number of IPv6 entries for a given block index
+func (d *GPDir) NumIPv6EntriesAtIndex(blockIdx int) uint64 {
+	return d.BlockTraffic[blockIdx].NumV6Entries
 }
 
 // ReadBlockAtIndex returns the block for a specified block index from the underlying GPFile
