@@ -134,8 +134,8 @@ func (m mockIfaces) BuildResults(t *testing.T, testDir string, resGoQuery result
 	}
 
 	// Copy summary values that cannot be reproduced by the synthetic test
-	res.Summary.TimeFirst = resGoQuery.Summary.TimeFirst
-	res.Summary.TimeLast = resGoQuery.Summary.TimeLast
+	res.Summary.First = resGoQuery.Summary.First
+	res.Summary.Last = resGoQuery.Summary.Last
 	res.Summary.Timings = resGoQuery.Summary.Timings
 
 	return res

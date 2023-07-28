@@ -93,6 +93,9 @@ func init() {
 	// subcommands
 	adminCmd.AddCommand(cleanCmd, wipeCmd)
 	adminCmd.SetHelpFunc(printAdminHelp)
+
+	// attach to root command
+	rootCmd.AddCommand(adminCmd)
 }
 
 func printAdminHelp(cmd *cobra.Command, args []string) {

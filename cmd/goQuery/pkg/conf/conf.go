@@ -12,6 +12,10 @@ const (
 
 	StoredQuery = "stored-query"
 
+	// logging
+	loggingKey = "logging"
+	LogLevel   = loggingKey + ".level"
+
 	// DNS settings
 	dnsKey               = "dns-resolution"
 	DNSResolutionEnabled = dnsKey + ".enabled"

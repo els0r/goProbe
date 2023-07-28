@@ -170,8 +170,8 @@ func (qr *QueryRunner) RunStatement(ctx context.Context, stmt *query.Statement) 
 		}
 	}
 
-	result.Summary.TimeFirst = tSpanFirst
-	result.Summary.TimeLast = tSpanLast
+	result.Summary.First = tSpanFirst
+	result.Summary.Last = tSpanLast
 
 	// spawn reader processing units and make them work on the individual DB blocks
 	// processing by interface is sequential, e.g. for multi-interface queries
