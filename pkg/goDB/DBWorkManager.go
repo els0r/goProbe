@@ -253,8 +253,6 @@ func (w *DBWorkManager) walkDB(tfirst, tlast int64, fn dbWalkFunc) (numDirs int,
 }
 
 func (w *DBWorkManager) ReadMetadata(tfirst int64, tlast int64) (*InterfaceMetadata, error) {
-	logger := logging.Logger()
-
 	aggMetadata := &InterfaceMetadata{Iface: w.iface}
 
 	query := NewMetadataQuery()
@@ -270,7 +268,10 @@ func (w *DBWorkManager) ReadMetadata(tfirst int64, tlast int64) (*InterfaceMetad
 	// workloads depends on how many directories have to be read
 	var curDir *gpfile.GPDir
 
+	var currentTimestamp int64
+
 	walkFunc := func(numDirs int, dayTimestamp int64) error {
+		currentTimestamp = dayTimestamp
 		curDir = gpfile.NewDir(w.dbIfaceDir, dayTimestamp, gpfile.ModeRead, gpFileOptions...)
 
 		err := curDir.Open()
@@ -284,8 +285,6 @@ func (w *DBWorkManager) ReadMetadata(tfirst int64, tlast int64) (*InterfaceMetad
 		// compute the metadata for the first day. If a "first" time argument is given,
 		// the partial day has to be computed
 		if numDirs == 0 {
-			logger.With("dir", curDir.Path()).Debug("handling first directory")
-
 			dirFirst, _ := curDir.TimeRange()
 			if tfirst >= dirFirst {
 				// subtract all entries that are smaller than w.tFirstCovered because they were added in the day loop
@@ -299,11 +298,6 @@ func (w *DBWorkManager) ReadMetadata(tfirst int64, tlast int64) (*InterfaceMetad
 					tFirstBlockInd = len(blocks)
 					w.tFirstCovered = curDir.BlockMetadata[0].BlockList[tFirstBlockInd].Timestamp
 				}
-
-				logger.With(
-					"blocks", len(curDir.BlockMetadata[0].BlockList),
-					"surplus", len(blocks),
-				).Debug("subtracting surplus blocks before tfirst")
 
 				aggMetadata, err = w.readMetadataAndEvaluate(curDir, query,
 					blocks, 0,
@@ -326,20 +320,15 @@ func (w *DBWorkManager) ReadMetadata(tfirst int64, tlast int64) (*InterfaceMetad
 
 	_, err := w.walkDB(tfirst, tlast, walkFunc)
 
-	logger.With("dir", curDir.Path()).Debug("handling last directory")
-
 	// compute the metadata for the last block. This will be partial if the last timestamp is smaller than the last
 	// block captured for the day
 	if curDir != nil {
-		logger.Debug("opening last directory")
+		curDir = gpfile.NewDir(w.dbIfaceDir, currentTimestamp, gpfile.ModeRead, gpFileOptions...)
 
 		if err := curDir.Open(); err != nil {
 			return nil, fmt.Errorf("failed to open last GPDir %s to ascertain query block timing: %w", curDir.Path(), err)
 		}
 		_, dirLast := curDir.TimeRange()
-
-		logger := logger.With("last", dirLast)
-		logger.Debug("checking last timestamp")
 
 		if tlast <= dirLast {
 			// subtract all entries that are smaller than w.tLastCovered because they were added in the day loop
@@ -347,12 +336,6 @@ func (w *DBWorkManager) ReadMetadata(tfirst int64, tlast int64) (*InterfaceMetad
 				blocks, offset = curDir.BlockMetadata[0].BlocksAfter(tlast)
 				tLastBlockInd  = len(curDir.BlockMetadata[0].BlockList) - len(blocks) - 1
 			)
-
-			logger.With(
-				"blocks", len(curDir.BlockMetadata[0].BlockList),
-				"surplus", len(blocks),
-				"offset", offset,
-			).Debug("subtracting surplus blocks after tlast")
 
 			aggMetadata, err = w.readMetadataAndEvaluate(curDir, query,
 				blocks, offset,
@@ -365,23 +348,12 @@ func (w *DBWorkManager) ReadMetadata(tfirst int64, tlast int64) (*InterfaceMetad
 			}
 			w.tLastCovered = curDir.BlockMetadata[0].BlockList[tLastBlockInd].Timestamp
 		} else {
-			logger.Debug("setting last covered timestamp to last")
 			w.tLastCovered = dirLast
 		}
 
-		logger.Debug("closing last directory")
-
-		// TODO: the tool will just get stuck here if the tfirst is in the last available directory
-		// for that interface
-		//
-		//	goquery --logging.level=debug -d /root/db-v4 -f '28.6.23 23:00'  list eth0
-		//
-		// This may be a related phenomenon to the panic observed further below
 		if err := curDir.Close(); err != nil {
 			return nil, fmt.Errorf("failed to close last GPDir %s after ascertaining query block timing: %w", curDir.Path(), err)
 		}
-
-		logger.Debug("last directory closed")
 	}
 
 	// assign time range of interface
@@ -407,17 +379,6 @@ func (w *DBWorkManager) readMetadataAndEvaluate(workDir *gpfile.GPDir, query *Qu
 		err                                                              error
 	)
 
-	// TODO: results in a panic
-	//
-	// panic: runtime error: index out of range [24] with length 0
-	// goroutine 1 [running]:
-	// github.com/els0r/goProbe/pkg/goDB/storage/gpfile.(*GPFile).ReadBlockAtIndex(0x4?, 0xc0000143a8?)
-	//         /usr/src/packages/src/sdwan/security/pkg/OSAGtmi/goProbe/pkg/goDB/storage/gpfile/gpfile.go:136 +0x60d
-	// github.com/els0r/goProbe/pkg/goDB/storage/gpfile.(*GPDir).ReadBlockAtIndex(0xc0000243c0, 0x4, 0x0?)
-	//
-	// 	goquery --logging.level=debug -d /root/db-v4 -f '28.6.23 23:00' -l '28.6.23 23:30:00' list eth0
-	//
-	// 7 blocks to evaluate, starts at 23:00:00, ends at 23:30:00. First relevant index for subtraction is 24
 	for b, block := range blocks {
 		ind := b + offset
 
@@ -430,7 +391,6 @@ func (w *DBWorkManager) readMetadataAndEvaluate(workDir *gpfile.GPDir, query *Qu
 		// Read the blocks from their files
 		for _, colIdx := range query.columnIndices {
 			// Read the block from the file
-			// fmt.Println(b, colIdx)
 			if colBlocks[colIdx], err = workDir.ReadBlockAtIndex(colIdx, ind); err != nil {
 				blockBroken = true
 				logger.With(
