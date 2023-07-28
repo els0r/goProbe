@@ -14,7 +14,7 @@ func GetInterfaces(dbPath string) ([]string, error) {
 
 	var ifaces []string
 	for _, dirent := range dirents {
-		if dirent.IsDir() && (dirent.Name() != "./" || dirent.Name() != "../") {
+		if dirent.IsDir() {
 			ifaces = append(ifaces, dirent.Name())
 		}
 	}

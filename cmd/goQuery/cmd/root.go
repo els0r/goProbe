@@ -267,23 +267,6 @@ func entrypoint(cmd *cobra.Command, args []string) error {
 			return nil
 		}
 
-		// // attach subcommands and flags
-		// subRootCmd.PersistentFlags().AddFlagSet(cmd.PersistentFlags())
-		// subRootCmd.AddCommand(
-		// 	adminCmd,
-		// 	exampleCmd,
-		// 	listCmd,
-		// 	versionCmd,
-		// )
-
-		// // execute subcommands if possible
-		// for _, c := range subRootCmd.Commands() {
-		// 	if c.Name() == args[0] {
-		// 		c.SetArgs(args[1:])
-		// 		return c.Execute()
-		// 	}
-		// }
-
 		// if we didn't find a supported command, we assume this is the query type
 		queryArgs.Query = args[0]
 	}
