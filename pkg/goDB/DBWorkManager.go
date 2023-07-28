@@ -171,7 +171,7 @@ func (w *DBWorkManager) CreateWorkerJobs(tfirst int64, tlast int64, query *Query
 }
 
 func skipNonMatching(isDir bool, name string) bool {
-	return !isDir || name == "./" || name == "../"
+	return !isDir
 }
 
 type dbWalkFunc func(numDirs int, dayTimestamp int64) error
