@@ -1,16 +1,36 @@
 package cmd
 
-var helpBase = `
-  goquery -i <interfaces> [-hax] [--in|--out|--sum] [-n <max_n>] [--resolve]
-  [-e txt|csv|json] [-d <db-path>] [-f <timestamp>] [-l <timestamp>]
-  [-c <conditions>] [-s <column>] ` + supportedCmds + `
+import (
+	"fmt"
 
+	"github.com/els0r/goProbe/cmd/goQuery/pkg/conf"
+)
+
+var usageBase = fmt.Sprintf(`goQuery -i <interfaces> [-h] [-c <conditions>] [-s <column>] [-a] [--in|--out|--sum] [-n <max_n>]
+  [-f|--%s <timestamp>] [-l|--%s <timestamp>] [-e|--%s txt|csv|json] %s
+  [-d|--%s <db-path>] [-q|--%s] [--%s] [--%s] [--%s]
+  [-r|--%s] [--%s] [--%s]
+  [--%s]
+`,
+	conf.First, conf.Last, conf.ResultsFormat, supportedCmds,
+	conf.QueryDBPath,
+	conf.QueryHostsResolution,
+	conf.QueryServerAddr,
+	conf.QueryTimeout,
+	conf.StoredQuery,
+	conf.DNSResolutionEnabled,
+	conf.DNSResolutionTimeout,
+	conf.DNSResolutionMaxRows,
+	conf.LogLevel,
+)
+
+const helpBase = `
   Flow database query tool to extract flow statistics from the goDB database
   created by goProbe. By default, output is written to STDOUT, sorted by overall
   (incoming and outgoing) data volume in descending order.
 `
 
-var helpBaseLong = helpBase + `
+const helpBaseLong = helpBase + `
   COLUMNS
 
     A comma separated list of columns over which to perform the "GROUP BY"/drilldown.
