@@ -8,6 +8,8 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
+	"runtime"
+	"runtime/pprof"
 	"sort"
 	"strconv"
 	"strings"
@@ -48,6 +50,7 @@ func main() {
 
 	var (
 		inPath, outPath string
+		profilePath     string
 		dryRun          bool
 		nWorkers        int
 		dbPermissions   uint
@@ -55,9 +58,10 @@ func main() {
 	)
 	flag.StringVar(&inPath, "path", "", "Path to legacy goDB")
 	flag.StringVar(&outPath, "output", "", "Path to output goDB")
+	flag.StringVar(&profilePath, "profile", "", "Path to output CPU profile")
 	flag.BoolVar(&dryRun, "dry-run", true, "Perform a dry-run")
 	flag.UintVar(&dbPermissions, "permissions", 0, "Permissions to use when writing DB (Unix file mode)")
-	flag.IntVar(&nWorkers, "n", 4, "Number of parallel conversion workers")
+	flag.IntVar(&nWorkers, "n", runtime.NumCPU()/2, "Number of parallel conversion workers")
 
 	flag.Parse()
 
@@ -65,10 +69,21 @@ func main() {
 		logger.Fatal("Paths to legacy / output goDB requried")
 	}
 
+	if profilePath != "" {
+		f, err := os.Create(profilePath)
+		if err != nil {
+			logger.Fatalf("failed to create CPU profile file: %s", err)
+		}
+		if err := pprof.StartCPUProfile(f); err != nil {
+			logger.Fatalf("failed to start CPU profiling: %s", err)
+		}
+		defer pprof.StopCPUProfile()
+	}
+
 	c := converter{
 		dbDir:         outPath,
 		dbPermissions: goDB.DefaultPermissions,
-		pipe:          make(chan work, 64),
+		pipe:          make(chan work, nWorkers*4),
 	}
 	if dbPermissions != 0 {
 		c.dbPermissions = fs.FileMode(dbPermissions)
