@@ -3,6 +3,7 @@ package writeout
 import (
 	"context"
 	"io/fs"
+	"sync"
 	"time"
 
 	"github.com/els0r/goProbe/pkg/capture/capturetypes"
@@ -20,6 +21,8 @@ type GoDBHandler struct {
 	path        string
 	dbWriters   map[string]*goDB.DBWriter
 	logToSyslog bool
+
+	sync.Mutex
 }
 
 // NewGoDBHandler instantiates a new GoDB handler
@@ -71,11 +74,13 @@ func (h *GoDBHandler) HandleWriteout(ctx context.Context, timestamp time.Time, w
 
 		// Clean up dead writers. We say that a writer is dead
 		// if it hasn't been used in the last few writeouts.
+		h.Lock()
 		for iface := range h.dbWriters {
 			if _, exists := seenIfaces[iface]; !exists {
 				delete(h.dbWriters, iface)
 			}
 		}
+		h.Unlock()
 
 		elapsed := time.Since(t0).Round(time.Millisecond)
 
@@ -91,8 +96,8 @@ func (h *GoDBHandler) handleIfaceWriteout(ctx context.Context, timestamp time.Ti
 	logger := logging.FromContext(ctx)
 
 	// Ensure that there is a DBWriter for the given interface
-	_, exists := h.dbWriters[taggedMap.Iface]
-	if !exists {
+	h.Lock()
+	if _, exists := h.dbWriters[taggedMap.Iface]; !exists {
 		w := goDB.NewDBWriter(h.path,
 			taggedMap.Iface,
 			h.encoderType,
@@ -107,6 +112,7 @@ func (h *GoDBHandler) handleIfaceWriteout(ctx context.Context, timestamp time.Ti
 	if err != nil {
 		logger.Errorf("failed to perform writeout: %s", err)
 	}
+	h.Unlock()
 
 	// write out flows to syslog if necessary
 	if h.logToSyslog {
