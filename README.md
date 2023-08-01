@@ -8,9 +8,13 @@ goProbe
 
 This package comprises:
 
-* goProbe   - A lightweight, concurrent, network packet aggregator
-* goDB      - A small, high-performance, columnar database (pkg)
-* goQuery   - A CLI tool using the query front-end to read out data acquired by goProbe and stored in goDB
+* goProbe - A high-througput, lightweight, concurrent, network packet aggregator
+* [gpctl](./cmd/gpctl/) - CLI tool to interact with a running goProbe instance (for status and capture configuration)
+* goDB - A small, high-performance, columnar database (pkg)
+* [goQuery](./cmd/goQuery/) - CLI tool for high-performance querying of goDB flow data acquired by goProbe
+
+Conversion tools:
+
 * goConvert - Helper binary to convert goProbe-flow data stored in `csv` files
 * legacy    - DB conversion tool to convert `.gpf` files - needed for upgrade to a `v4.x` compatible format
 
