@@ -3,9 +3,10 @@ package conf
 const (
 	queryKey = "query"
 
-	serverKey       = queryKey + ".server"
-	QueryServerAddr = serverKey + ".addr"
-	QueryTimeout    = queryKey + ".timeout"
+	serverKey            = queryKey + ".server"
+	QueryServerAddr      = serverKey + ".addr"
+	QueryTimeout         = queryKey + ".timeout"
+	QueryHostsResolution = queryKey + ".hosts-resolution"
 
 	dbKey       = "db"
 	QueryDBPath = dbKey + ".path"
@@ -36,4 +37,8 @@ const (
 	memoryKey     = "memory"
 	MemoryMaxPct  = memoryKey + ".max-pct"
 	MemoryLowMode = memoryKey + ".low-mode"
+
+	// Time
+	First = "first"
+	Last  = "last"
 )

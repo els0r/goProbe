@@ -1,29 +1,58 @@
 package cmd
 
-var helpBase = `
-  goquery -i <interfaces> [-hax] [--in|--out|--sum] [-n <max_n>] [--resolve]
-  [-e txt|csv|json] [-d <db-path>] [-f <timestamp>] [-l <timestamp>]
-  [-c <conditions>] [-s <column>] ` + supportedCmds + `
+import (
+	"fmt"
 
+	"github.com/els0r/goProbe/cmd/goQuery/pkg/conf"
+)
+
+var usageBase = fmt.Sprintf(`goQuery -i <interfaces> [-h] [-c <conditions>] [-s <column>] [-a] [--in|--out|--sum] [-n <max_n>]
+  [-f|--%s <timestamp>] [-l|--%s <timestamp>] [-e|--%s txt|csv|json] %s
+  [-d|--%s <db-path>] [-q|--%s] [--%s] [--%s] [--%s]
+  [-r|--%s] [--%s] [--%s]
+  [--%s]
+`,
+	conf.First, conf.Last, conf.ResultsFormat, supportedCmds,
+	conf.QueryDBPath,
+	conf.QueryHostsResolution,
+	conf.QueryServerAddr,
+	conf.QueryTimeout,
+	conf.StoredQuery,
+	conf.DNSResolutionEnabled,
+	conf.DNSResolutionTimeout,
+	conf.DNSResolutionMaxRows,
+	conf.LogLevel,
+)
+
+const helpBase = `
   Flow database query tool to extract flow statistics from the goDB database
   created by goProbe. By default, output is written to STDOUT, sorted by overall
   (incoming and outgoing) data volume in descending order.
 `
 
-var helpBaseLong = helpBase + `
+const helpBaseLong = helpBase + `
   COLUMNS
+
     A comma separated list of columns over which to perform the "GROUP BY"/drilldown.
     Available columns:
-      sip (or src)   source ip
-      dip (or dst)   destination ip
-      dport          destination port
-      iface          interface
-      proto          protocol (e.g. UDP, TCP)
-      time           timestamp
+
+      sip   (or src)   source ip
+      dip   (or dst)   destination ip
+      dport (or port)  destination port
+      proto            protocol (e.g. UDP, TCP)
+
+    Labels which can also be printed as columns:
+
+      hostid           unique ID of the host
+      hostname         hostname
+      iface            interface
+      time             timestamp
 
   QUERY_TYPE
+
     Type of query to perform (top talkers or top applications). This allows you to
     conveniently specify commonly used column combinations.
+
       talk_src        top talkers by source IP (default)
                       (equivalent to columns "sip")
       talk_dst        top talkers by destination IP
@@ -50,6 +79,7 @@ You can specify "ANY" to query all interfaces.
 	"First": `Upper/lower bound on flow timestamp
 
 ALLOWED FORMATS
+
   1357800683                            EPOCH
   Mon Jan _2 15:04:05 2006              ANSIC
   Mon Jan 02 15:04:05 -0700 2006        RUBY DATE
@@ -118,7 +148,8 @@ NOTE: there is no attribute for "month" as it collides with "m"
       that should be taken into account (e.g. "-45d").
 
 TIME ZONES:
-      all CUSTOM time formats support an offset from UTC. It can be
+
+      All CUSTOM time formats support an offset from UTC. It can be
       used to evaluate dates in timezones different from the one used
       on the host (e.g. Europe/Zurich - CEST). The format is {+,-}0000.
       For a host in San Fransisco (PDT), a difference of -7 hours to
@@ -146,6 +177,7 @@ and a value against which the attribute is checked, e.g.:
 ATTRIBUTES:
 
   Talker:
+
     dip (or dst)       Destination IP/Hostname
     sip (or src)       Source IP/Hostname
     host               Source IP/Hostname or Destination IP/Hostname
@@ -161,6 +193,7 @@ ATTRIBUTES:
              (assuming that those are the A and AAAA records of foo.com)
 
   Talker by network:
+
     dnet        Destination network in CIDR notation
     snet        Source network in CIDR notation
     net         Source network or destination network
@@ -172,10 +205,12 @@ ATTRIBUTES:
              "(snet != 192.168.1.0/24 & dnet != 192.168.1.0/24)"
 
   Application:
-    dport       Destination port
-    proto       IP protocol
 
-    EXAMPLE: "dport = 22 & proto = TCP"
+    dport (or port) Destination port
+    proto           IP protocol
+
+    EXAMPLE: "dport = 22 & proto = TCP" is equivalent to
+             "port = 22 & proto = 6"
 
 COMPARATIVE OPERATORS:
 
@@ -202,6 +237,7 @@ e.g.
 LOGICAL OPERATORS:
 
   Base    Description            Other representations
+
      !    unary negation         not
      &    and                    and, &&, *
      |    or                     or, ||, +
@@ -267,17 +303,3 @@ with --in.
 	"Sum": `Sum incoming and outgoing data.
 `,
 }
-
-var adminHelp = `Advanced maintenance options (should not be used in interactive mode).
-
-COMMANDS
-
-  clean [date]
-      Remove all database rows before given timestamp (retention time).
-      Handle with utmost care, all changes are permanent and cannot be undone!
-      Allowed formats are identical to -f/-l parameters.
-
-  wipe
-      Wipe all database entries from disk.
-      Handle with utmost care, all changes are permanent and cannot be undone!
-`

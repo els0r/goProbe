@@ -12,6 +12,10 @@ var exampleCmd = &cobra.Command{
 	Run:   printExample,
 }
 
+func init() {
+	rootCmd.AddCommand(exampleCmd)
+}
+
 var examples = `
 EXAMPLES
 

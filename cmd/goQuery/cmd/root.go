@@ -28,10 +28,10 @@ import (
 
 var cfgFile string
 
-var supportedCmds = "{QUERY TYPE|COLUMNS|admin|examples|list|version}"
+var supportedCmds = "{QUERY TYPE|COLUMNS|examples|list|version}"
 
 var rootCmd = &cobra.Command{
-	Use:           "goQuery [flags] [" + supportedCmds + "]",
+	Use:           "goQuery -i <interfaces> QUERY TYPE",
 	Short:         helpBase,
 	Long:          helpBaseLong,
 	RunE:          entrypoint,
@@ -121,13 +121,13 @@ Beware: The lookup is carried out at query time; DNS data may have been
 different when the packets were captured.
 `,
 	)
-	flags.IntVarP(&cmdLineParams.DNSResolution.MaxRows, conf.DNSResolutionMaxRows, "", query.DefaultResolveRows,
+	flags.IntVar(&cmdLineParams.DNSResolution.MaxRows, conf.DNSResolutionMaxRows, query.DefaultResolveRows,
 		`Maximum number of output rows to perform DNS resolution against. Before
 setting this to some high value (e.g. 1000), consider that this may incur
 a high load on the DNS resolver and network!
 `,
 	)
-	flags.DurationVarP(&cmdLineParams.DNSResolution.Timeout, conf.DNSResolutionTimeout, "", query.DefaultResolveTimeout,
+	flags.DurationVar(&cmdLineParams.DNSResolution.Timeout, conf.DNSResolutionTimeout, query.DefaultResolveTimeout,
 		"Timeout in seconds for (reverse) DNS lookups\n",
 	)
 
@@ -141,7 +141,7 @@ a high load on the DNS resolver and network!
 and I/O load)
 `,
 	)
-	flags.StringVarP(&cmdLineParams.HostQuery, "hosts-query", "q", "", "Hosts resolution query\n")
+	flags.StringVarP(&cmdLineParams.HostQuery, conf.QueryHostsResolution, "q", "", "Hosts resolution query\n")
 
 	// persistent flags to be also passed to children commands
 	pflags.StringVarP(&cmdLineParams.Format, conf.ResultsFormat, "e", query.DefaultFormat,
@@ -153,8 +153,8 @@ and I/O load)
 	)
 
 	// the time parameter should be available to commands other than query
-	pflags.StringVarP(&cmdLineParams.First, "first", "f", "", helpMap["First"])
-	pflags.StringVarP(&cmdLineParams.Last, "last", "l", "", "Show flows no later than --last. See help for --first for more info\n")
+	pflags.StringVarP(&cmdLineParams.First, conf.First, "f", "", helpMap["First"])
+	pflags.StringVarP(&cmdLineParams.Last, conf.Last, "l", "", "Show flows no later than --last. See help for --first for more info\n")
 
 	pflags.String(conf.QueryServerAddr, "",
 		`Address of query server to run queries against (host:port). If this value is
