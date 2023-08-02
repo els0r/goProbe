@@ -7,6 +7,7 @@ const (
 	QueryServerAddr      = serverKey + ".addr"
 	QueryTimeout         = queryKey + ".timeout"
 	QueryHostsResolution = queryKey + ".hosts-resolution"
+	QueryLog             = queryKey + ".log"
 
 	dbKey       = "db"
 	QueryDBPath = dbKey + ".path"

@@ -24,6 +24,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"golang.org/x/exp/slog"
 )
 
 var cfgFile string
@@ -173,6 +174,7 @@ goProbe.
 	)
 	pflags.String(conf.StoredQuery, "", "Load JSON serialized query arguments from disk and run them\n")
 	pflags.Duration(conf.QueryTimeout, query.DefaultQueryTimeout, "Abort query processing after timeout expires\n")
+	pflags.String(conf.QueryLog, "", "Log query invocations to file\n")
 
 	pflags.String(conf.LogLevel, logging.LevelWarn.String(), "log level (debug, info, warn, error, fatal, panic)")
 
@@ -284,6 +286,9 @@ func entrypoint(cmd *cobra.Command, args []string) error {
 		ctx = queryCtx
 	}
 
+	// get logger
+	logger := logging.FromContext(ctx)
+
 	queryArgs.Caller = os.Args[0] // take the full path of called binary
 
 	// run the query
@@ -318,10 +323,39 @@ func entrypoint(cmd *cobra.Command, args []string) error {
 		querier = engine.NewQueryRunner(dbPathCfg)
 	}
 
+	// create query logger
+	queryLogFile := viper.GetString(conf.QueryLog)
+	var qlogger *logging.L
+	if queryLogFile != "" {
+		var err error
+
+		logger := logger.With("file", queryLogFile)
+		logger.Debugf("logging query")
+
+		qlogger, err = logging.New(slog.LevelInfo, logging.EncodingJSON, logging.WithFileOutput(queryLogFile))
+		if err != nil {
+			logger.Errorf("failed to initialize query logger: %v", err)
+		} else {
+			qlogger.With("args", queryArgs).Infof("preparing query")
+			defer func() {
+				if result != nil {
+					qlogger = qlogger.With("summary", result.Summary)
+				}
+				qlogger.Info("query finished")
+			}()
+		}
+	}
+
 	// convert the command line parameters
 	stmt, err := queryArgs.Prepare()
 	if err != nil {
 		return fmt.Errorf("failed to prepare query: %w", err)
+	}
+
+	if queryLogFile != "" {
+		if qlogger != nil {
+			qlogger.With("stmt", stmt).Info("running query")
+		}
 	}
 
 	result, err = querier.Run(ctx, &queryArgs)
