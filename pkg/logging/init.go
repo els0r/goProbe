@@ -74,11 +74,7 @@ func WithFileOutput(filepath string) Option {
 			}
 			output = f
 		}
-		err := WithOutput(output)(lc)
-		if err != nil {
-			return err
-		}
-		return nil
+		return WithOutput(output)(lc)
 	}
 }
 
