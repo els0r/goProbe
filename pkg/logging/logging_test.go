@@ -38,6 +38,31 @@ func TestInitialization(t *testing.T) {
 	})
 }
 
+func TestFileOutputOption(t *testing.T) {
+	var tests = []struct {
+		in            string
+		expectedError error
+		clean         bool
+	}{
+		{"stdout", nil, false},
+		{"stderr", nil, false},
+		{"devnull", nil, false},
+		{"", emptyFilePathError, false},
+		{"tmpfile", nil, true},
+	}
+
+	for i, test := range tests {
+		test := test
+		t.Run(fmt.Sprint(i), func(t *testing.T) {
+			_, err := New(LevelDebug, EncodingLogfmt, WithFileOutput(test.in))
+			require.ErrorIs(t, test.expectedError, err)
+			if test.clean {
+				os.RemoveAll(test.in)
+			}
+		})
+	}
+}
+
 func TestBogusInput(t *testing.T) {
 	_, err := NewFromContext(context.Background(), 42, Encoding("00000000000llllllllll"))
 	require.NotNil(t, err)
