@@ -30,7 +30,7 @@ func TestPanicDuringWrite(t *testing.T) {
 
 	// Add a single item that will trigger a panic later
 	testMap := hashmap.NewAggFlowMap()
-	testMap.V4Map.Set([]byte{0x0}, hashmap.Val{})
+	testMap.PrimaryMap.Set([]byte{0x0}, hashmap.Val{})
 
 	t.Run("Write", func(t *testing.T) {
 		require.Panics(t, func() {
