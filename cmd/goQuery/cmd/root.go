@@ -239,14 +239,7 @@ func entrypoint(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// handle the defaults for time
-	if queryArgs.First == "" {
-		// by default, go back one month in time
-		queryArgs.First = time.Now().AddDate(0, -1, 0).Format(time.ANSIC)
-	}
-	if queryArgs.Last == "" {
-		queryArgs.Last = time.Now().Format(time.ANSIC)
-	}
+	queryArgs = setDefaultTimeRange(&queryArgs)
 
 	// check if arguments should be loaded from disk. The cmdLineParams are taken as
 	// the base for this to allow modification of single parameters
@@ -389,4 +382,23 @@ func entrypoint(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to print query result: %w", err)
 	}
 	return nil
+}
+
+// setDefaultTimeRange handles the defaults for time arguments if they aren't set
+func setDefaultTimeRange(args *query.Args) query.Args {
+	if args.First == "" {
+		// by default, go back one month in time
+		args.First = time.Now().AddDate(0, -1, 0).Format(time.ANSIC)
+
+		// protect against queries that are possibly too large and only go back a day if a time attribute
+		// is included. This is only done if first wasn't explicitly set. If it is, it must be assumed that
+		// the caller knows the possible extend of a "time" query
+		if strings.Contains(args.Query, types.TimeName) || strings.Contains(args.Query, types.RawCompoundQuery) {
+			args.First = time.Now().AddDate(0, 0, -1).Format(time.ANSIC)
+		}
+	}
+	if args.Last == "" {
+		args.Last = time.Now().Format(time.ANSIC)
+	}
+	return *args
 }
