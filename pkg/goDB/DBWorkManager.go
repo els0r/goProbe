@@ -614,13 +614,21 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workDir *gpfile.GPDir, query *Quer
 		protoBlocks := blocks[types.ProtoColIdx]
 
 		key, comparisonValue := v4Key, v4ComparisonValue
-		startEntry, isIPv4 := 0, true // TODO: Support traversal of IPv4 / IPv6 only if there's a matching condition
+		startEntry, isIPv4, condIsIPv4 := 0, true, true // TODO: Support traversal of IPv4 / IPv6 only if there's a matching condition
 		for i := startEntry; i < numEntries; i++ {
 
 			// When reaching the v4/v6 mark, we switch to the IPv6 key / submap
 			if i == int(numV4Entries) {
-				key, comparisonValue = v6Key, v6ComparisonValue
-				isIPv4 = false
+
+				// Skip switching to secondary map if IPs are not part of the query attributes
+				if query.hasAttrSip || query.hasAttrDip {
+					key = v6Key
+					isIPv4 = false
+				}
+
+				// But always switch the comparison value to allow for proper filtering
+				comparisonValue = v6ComparisonValue
+				condIsIPv4 = false
 			}
 
 			// Populate key for current entry
@@ -651,24 +659,24 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workDir *gpfile.GPDir, query *Quer
 
 				// Populate comparison value for current entry
 				if query.hasCondSip {
-					if isIPv4 {
+					if condIsIPv4 {
 						comparisonValue.PutSip(sipBlocks[i*4 : i*4+4])
 					} else {
 						comparisonValue.PutSip(sipBlocks[numV4Entries*4+(i-numV4Entries)*16 : numV4Entries*4+(i-numV4Entries)*16+16])
 					}
 				}
 				if query.hasCondDip {
-					if isIPv4 {
+					if condIsIPv4 {
 						comparisonValue.PutDipV4(dipBlocks[i*4 : i*4+4])
 					} else {
 						comparisonValue.PutDipV6(dipBlocks[numV4Entries*4+(i-numV4Entries)*16 : numV4Entries*4+(i-numV4Entries)*16+16])
 					}
 				}
 				if query.hasCondProto {
-					comparisonValue.PutProtoV(protoBlocks[i], isIPv4)
+					comparisonValue.PutProtoV(protoBlocks[i], condIsIPv4)
 				}
 				if query.hasCondDport {
-					comparisonValue.PutDportV(dportBlocks[i*types.DportSizeof:i*types.DportSizeof+types.DportSizeof], isIPv4)
+					comparisonValue.PutDportV(dportBlocks[i*types.DportSizeof:i*types.DportSizeof+types.DportSizeof], condIsIPv4)
 				}
 
 				conditionalSatisfied = query.Conditional.Evaluate(comparisonValue.Key())
