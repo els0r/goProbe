@@ -134,7 +134,7 @@ func (hs HostsStatuses) Print(w io.Writer) {
 // Timinigs summarizes query runtimes
 type Timings struct {
 	QueryStart         time.Time     `json:"query_start"`
-	QueryDuration      time.Duration `json:"query_duration"`
+	QueryDuration      time.Duration `json:"query_duration_ns"`
 	ResolutionDuration time.Duration `json:"resolution,omitempty"`
 }
 
