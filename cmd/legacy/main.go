@@ -4,7 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"io/fs"
-	"io/ioutil"
 	"net/netip"
 	"os"
 	"path/filepath"
@@ -30,9 +29,10 @@ type work struct {
 }
 
 type converter struct {
-	dbDir         string
-	dbPermissions fs.FileMode
-	pipe          chan work
+	dbDir            string
+	dbPermissions    fs.FileMode
+	compressionLevel int
+	pipe             chan work
 }
 
 var logger *logging.L
@@ -49,12 +49,13 @@ func main() {
 	logger = logging.Logger()
 
 	var (
-		inPath, outPath string
-		profilePath     string
-		dryRun          bool
-		nWorkers        int
-		dbPermissions   uint
-		wg              sync.WaitGroup
+		inPath, outPath  string
+		profilePath      string
+		dryRun           bool
+		nWorkers         int
+		compressionLevel int
+		dbPermissions    uint
+		wg               sync.WaitGroup
 	)
 	flag.StringVar(&inPath, "path", "", "Path to legacy goDB")
 	flag.StringVar(&outPath, "output", "", "Path to output goDB")
@@ -62,6 +63,7 @@ func main() {
 	flag.BoolVar(&dryRun, "dry-run", true, "Perform a dry-run")
 	flag.UintVar(&dbPermissions, "permissions", 0, "Permissions to use when writing DB (Unix file mode)")
 	flag.IntVar(&nWorkers, "n", runtime.NumCPU()/2, "Number of parallel conversion workers")
+	flag.IntVar(&compressionLevel, "l", 0, "Custom compression level (uses internal default if <= 0)")
 
 	flag.Parse()
 
@@ -81,9 +83,10 @@ func main() {
 	}
 
 	c := converter{
-		dbDir:         outPath,
-		dbPermissions: goDB.DefaultPermissions,
-		pipe:          make(chan work, nWorkers*4),
+		dbDir:            outPath,
+		dbPermissions:    goDB.DefaultPermissions,
+		compressionLevel: compressionLevel,
+		pipe:             make(chan work, nWorkers*4),
 	}
 	if dbPermissions != 0 {
 		c.dbPermissions = fs.FileMode(dbPermissions)
@@ -103,7 +106,7 @@ func main() {
 	}
 
 	// Get all interfaces
-	ifaces, err := ioutil.ReadDir(inPath)
+	ifaces, err := os.ReadDir(inPath)
 	if err != nil {
 		logger.Fatal(err.Error())
 	}
@@ -113,7 +116,7 @@ func main() {
 		}
 
 		// Get all date directories (usually days)
-		dates, err := ioutil.ReadDir(filepath.Join(inPath, iface.Name()))
+		dates, err := os.ReadDir(filepath.Join(inPath, iface.Name()))
 		if err != nil {
 			logger.Fatal(err.Error())
 		}
@@ -234,7 +237,7 @@ func (c converter) convertDir(w work, dryRun bool) error {
 	if err != nil {
 		return fmt.Errorf("failed to read metadata from %s: %w", filepath.Join(w.path, MetadataFileName), err)
 	}
-	writer := goDB.NewDBWriter(c.dbDir, w.iface, encoders.EncoderTypeLZ4).Permissions(c.dbPermissions)
+	writer := goDB.NewDBWriter(c.dbDir, w.iface, encoders.EncoderTypeLZ4).Permissions(c.dbPermissions).EncoderLevel(c.compressionLevel)
 
 	var bulkWorkload []goDB.BulkWorkload
 	for _, block := range allBlocks {
