@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 
 	"golang.org/x/exp/slog"
@@ -49,21 +50,29 @@ var (
 	emptyFilePathError = errors.New("empty filepath provided")
 )
 
+const (
+	devnullOutput = "devnull"
+	stderrOutput  = "stderr"
+	stdoutOutput  = "stdout"
+)
+
 // WithFileOutput sets the log output to a file. The filepath can be one of the following:
 //
 // - stdout: logs will be written to os.Stdout
 // - stderr: logs will be written to os.Stderr
 // - devnull: logs will be discarded
 // - any other filepath: logs will be written to the file
+//
+// The special filepaths are case insensitive, e.g. DEVNULL works just as well
 func WithFileOutput(filepath string) Option {
 	return func(lc *loggingConfig) error {
 		var output io.Writer
-		switch filepath {
-		case "stdout":
+		switch strings.ToLower(filepath) { // ToLower will allow users to pass STDERR for example
+		case stdoutOutput:
 			output = os.Stdout
-		case "stderr":
+		case stderrOutput:
 			output = os.Stderr
-		case "devnull":
+		case devnullOutput:
 			output = io.Discard
 		case "":
 			return emptyFilePathError
