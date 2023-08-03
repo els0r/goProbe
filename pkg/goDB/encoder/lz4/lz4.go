@@ -141,8 +141,13 @@ func New(opts ...Option) *Encoder {
 // WithCompressionLevel allows the level to be set to something other than the default 512
 func WithCompressionLevel(level int) Option {
 	return func(e *Encoder) {
-		e.level = level
+		e.SetLevel(level)
 	}
+}
+
+// SetLevel sets / changes the compression level (if supported)
+func (e *Encoder) SetLevel(level int) {
+	e.level = level
 }
 
 // Type will return the type of encoder
