@@ -3,11 +3,13 @@ package logging
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 
 	"golang.org/x/exp/slog"
@@ -25,42 +27,88 @@ const (
 	initKeyVersion = "version"
 )
 
-type Option func(*loggingConfig)
+type Option func(*loggingConfig) error
 
 // WithOutput sets the log output
 func WithOutput(w io.Writer) Option {
-	return func(lc *loggingConfig) {
+	return func(lc *loggingConfig) error {
 		lc.stdOutput = w
+		return nil
 	}
 }
 
 // WithErrorOutput sets the log output for level Error, Fatal and Panic. For the rest,
 // the default output os.Stdout or the output set by `WithOutput` is chosen
 func WithErrorOutput(w io.Writer) Option {
-	return func(lc *loggingConfig) {
+	return func(lc *loggingConfig) error {
 		lc.errsOutput = w
+		return nil
+	}
+}
+
+var (
+	emptyFilePathError = errors.New("empty filepath provided")
+)
+
+const (
+	devnullOutput = "devnull"
+	stderrOutput  = "stderr"
+	stdoutOutput  = "stdout"
+)
+
+// WithFileOutput sets the log output to a file. The filepath can be one of the following:
+//
+// - stdout: logs will be written to os.Stdout
+// - stderr: logs will be written to os.Stderr
+// - devnull: logs will be discarded
+// - any other filepath: logs will be written to the file
+//
+// The special filepaths are case insensitive, e.g. DEVNULL works just as well
+func WithFileOutput(filepath string) Option {
+	return func(lc *loggingConfig) error {
+		var output io.Writer
+		switch strings.ToLower(filepath) { // ToLower will allow users to pass STDERR for example
+		case stdoutOutput:
+			output = os.Stdout
+		case stderrOutput:
+			output = os.Stderr
+		case devnullOutput:
+			output = io.Discard
+		case "":
+			return emptyFilePathError
+		default:
+			f, err := os.OpenFile(filepath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+			if err != nil {
+				return fmt.Errorf("failed to open file: %w", err)
+			}
+			output = f
+		}
+		return WithOutput(output)(lc)
 	}
 }
 
 // WithCaller sets whether the calling source should be logged, since the operation is
 // computationally expensive
 func WithCaller(b bool) Option {
-	return func(lc *loggingConfig) {
+	return func(lc *loggingConfig) error {
 		lc.enableCaller = b
+		return nil
 	}
 }
 
 // WithName sets the application name as initial field present in all log messages
 func WithName(name string) Option {
-	return func(lc *loggingConfig) {
+	return func(lc *loggingConfig) error {
 		lc.initialAttr[initKeyName] = slog.String(initKeyName, name)
+		return nil
 	}
 }
 
 // WithVersion sets the application version as initial field present in all log messages
 func WithVersion(version string) Option {
-	return func(lc *loggingConfig) {
+	return func(lc *loggingConfig) error {
 		lc.initialAttr[initKeyVersion] = slog.String(initKeyVersion, version)
+		return nil
 	}
 }
 
@@ -122,7 +170,10 @@ func New(level slog.Level, encoding Encoding, opts ...Option) (*L, error) {
 		initialAttr: make(map[string]slog.Attr),
 	}
 	for _, opt := range opts {
-		opt(cfg)
+		err := opt(cfg)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	hopts := slog.HandlerOptions{
