@@ -29,19 +29,30 @@ type DBWriter struct {
 	dbpath string
 	iface  string
 
-	dayTimestamp int64
 	encoderType  encoders.Type
+	encoderLevel int
 	permissions  fs.FileMode
 }
 
 // NewDBWriter initializes a new DBWriter
 func NewDBWriter(dbpath string, iface string, encoderType encoders.Type) (w *DBWriter) {
-	return &DBWriter{dbpath, iface, 0, encoderType, DefaultPermissions}
+	return &DBWriter{
+		dbpath:      dbpath,
+		iface:       iface,
+		encoderType: encoderType,
+		permissions: DefaultPermissions,
+	}
 }
 
 // Permissions overrides the default permissions for files / directories in the DB
 func (w *DBWriter) Permissions(permissions fs.FileMode) *DBWriter {
 	w.permissions = permissions
+	return w
+}
+
+// EncoderLevel overrides the default encoder / compressor level for files / directories in the DB
+func (w *DBWriter) EncoderLevel(level int) *DBWriter {
+	w.encoderLevel = level
 	return w
 }
 
@@ -53,10 +64,9 @@ func (w *DBWriter) Write(flowmap *hashmap.AggFlowMap, captureMeta CaptureMetadat
 		err    error
 	)
 
-	dir := gpfile.NewDir(filepath.Join(w.dbpath, w.iface), timestamp, gpfile.ModeWrite, gpfile.WithPermissions(w.permissions))
+	dir := gpfile.NewDir(filepath.Join(w.dbpath, w.iface), timestamp, gpfile.ModeWrite, gpfile.WithPermissions(w.permissions), gpfile.WithEncoderTypeLevel(w.encoderType, w.encoderLevel))
 	if err = dir.Open(); err != nil {
-		err = fmt.Errorf("Could not create / open daily directory: %w", err)
-		return err
+		return fmt.Errorf("failed to create / open daily directory: %w", err)
 	}
 
 	data, update = dbData(w.iface, timestamp, flowmap)
@@ -85,10 +95,9 @@ func (w *DBWriter) WriteBulk(workloads []BulkWorkload, dirTimestamp int64) (err 
 		update gpfile.Stats
 	)
 
-	dir := gpfile.NewDir(filepath.Join(w.dbpath, w.iface), dirTimestamp, gpfile.ModeWrite, gpfile.WithPermissions(w.permissions))
+	dir := gpfile.NewDir(filepath.Join(w.dbpath, w.iface), dirTimestamp, gpfile.ModeWrite, gpfile.WithPermissions(w.permissions), gpfile.WithEncoderTypeLevel(w.encoderType, w.encoderLevel))
 	if err = dir.Open(); err != nil {
-		err = fmt.Errorf("Could not create / open daily directory: %w", err)
-		return err
+		return fmt.Errorf("failed to create / open daily directory: %w", err)
 	}
 
 	for _, workload := range workloads {
