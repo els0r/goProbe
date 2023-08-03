@@ -24,7 +24,8 @@ import (
 	"time"
 
 	"github.com/els0r/goProbe/cmd/goProbe/flags"
-	"github.com/els0r/goProbe/pkg/api/goprobe/server"
+	gpserver "github.com/els0r/goProbe/pkg/api/goprobe/server"
+	"github.com/els0r/goProbe/pkg/api/server"
 	"github.com/els0r/goProbe/pkg/capture"
 	"github.com/els0r/goProbe/pkg/logging"
 	"github.com/els0r/goProbe/pkg/version"
@@ -118,19 +119,17 @@ func main() {
 
 	// configure api server
 	var (
-		apiServer  *server.Server
+		apiServer  *gpserver.Server
 		apiOptions = []server.Option{
-			server.WithDBPath(config.DB.Path),
 			// Set the release mode of GIN depending on the log level
 			server.WithDebugMode(
 				logging.LevelFromString(config.Logging.Level) == logging.LevelDebug,
 			),
+			server.WithProfiling(config.API.Profiling),
+			server.WithMetrics(config.API.Metrics),
 		}
 	)
 
-	// if config.API.Metrics {
-	// 	apiOptions = append(apiOptions, api.WithMetricsExport())
-	// }
 	// if len(config.API.Keys) > 0 {
 	// 	apiOptions = append(apiOptions, api.WithKeys(config.API.Keys))
 	// }
@@ -143,7 +142,8 @@ func main() {
 
 	// create server and start listening for requests
 	if config.API != nil {
-		apiServer = server.New(config.API.Addr, captureManager, apiOptions...)
+		apiServer = gpserver.New(config.API.Addr, captureManager, apiOptions...)
+		apiServer.SetDBPath(config.DB.Path)
 
 		logger.With("addr", config.API.Addr).Info("starting API server")
 		go func() {
