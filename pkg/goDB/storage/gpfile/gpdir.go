@@ -42,7 +42,7 @@ var (
 type TrafficMetadata struct {
 	NumV4Entries uint64 `json:"num_v4_entries"`
 	NumV6Entries uint64 `json:"num_v6_entries"`
-	NumDrops     int    `json:"num_drops"`
+	NumDrops     uint64 `json:"num_drops"`
 }
 
 type Stats struct {
@@ -91,7 +91,7 @@ type Metadata struct {
 	BlockTraffic  []TrafficMetadata
 
 	Stats
-	Version int
+	Version uint64
 }
 
 // newMetadata initializes a new Metadata set (internal / serialization use only)
@@ -263,15 +263,15 @@ func (d *GPDir) Unmarshal(r ReadWriteSeekCloser) error {
 
 	d.Metadata = newMetadata()
 
-	d.Metadata.Version = int(binary.BigEndian.Uint64(data[0:8]))            // Get header version
-	nBlocks := int(binary.BigEndian.Uint64(data[8:16]))                     // Get flat nummber of blocks
-	d.Metadata.Traffic.NumV4Entries = binary.BigEndian.Uint64(data[16:24])  // Get global number of IPv4 flows
-	d.Metadata.Traffic.NumV6Entries = binary.BigEndian.Uint64(data[24:32])  // Get global number of IPv6 flows
-	d.Metadata.Traffic.NumDrops = int(binary.BigEndian.Uint64(data[32:40])) // Get global number of dropped packets
-	d.Metadata.Counts.BytesRcvd = binary.BigEndian.Uint64(data[40:48])      // Get global Counters (BytesRcvd)
-	d.Metadata.Counts.BytesSent = binary.BigEndian.Uint64(data[48:56])      // Get global Counters (BytesSent)
-	d.Metadata.Counts.PacketsRcvd = binary.BigEndian.Uint64(data[56:64])    // Get global Counters (PacketsRcvd)
-	d.Metadata.Counts.PacketsSent = binary.BigEndian.Uint64(data[64:72])    // Get global Counters (PacketsSent)
+	d.Metadata.Version = binary.BigEndian.Uint64(data[0:8])                // Get header version
+	nBlocks := int(binary.BigEndian.Uint64(data[8:16]))                    // Get flat nummber of blocks
+	d.Metadata.Traffic.NumV4Entries = binary.BigEndian.Uint64(data[16:24]) // Get global number of IPv4 flows
+	d.Metadata.Traffic.NumV6Entries = binary.BigEndian.Uint64(data[24:32]) // Get global number of IPv6 flows
+	d.Metadata.Traffic.NumDrops = binary.BigEndian.Uint64(data[32:40])     // Get global number of dropped packets
+	d.Metadata.Counts.BytesRcvd = binary.BigEndian.Uint64(data[40:48])     // Get global Counters (BytesRcvd)
+	d.Metadata.Counts.BytesSent = binary.BigEndian.Uint64(data[48:56])     // Get global Counters (BytesSent)
+	d.Metadata.Counts.PacketsRcvd = binary.BigEndian.Uint64(data[56:64])   // Get global Counters (PacketsRcvd)
+	d.Metadata.Counts.PacketsSent = binary.BigEndian.Uint64(data[64:72])   // Get global Counters (PacketsSent)
 	pos := 72
 
 	// Get block information
@@ -298,7 +298,7 @@ func (d *GPDir) Unmarshal(r ReadWriteSeekCloser) error {
 	for i := 0; i < nBlocks; i++ {
 		d.BlockTraffic[i].NumV4Entries = uint64(binary.BigEndian.Uint32(data[pos : pos+4]))
 		d.BlockTraffic[i].NumV6Entries = uint64(binary.BigEndian.Uint32(data[pos+4 : pos+8]))
-		d.BlockTraffic[i].NumDrops = int(binary.BigEndian.Uint32(data[pos+8 : pos+12]))
+		d.BlockTraffic[i].NumDrops = uint64(binary.BigEndian.Uint32(data[pos+8 : pos+12]))
 		thisTimestamp := lastTimestamp + int64(binary.BigEndian.Uint32(data[pos+12:pos+16]))
 		for j := 0; j < int(types.ColIdxCount); j++ {
 			d.BlockMetadata[j].BlockList[i].Timestamp = thisTimestamp

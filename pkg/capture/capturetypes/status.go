@@ -30,15 +30,15 @@ type CaptureStats struct {
 	// StartedAt denotes the time when the capture was started
 	StartedAt time.Time `json:"started_at"`
 	// Received denotes the number of packets received
-	Received int `json:"received"`
+	Received uint64 `json:"received"`
 	// Received denotes the number of packets received since the capture was started
-	ReceivedTotal int `json:"received_total"`
+	ReceivedTotal uint64 `json:"received_total"`
 	// Processed denotes the number of packets processed by the capture
-	Processed int `json:"processed"`
+	Processed uint64 `json:"processed"`
 	// Processed denotes the number of packets processed since the capture was started
-	ProcessedTotal int `json:"processed_total"`
+	ProcessedTotal uint64 `json:"processed_total"`
 	// Dropped denotes the number of packets dropped
-	Dropped int `json:"dropped"`
+	Dropped uint64 `json:"dropped"`
 }
 
 // AddStats is a convenience method to total capture stats. This is relevant in the scope of
