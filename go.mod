@@ -3,9 +3,8 @@ module github.com/els0r/goProbe
 go 1.18
 
 require (
-	github.com/els0r/status v1.0.0
 	github.com/fako1024/httpc v1.0.15-0.20230527113611-da5628ef596d
-	github.com/fako1024/slimcap v0.0.0-20230628065646-a567eb3289a5
+	github.com/fako1024/slimcap v0.0.0-20230804130619-6e647c83f7e0
 	github.com/fatih/color v1.15.0
 	github.com/gin-gonic/gin v1.9.1
 	github.com/json-iterator/go v1.1.12
@@ -75,4 +74,3 @@ require (
 	google.golang.org/protobuf v1.30.0 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 )
-

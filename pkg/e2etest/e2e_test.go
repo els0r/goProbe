@@ -246,7 +246,7 @@ func testE2E(t *testing.T, datasets ...[]byte) {
 	resReference := mockIfaces.BuildResults(t, tempDir, resGoQuery)
 
 	// Counter consistency checks
-	require.Equal(t, mockIfaces.NProcessed(), int(resGoQuery.Summary.Totals.PacketsRcvd))
+	require.Equal(t, mockIfaces.NProcessed(), resGoQuery.Summary.Totals.PacketsRcvd)
 	require.Equal(t, mockIfaces.NProcessed(), mockIfaces.NRead()-mockIfaces.NErr())
 
 	// Summary consistency check (do not fail yet to show details in the next check)

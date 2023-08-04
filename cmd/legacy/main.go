@@ -249,7 +249,7 @@ func (c converter) convertDir(w work, dryRun bool) error {
 		bulkWorkload = append(bulkWorkload, goDB.BulkWorkload{
 			FlowMap: block.data,
 			CaptureMeta: goDB.CaptureMetadata{
-				PacketsDropped: blockMetadata.PcapPacketsDropped + blockMetadata.PcapPacketsIfDropped,
+				PacketsDropped: ensureUnsigned(blockMetadata.PcapPacketsDropped) + ensureUnsigned(blockMetadata.PcapPacketsIfDropped),
 			},
 			Timestamp: block.ts,
 		})
@@ -269,4 +269,11 @@ func newKeyFromNetIPAddr(sip, dip netip.Addr, dport []byte, proto byte, isIPv4 b
 		return types.NewV4KeyStatic(sip.As4(), dip.As4(), dport, proto)
 	}
 	return types.NewV6KeyStatic(sip.As16(), dip.As16(), dport, proto)
+}
+
+func ensureUnsigned(in int) uint64 {
+	if in <= 0 {
+		return 0
+	}
+	return uint64(in)
 }

@@ -410,7 +410,7 @@ func writeDummyBlock(timestamp int64, dir *GPDir, dummyByte byte) error {
 	return dir.WriteBlocks(timestamp, TrafficMetadata{
 		NumV4Entries: uint64(dummyByte),
 		NumV6Entries: uint64(dummyByte),
-		NumDrops:     int(dummyByte),
+		NumDrops:     uint64(dummyByte),
 	}, types.Counters{
 		BytesRcvd:   uint64(dummyByte),
 		BytesSent:   uint64(dummyByte),
