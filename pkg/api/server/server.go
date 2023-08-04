@@ -10,6 +10,10 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+const (
+	maxMultipartMemory = 32 << 20 // 32 MiB
+)
+
 type Option func(*DefaultServer)
 
 // DefaultServer is the default API server, allowing middlewares and settings to be
@@ -61,7 +65,7 @@ func NewDefault(addr string, opts ...Option) *DefaultServer {
 	}
 
 	router := gin.New()
-	router.MaxMultipartMemory = 32 << 20 // 32 MiB
+	router.MaxMultipartMemory = maxMultipartMemory
 
 	router.Use(gin.Recovery())
 
