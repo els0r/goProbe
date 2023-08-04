@@ -1,3 +1,4 @@
+//go:build ignore
 // +build ignore
 
 // The make_version program is run by go generate to compile a version stamp
@@ -19,8 +20,9 @@ func main() {
 	if version == "" {
 		return
 	}
+	semver := os.Getenv("SEM_VER")
 
-	output := fmt.Sprintf(outputFormat, time.Now().In(time.UTC).Format(time.UnixDate), version)
+	output := fmt.Sprintf(outputFormat, time.Now().In(time.UTC).Format(time.UnixDate), version, semver)
 
 	err := ioutil.WriteFile("git_version.go", []byte(output), 0664)
 	if err != nil {
@@ -42,5 +44,6 @@ func init() {
         panic(err)
     }
     GitSHA = fmt.Sprintf("%%s", %[2]q)
+    SemVer = fmt.Sprintf("%%s", %[3]q)
 }
 `

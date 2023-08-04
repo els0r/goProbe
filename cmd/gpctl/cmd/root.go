@@ -21,12 +21,9 @@ var cfgFile string
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:   "gpctl",
-	Short: "goProbe control CLI tool",
-	Long: `gpctl goProbe control CLI tool
-
-	TODO
-`,
+	Use:               "gpctl",
+	Short:             "goProbe control CLI tool",
+	Long:              `gpctl goProbe control CLI tool`,
 	PersistentPreRunE: verifyArgs,
 	RunE:              rootEntrypoint,
 }
@@ -90,7 +87,13 @@ func initConfig() {
 	}
 }
 
-func verifyArgs(_ *cobra.Command, _ []string) error {
+func verifyArgs(cmd *cobra.Command, _ []string) error {
+	// don't verify server if the help has been requested or the version
+	// should be printed
+	if cmd.Use == "help" || cmd.Use == versionCmd.Use {
+		return nil
+	}
+
 	serverAddr := viper.GetString(conf.GoProbeServerAddr)
 	if serverAddr == "" {
 		return fmt.Errorf("%s: empty", conf.GoProbeServerAddr)
