@@ -198,6 +198,12 @@ func (c *Capture) rotate(ctx context.Context) (agg *hashmap.AggFlowMap) {
 	return
 }
 
+type bufPkt struct {
+	ipLayer capture.IPLayer
+	pktType byte
+	pktSize uint32
+}
+
 // process is the heart of the Capture. It listens for network traffic on the
 // network interface and logs the corresponding flows.
 //
@@ -213,6 +219,7 @@ func (c *Capture) process(ctx context.Context) <-chan error {
 		defer c.wgProc.Done()
 
 		// Main packet capture loop which an interface should be in most of the time
+		pktBuf, isBuf := make([]bufPkt, 0), false
 		for {
 
 			// Since lock confirmation is only done from a single goroutine (this one)
@@ -223,13 +230,24 @@ func (c *Capture) process(ctx context.Context) <-chan error {
 			// This logic may be slightly more contrived than a select{} statement but it increases
 			// packet throughput by several percent points
 			if len(c.capLock.request) > 0 {
-				<-c.capLock.request             // Consume the request
+				if <-c.capLock.request { // Consume the request
+					isBuf = true
+				} else {
+					isBuf = false
+					for _, pkt := range pktBuf {
+						if err := c.addToFlowLog(pkt.ipLayer, pkt.pktType, pkt.pktSize); err != nil {
+							captureErrors <- err
+							return
+						}
+					}
+					pktBuf = pktBuf[:0]
+				}
 				c.capLock.confirm <- struct{}{} // Confirm that process() is not processing
 				<-c.capLock.done                // Consume the request to continue normal processing
 			}
 
 			// Fetch the next packet or PPOLL even from the source
-			if err := c.capturePacket(); err != nil {
+			if err := c.capturePacket(&pktBuf, isBuf); err != nil {
 				if errors.Is(err, capture.ErrCaptureUnblocked) { // capture unblocked (during lock)
 
 					// Advance to the next loop iteration (during which the pending lock will be
@@ -249,7 +267,7 @@ func (c *Capture) process(ctx context.Context) <-chan error {
 	return captureErrors
 }
 
-func (c *Capture) capturePacket() error {
+func (c *Capture) capturePacket(pktBuf *[]bufPkt, isBuf bool) error {
 
 	// Fetch the next packet form the wire
 	ipLayer, pktType, pktSize, err := c.captureHandle.NextIPPacketZeroCopy()
@@ -260,8 +278,21 @@ func (c *Capture) capturePacket() error {
 		return fmt.Errorf("capture error: %w", err)
 	}
 
+	if isBuf {
+		*pktBuf = append(*pktBuf, bufPkt{
+			ipLayer, pktType, pktSize,
+		})
+		return nil
+	}
+
+	return c.addToFlowLog(ipLayer, pktType, pktSize)
+}
+
+func (c *Capture) addToFlowLog(ipLayer capture.IPLayer, pktType capture.PacketType, pktSize uint32) error {
+
 	// Parse / add the received data to the map of flows
-	if err = c.flowLog.Add(ipLayer, pktType, pktSize); err == nil {
+	err := c.flowLog.Add(ipLayer, pktType, pktSize)
+	if err == nil {
 		c.stats.Processed++
 		c.errCount = 0
 
@@ -307,14 +338,14 @@ func (c *Capture) status() (*capturetypes.CaptureStats, error) {
 	return &res, nil
 }
 
-func (c *Capture) lock() {
+func (c *Capture) lock(enableBuf bool) {
 
 	// Notify the capture that a locked interaction is about to begin, then
 	// unblock the capture potentially being in a blocking PPOLL syscall
 	// Channel has a depth of one and hence this push is non-blocking. Since
 	// we wait for confirmation there is no possibility of repeated attempts
 	// or race conditions
-	c.capLock.request <- struct{}{}
+	c.capLock.request <- enableBuf
 	if err := c.captureHandle.Unblock(); err != nil {
 		panic(fmt.Sprintf("unexpectedly failed to unblock capture handle, deadlock inevitable: %s", err))
 	}
@@ -331,14 +362,14 @@ func (c *Capture) unlock() {
 }
 
 type captureLock struct {
-	request chan struct{}
+	request chan bool
 	confirm chan struct{}
 	done    chan struct{}
 }
 
 func newCaptureLock() *captureLock {
 	return &captureLock{
-		request: make(chan struct{}, 1),
+		request: make(chan bool, 1),
 		confirm: make(chan struct{}),
 		done:    make(chan struct{}),
 	}
