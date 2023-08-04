@@ -57,8 +57,6 @@ github.com/creack/pty v1.1.9/go.mod h1:oKZEueFk5CKHvIhNR5MUki03XCEU+Q6VDXinZuGJ3
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
-github.com/els0r/status v1.0.0 h1:j2G+Iq4nZK8yNXfJqkRwBEHzHl/SReUBMg0z6SV6vqU=
-github.com/els0r/status v1.0.0/go.mod h1:O/aG4Ny1gNwOU82pIRTT1GQ1+upMDX+FA6QKwwgfSY4=
 github.com/envoyproxy/go-control-plane v0.9.0/go.mod h1:YTl/9mNaCwkRvm6d1a2C3ymFceY/DCBVvsKhRF0iEA4=
 github.com/envoyproxy/go-control-plane v0.9.1-0.20191026205805-5f8ba28d4473/go.mod h1:YTl/9mNaCwkRvm6d1a2C3ymFceY/DCBVvsKhRF0iEA4=
 github.com/envoyproxy/go-control-plane v0.9.4/go.mod h1:6rpuAdCZL397s3pYoYcLgu1mIlRU8Am5FuJP05cCM98=
@@ -67,10 +65,8 @@ github.com/envoyproxy/go-control-plane v0.9.9-0.20201210154907-fd9021fe5dad/go.m
 github.com/envoyproxy/protoc-gen-validate v0.1.0/go.mod h1:iSmxcyjqTsJpI2R4NaDN7+kN2VEUnK/pcBlmesArF7c=
 github.com/fako1024/httpc v1.0.15-0.20230527113611-da5628ef596d h1:F3C5kQisGHZJii+e8Olt+DRzDgqpTTTBG8k/6AmQtNg=
 github.com/fako1024/httpc v1.0.15-0.20230527113611-da5628ef596d/go.mod h1:dqjklLvXS72dQ7sFxWi0A9te7JdzG2BhBXDe2OvjwvU=
-github.com/fako1024/slimcap v0.0.0-20230628065646-a567eb3289a5 h1:GCMNKHnSr9gs2DTVmgBuhmL3MkCVx2gyzoJES1HBxCs=
-github.com/fako1024/slimcap v0.0.0-20230628065646-a567eb3289a5/go.mod h1:yux7ThjYmysyyk1YefBe3Eyzchp8dG+w5afA4Nje/dE=
-github.com/fako1024/slimcap v0.0.0-20230804105950-d6cd61048020 h1:mCwDAcPPNO1vMftozGUukvTglbqFPQhapq7GyJFvqyc=
-github.com/fako1024/slimcap v0.0.0-20230804105950-d6cd61048020/go.mod h1:yux7ThjYmysyyk1YefBe3Eyzchp8dG+w5afA4Nje/dE=
+github.com/fako1024/slimcap v0.0.0-20230804130619-6e647c83f7e0 h1:sInlPKJBQwQ69qT3OftNbbgfBJc2pbMLPnBhcn6qaxM=
+github.com/fako1024/slimcap v0.0.0-20230804130619-6e647c83f7e0/go.mod h1:yux7ThjYmysyyk1YefBe3Eyzchp8dG+w5afA4Nje/dE=
 github.com/fatih/color v1.15.0 h1:kOqh6YHBtK8aywxGerMG2Eq3H6Qgoqeo13Bk2Mv/nBs=
 github.com/fatih/color v1.15.0/go.mod h1:0h5ZqXfHYED7Bhv2ZJamyIOUej9KtShiJESRwBDUSsw=
 github.com/felixge/httpsnoop v1.0.3 h1:s/nj+GCswXYzN5v2DpNMuMQYe+0DDwt5WVCU6CWBdXk=
