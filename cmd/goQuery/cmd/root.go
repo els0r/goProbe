@@ -239,8 +239,6 @@ func entrypoint(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	queryArgs = setDefaultTimeRange(&queryArgs)
-
 	// check if arguments should be loaded from disk. The cmdLineParams are taken as
 	// the base for this to allow modification of single parameters
 	if viper.GetString(conf.StoredQuery) != "" {
@@ -265,6 +263,9 @@ func entrypoint(cmd *cobra.Command, args []string) error {
 		// if we didn't find a supported command, we assume this is the query type
 		queryArgs.Query = args[0]
 	}
+
+	// make sure there's protection against unbounded time intervals
+	queryArgs = setDefaultTimeRange(&queryArgs)
 
 	queryCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	defer stop()
@@ -386,18 +387,23 @@ func entrypoint(cmd *cobra.Command, args []string) error {
 
 // setDefaultTimeRange handles the defaults for time arguments if they aren't set
 func setDefaultTimeRange(args *query.Args) query.Args {
+	logger := logging.Logger()
 	if args.First == "" {
-		// by default, go back one month in time
-		args.First = time.Now().AddDate(0, -1, 0).Format(time.ANSIC)
+		logger.Debug("setting default value for 'first'")
 
 		// protect against queries that are possibly too large and only go back a day if a time attribute
 		// is included. This is only done if first wasn't explicitly set. If it is, it must be assumed that
 		// the caller knows the possible extend of a "time" query
 		if strings.Contains(args.Query, types.TimeName) || strings.Contains(args.Query, types.RawCompoundQuery) {
+			logger.With("query", args.Query).Debug("time attribute detected, limiting time range to one day")
 			args.First = time.Now().AddDate(0, 0, -1).Format(time.ANSIC)
+		} else {
+			// by default, go back one month in time
+			args.First = time.Now().AddDate(0, -1, 0).Format(time.ANSIC)
 		}
 	}
 	if args.Last == "" {
+		logger.Debug("setting default value for 'last'")
 		args.Last = time.Now().Format(time.ANSIC)
 	}
 	return *args
