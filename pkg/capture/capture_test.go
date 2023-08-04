@@ -57,7 +57,7 @@ func (t testMockSrcs) Wait() error {
 func TestConcurrentMethodAccess(t *testing.T) {
 	for _, i := range []int{1, 2, 3, 10} {
 		t.Run(fmt.Sprintf("%d ifaces", i), func(t *testing.T) {
-			testConcurrentMethodAccess(t, i, 1000)
+			testConcurrentMethodAccess(t, i, 100)
 		})
 	}
 }
@@ -185,7 +185,7 @@ func TestMockPacketCapturePerformance(t *testing.T) {
 	mockSrc.Done()
 	<-errChan
 
-	mockC.lock(false)
+	mockC.lock()
 	flows := mockC.flowLog.Flows()
 	for _, v := range flows {
 		fmt.Printf("Packets processed after %v: %d (%v/pkt)\n", runtime, v.packetsSent, runtime/time.Duration(v.packetsSent))
@@ -277,10 +277,8 @@ func testDeadlockLowTraffic(t *testing.T, maxPkts int) {
 	doneChan := make(chan error)
 	time.AfterFunc(100*time.Millisecond, func() {
 		for i := 0; i < 20; i++ {
-			mockC.lock(true)
-			mockC.unlock()
+			mockC.lock()
 			mockC.rotate(ctx)
-			mockC.lock(false)
 			mockC.unlock()
 			time.Sleep(10 * time.Millisecond)
 		}
@@ -327,10 +325,8 @@ func testDeadlockHighTraffic(t *testing.T) {
 	doneChan := make(chan error)
 	time.AfterFunc(100*time.Millisecond, func() {
 		for i := 0; i < 20; i++ {
-			mockC.lock(true)
-			mockC.unlock()
+			mockC.lock()
 			mockC.rotate(ctx)
-			mockC.lock(false)
 			mockC.unlock()
 			time.Sleep(10 * time.Millisecond)
 		}

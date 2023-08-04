@@ -214,7 +214,7 @@ func (cm *Manager) Status(ctx context.Context, ifaces ...string) (statusmap capt
 			runCtx := withIfaceContext(ctx, mc.iface)
 
 			// Lock the running capture and extract the status
-			mc.lock(false)
+			mc.lock()
 
 			// Since the capture is locked we can safely extract the (capture) status
 			// from the individual interfaces (and unlock no matter what)
@@ -403,8 +403,7 @@ func (cm *Manager) rotate(ctx context.Context, writeoutChan chan<- capturetypes.
 				runCtx := withIfaceContext(ctx, mc.iface)
 
 				// Lock the running capture and perform the rotation
-				mc.lock(true)
-				mc.unlock()
+				mc.lock()
 
 				rotateResult := mc.rotate(runCtx)
 
@@ -414,7 +413,6 @@ func (cm *Manager) rotate(ctx context.Context, writeoutChan chan<- capturetypes.
 				if err != nil {
 					logging.FromContext(runCtx).Errorf("failed to get capture stats: %v", err)
 				}
-				mc.lock(false)
 				mc.unlock()
 
 				writeoutChan <- capturetypes.TaggedAggFlowMap{
