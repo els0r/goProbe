@@ -77,8 +77,8 @@ func TestCompressionDecompression(t *testing.T) {
 				t.Fatalf("Unexpected number of compressed bytes, want %d, have %d", buf.Len(), nCompressed)
 			}
 
-			out := make([]byte, nBytes, nBytes)
-			in := make([]byte, nCompressed, nCompressed)
+			out := make([]byte, nBytes)
+			in := make([]byte, nCompressed)
 			nDecompressed, err := enc.Decompress(in, out, buf)
 			if err != nil {
 				t.Fatalf("Failed to decompress data for encoder of type %s: %s", encType, err)
@@ -91,6 +91,49 @@ func TestCompressionDecompression(t *testing.T) {
 				t.Fatalf("Invalid data detected after round-trip")
 			}
 		})
+	}
+}
+
+func TestCompressionDecompressionCustomLevel(t *testing.T) {
+	var nBytes = int64(len(encodingCorpus))
+
+	for _, encType := range testEncoders {
+		for level := 0; level <= 9; level++ {
+			t.Run(fmt.Sprintf("%s_%d", encType, level), func(t *testing.T) {
+				enc, err := New(encType)
+				if err != nil {
+					t.Fatalf("Failed to instantiate encoder of type %s: %s", encType, err)
+				}
+				enc.SetLevel(level)
+				defer func() {
+					if err := enc.Close(); err != nil {
+						t.Fatalf("Failed to release encoder of type %s: %s", encType, err)
+					}
+				}()
+				buf := bytes.NewBuffer(nil)
+				nCompressed, err := enc.Compress(encodingCorpus, nil, buf)
+				if err != nil {
+					t.Fatalf("Failed to compress data for encoder of type %s: %s", encType, err)
+				}
+				if nCompressed != buf.Len() {
+					t.Fatalf("Unexpected number of compressed bytes, want %d, have %d", buf.Len(), nCompressed)
+				}
+
+				out := make([]byte, nBytes)
+				in := make([]byte, nCompressed)
+				nDecompressed, err := enc.Decompress(in, out, buf)
+				if err != nil {
+					t.Fatalf("Failed to decompress data for encoder of type %s: %s", encType, err)
+				}
+				if nDecompressed != int(nBytes) {
+					t.Fatalf("Unexpected number of decompressed bytes, want %d, have %d", nBytes, nDecompressed)
+				}
+
+				if string(out) != string(encodingCorpus) {
+					t.Fatalf("Invalid data detected after round-trip")
+				}
+			})
+		}
 	}
 }
 
@@ -143,8 +186,8 @@ func BenchmarkEncodersDecompress(b *testing.B) {
 			b.SetBytes(int64(nWritten))
 			b.ResetTimer()
 
-			out := make([]byte, nBytes, nBytes)
-			in := make([]byte, nWritten, nWritten)
+			out := make([]byte, nBytes)
+			in := make([]byte, nWritten)
 			for i := 0; i < b.N; i++ {
 				enc.Decompress(in, out, buf)
 
@@ -228,8 +271,8 @@ func BenchmarkLevelsDecompress(b *testing.B) {
 					b.Fatalf("Failed to encode test data for encoder type %s: %s", encType, err)
 				}
 
-				out := make([]byte, nBytes, nBytes)
-				in := make([]byte, nWritten, nWritten)
+				out := make([]byte, nBytes)
+				in := make([]byte, nWritten)
 				for i := 0; i < b.N; i++ {
 					_, _ = enc.Decompress(in, out, bytes.NewBuffer(buf.Bytes()))
 
