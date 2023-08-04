@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/els0r/goProbe/pkg/logging"
+	"github.com/gin-contrib/pprof"
 	"github.com/gin-gonic/gin"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/exp/slog"
@@ -30,6 +31,8 @@ func TraceIDMiddleware() gin.HandlerFunc {
 	}
 }
 
+const requestMsg = "handled request"
+
 func RequestLoggingMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		logger := logging.FromContext(c.Request.Context())
@@ -55,10 +58,18 @@ func RequestLoggingMiddleware() gin.HandlerFunc {
 			slog.Int("size", size),
 		))
 
-		if 200 <= statusCode && statusCode < 300 {
-			logger.Info("handled request")
-		} else {
-			logger.Error("handled request")
+		switch {
+		case 200 <= statusCode && statusCode < 300:
+			logger.Info(requestMsg)
+		case 300 <= statusCode && statusCode < 400:
+			logger.Warn(requestMsg)
+		case 400 <= statusCode:
+			logger.Error(requestMsg)
 		}
 	}
+}
+
+// RegisterProfiling registers the profiling middleware
+func RegisterProfiling(router *gin.Engine) {
+	pprof.Register(router)
 }
