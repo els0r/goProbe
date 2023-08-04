@@ -19,7 +19,6 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"runtime/pprof"
 	"syscall"
 	"time"
 
@@ -70,18 +69,6 @@ func main() {
 
 	logger := logging.Logger()
 	logger.Info("loaded configuration")
-
-	// Setup profiling (if enabled)
-	if flags.CmdLine.ProfilingOutputDir != "" {
-		if err := startProfiling(flags.CmdLine.ProfilingOutputDir); err != nil {
-			logger.Fatal(err)
-		}
-		defer func() {
-			if err := stopProfiling(flags.CmdLine.ProfilingOutputDir); err != nil {
-				logger.Fatal(err)
-			}
-		}()
-	}
 
 	// It doesn't make sense to monitor zero interfaces
 	if len(config.Interfaces) == 0 {
@@ -176,37 +163,4 @@ func main() {
 
 	captureManager.Close(fallbackCtx)
 	logger.Info("graceful shut down completed")
-}
-
-func startProfiling(dirPath string) error {
-
-	err := os.MkdirAll(dirPath, 0750)
-	if err != nil {
-		return fmt.Errorf("failed to create pprof directory: %w", err)
-	}
-
-	f, err := os.Create(filepath.Join(filepath.Clean(dirPath), "goprobe_cpu_profile.pprof"))
-	if err != nil {
-		return fmt.Errorf("failed to create CPU profile file: %w", err)
-	}
-	if err := pprof.StartCPUProfile(f); err != nil {
-		return fmt.Errorf("failed to start CPU profiling: %w", err)
-	}
-
-	return nil
-}
-
-func stopProfiling(dirPath string) error {
-
-	pprof.StopCPUProfile()
-
-	f, err := os.Create(filepath.Join(filepath.Clean(dirPath), "goprobe_mem_profile.pprof"))
-	if err != nil {
-		return fmt.Errorf("failed to create memory profile file: %w", err)
-	}
-	if err := pprof.Lookup("allocs").WriteTo(f, 0); err != nil {
-		return fmt.Errorf("failed to start memory profiling: %w", err)
-	}
-
-	return nil
 }
