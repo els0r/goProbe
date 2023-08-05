@@ -30,6 +30,8 @@ type Manager struct {
 
 	lastRotation time.Time
 	startedAt    time.Time
+
+	skipWriteoutSchedule bool
 }
 
 // InitManager initializes a CaptureManager and the underlying writeout logic
@@ -64,7 +66,9 @@ func InitManager(ctx context.Context, config *config.Config, opts ...ManagerOpti
 	// this is the first time the capture manager is started and is important to report program runtime
 	captureManager.startedAt = time.Now()
 
-	captureManager.ScheduleWriteouts(ctx, time.Duration(goDB.DBWriteInterval)*time.Second)
+	if !captureManager.skipWriteoutSchedule {
+		captureManager.ScheduleWriteouts(ctx, time.Duration(goDB.DBWriteInterval)*time.Second)
+	}
 
 	return captureManager, nil
 }
@@ -163,6 +167,13 @@ type ManagerOption func(cm *Manager)
 func WithSourceInitFn(fn sourceInitFn) ManagerOption {
 	return func(cm *Manager) {
 		cm.sourceInitFn = fn
+	}
+}
+
+// WithSkipWriteoutSchedule disables scheduled writeouts
+func WithSkipWriteoutSchedule(skip bool) ManagerOption {
+	return func(cm *Manager) {
+		cm.skipWriteoutSchedule = skip
 	}
 }
 

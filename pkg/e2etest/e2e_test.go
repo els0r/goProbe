@@ -102,7 +102,7 @@ func testStartStop(t *testing.T) {
 		)
 		require.Nil(t, err)
 		return mockSrc, nil
-	}))
+	}), capture.WithSkipWriteoutSchedule(true))
 	require.Nil(t, err)
 
 	// Wait until goProbe is done processing all packets, then kill it in the
@@ -294,7 +294,10 @@ func runGoProbe(t *testing.T, testDir string, sourceInitFn func() (mockIfaces, f
 		},
 		Interfaces: ifaceConfigs,
 		Logging:    config.LogConfig{},
-	}, capture.WithSourceInitFn(initFn))
+	},
+		capture.WithSourceInitFn(initFn),
+		capture.WithSkipWriteoutSchedule(true),
+	)
 	require.Nil(t, err)
 
 	// Wait until goProbe is done processing all packets, then kill it in the
