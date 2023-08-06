@@ -90,7 +90,7 @@ func init() {
 	flags.BoolVarP(&cmdLineParams.Sum, "sum", "", false, helpMap["Sum"])
 	flags.BoolVarP(&cmdLineParams.Version, "version", "v", false, "Print version information and exit\n")
 
-	flags.StringVar(&cmdLineParams.ProfilingOutputDir, "profiling-output-dir", "", "Enable and set directory to store CPU and memory profiles")
+	flags.StringVar(&cmdLineParams.ProfilingOutputDir, conf.ProfilingOutputDir, "", "Enable and set directory to store CPU and memory profiles")
 
 	flags.StringVarP(&cmdLineParams.Ifaces, "ifaces", "i", "", helpMap["Ifaces"])
 	flags.StringVarP(&cmdLineParams.Condition, "condition", "c", "", helpMap["Condition"])
