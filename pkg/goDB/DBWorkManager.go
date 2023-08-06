@@ -521,7 +521,11 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workDir *gpfile.GPDir, query *Quer
 	if err := workDir.Open(gpfile.WithEncoder(enc)); err != nil {
 		return err
 	}
-	defer workDir.Close()
+	defer func() {
+		if cerr := workDir.Close(); cerr != nil && err == nil {
+			err = cerr
+		}
+	}()
 
 	// Set map metadata (and cross-check consistency for consecutive workloads)
 	if resultMap.Interface == "" {
@@ -613,12 +617,19 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workDir *gpfile.GPDir, query *Quer
 		dportBlocks := blocks[types.DportColIdx]
 		protoBlocks := blocks[types.ProtoColIdx]
 
+		// Determine start / end of block perusal - If the query is limited to either IPv4 or IPv6, adjust
+		// accordingly to skip irrelevant data that wouldn't satisfy the condition anyway
 		key, comparisonValue := v4Key, v4ComparisonValue
-		startEntry, isIPv4, condIsIPv4 := 0, true, true // TODO: Support traversal of IPv4 / IPv6 only if there's a matching condition
+		startEntry, isIPv4, condIsIPv4 := 0, true, true
+		if query.ipVersion == types.IPVersionV6 {
+			startEntry = numV4Entries
+		} else if query.ipVersion == types.IPVersionV4 {
+			numEntries = numV4Entries
+		}
 		for i := startEntry; i < numEntries; i++ {
 
-			// When reaching the v4/v6 mark, we switch to the IPv6 key / submap
-			if i == int(numV4Entries) {
+			// If / when reaching the v4/v6 mark, switch to the IPv6 key / submap
+			if i == numV4Entries {
 
 				// Skip switching to secondary map if IPs are not part of the query attributes
 				if query.hasAttrSip || query.hasAttrDip {
