@@ -21,9 +21,9 @@ import (
 )
 
 type mockTracking struct {
-	nRead      int
-	nProcessed int
-	nErr       int
+	nRead      uint64
+	nProcessed uint64
+	nErr       uint64
 
 	done chan struct{}
 }
@@ -63,7 +63,7 @@ func (m mockIfaces) WaitUntilDoneReading() {
 	wg.Wait()
 }
 
-func (m mockIfaces) NRead() (res int) {
+func (m mockIfaces) NRead() (res uint64) {
 	for _, v := range m {
 		v.RLock()
 		res += v.tracking.nRead
@@ -72,7 +72,7 @@ func (m mockIfaces) NRead() (res int) {
 	return
 }
 
-func (m mockIfaces) NProcessed() (res int) {
+func (m mockIfaces) NProcessed() (res uint64) {
 	for _, v := range m {
 		v.RLock()
 		res += v.tracking.nProcessed
@@ -81,7 +81,7 @@ func (m mockIfaces) NProcessed() (res int) {
 	return
 }
 
-func (m mockIfaces) NErr() (res int) {
+func (m mockIfaces) NErr() (res uint64) {
 	for _, v := range m {
 		v.RLock()
 		res += v.tracking.nErr
@@ -134,8 +134,8 @@ func (m mockIfaces) BuildResults(t *testing.T, testDir string, resGoQuery result
 	}
 
 	// Copy summary values that cannot be reproduced by the synthetic test
-	res.Summary.TimeFirst = resGoQuery.Summary.TimeFirst
-	res.Summary.TimeLast = resGoQuery.Summary.TimeLast
+	res.Summary.First = resGoQuery.Summary.First
+	res.Summary.Last = resGoQuery.Summary.Last
 	res.Summary.Timings = resGoQuery.Summary.Timings
 
 	return res
@@ -153,7 +153,7 @@ func (m mockIfaces) KillGoProbeOnceDone(cm *capture.Manager) {
 
 		// Grab the number of overall received / processed packets in all captures and
 		// wait until they match the number of read packets
-		var nProcessed int
+		var nProcessed uint64
 		for _, st := range cm.Status(ctx) {
 			nProcessed += st.ProcessedTotal
 		}

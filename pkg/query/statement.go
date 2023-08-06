@@ -14,7 +14,7 @@ type Statement struct {
 	// Ifaces holds hte list of all interfaces that should be queried
 	Ifaces []string `json:"ifaces"`
 
-	LabelSelector types.LabelSelector `json:"-"`
+	LabelSelector types.LabelSelector `json:"label_selector,omitempty"`
 
 	// needed for feedback to user
 	QueryType string `json:"query_type"`
@@ -40,10 +40,10 @@ type Statement struct {
 	Caller string `json:"caller,omitempty"` // who called the query
 
 	// resolution parameters (probably part of table printer)
-	DNSResolution DNSResolution
+	DNSResolution DNSResolution `json:"dns_resolution,omitempty"`
 
 	// file system
-	MaxMemPct int  `json:"-"`
+	MaxMemPct int  `json:"max_mem_pct,omitempty"`
 	LowMem    bool `json:"low_mem,omitempty"`
 }
 

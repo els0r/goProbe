@@ -7,16 +7,17 @@ import (
 	"context"
 	"fmt"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/els0r/goProbe/cmd/gpctl/pkg/conf"
 	"github.com/els0r/goProbe/pkg/api/goprobe/client"
 	"github.com/els0r/goProbe/pkg/capture/capturetypes"
+	"github.com/els0r/goProbe/pkg/formatting"
 	"github.com/els0r/goProbe/pkg/types"
-	"github.com/els0r/status"
+	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"github.com/xlab/tablewriter"
 )
 
 // statusCmd represents the stats command
@@ -36,41 +37,22 @@ func init() {
 	rootCmd.AddCommand(statusCmd)
 }
 
-const (
-	receivedCol = "RECEIVED"
-	droppedCol  = "DROPPED"
-
-	colDistance = 4
-)
-
-func printHeader() {
-	fmt.Println(strings.Repeat(" ", 2+status.StatusLineIndent+8+1) + receivedCol + strings.Repeat(" ", colDistance) + droppedCol)
-}
-
-func printStats(stats capturetypes.CaptureStats) {
-	rcvdStr := fmt.Sprint(stats.Received)
-	droppedStr := fmt.Sprint(stats.Dropped)
-
-	status.Okf("%s%s%s", rcvdStr, strings.Repeat(" ", len(receivedCol)+colDistance-len(rcvdStr)), droppedStr)
-}
-
 func statusEntrypoint(ctx context.Context, cmd *cobra.Command, args []string) error {
 	client := client.New(viper.GetString(conf.GoProbeServerAddr))
 
 	ifaces := args
 
-	statuses, lastWriteout, err := client.GetInterfaceStatus(ctx, ifaces...)
+	statuses, lastWriteout, startedAt, err := client.GetInterfaceStatus(ctx, ifaces...)
 	if err != nil {
 		return fmt.Errorf("failed to fetch status for interfaces %v: %w", ifaces, err)
 	}
 
 	var (
-		totalReceived, totalDropped int64
-		totalActive, totalIfaces    int = 0, len(statuses)
+		runtimeTotalReceived, runtimeTotalProcessed int64
+		totalReceived, totalProcessed, totalDropped int64
 	)
 
 	fmt.Println()
-	printHeader()
 
 	var allStatuses []struct {
 		iface  string
@@ -90,17 +72,51 @@ func statusEntrypoint(ctx context.Context, cmd *cobra.Command, args []string) er
 		return allStatuses[i].iface < allStatuses[j].iface
 	})
 
-	for _, st := range allStatuses {
-		status.Line(st.iface)
+	bold := color.New(color.Bold, color.FgWhite)
+	boldRed := color.New(color.Bold, color.FgRed)
 
+	table := tablewriter.CreateTable()
+	table.UTF8Box()
+	table.AddTitle(bold.Sprint("Interface Statuses"))
+
+	table.AddRow("", "total", "", "total", "", "", "active")
+	table.AddRow("iface",
+		"received", "+ received",
+		"processed", "+ processed",
+		"+ dropped", "for",
+	)
+	table.AddSeparator()
+
+	for _, st := range allStatuses {
 		ifaceStatus := st.status
 
+		runtimeTotalReceived += int64(ifaceStatus.ReceivedTotal)
+		runtimeTotalProcessed += int64(ifaceStatus.ProcessedTotal)
+
+		totalProcessed += int64(ifaceStatus.Processed)
 		totalReceived += int64(ifaceStatus.Received)
 		totalDropped += int64(ifaceStatus.Dropped)
-		totalActive++
 
-		printStats(ifaceStatus)
+		dropped := fmt.Sprint(ifaceStatus.Dropped)
+		if ifaceStatus.Dropped > 0 {
+			dropped = boldRed.Sprint(ifaceStatus.Dropped)
+		}
+
+		table.AddRow(st.iface,
+			formatting.Countable(ifaceStatus.ReceivedTotal), formatting.Countable(ifaceStatus.Received),
+			formatting.Countable(ifaceStatus.ProcessedTotal), formatting.Countable(ifaceStatus.Processed),
+			dropped,
+			time.Since(ifaceStatus.StartedAt).Round(time.Second).String(),
+		)
 	}
+
+	// set alignment before rendering
+	table.SetAlign(tablewriter.AlignLeft, 1)
+	for i := 2; i <= 6; i++ {
+		table.SetAlign(tablewriter.AlignRight, i)
+	}
+
+	fmt.Println(table.Render())
 
 	lastWriteoutStr := "-"
 	ago := "-"
@@ -111,16 +127,25 @@ func statusEntrypoint(ctx context.Context, cmd *cobra.Command, args []string) er
 		ago = time.Since(tLocal).Round(time.Second).String()
 	}
 
-	fmt.Println()
-	fmt.Printf("%d/%d interfaces active\n\n", totalActive, totalIfaces)
-	fmt.Printf(`Totals:
-    Last writeout: %s (%s ago)
-    Packets
-      Received: %d
-      Dropped:  %d		(%.2f %%)
+	fmt.Printf(`Runtime info:
 
-`, lastWriteoutStr, ago,
-		totalReceived, totalDropped, float64(totalDropped)/float64(totalReceived)*100)
+            Running since: %s (%s ago)
+  Last scheduled writeout: %s (%s ago)
+
+Totals:
+
+    Packets
+       Received: %s / + %s
+      Processed: %s / + %s
+        Dropped:      + %d
+
+`,
+		startedAt.Local().Format(types.DefaultTimeOutputFormat), time.Since(startedAt).Round(time.Second).String(),
+		lastWriteoutStr, ago,
+		formatting.Countable(runtimeTotalReceived), formatting.Countable(totalReceived),
+		formatting.Countable(runtimeTotalProcessed), formatting.Countable(totalProcessed),
+		totalDropped,
+	)
 
 	return nil
 }

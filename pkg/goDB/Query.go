@@ -34,6 +34,10 @@ type Query struct {
 	hasCondSip, hasCondDip, hasCondDport, hasCondProto bool
 	ipVersion                                          types.IPVersion
 
+	// metadataOnly will determine if all relevant information to answer the query can be
+	// derived solely from metadata inside GPDir
+	metadataOnly bool
+
 	// Each of the following slices represents a set in the sense that each column index can occur at most once in each slice.
 	// They are populated during the call to NewQuery
 
@@ -97,6 +101,14 @@ var queryConditionalColumnFlagSetters = [types.ColIdxAttributeCount]func(q *Quer
 	func(q *Query) { q.hasCondDip = true },
 	func(q *Query) { q.hasCondProto = true },
 	func(q *Query) { q.hasCondDport = true },
+}
+
+// NewMetadataQuery creates a metadata-only query
+func NewMetadataQuery() *Query {
+	q := NewQuery([]types.Attribute{}, nil, types.LabelSelector{Iface: true})
+	q.metadataOnly = true
+
+	return q
 }
 
 // NewQuery creates a new Query object based on the parsed command line parameters

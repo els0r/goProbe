@@ -51,10 +51,10 @@ const (
 const DefaultTimeOutputFormat = "2006-01-02 15:04:05"
 
 type LabelSelector struct {
-	Timestamp bool
-	Iface     bool
-	Hostname  bool
-	HostID    bool
+	Timestamp bool `json:"timestamp,omitempty"`
+	Iface     bool `json:"iface,omitempty"`
+	Hostname  bool `json:"hostname,omitempty"`
+	HostID    bool `json:"host_id,omitempty"`
 }
 
 type Width = int

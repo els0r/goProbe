@@ -316,7 +316,7 @@ func TestMetadataRoundTrip(t *testing.T) {
 	require.Equal(t, sumDrops, int(testDir.Metadata.Traffic.NumDrops), "mismatched number of total packet drops vs. computed")
 }
 
-func TestBrokenWrite(t *testing.T) {
+func TestBrokenAccess(t *testing.T) {
 
 	require.Nil(t, os.RemoveAll("/tmp/test_db"))
 
@@ -344,7 +344,20 @@ func TestBrokenWrite(t *testing.T) {
 	require.Nil(t, testDir.Open(), "error opening test dir for reading")
 	require.Equal(t, expectedOffset, testDir.BlockMetadata[0].CurrentOffset)
 	require.Equal(t, testDir.BlockMetadata[0].NBlocks(), 2)
+	for i := types.ColumnIndex(0); i < types.ColIdxCount; i++ {
+		_, err := testDir.ReadBlockAtIndex(i, 0)
+		require.Nil(t, err)
+	}
 	require.Nil(t, testDir.Close(), "error closing test dir")
+
+	// Attempt to read from closed GPDir (should return an error)
+	t.Run("not open", func(t *testing.T) {
+		for i := types.ColumnIndex(0); i < types.ColIdxCount; i++ {
+			data, err := testDir.ReadBlockAtIndex(i, 0)
+			require.Nil(t, data)
+			require.ErrorIs(t, err, ErrDirNotOpen)
+		}
+	})
 
 	// Append another two blocks and write normally
 	testDir = NewDir("/tmp/test_db", 1000, ModeWrite)
@@ -410,7 +423,7 @@ func writeDummyBlock(timestamp int64, dir *GPDir, dummyByte byte) error {
 	return dir.WriteBlocks(timestamp, TrafficMetadata{
 		NumV4Entries: uint64(dummyByte),
 		NumV6Entries: uint64(dummyByte),
-		NumDrops:     int(dummyByte),
+		NumDrops:     uint64(dummyByte),
 	}, types.Counters{
 		BytesRcvd:   uint64(dummyByte),
 		BytesSent:   uint64(dummyByte),

@@ -20,6 +20,7 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/els0r/goProbe/pkg/formatting"
 	"github.com/els0r/goProbe/pkg/goDB/protocols"
 	"github.com/els0r/goProbe/pkg/types"
 )
@@ -84,13 +85,13 @@ func columns(selector types.LabelSelector, attributes []types.Attribute, d types
 
 	for _, attrib := range attributes {
 		switch attrib.Name() {
-		case "sip":
+		case types.SipName:
 			cols = append(cols, OutcolSip)
-		case "dip":
+		case types.DipName:
 			cols = append(cols, OutcolDip)
-		case "proto":
+		case types.ProtoName:
 			cols = append(cols, OutcolProto)
-		case "dport":
+		case types.DportName:
 			cols = append(cols, OutcolDport)
 		}
 	}
@@ -451,54 +452,17 @@ func NewTextFormatter() TextFormatter {
 
 // Size prints out size in a human-readable format (e.g. 10 MB)
 func (TextFormatter) Size(size uint64) string {
-	count := 0
-	var sizeF = float64(size)
-
-	units := []string{" B", "kB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"}
-
-	for size > 1024 {
-		size /= 1024
-		sizeF /= 1024.0
-		count++
-	}
-	if sizeF == 0 {
-		return fmt.Sprintf("%.2f %s", sizeF, units[count])
-	}
-
-	return fmt.Sprintf("%.2f %s", sizeF, units[count])
+	return formatting.Size(size)
 }
 
 // Duration prints out d in a human-readable duration format
 func (TextFormatter) Duration(d time.Duration) string {
-	if d/time.Hour != 0 {
-		return fmt.Sprintf("%dh%2dm", d/time.Hour, d%time.Hour/time.Minute)
-	}
-	if d/time.Minute != 0 {
-		return fmt.Sprintf("%dm%2ds", d/time.Minute, d%time.Minute/time.Second)
-	}
-	if d/time.Second != 0 {
-		return fmt.Sprintf("%.1fs", d.Seconds())
-	}
-	return fmt.Sprintf("%dms", d/time.Millisecond)
+	return formatting.Duration(d)
 }
 
 // Count prints val in concise human-readable form (e.g. 1 K instead of 1000)
 func (TextFormatter) Count(val uint64) string {
-	count := 0
-	var valF = float64(val)
-
-	units := []string{" ", "k", "M", "G", "T", "P", "E", "Z", "Y"}
-
-	for val >= 1000 {
-		val /= 1000
-		valF /= 1000.0
-		count++
-	}
-	if valF == 0 {
-		return fmt.Sprintf("%.2f %s", valF, units[count])
-	}
-
-	return fmt.Sprintf("%.2f %s", valF, units[count])
+	return formatting.Count(val)
 }
 
 // Float prints f rounded to two decimals
@@ -652,37 +616,40 @@ func (t *TextTablePrinter) Footer(result *Result) {
 		fmt.Fprintln(t.writer)
 	}
 
+	textFormatter := TextFormatter{}
+
 	// Summary
-	fmt.Fprintf(t.footwriter, "Timespan / Interface\t: [%s, %s] / %s\n",
-		result.Summary.TimeFirst.Format(types.DefaultTimeOutputFormat),
-		result.Summary.TimeLast.Format(types.DefaultTimeOutputFormat),
+	fmt.Fprintf(t.footwriter, "Timespan / Interface\t: [%s, %s] (%s) / %s\n",
+		result.Summary.First.Format(types.DefaultTimeOutputFormat),
+		result.Summary.Last.Format(types.DefaultTimeOutputFormat),
+		formatting.Durationable(result.Summary.Last.Sub(result.Summary.First).Round(time.Minute)),
 		strings.Join(result.Summary.Interfaces, ","))
 	fmt.Fprintf(t.footwriter, "Sorted by\t: %s\n",
 		describe(t.sort, t.direction))
 	if result.Summary.Timings.ResolutionDuration > 0 {
 		fmt.Fprintf(t.footwriter, "Reverse DNS stats\t: RDNS took %s, timeout was %s\n",
-			TextFormatter{}.Duration(result.Summary.Timings.ResolutionDuration),
-			TextFormatter{}.Duration(t.resolveTimeout))
+			formatting.Durationable(result.Summary.Timings.ResolutionDuration),
+			formatting.Durationable(t.resolveTimeout))
 	}
 
 	var hitsDisplayed string
 	if result.Summary.Hits.Displayed < 1000 {
 		hitsDisplayed = fmt.Sprintf("%d", result.Summary.Hits.Displayed)
 	} else {
-		hitsDisplayed = strings.TrimSpace(TextFormatter{}.Count(uint64(result.Summary.Hits.Displayed)))
+		hitsDisplayed = strings.TrimSpace(textFormatter.Count(uint64(result.Summary.Hits.Displayed)))
 	}
 
 	var hitsTotal string
 	if result.Summary.Hits.Total < 1000 {
 		hitsTotal = fmt.Sprintf("%d", result.Summary.Hits.Total)
 	} else {
-		hitsTotal = strings.TrimSpace(TextFormatter{}.Count(uint64(result.Summary.Hits.Total)))
+		hitsTotal = strings.TrimSpace(textFormatter.Count(uint64(result.Summary.Hits.Total)))
 	}
 
 	fmt.Fprintf(t.footwriter, "Query stats\t: displayed top %s hits out of %s in %s\n",
 		hitsDisplayed,
 		hitsTotal,
-		TextFormatter{}.Duration(result.Summary.Timings.QueryDuration))
+		textFormatter.Duration(result.Summary.Timings.QueryDuration))
 	if result.Query.Condition != "" {
 		fmt.Fprintf(t.footwriter, "Conditions:\t: %s\n",
 			result.Query.Condition)

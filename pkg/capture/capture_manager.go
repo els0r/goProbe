@@ -29,6 +29,9 @@ type Manager struct {
 	lastAppliedConfig config.Ifaces
 
 	lastRotation time.Time
+	startedAt    time.Time
+
+	skipWriteoutSchedule bool
 }
 
 // InitManager initializes a CaptureManager and the underlying writeout logic
@@ -59,7 +62,13 @@ func InitManager(ctx context.Context, config *config.Config, opts ...ManagerOpti
 	if err != nil {
 		return nil, err
 	}
-	captureManager.ScheduleWriteouts(ctx, time.Duration(goDB.DBWriteInterval)*time.Second)
+
+	// this is the first time the capture manager is started and is important to report program runtime
+	captureManager.startedAt = time.Now()
+
+	if !captureManager.skipWriteoutSchedule {
+		captureManager.ScheduleWriteouts(ctx, time.Duration(goDB.DBWriteInterval)*time.Second)
+	}
 
 	return captureManager, nil
 }
@@ -81,6 +90,26 @@ func NewManager(writeoutHandler writeout.Handler, opts ...ManagerOption) *Manage
 func (cm *Manager) LastRotation() (t time.Time) {
 	cm.RLock()
 	t = cm.lastRotation
+	cm.RUnlock()
+
+	return
+}
+
+// StartedAt returns the timestamp when the capture manager was initialized
+func (cm *Manager) StartedAt() (t time.Time) {
+	cm.RLock()
+	t = cm.startedAt
+	cm.RUnlock()
+
+	return
+}
+
+// GetTimestamps is a combination of LastRotation() and StartedAt(). It exists to save a lock
+// in case both timestamps are requested
+func (cm *Manager) GetTimestamps() (startedAt, lastRotation time.Time) {
+	cm.RLock()
+	startedAt = cm.startedAt
+	lastRotation = cm.lastRotation
 	cm.RUnlock()
 
 	return
@@ -116,7 +145,6 @@ func (cm *Manager) ScheduleWriteouts(ctx context.Context, interval time.Duration
 				logger.Info("stopping rotation handler")
 				return
 			default:
-
 				t0 := time.Now()
 				cm.performWriteout(ctx, t)
 				if elapsed := float64(time.Since(t0)); elapsed > allowedWriteoutDurationFraction*float64(interval) {
@@ -142,6 +170,13 @@ func WithSourceInitFn(fn sourceInitFn) ManagerOption {
 	}
 }
 
+// WithSkipWriteoutSchedule disables scheduled writeouts
+func WithSkipWriteoutSchedule(skip bool) ManagerOption {
+	return func(cm *Manager) {
+		cm.skipWriteoutSchedule = skip
+	}
+}
+
 // Config returns the runtime config of the capture manager for all (or a set of) interfaces
 func (cm *Manager) Config(ctx context.Context, ifaces ...string) (ifaceConfigs config.Ifaces) {
 	cm.RLock()
@@ -164,11 +199,11 @@ func (cm *Manager) Config(ctx context.Context, ifaces ...string) (ifaceConfigs c
 }
 
 // Status fetches the current capture stats from all (or a set of) interfaces
-func (cm *Manager) Status(ctx context.Context, ifaces ...string) (statusmap map[string]capturetypes.CaptureStats) {
+func (cm *Manager) Status(ctx context.Context, ifaces ...string) (statusmap capturetypes.InterfaceStats) {
 
 	logger, t0 := logging.FromContext(ctx), time.Now()
 
-	statusmap = make(map[string]capturetypes.CaptureStats)
+	statusmap = make(capturetypes.InterfaceStats)
 
 	// Build list of interfaces to process (either from all interfaces or from explicit list)
 	// If none are provided / are available, return empty map

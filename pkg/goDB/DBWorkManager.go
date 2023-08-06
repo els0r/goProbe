@@ -26,6 +26,7 @@ import (
 	"github.com/els0r/goProbe/pkg/goDB/encoder"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/bitpack"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
+	"github.com/els0r/goProbe/pkg/goDB/storage"
 	"github.com/els0r/goProbe/pkg/goDB/storage/gpfile"
 	"github.com/els0r/goProbe/pkg/logging"
 	"github.com/els0r/goProbe/pkg/types"
@@ -93,120 +94,54 @@ func (w *DBWorkManager) GetCoveredTimeInterval() (time.Time, time.Time) {
 
 // CreateWorkerJobs sets up all workloads for query execution
 func (w *DBWorkManager) CreateWorkerJobs(tfirst int64, tlast int64, query *Query) (nonempty bool, err error) {
-
 	// Make sure the channel is closed at the end of this function no matter what to
 	// ensure graceful termination of all workers
 	defer close(w.workloadChan)
 
-	// Get list of years in main directory (ordered by directory name, i.e. time)
-	yearList, err := os.ReadDir(w.dbIfaceDir)
-	if err != nil {
-		return false, err
-	}
-
 	// loop over directory list in order to create the timestamp pairs
 	var (
-		gpFileOptions       []gpfile.Option
-		unixFirst, unixLast = time.Unix(tfirst, 0), time.Unix(tlast+DBWriteInterval, 0)
+		gpFileOptions []gpfile.Option
 	)
 	if !query.lowMem {
 		w.memPool = gpfile.NewMemPool(w.numProcessingUnits * len(query.columnIndices))
 		gpFileOptions = append(gpFileOptions, gpfile.WithReadAll(w.memPool))
 	}
-	w.tFirstCovered, w.tLastCovered = tfirst, tlast
 
 	// make sure to start with zero workloads as the number of assigned
 	// workloads depends on how many directories have to be read
-	var (
-		numDirs int
-		curDir  *gpfile.GPDir
-	)
+	var curDir *gpfile.GPDir
 	workloadBulk := make([]*gpfile.GPDir, 0, WorkBulkSize)
-	for _, year := range yearList {
 
-		// Skip obvious non-matching entries
-		if !year.IsDir() || year.Name() == "./" || year.Name() == "../" {
-			continue
-		}
+	walkFunc := func(numDirs int, dayTimestamp int64) error {
+		curDir = gpfile.NewDir(w.dbIfaceDir, dayTimestamp, gpfile.ModeRead, gpFileOptions...)
 
-		// Skip if outside of annual range
-		yearTimestamp, err := strconv.Atoi(year.Name())
-		if err != nil {
-			return false, fmt.Errorf("failed to parse year from directory `%s`: %w", year.Name(), err)
-		}
-		if yearTimestamp < unixFirst.Year() || yearTimestamp > unixLast.Year() {
-			continue
-		}
-
-		// Get list of months in year directory (ordered by directory name, i.e. time)
-		monthList, err := os.ReadDir(filepath.Join(w.dbIfaceDir, year.Name()))
-		if err != nil {
-			return false, err
-		}
-		for _, month := range monthList {
-
-			// Skip obvious non-matching entries
-			if !month.IsDir() || month.Name() == "./" || month.Name() == "../" {
-				continue
+		// For the first and last item, check out the GPDir metadata for the actual first and
+		// last block timestamp to cover (and adapt variables accordingly)
+		// We will grab the timestamp from the first visited / valid directory that fulfils
+		// the timestamp condition on directory level
+		if numDirs == 0 {
+			if err := curDir.Open(); err != nil {
+				return fmt.Errorf("failed to open first GPDir %s to ascertain query block timing: %w", curDir.Path(), err)
 			}
-
-			// Skip if outside of month range (only considering the "edge" years)
-			monthTimestamp, err := strconv.Atoi(month.Name())
-			if err != nil {
-				return false, fmt.Errorf("failed to parse month from directory `%s`: %w", year.Name(), err)
+			dirFirst, _ := curDir.TimeRange()
+			if tfirst < dirFirst {
+				w.tFirstCovered = dirFirst
 			}
-			if (yearTimestamp == unixFirst.Year() && time.Month(monthTimestamp) < unixFirst.Month()) ||
-				(yearTimestamp == unixLast.Year() && time.Month(monthTimestamp) > unixLast.Month()) {
-				continue
-			}
-
-			// Get list of days in month directory (ordered by directory name, i.e. time)
-			dirList, err := os.ReadDir(filepath.Join(w.dbIfaceDir, year.Name(), month.Name()))
-			if err != nil {
-				return false, err
-			}
-
-			for _, file := range dirList {
-				if file.IsDir() && (file.Name() != "./" || file.Name() != "../") {
-					dayTimestamp, err := strconv.ParseInt(file.Name(), 10, 64)
-					if err != nil {
-						return false, fmt.Errorf("failed to parse epoch timestamp from directory `%s`: %w", file.Name(), err)
-					}
-
-					// check if the directory is within time frame of interest
-					if tfirst < dayTimestamp+gpfile.EpochDay && dayTimestamp < tlast+DBWriteInterval {
-						curDir = gpfile.NewDir(w.dbIfaceDir, dayTimestamp, gpfile.ModeRead, gpFileOptions...)
-
-						// For the first and last item, check out the GPDir metadata for the actual first and
-						// last block timestamp to cover (and adapt variables accordingly)
-						// We will grab the timestamp from the first visited / valid directory that fulfils
-						// the timestamp condition on directory level
-						if numDirs == 0 {
-							if err := curDir.Open(); err != nil {
-								return false, fmt.Errorf("failed to open first GPDir %s to ascertain query block timing: %w", curDir.Path(), err)
-							}
-							dirFirst, _ := curDir.TimeRange()
-							if tfirst < dirFirst {
-								w.tFirstCovered = dirFirst
-							}
-							if err := curDir.Close(); err != nil {
-								return false, fmt.Errorf("failed to close first GPDir %s after ascertaining query block timing: %w", curDir.Path(), err)
-							}
-						}
-						numDirs++
-
-						// create new workload for the directory
-						workloadBulk = append(workloadBulk, curDir)
-						if len(workloadBulk) == WorkBulkSize {
-							w.workloadChan <- DBWorkload{query: query, workDirs: workloadBulk}
-							w.nWorkloads++
-							workloadBulk = make([]*gpfile.GPDir, 0, WorkBulkSize)
-						}
-					}
-				}
+			if err := curDir.Close(); err != nil {
+				return fmt.Errorf("failed to close first GPDir %s after ascertaining query block timing: %w", curDir.Path(), err)
 			}
 		}
+
+		// create new workload for the directory
+		workloadBulk = append(workloadBulk, curDir)
+		if len(workloadBulk) == WorkBulkSize {
+			w.workloadChan <- DBWorkload{query: query, workDirs: workloadBulk}
+			w.nWorkloads++
+			workloadBulk = make([]*gpfile.GPDir, 0, WorkBulkSize)
+		}
+		return nil
 	}
+	numDirs, err := w.walkDB(tfirst, tlast, walkFunc)
 
 	// Flush any remaining work
 	if len(workloadBulk) > 0 {
@@ -233,6 +168,282 @@ func (w *DBWorkManager) CreateWorkerJobs(tfirst int64, tlast int64, query *Query
 	}
 
 	return 0 < numDirs, nil
+}
+
+func skipNonMatching(isDir bool, name string) bool {
+	return !isDir
+}
+
+type dbWalkFunc func(numDirs int, dayTimestamp int64) error
+
+func (w *DBWorkManager) walkDB(tfirst, tlast int64, fn dbWalkFunc) (numDirs int, err error) {
+	// Get list of years in main directory (ordered by directory name, i.e. time)
+	yearList, err := os.ReadDir(w.dbIfaceDir)
+	if err != nil {
+		return numDirs, err
+	}
+	w.tFirstCovered, w.tLastCovered = tfirst, tlast
+
+	var unixFirst, unixLast = time.Unix(tfirst, 0), time.Unix(tlast+DBWriteInterval, 0)
+	for _, year := range yearList {
+
+		// Skip obvious non-matching entries
+		if skipNonMatching(year.IsDir(), year.Name()) {
+			continue
+		}
+
+		// Skip if outside of annual range
+		yearTimestamp, err := strconv.Atoi(year.Name())
+		if err != nil {
+			return numDirs, fmt.Errorf("failed to parse year from directory `%s`: %w", year.Name(), err)
+		}
+		if yearTimestamp < unixFirst.Year() || yearTimestamp > unixLast.Year() {
+			continue
+		}
+
+		// Get list of months in year directory (ordered by directory name, i.e. time)
+		monthList, err := os.ReadDir(filepath.Join(w.dbIfaceDir, year.Name()))
+		if err != nil {
+			return numDirs, err
+		}
+		for _, month := range monthList {
+			// Skip obvious non-matching entries
+			if skipNonMatching(month.IsDir(), month.Name()) {
+				continue
+			}
+
+			// Skip if outside of month range (only considering the "edge" years)
+			monthTimestamp, err := strconv.Atoi(month.Name())
+			if err != nil {
+				return numDirs, fmt.Errorf("failed to parse month from directory `%s`: %w", year.Name(), err)
+			}
+			if (yearTimestamp == unixFirst.Year() && time.Month(monthTimestamp) < unixFirst.Month()) ||
+				(yearTimestamp == unixLast.Year() && time.Month(monthTimestamp) > unixLast.Month()) {
+				continue
+			}
+
+			// Get list of days in month directory (ordered by directory name, i.e. time)
+			dirList, err := os.ReadDir(filepath.Join(w.dbIfaceDir, year.Name(), month.Name()))
+			if err != nil {
+				return numDirs, err
+			}
+
+			for _, file := range dirList {
+				if skipNonMatching(file.IsDir(), file.Name()) {
+					continue
+				}
+				dayTimestamp, err := strconv.ParseInt(file.Name(), 10, 64)
+				if err != nil {
+					return numDirs, fmt.Errorf("failed to parse epoch timestamp from directory `%s`: %w", file.Name(), err)
+				}
+
+				// check if the directory is within time frame of interest
+				if tfirst < dayTimestamp+gpfile.EpochDay && dayTimestamp < tlast+DBWriteInterval {
+					// actual processing upon a match
+					err := fn(numDirs, dayTimestamp)
+					if err != nil {
+						return numDirs, err
+					}
+					numDirs++
+				}
+			}
+		}
+	}
+	return numDirs, nil
+}
+
+func (w *DBWorkManager) ReadMetadata(tfirst int64, tlast int64) (*InterfaceMetadata, error) {
+	aggMetadata := &InterfaceMetadata{Iface: w.iface}
+
+	query := NewMetadataQuery()
+
+	// loop over directory list in order to create the timestamp pairs
+	var gpFileOptions []gpfile.Option
+	if !query.lowMem {
+		w.memPool = gpfile.NewMemPool(w.numProcessingUnits * len(query.columnIndices))
+		gpFileOptions = append(gpFileOptions, gpfile.WithReadAll(w.memPool))
+	}
+
+	// make sure to start with zero workloads as the number of assigned
+	// workloads depends on how many directories have to be read
+	var curDir *gpfile.GPDir
+
+	var currentTimestamp int64
+
+	walkFunc := func(numDirs int, dayTimestamp int64) error {
+		currentTimestamp = dayTimestamp
+		curDir = gpfile.NewDir(w.dbIfaceDir, dayTimestamp, gpfile.ModeRead, gpFileOptions...)
+
+		err := curDir.Open()
+		if err != nil {
+			return fmt.Errorf("failed to open first GPDir %s to ascertain query block timing: %w", curDir.Path(), err)
+		}
+
+		// do the metadata compuation based on the metadata
+		aggMetadata.Stats = aggMetadata.Stats.Add(curDir.Stats)
+
+		// compute the metadata for the first day. If a "first" time argument is given,
+		// the partial day has to be computed
+		if numDirs == 0 {
+			dirFirst, _ := curDir.TimeRange()
+			if tfirst >= dirFirst {
+				// subtract all entries that are smaller than w.tFirstCovered because they were added in the day loop
+				var (
+					tFirstBlockInd = len(curDir.BlockMetadata[0].BlockList) - 1
+					blocks         = curDir.BlockMetadata[0].BlocksBefore(tfirst)
+				)
+
+				// only assign the first covered time if there are blocks to subtract, e.g. if BlocksBefore(tfirst) != BlockList
+				if len(blocks) < tFirstBlockInd {
+					tFirstBlockInd = len(blocks)
+					w.tFirstCovered = curDir.BlockMetadata[0].BlockList[tFirstBlockInd].Timestamp
+				}
+
+				aggMetadata, err = w.readMetadataAndEvaluate(curDir, query,
+					blocks, 0,
+					aggMetadata, func(metadata *InterfaceMetadata, stats gpfile.Stats) gpfile.Stats {
+						return metadata.Stats.Sub(stats)
+					},
+				)
+				if err != nil {
+					return fmt.Errorf("failed to read block metadata: %w", err)
+				}
+			} else {
+				w.tFirstCovered = dirFirst
+			}
+		}
+		if err := curDir.Close(); err != nil {
+			return fmt.Errorf("failed to close first GPDir %s after ascertaining query block timing: %w", curDir.Path(), err)
+		}
+		return nil
+	}
+
+	_, err := w.walkDB(tfirst, tlast, walkFunc)
+
+	// compute the metadata for the last block. This will be partial if the last timestamp is smaller than the last
+	// block captured for the day
+	if curDir != nil {
+		curDir = gpfile.NewDir(w.dbIfaceDir, currentTimestamp, gpfile.ModeRead, gpFileOptions...)
+
+		if err := curDir.Open(); err != nil {
+			return nil, fmt.Errorf("failed to open last GPDir %s to ascertain query block timing: %w", curDir.Path(), err)
+		}
+		_, dirLast := curDir.TimeRange()
+
+		if tlast <= dirLast {
+			// subtract all entries that are smaller than w.tLastCovered because they were added in the day loop
+			var (
+				blocks, offset = curDir.BlockMetadata[0].BlocksAfter(tlast)
+				tLastBlockInd  = len(curDir.BlockMetadata[0].BlockList) - len(blocks) - 1
+			)
+
+			aggMetadata, err = w.readMetadataAndEvaluate(curDir, query,
+				blocks, offset,
+				aggMetadata, func(metadata *InterfaceMetadata, stats gpfile.Stats) gpfile.Stats {
+					return metadata.Stats.Sub(stats)
+				},
+			)
+			if err != nil {
+				return nil, fmt.Errorf("failed to read block metadata: %w", err)
+			}
+			w.tLastCovered = curDir.BlockMetadata[0].BlockList[tLastBlockInd].Timestamp
+		} else {
+			w.tLastCovered = dirLast
+		}
+
+		if err := curDir.Close(); err != nil {
+			return nil, fmt.Errorf("failed to close last GPDir %s after ascertaining query block timing: %w", curDir.Path(), err)
+		}
+	}
+
+	// assign time range of interface
+	//
+	// IMPORTANT: in the case of the first timestamp, the DB write interval is subtracted to
+	// show that flows are taken into account _up to_ the timestamp of the effective write out.
+	//
+	// This will retain consistency with what is presented in the summary after a normal query
+	aggMetadata.First, aggMetadata.Last = w.GetCoveredTimeInterval()
+
+	return aggMetadata, nil
+}
+
+// NOTE: contrary to it's bigger sister readBlocksAndEvaluate, the function assumes that the workDir is already open.
+// This is owed to the nature of its calling function
+func (w *DBWorkManager) readMetadataAndEvaluate(workDir *gpfile.GPDir, query *Query, blocks []storage.BlockAtTime, offset int, aggMetadata *InterfaceMetadata,
+	statsOpFunc func(*InterfaceMetadata, gpfile.Stats) gpfile.Stats,
+) (*InterfaceMetadata, error) {
+	logger := logging.Logger().With("iface", w.iface, "day", workDir.Path())
+
+	var (
+		bytesRcvdValues, bytesSentValues, pktsRcvdValues, pktsSentValues []uint64
+		err                                                              error
+	)
+
+	for b, block := range blocks {
+		ind := b + offset
+
+		var (
+			colBlocks   [types.ColIdxCount][]byte
+			blockBroken bool
+			stats       = gpfile.Stats{}
+		)
+
+		// Read the blocks from their files
+		for _, colIdx := range query.columnIndices {
+			// Read the block from the file
+			if colBlocks[colIdx], err = workDir.ReadBlockAtIndex(colIdx, ind); err != nil {
+				blockBroken = true
+				logger.With(
+					"block", block.Timestamp,
+					"column", types.ColumnFileNames[colIdx],
+				).Warnf("Failed to read column: %s", err)
+				break
+			}
+		}
+
+		// Check whether all blocks have matching number of entries
+		stats.Traffic.NumV4Entries = uint64(workDir.NumIPv4EntriesAtIndex(ind))
+		stats.Traffic.NumV6Entries = uint64(workDir.NumIPv6EntriesAtIndex(ind))
+
+		numEntries := bitpack.Len(colBlocks[types.BytesRcvdColIdx])
+		for _, colIdx := range query.columnIndices {
+			if colIdx.IsCounterCol() {
+				if bitpack.Len(colBlocks[colIdx]) != numEntries {
+					blockBroken = true
+					logger.With(
+						"block", ind,
+						"column", types.ColumnFileNames[colIdx],
+					).Warnf("Incorrect number of entries in column file. Expected %d, found %d", numEntries, bitpack.Len(colBlocks[colIdx]))
+					break
+				}
+			}
+		}
+
+		// In case any error was observed during above sanity checks, skip this whole block
+		if blockBroken {
+			continue
+		}
+
+		bytesRcvdValues = bitpack.UnpackInto(colBlocks[types.BytesRcvdColIdx], bytesRcvdValues)
+		bytesSentValues = bitpack.UnpackInto(colBlocks[types.BytesSentColIdx], bytesSentValues)
+		pktsRcvdValues = bitpack.UnpackInto(colBlocks[types.PacketsRcvdColIdx], pktsRcvdValues)
+		pktsSentValues = bitpack.UnpackInto(colBlocks[types.PacketsSentColIdx], pktsSentValues)
+
+		for i := 0; i < numEntries; i++ {
+			stats.Counts = stats.Counts.Add(types.Counters{
+				BytesRcvd:   bytesRcvdValues[i],
+				BytesSent:   bytesSentValues[i],
+				PacketsRcvd: pktsRcvdValues[i],
+				PacketsSent: pktsSentValues[i],
+			})
+		}
+
+		// perform operation for stats gathered from blocks
+		aggMetadata.Stats = statsOpFunc(aggMetadata, stats)
+
+	}
+
+	return aggMetadata, nil
 }
 
 // main query processing
@@ -310,11 +521,7 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workDir *gpfile.GPDir, query *Quer
 	if err := workDir.Open(gpfile.WithEncoder(enc)); err != nil {
 		return err
 	}
-	defer func() {
-		if cerr := workDir.Close(); cerr != nil && err == nil {
-			err = cerr
-		}
-	}()
+	defer workDir.Close()
 
 	// Set map metadata (and cross-check consistency for consecutive workloads)
 	if resultMap.Interface == "" {
@@ -406,22 +613,22 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workDir *gpfile.GPDir, query *Quer
 		dportBlocks := blocks[types.DportColIdx]
 		protoBlocks := blocks[types.ProtoColIdx]
 
-		// Determine start / end of block perusal - If the query is limited to either IPv4 or IPv6, adjust
-		// accordingly to skip irrelevant data that wouldn't satisfy the condition anyway
 		key, comparisonValue := v4Key, v4ComparisonValue
-		startEntry, isIPv4 := 0, true
-		if query.ipVersion == types.IPVersionV6 {
-			startEntry = numV4Entries
-		} else if query.ipVersion == types.IPVersionV4 {
-			numEntries = numV4Entries
-		}
-
+		startEntry, isIPv4, condIsIPv4 := 0, true, true // TODO: Support traversal of IPv4 / IPv6 only if there's a matching condition
 		for i := startEntry; i < numEntries; i++ {
 
-			// If / when reaching the v4/v6 mark, switch to the IPv6 key / submap
-			if i == numV4Entries {
-				key, comparisonValue = v6Key, v6ComparisonValue
-				isIPv4 = false
+			// When reaching the v4/v6 mark, we switch to the IPv6 key / submap
+			if i == int(numV4Entries) {
+
+				// Skip switching to secondary map if IPs are not part of the query attributes
+				if query.hasAttrSip || query.hasAttrDip {
+					key = v6Key
+					isIPv4 = false
+				}
+
+				// But always switch the comparison value to allow for proper filtering
+				comparisonValue = v6ComparisonValue
+				condIsIPv4 = false
 			}
 
 			// Populate key for current entry
@@ -447,31 +654,29 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workDir *gpfile.GPDir, query *Quer
 			}
 
 			// Check whether conditional is satisfied for current entry
-			var conditionalSatisfied bool
-			if query.Conditional == nil {
-				conditionalSatisfied = true
-			} else {
+			var conditionalSatisfied = (query.Conditional == nil)
+			if !conditionalSatisfied {
 
 				// Populate comparison value for current entry
 				if query.hasCondSip {
-					if isIPv4 {
+					if condIsIPv4 {
 						comparisonValue.PutSip(sipBlocks[i*4 : i*4+4])
 					} else {
 						comparisonValue.PutSip(sipBlocks[numV4Entries*4+(i-numV4Entries)*16 : numV4Entries*4+(i-numV4Entries)*16+16])
 					}
 				}
 				if query.hasCondDip {
-					if isIPv4 {
+					if condIsIPv4 {
 						comparisonValue.PutDipV4(dipBlocks[i*4 : i*4+4])
 					} else {
 						comparisonValue.PutDipV6(dipBlocks[numV4Entries*4+(i-numV4Entries)*16 : numV4Entries*4+(i-numV4Entries)*16+16])
 					}
 				}
 				if query.hasCondProto {
-					comparisonValue.PutProtoV(protoBlocks[i], isIPv4)
+					comparisonValue.PutProtoV(protoBlocks[i], condIsIPv4)
 				}
 				if query.hasCondDport {
-					comparisonValue.PutDportV(dportBlocks[i*types.DportSizeof:i*types.DportSizeof+types.DportSizeof], isIPv4)
+					comparisonValue.PutDportV(dportBlocks[i*types.DportSizeof:i*types.DportSizeof+types.DportSizeof], condIsIPv4)
 				}
 
 				conditionalSatisfied = query.Conditional.Evaluate(comparisonValue.Key())

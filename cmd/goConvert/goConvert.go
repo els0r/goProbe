@@ -410,9 +410,9 @@ func main() {
 
 		// insert the key-value pair into the correct flow map
 		if rowKey.IsIPv4() {
-			flowMaps[iface][ts].V4Map.Set(rowKey.Key(), rowVal)
+			flowMaps[iface][ts].PrimaryMap.Set(rowKey.Key(), rowVal)
 		} else {
-			flowMaps[iface][ts].V6Map.Set(rowKey.Key(), rowVal)
+			flowMaps[iface][ts].SecondaryMap.Set(rowKey.Key(), rowVal)
 		}
 		linesRead++
 	}

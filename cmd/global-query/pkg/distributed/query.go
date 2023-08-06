@@ -223,8 +223,8 @@ func aggregateResults(ctx context.Context, stmt *query.Statement, queryResults <
 			finalResult.Summary.Interfaces = ifaces
 
 			finalResult.Query = res.Query
-			finalResult.Summary.TimeFirst = res.Summary.TimeFirst
-			finalResult.Summary.TimeLast = res.Summary.TimeLast
+			finalResult.Summary.First = res.Summary.First
+			finalResult.Summary.Last = res.Summary.Last
 			finalResult.Summary.Totals = finalResult.Summary.Totals.Add(res.Summary.Totals)
 
 			// take the total from the query result. Since there may be overlap between the queries of two

@@ -15,6 +15,10 @@ var versionCmd = &cobra.Command{
 	},
 }
 
+func init() {
+	rootCmd.AddCommand(versionCmd)
+}
+
 func printVersion() {
 	fmt.Printf("goQuery\n%s", version.Version())
 }

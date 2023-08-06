@@ -57,9 +57,10 @@ type GPFile struct {
 	lastSeekPos int64
 
 	// defaultEncoderType governs how data blocks are (de-)compressed by default
-	defaultEncoderType encoders.Type
-	defaultEncoder     encoder.Encoder
-	freeEncoder        bool
+	defaultEncoderType  encoders.Type
+	defaultEncoderLevel int
+	defaultEncoder      encoder.Encoder
+	freeEncoder         bool
 
 	// accessMode denotes if the file is opened for read or write operations (to avoid
 	// race conditions and unpredictable behavior, only one mode is possible at a time)
@@ -99,6 +100,9 @@ func New(filename string, header *storage.BlockHeader, accessMode int, options .
 		var err error
 		if g.defaultEncoder, err = encoder.New(g.defaultEncoderType); err != nil {
 			return nil, err
+		}
+		if g.defaultEncoderLevel > 0 {
+			g.defaultEncoder.SetLevel(g.defaultEncoderLevel)
 		}
 	}
 
@@ -335,4 +339,11 @@ func (g *GPFile) setEncoder(e encoder.Encoder) {
 	g.defaultEncoder = e
 	g.defaultEncoderType = e.Type()
 	g.freeEncoder = false
+}
+
+func (g *GPFile) setEncoderTypeLevel(t encoders.Type, l int) {
+	g.defaultEncoderType = t
+	if l > 0 {
+		g.defaultEncoderLevel = l
+	}
 }

@@ -85,10 +85,11 @@ type LogConfig struct {
 
 // APIConfig stores goProbe's API configuration
 type APIConfig struct {
-	Addr    string   `json:"addr" yaml:"addr"`
-	Metrics bool     `json:"metrics" yaml:"metrics"`
-	Timeout int      `json:"request_timeout" yaml:"request_timeout"`
-	Keys    []string `json:"keys" yaml:"keys"`
+	Addr      string   `json:"addr" yaml:"addr"`
+	Metrics   bool     `json:"metrics" yaml:"metrics"`
+	Profiling bool     `json:"profiling" yaml:"profiling"`
+	Timeout   int      `json:"request_timeout" yaml:"request_timeout"`
+	Keys      []string `json:"keys" yaml:"keys"`
 }
 
 // New creates a new configuration struct with default settings

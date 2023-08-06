@@ -24,26 +24,31 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"golang.org/x/exp/slog"
 )
 
 var cfgFile string
 
-var supportedCmds = "{QUERY TYPE|COLUMNS|admin|examples|list|version}"
+var supportedCmds = "{QUERY TYPE|COLUMNS|examples|list|version}"
 
 var rootCmd = &cobra.Command{
-	Use:           "goQuery [flags] [" + supportedCmds + "]",
+	Use:           "goQuery -i <interfaces> QUERY TYPE",
 	Short:         helpBase,
 	Long:          helpBaseLong,
 	RunE:          entrypoint,
+	Args:          validatePositionalArgs,
 	SilenceUsage:  true,
 	SilenceErrors: true,
 }
 
-// any commands other than query type will be hooked up to this command
-var subRootCmd = &cobra.Command{}
-
 func GetRootCmd() *cobra.Command {
 	return rootCmd
+}
+
+// this is a necessary re-routing, so that the tool can handle commands other than query
+// without complaining that that something like "sip,dip" cannot be found as a command
+func validatePositionalArgs(cmd *cobra.Command, args []string) error {
+	return cobra.ArbitraryArgs(cmd, args)
 }
 
 // Execute is the main entrypoint and runs the CLI tool
@@ -77,48 +82,38 @@ func init() {
 	rootCmd.InitDefaultHelpCmd()
 	rootCmd.InitDefaultHelpFlag()
 
-	subRootCmd.InitDefaultHelpCmd()
-	subRootCmd.InitDefaultHelpFlag()
+	flags := rootCmd.Flags()
+	pflags := rootCmd.PersistentFlags()
 
-	rootCmd.Flags().BoolVarP(&cmdLineParams.In, "in", "", query.DefaultIn, helpMap["In"])
-	rootCmd.Flags().BoolVarP(&cmdLineParams.List, "list", "", false, helpMap["List"])
-	rootCmd.Flags().BoolVarP(&cmdLineParams.Out, "out", "", query.DefaultOut, helpMap["Out"])
-	rootCmd.Flags().BoolVarP(&cmdLineParams.Sum, "sum", "", false, helpMap["Sum"])
-	rootCmd.Flags().BoolVarP(&cmdLineParams.Version, "version", "v", false, "Print version information and exit\n")
+	flags.BoolVarP(&cmdLineParams.In, "in", "", query.DefaultIn, helpMap["In"])
+	flags.BoolVarP(&cmdLineParams.Out, "out", "", query.DefaultOut, helpMap["Out"])
+	flags.BoolVarP(&cmdLineParams.Sum, "sum", "", false, helpMap["Sum"])
+	flags.BoolVarP(&cmdLineParams.Version, "version", "v", false, "Print version information and exit\n")
 
-	rootCmd.Flags().StringVarP(&cmdLineParams.Ifaces, "ifaces", "i", "", helpMap["Ifaces"])
-	rootCmd.Flags().StringVarP(&cmdLineParams.First, "first", "f", time.Now().AddDate(0, -1, 0).Format(time.ANSIC), helpMap["First"])
-	rootCmd.Flags().StringVarP(&cmdLineParams.Last, "last", "l", time.Now().Format(time.ANSIC), "Show flows no later than --last. See help for --first for more info\n")
-	rootCmd.Flags().StringVarP(&cmdLineParams.Condition, "condition", "c", "", helpMap["Condition"])
+	flags.StringVarP(&cmdLineParams.Ifaces, "ifaces", "i", "", helpMap["Ifaces"])
+	flags.StringVarP(&cmdLineParams.Condition, "condition", "c", "", helpMap["Condition"])
 
-	rootCmd.Flags().StringVarP(&cmdLineParams.SortBy, conf.SortBy, "s", query.DefaultSortBy,
+	flags.StringVarP(&cmdLineParams.SortBy, conf.SortBy, "s", query.DefaultSortBy,
 		`Sort results by given column name:
   bytes         Sort by accumulated data volume (default)
   packets       Sort by accumulated packets
   time          Sort by time. Enforced for "time" queries
 `,
 	)
-	rootCmd.Flags().BoolVarP(&cmdLineParams.SortAscending, conf.SortAscending, "a", false,
+	flags.BoolVarP(&cmdLineParams.SortAscending, conf.SortAscending, "a", false,
 		`Sort results in ascending instead of descending order. Forced for queries
 including the "time" field.
 `,
 	)
 
-	rootCmd.Flags().StringVarP(&cmdLineParams.Format, conf.ResultsFormat, "e", query.DefaultFormat,
-		`Output format:
-  txt           Output in plain text format (default)
-  json          Output in JSON format
-  csv           Output in comma-separated table format
-`,
-	)
-	rootCmd.Flags().IntVarP(&cmdLineParams.NumResults, conf.ResultsLimit, "n", query.DefaultNumResults,
+	flags.IntVarP(&cmdLineParams.NumResults, conf.ResultsLimit, "n", query.DefaultNumResults,
 		`Maximum number of final entries to show. Defaults to 95% of the overall
 data volume / number of packets (depending on the '-s' parameter).
 Ignored for queries including the "time" field.
 `,
 	)
 
-	rootCmd.Flags().BoolVarP(&cmdLineParams.DNSResolution.Enabled, conf.DNSResolutionEnabled, "r", false,
+	flags.BoolVarP(&cmdLineParams.DNSResolution.Enabled, conf.DNSResolutionEnabled, "r", false,
 		`Resolve top IPs in output using reverse DNS lookups.
 If the reverse DNS lookup for an IP fails, the IP is shown instead.
 The lookup is performed for the first '--resolve-rows' rows
@@ -127,35 +122,47 @@ Beware: The lookup is carried out at query time; DNS data may have been
 different when the packets were captured.
 `,
 	)
-	rootCmd.Flags().IntVarP(&cmdLineParams.DNSResolution.MaxRows, conf.DNSResolutionMaxRows, "", query.DefaultResolveRows,
+	flags.IntVar(&cmdLineParams.DNSResolution.MaxRows, conf.DNSResolutionMaxRows, query.DefaultResolveRows,
 		`Maximum number of output rows to perform DNS resolution against. Before
 setting this to some high value (e.g. 1000), consider that this may incur
 a high load on the DNS resolver and network!
 `,
 	)
-	rootCmd.Flags().DurationVarP(&cmdLineParams.DNSResolution.Timeout, conf.DNSResolutionTimeout, "", query.DefaultResolveTimeout,
+	flags.DurationVar(&cmdLineParams.DNSResolution.Timeout, conf.DNSResolutionTimeout, query.DefaultResolveTimeout,
 		"Timeout in seconds for (reverse) DNS lookups\n",
 	)
 
-	rootCmd.Flags().IntVar(&cmdLineParams.MaxMemPct, conf.MemoryMaxPct, query.DefaultMaxMemPct,
+	flags.IntVar(&cmdLineParams.MaxMemPct, conf.MemoryMaxPct, query.DefaultMaxMemPct,
 		`Maximum amount of memory that can be used for the query
 (in % of available memory)
 `,
 	)
-	rootCmd.Flags().BoolVar(&cmdLineParams.LowMem, conf.MemoryLowMode, false,
+	flags.BoolVar(&cmdLineParams.LowMem, conf.MemoryLowMode, false,
 		`Enable low-memory mode (reduces overall memory use at the expense of higher CPU
 and I/O load)
 `,
 	)
-	rootCmd.Flags().StringVarP(&cmdLineParams.HostQuery, "hosts-query", "q", "", "Hosts resolution query\n")
+	flags.StringVarP(&cmdLineParams.HostQuery, conf.QueryHostsResolution, "q", "", "Hosts resolution query\n")
 
 	// persistent flags to be also passed to children commands
-	rootCmd.PersistentFlags().String(conf.QueryServerAddr, "",
+	pflags.StringVarP(&cmdLineParams.Format, conf.ResultsFormat, "e", query.DefaultFormat,
+		`Output format:
+  txt           Output in plain text format (default)
+  json          Output in JSON format
+  csv           Output in comma-separated table format
+`,
+	)
+
+	// the time parameter should be available to commands other than query
+	pflags.StringVarP(&cmdLineParams.First, conf.First, "f", "", helpMap["First"])
+	pflags.StringVarP(&cmdLineParams.Last, conf.Last, "l", "", "Show flows no later than --last. See help for --first for more info\n")
+
+	pflags.String(conf.QueryServerAddr, "",
 		`Address of query server to run queries against (host:port). If this value is
 set, goQuery will attempt to run queries using the specified query server as opposed to its local goDB
 `,
 	)
-	rootCmd.PersistentFlags().StringP(conf.QueryDBPath, "d", defaults.DBPath,
+	pflags.StringP(conf.QueryDBPath, "d", defaults.DBPath,
 		`Path to goDB database directory. By default,
 the database path from the configuration file is used.
 If it does not exist, an error will be thrown.
@@ -165,18 +172,21 @@ the path if you analyze data on a different host without
 goProbe.
 `,
 	)
-	rootCmd.PersistentFlags().String(conf.StoredQuery, "", "Load JSON serialized query arguments from disk and run them\n")
-	rootCmd.PersistentFlags().Duration(conf.QueryTimeout, query.DefaultQueryTimeout, "Abort query processing after timeout expires\n")
+	pflags.String(conf.StoredQuery, "", "Load JSON serialized query arguments from disk and run them\n")
+	pflags.Duration(conf.QueryTimeout, query.DefaultQueryTimeout, "Abort query processing after timeout expires\n")
+	pflags.String(conf.QueryLog, "", "Log query invocations to file\n")
 
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "Config file location\n")
+	pflags.String(conf.LogLevel, logging.LevelWarn.String(), "log level (debug, info, warn, error, fatal, panic)")
 
-	_ = viper.BindPFlags(rootCmd.PersistentFlags())
+	pflags.StringVar(&cfgFile, "config", "", "Config file location\n")
+
+	_ = viper.BindPFlags(pflags)
 }
 
 func initLogger() {
 	// since this is a command line tool, only warnings and errors should be printed and they
 	// shouldn't go to a dedicated file
-	err := logging.Init(logging.LevelWarn, logging.EncodingLogfmt,
+	err := logging.Init(logging.LevelFromString(viper.GetString(conf.LogLevel)), logging.EncodingLogfmt,
 		logging.WithVersion(version.Short()),
 		logging.WithOutput(os.Stdout),
 		logging.WithErrorOutput(os.Stderr),
@@ -250,25 +260,12 @@ func entrypoint(cmd *cobra.Command, args []string) error {
 			return nil
 		}
 
-		// attach subcommands
-		subRootCmd.AddCommand(
-			adminCmd,
-			exampleCmd,
-			listCmd,
-			versionCmd,
-		)
-
-		// execute subcommands if possible
-		for _, c := range subRootCmd.Commands() {
-			if c.Name() == args[0] {
-				c.SetArgs(args[1:])
-				return c.Execute()
-			}
-		}
-
 		// if we didn't find a supported command, we assume this is the query type
 		queryArgs.Query = args[0]
 	}
+
+	// make sure there's protection against unbounded time intervals
+	queryArgs = setDefaultTimeRange(&queryArgs)
 
 	queryCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	defer stop()
@@ -282,6 +279,9 @@ func entrypoint(cmd *cobra.Command, args []string) error {
 	} else {
 		ctx = queryCtx
 	}
+
+	// get logger
+	logger := logging.FromContext(ctx)
 
 	queryArgs.Caller = os.Args[0] // take the full path of called binary
 
@@ -317,10 +317,39 @@ func entrypoint(cmd *cobra.Command, args []string) error {
 		querier = engine.NewQueryRunner(dbPathCfg)
 	}
 
+	// create query logger
+	queryLogFile := viper.GetString(conf.QueryLog)
+	var qlogger *logging.L
+	if queryLogFile != "" {
+		var err error
+
+		logger := logger.With("file", queryLogFile)
+		logger.Debugf("logging query")
+
+		qlogger, err = logging.New(slog.LevelInfo, logging.EncodingJSON, logging.WithFileOutput(queryLogFile))
+		if err != nil {
+			logger.Errorf("failed to initialize query logger: %v", err)
+		} else {
+			qlogger.With("args", queryArgs).Infof("preparing query")
+			defer func() {
+				if result != nil {
+					qlogger = qlogger.With("summary", result.Summary)
+				}
+				qlogger.Info("query finished")
+			}()
+		}
+	}
+
 	// convert the command line parameters
 	stmt, err := queryArgs.Prepare()
 	if err != nil {
 		return fmt.Errorf("failed to prepare query: %w", err)
+	}
+
+	if queryLogFile != "" {
+		if qlogger != nil {
+			qlogger.With("stmt", stmt).Info("running query")
+		}
 	}
 
 	result, err = querier.Run(ctx, &queryArgs)
@@ -354,4 +383,28 @@ func entrypoint(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to print query result: %w", err)
 	}
 	return nil
+}
+
+// setDefaultTimeRange handles the defaults for time arguments if they aren't set
+func setDefaultTimeRange(args *query.Args) query.Args {
+	logger := logging.Logger()
+	if args.First == "" {
+		logger.Debug("setting default value for 'first'")
+
+		// protect against queries that are possibly too large and only go back a day if a time attribute
+		// is included. This is only done if first wasn't explicitly set. If it is, it must be assumed that
+		// the caller knows the possible extend of a "time" query
+		if strings.Contains(args.Query, types.TimeName) || strings.Contains(args.Query, types.RawCompoundQuery) {
+			logger.With("query", args.Query).Debug("time attribute detected, limiting time range to one day")
+			args.First = time.Now().AddDate(0, 0, -1).Format(time.ANSIC)
+		} else {
+			// by default, go back one month in time
+			args.First = time.Now().AddDate(0, -1, 0).Format(time.ANSIC)
+		}
+	}
+	if args.Last == "" {
+		logger.Debug("setting default value for 'last'")
+		args.Last = time.Now().Format(time.ANSIC)
+	}
+	return *args
 }

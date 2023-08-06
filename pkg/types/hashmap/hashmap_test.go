@@ -101,8 +101,8 @@ func TestAggFlowMapFlatten(t *testing.T) {
 	for i := 0; i < 1000; i++ {
 		temp := make([]byte, 8)
 		binary.BigEndian.PutUint64(temp, uint64(i))
-		testMap.V4Map.Set(temp, types.Counters{BytesRcvd: uint64(i), BytesSent: 0, PacketsRcvd: 0, PacketsSent: 0})
-		testMap.V6Map.Set(temp, types.Counters{BytesRcvd: uint64(i), BytesSent: 0, PacketsRcvd: 0, PacketsSent: 0})
+		testMap.PrimaryMap.Set(temp, types.Counters{BytesRcvd: uint64(i), BytesSent: 0, PacketsRcvd: 0, PacketsSent: 0})
+		testMap.SecondaryMap.Set(temp, types.Counters{BytesRcvd: uint64(i), BytesSent: 0, PacketsRcvd: 0, PacketsSent: 0})
 		var count int
 		for it := testMap.Iter(); it.Next(); {
 			count++
@@ -110,9 +110,9 @@ func TestAggFlowMapFlatten(t *testing.T) {
 		require.Equal(t, 2*(i+1), testMap.Len())
 		require.Equal(t, testMap.Len(), count)
 
-		v4List, v6List := testMap.Flatten()
-		require.Equal(t, i+1, len(v4List))
-		require.Equal(t, i+1, len(v6List))
+		primaryList, secondaryList := testMap.Flatten()
+		require.Equal(t, i+1, len(primaryList))
+		require.Equal(t, i+1, len(secondaryList))
 	}
 }
 
