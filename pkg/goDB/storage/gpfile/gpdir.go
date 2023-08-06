@@ -36,6 +36,9 @@ var (
 
 	// ErrInputSizeTooSmall is thrown if the input size for desiralization is too small to be valid
 	ErrInputSizeTooSmall = errors.New("input size too small to be a GPDir metadata header")
+
+	// ErrDirNotOpen denotes that a GPDir is not (yet) open or has been closed
+	ErrDirNotOpen = errors.New("GPDir not open, call Open() first")
 )
 
 // TrafficMetadata denotes a serializable set of metadata information about traffic stats
@@ -120,6 +123,7 @@ type GPDir struct {
 	accessMode  int         // Access mode (also forwarded to all GPFiles)
 	permissions os.FileMode // Permissions (also forwarded to all GPFiles)
 
+	isOpen bool
 	*Metadata
 }
 
@@ -186,6 +190,7 @@ func (d *GPDir) Open(options ...Option) error {
 		}
 	}
 
+	d.isOpen = true
 	return nil
 }
 
@@ -201,6 +206,10 @@ func (d *GPDir) NumIPv6EntriesAtIndex(blockIdx int) uint64 {
 
 // ReadBlockAtIndex returns the block for a specified block index from the underlying GPFile
 func (d *GPDir) ReadBlockAtIndex(colIdx types.ColumnIndex, blockIdx int) ([]byte, error) {
+
+	if !d.isOpen {
+		return nil, ErrDirNotOpen
+	}
 
 	// Load column if required
 	_, err := d.Column(colIdx)
@@ -423,6 +432,10 @@ func (d *GPDir) NBlocks() int {
 // Close closes all underlying open GPFiles and cleans up resources
 func (d *GPDir) Close() error {
 
+	defer func() {
+		d.isOpen = false
+	}()
+
 	// Close all open GPFiles
 	var errs []error
 	for i := 0; i < int(types.ColIdxCount); i++ {
@@ -459,6 +472,11 @@ func (d *GPDir) Close() error {
 
 // column returns the underlying GPFile for a specified column (lazy-access)
 func (d *GPDir) Column(colIdx types.ColumnIndex) (*GPFile, error) {
+
+	if !d.isOpen {
+		return nil, ErrDirNotOpen
+	}
+
 	if d.gpFiles[colIdx] == nil {
 		var err error
 		if d.gpFiles[colIdx], err = New(filepath.Join(d.Path(), types.ColumnFileNames[colIdx]+FileSuffix), d.BlockMetadata[colIdx], d.accessMode, d.options...); err != nil {
