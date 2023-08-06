@@ -88,6 +88,9 @@ type Args struct {
 	// stores who produced these args (caller)
 	Caller string `json:"caller,omitempty" yaml:"caller,omitempty"`
 
+	// enables / sets output for CPU & memory profiling
+	ProfilingOutputDir string `json:"profiling_output_dir,omitempty" yaml:"profiling_output_dir,omitempty"`
+
 	// outputs is unexported
 	outputs []io.Writer
 }

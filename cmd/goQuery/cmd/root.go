@@ -90,6 +90,8 @@ func init() {
 	flags.BoolVarP(&cmdLineParams.Sum, "sum", "", false, helpMap["Sum"])
 	flags.BoolVarP(&cmdLineParams.Version, "version", "v", false, "Print version information and exit\n")
 
+	flags.StringVar(&cmdLineParams.ProfilingOutputDir, "profiling-output-dir", "", "Enable and set directory to store CPU and memory profiles")
+
 	flags.StringVarP(&cmdLineParams.Ifaces, "ifaces", "i", "", helpMap["Ifaces"])
 	flags.StringVarP(&cmdLineParams.Condition, "condition", "c", "", helpMap["Condition"])
 
@@ -215,9 +217,21 @@ func initConfig() {
 }
 
 // main program entrypoint
-func entrypoint(cmd *cobra.Command, args []string) error {
+func entrypoint(cmd *cobra.Command, args []string) (err error) {
 	// assign query args
 	var queryArgs = *cmdLineParams
+
+	// Setup profiling (if enabled)
+	if cmdLineParams.ProfilingOutputDir != "" {
+		if err := startProfiling(cmdLineParams.ProfilingOutputDir); err != nil {
+			return fmt.Errorf("failed to initialize profiling: %w", err)
+		}
+		defer func() {
+			if stopErr := stopProfiling(cmdLineParams.ProfilingOutputDir); stopErr != nil && err == nil {
+				err = fmt.Errorf("failed to finalize profiling: %w", err)
+			}
+		}()
+	}
 
 	// the DB path that can be set in the configuration file has precedence over the one
 	// in the arguments
