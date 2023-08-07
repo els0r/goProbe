@@ -5,10 +5,36 @@ import (
 	"os"
 	"path/filepath"
 	"runtime/pprof"
+
+	"github.com/els0r/goProbe/cmd/goQuery/pkg/conf"
+	"github.com/els0r/goProbe/pkg/logging"
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
-func startProfiling(dirPath string) error {
+func initProfiling(_ *cobra.Command, args []string) error {
+	// Setup profiling (if enabled)
+	profilingOutputDir := viper.GetString(conf.ProfilingOutputDir)
+	if profilingOutputDir != "" {
+		logging.Logger().With(conf.ProfilingOutputDir, profilingOutputDir).Debug("setting up profiling")
+		if err := startProfiling(profilingOutputDir); err != nil {
+			return fmt.Errorf("failed to initialize profiling: %w", err)
+		}
+	}
+	return nil
+}
 
+func finishProfiling(_ *cobra.Command, _ []string) error {
+	profilingOutputDir := viper.GetString(conf.ProfilingOutputDir)
+	if profilingOutputDir != "" {
+		if err := stopProfiling(profilingOutputDir); err != nil {
+			return fmt.Errorf("failed to finalize profiling: %w", err)
+		}
+	}
+	return nil
+}
+
+func startProfiling(dirPath string) error {
 	err := os.MkdirAll(dirPath, 0750)
 	if err != nil {
 		return fmt.Errorf("failed to create pprof directory: %w", err)
