@@ -120,6 +120,8 @@ func main() {
 				logging.LevelFromString(config.Logging.Level) == logging.LevelDebug,
 			),
 			server.WithProfiling(config.API.Profiling),
+			// this line will enable not only HTTP request metrics, but also the default prometheus golang client
+			// metrics for memory, cpu, gc performance, etc.
 			server.WithMetrics(config.API.Metrics, []float64{0.01, 0.05, 0.1, 0.25, 1, 5, 10, 30, 60, 300}...),
 		}
 	)

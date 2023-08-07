@@ -82,9 +82,10 @@ func (h *GoDBHandler) HandleWriteout(ctx context.Context, timestamp time.Time, w
 		}
 		h.Unlock()
 
-		elapsed := time.Since(t0).Round(time.Millisecond)
+		elapsed := time.Since(t0)
+		writeoutDuration.Observe(float64(elapsed) / float64(time.Second))
 
-		logger.With("elapsed", elapsed.String()).Debug("completed writeout")
+		logger.With("elapsed", elapsed.Round(time.Millisecond).String()).Debug("completed writeout")
 		doneChan <- struct{}{}
 	}()
 
