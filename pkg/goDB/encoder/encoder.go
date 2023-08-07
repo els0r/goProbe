@@ -26,6 +26,9 @@ type Encoder interface {
 	// Decompress reads compressed bytes from src into in, decompresses it into out and returns the number of bytes decompressed.
 	// It is the responsibility of the caller to ensure that in and out are properly sized
 	Decompress(in, out []byte, src io.Reader) (n int, err error)
+
+	// SetLevel sets / changes the compression level (if supported)
+	SetLevel(level int)
 }
 
 // New creates a new encoder based on an encoder type

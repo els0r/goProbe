@@ -33,16 +33,16 @@ func New(n ...int) *Map {
 // AggFlowMap stores all flows where the source port from the FlowLog has been aggregated
 // Just a convenient alias for the map type itself
 type AggFlowMap struct {
-	V4Map *Map
-	V6Map *Map
+	PrimaryMap   *Map
+	SecondaryMap *Map
 }
 
 // NewAggFlowMap instantiates a new NewAggFlowMap with an underlying
 // hashmap for both IPv4 and IPv6 entries
 func NewAggFlowMap(n ...int) *AggFlowMap {
 	return &AggFlowMap{
-		V4Map: New(n...),
-		V6Map: New(n...),
+		PrimaryMap:   New(n...),
+		SecondaryMap: New(n...),
 	}
 }
 
@@ -100,8 +100,8 @@ func (n NamedAggFlowMapWithMetadata) ClearFast() {
 func NewAggFlowMapWithMetadata(n ...int) AggFlowMapWithMetadata {
 	return AggFlowMapWithMetadata{
 		AggFlowMap: &AggFlowMap{
-			V4Map: New(n...),
-			V6Map: New(n...),
+			PrimaryMap:   New(n...),
+			SecondaryMap: New(n...),
 		},
 	}
 }
@@ -116,19 +116,19 @@ func (a AggFlowMapWithMetadata) IsNil() bool {
 
 // IsNil returns if an AggFlowMap is nil (used e.g. in cases of error)
 func (a AggFlowMap) IsNil() bool {
-	return a.V4Map == nil && a.V6Map == nil
+	return a.PrimaryMap == nil && a.SecondaryMap == nil
 }
 
 // Len returns the number of valents in the map
 func (a AggFlowMap) Len() int {
-	return a.V4Map.count + a.V6Map.count
+	return a.PrimaryMap.count + a.SecondaryMap.count
 }
 
 // Iter provides a map Iter to allow traversal of both underlying maps (IPv4 and IPv6)
 func (a AggFlowMap) Iter() *MetaIter {
 	return &MetaIter{
-		Iter:   a.V4Map.Iter(),
-		v6Iter: a.V6Map.Iter(),
+		Iter:   a.PrimaryMap.Iter(),
+		v6Iter: a.SecondaryMap.Iter(),
 	}
 }
 
@@ -138,35 +138,35 @@ func (a AggFlowMap) Iter() *MetaIter {
 // it avoids intermediate allocation of a value type valent in case of an update
 func (a AggFlowMap) SetOrUpdate(key Key, isIPv4 bool, eA, eB, eC, eD uint64) {
 	if isIPv4 {
-		a.V4Map.SetOrUpdate(key, eA, eB, eC, eD)
+		a.PrimaryMap.SetOrUpdate(key, eA, eB, eC, eD)
 	} else {
-		a.V6Map.SetOrUpdate(key, eA, eB, eC, eD)
+		a.SecondaryMap.SetOrUpdate(key, eA, eB, eC, eD)
 	}
 }
 
 // Merge allows to incorporate the content of a map b into an existing map a (providing
 // additional in-place counter updates).
 func (a AggFlowMap) Merge(b AggFlowMap, totals *Val) {
-	a.V4Map.Merge(b.V4Map, totals)
-	a.V6Map.Merge(b.V6Map, totals)
+	a.PrimaryMap.Merge(b.PrimaryMap, totals)
+	a.SecondaryMap.Merge(b.SecondaryMap, totals)
 }
 
 // Merge allows to incorporate the content of a map b into an existing map a (providing
 // additional in-place counter updates).
 func (a AggFlowMapWithMetadata) Merge(b AggFlowMapWithMetadata, totals *Val) {
-	a.V4Map.Merge(b.V4Map, totals)
-	a.V6Map.Merge(b.V6Map, totals)
+	a.PrimaryMap.Merge(b.PrimaryMap, totals)
+	a.SecondaryMap.Merge(b.SecondaryMap, totals)
 }
 
 // Clear frees as many resources as possible by making them eligible for GC
 func (a AggFlowMap) Clear() {
-	a.V4Map.Clear()
-	a.V6Map.Clear()
+	a.PrimaryMap.Clear()
+	a.SecondaryMap.Clear()
 }
 
 // ClearFast nils all main resources, making them eligible for GC (but
 // probably not as effectively as Clear())
 func (a AggFlowMap) ClearFast() {
-	a.V4Map.ClearFast()
-	a.V6Map.ClearFast()
+	a.PrimaryMap.ClearFast()
+	a.SecondaryMap.ClearFast()
 }

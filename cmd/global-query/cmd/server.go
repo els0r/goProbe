@@ -9,7 +9,8 @@ import (
 	"syscall"
 
 	"github.com/els0r/goProbe/cmd/global-query/pkg/conf"
-	"github.com/els0r/goProbe/pkg/api/globalquery/server"
+	gqserver "github.com/els0r/goProbe/pkg/api/globalquery/server"
+	"github.com/els0r/goProbe/pkg/api/server"
 	"github.com/els0r/goProbe/pkg/logging"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -26,10 +27,15 @@ var serverCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(serverCmd)
 
-	serverCmd.Flags().String(conf.ServerAddr, conf.DefaultServerAddr, "address to which the server binds")
-	serverCmd.Flags().Duration(conf.ServerShutdownGracePeriod, conf.DefaultServerShutdownGracePeriod, "duration the server will wait during shutdown before forcing shutdown")
+	pflags := serverCmd.PersistentFlags()
 
-	_ = viper.BindPFlags(serverCmd.Flags())
+	pflags.String(conf.ServerAddr, conf.DefaultServerAddr, "address to which the server binds")
+	pflags.Duration(conf.ServerShutdownGracePeriod, conf.DefaultServerShutdownGracePeriod, "duration the server will wait during shutdown before forcing shutdown")
+
+	// telemetry
+	pflags.Bool(conf.ProfilingEnabled, false, "enable profiling endpoints")
+
+	_ = viper.BindPFlags(pflags)
 }
 
 func serverEntrypoint(cmd *cobra.Command, args []string) error {
@@ -53,11 +59,12 @@ func serverEntrypoint(cmd *cobra.Command, args []string) error {
 
 	// set up the API server
 	addr := viper.GetString(conf.ServerAddr)
-	apiServer := server.NewServer(addr, hostListResolver, querier,
+	apiServer := gqserver.New(addr, hostListResolver, querier,
 		// Set the release mode of GIN depending on the log level
 		server.WithDebugMode(
 			logging.LevelFromString(viper.GetString(conf.LogLevel)) == logging.LevelDebug,
 		),
+		server.WithProfiling(viper.GetBool(conf.ProfilingEnabled)),
 	)
 
 	// initializing the server in a goroutine so that it won't block the graceful

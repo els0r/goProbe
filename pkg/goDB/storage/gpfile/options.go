@@ -4,6 +4,7 @@ import (
 	"io/fs"
 
 	"github.com/els0r/goProbe/pkg/goDB/encoder"
+	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 )
 
 // Option defines optional arguments to gpfile
@@ -19,6 +20,7 @@ type optionSetterFile interface {
 	optionSetterCommon
 	setMemPool(MemPoolGCable)
 	setEncoder(encoder.Encoder)
+	setEncoderTypeLevel(encoders.Type, int)
 }
 
 // WithEncoder allows to set the compression implementation
@@ -26,6 +28,15 @@ func WithEncoder(e encoder.Encoder) Option {
 	return func(o any) {
 		if obj, ok := o.(optionSetterFile); ok {
 			obj.setEncoder(e)
+		}
+	}
+}
+
+// WithEncoderTypeLevel allows to set the compression type and level
+func WithEncoderTypeLevel(t encoders.Type, l int) Option {
+	return func(o any) {
+		if obj, ok := o.(optionSetterFile); ok {
+			obj.setEncoderTypeLevel(t, l)
 		}
 	}
 }

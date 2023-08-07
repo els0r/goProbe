@@ -146,18 +146,18 @@ func populateTestDir(t *testing.T, basePath, iface string, timestamp time.Time) 
 
 func generateFlows() *hashmap.AggFlowMap {
 	m := hashmap.AggFlowMap{
-		V4Map: hashmap.New(),
-		V6Map: hashmap.New(),
+		PrimaryMap:   hashmap.New(),
+		SecondaryMap: hashmap.New(),
 	}
 
 	for i := byte(0); i < testNv4; i++ {
-		m.V4Map.Set(types.NewV4KeyStatic(
+		m.PrimaryMap.Set(types.NewV4KeyStatic(
 			[4]byte{i, i, i, i},
 			[4]byte{i, i, i, i},
 			[]byte{i, i}, i), types.Counters{BytesRcvd: uint64(i), BytesSent: 0, PacketsRcvd: uint64(i), PacketsSent: 0})
 	}
 	for i := byte(0); i < testNv6; i++ {
-		m.V6Map.Set(types.NewV6KeyStatic(
+		m.SecondaryMap.Set(types.NewV6KeyStatic(
 			[16]byte{i, i, i, i, i, i, i, i, i, i, i, i, i, i, i, i},
 			[16]byte{i, i, i, i, i, i, i, i, i, i, i, i, i, i, i, i},
 			[]byte{i, i}, i), types.Counters{BytesRcvd: 0, BytesSent: uint64(i), PacketsRcvd: 0, PacketsSent: uint64(i)})
@@ -217,8 +217,8 @@ func testWorkload(t *testing.T, c testCase, dryRun bool) {
 			// Perform sanity checks on aggregated data
 			require.Equal(t, int(c.nExpectedWorkloads), len(mapChan))
 			for aggMap := range mapChan {
-				require.Equal(t, testNv4, aggMap.V4Map.Len())
-				require.Equal(t, testNv6, aggMap.V6Map.Len())
+				require.Equal(t, testNv4, aggMap.PrimaryMap.Len())
+				require.Equal(t, testNv6, aggMap.SecondaryMap.Len())
 			}
 		}
 	}

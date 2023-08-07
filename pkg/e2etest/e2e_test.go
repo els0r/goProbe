@@ -102,7 +102,7 @@ func testStartStop(t *testing.T) {
 		)
 		require.Nil(t, err)
 		return mockSrc, nil
-	}))
+	}), capture.WithSkipWriteoutSchedule(true))
 	require.Nil(t, err)
 
 	// Wait until goProbe is done processing all packets, then kill it in the
@@ -246,7 +246,7 @@ func testE2E(t *testing.T, datasets ...[]byte) {
 	resReference := mockIfaces.BuildResults(t, tempDir, resGoQuery)
 
 	// Counter consistency checks
-	require.Equal(t, mockIfaces.NProcessed(), int(resGoQuery.Summary.Totals.PacketsRcvd))
+	require.Equal(t, mockIfaces.NProcessed(), resGoQuery.Summary.Totals.PacketsRcvd)
 	require.Equal(t, mockIfaces.NProcessed(), mockIfaces.NRead()-mockIfaces.NErr())
 
 	// Summary consistency check (do not fail yet to show details in the next check)
@@ -294,7 +294,10 @@ func runGoProbe(t *testing.T, testDir string, sourceInitFn func() (mockIfaces, f
 		},
 		Interfaces: ifaceConfigs,
 		Logging:    config.LogConfig{},
-	}, capture.WithSourceInitFn(initFn))
+	},
+		capture.WithSourceInitFn(initFn),
+		capture.WithSkipWriteoutSchedule(true),
+	)
 	require.Nil(t, err)
 
 	// Wait until goProbe is done processing all packets, then kill it in the

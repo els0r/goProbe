@@ -45,6 +45,29 @@ func (b *BlockHeader) Blocks() []BlockAtTime {
 	return b.BlockList
 }
 
+// BlocksBefore returns an ordered list all timestamps / blocks that
+// occurred before a given timestamp (including ts)
+func (b *BlockHeader) BlocksBefore(ts int64) []BlockAtTime {
+	for i, block := range b.BlockList {
+		if block.Timestamp >= ts {
+			return b.BlockList[:i]
+		}
+	}
+	return b.BlockList
+}
+
+// BlocksAfter returns an ordered list all timestamps / blocks that
+// occurred after a given timestamp (including ts). The second return
+// ind indicates the index of the first block that is returned
+func (b *BlockHeader) BlocksAfter(ts int64) (blocks []BlockAtTime, ind int) {
+	for i, block := range b.BlockList {
+		if block.Timestamp >= ts {
+			return b.BlockList[i+1:], i + 1
+		}
+	}
+	return []BlockAtTime{}, 0
+}
+
 // NBlocks returns the number of blocks
 func (b *BlockHeader) NBlocks() int {
 	return len(b.BlockList)

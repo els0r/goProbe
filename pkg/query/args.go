@@ -195,16 +195,9 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 	}
 
 	// parse time bound
-	s.Last, err = ParseTimeArgument(a.Last)
+	s.First, s.Last, err = ParseTimeRange(a.First, a.Last)
 	if err != nil {
-		return s, fmt.Errorf("invalid time format for --last: %w", err)
-	}
-	s.First, err = ParseTimeArgument(a.First)
-	if err != nil {
-		return s, fmt.Errorf("invalid time format for --first: %w", err)
-	}
-	if s.Last <= s.First {
-		return s, fmt.Errorf("invalid time interval: the lower time bound cannot be greater than the upper time bound")
+		return s, err
 	}
 
 	// check external calls
