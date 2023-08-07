@@ -42,4 +42,8 @@ const (
 	// Time
 	First = "first"
 	Last  = "last"
+
+	// Profiling
+	profilingKey       = "profiling"
+	ProfilingOutputDir = profilingKey + ".output-dir"
 )
