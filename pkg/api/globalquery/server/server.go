@@ -16,11 +16,11 @@ type Server struct {
 }
 
 // New creates a new global-query API server
-func New(addr string, resolver hosts.Resolver, querier distributed.Querier, opts ...server.Option) *Server {
+func New(serviceName, addr string, resolver hosts.Resolver, querier distributed.Querier, opts ...server.Option) *Server {
 	server := &Server{
 		hostListResolver: resolver,
 		querier:          querier,
-		DefaultServer:    server.NewDefault(addr, opts...),
+		DefaultServer:    server.NewDefault(serviceName, addr, opts...),
 	}
 
 	server.registerRoutes()

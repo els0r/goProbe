@@ -25,11 +25,11 @@ func (server *Server) SetDBPath(path string) *Server {
 }
 
 // New creates a new goprobe API server
-func New(addr string, captureManager *capture.Manager, opts ...server.Option) *Server {
+func New(serviceName, addr string, captureManager *capture.Manager, opts ...server.Option) *Server {
 	server := &Server{
 		dbPath:         defaults.DBPath,
 		captureManager: captureManager,
-		DefaultServer:  server.NewDefault(addr, opts...),
+		DefaultServer:  server.NewDefault(serviceName, addr, opts...),
 	}
 
 	server.registerRoutes()

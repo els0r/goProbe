@@ -4,10 +4,13 @@ import (
 	"context"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/els0r/goProbe/pkg/api"
+	"github.com/els0r/goProbe/pkg/telemetry/metrics"
 	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 const (
@@ -26,10 +29,12 @@ type DefaultServer struct {
 	debug bool
 
 	// telemetry
-	profiling bool
-	metrics   bool
+	profiling              bool
+	metrics                bool
+	requestDurationBuckets []float64
 
-	addr string
+	serviceName string // serviceName is the name of the program that serves the API, e.g. global-query
+	addr        string
 
 	srv    *http.Server
 	router *gin.Engine
@@ -51,17 +56,22 @@ func WithProfiling(enabled bool) Option {
 	}
 }
 
-// WithMetrics enables prometheus metrics endpoints
-func WithMetrics(enabled bool) Option {
+// WithMetrics enables prometheus metrics endpoints. The request duration can be provided if they should differ
+// from the default duration buckets
+func WithMetrics(enabled bool, requestDurationBuckets ...float64) Option {
 	return func(server *DefaultServer) {
 		server.metrics = enabled
+		server.requestDurationBuckets = requestDurationBuckets
 	}
 }
 
 // NewDefault creates a new API server
-func NewDefault(addr string, opts ...Option) *DefaultServer {
+func NewDefault(serviceName, addr string, opts ...Option) *DefaultServer {
 	s := &DefaultServer{
 		addr: addr,
+		// make sure that serviceName conforms to the prometheus naming convention. Exhaustive would be stripping
+		// the serviceName off any characters that are not permitted
+		serviceName: strings.ToLower(serviceName),
 	}
 
 	router := gin.New()
@@ -97,6 +107,15 @@ func (server *DefaultServer) registerMiddlewares() {
 		api.RequestLoggingMiddleware(),
 	)
 
+	if server.metrics {
+		buckets := prometheus.DefBuckets
+		if len(server.requestDurationBuckets) > 0 {
+			buckets = server.requestDurationBuckets
+		}
+		metrics.NewPrometheus(server.serviceName, "api").
+			WithRequestDurationBuckets(buckets).
+			Register(server.router)
+	}
 	if server.profiling {
 		api.RegisterProfiling(server.router)
 	}

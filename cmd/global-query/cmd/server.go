@@ -59,7 +59,7 @@ func serverEntrypoint(cmd *cobra.Command, args []string) error {
 
 	// set up the API server
 	addr := viper.GetString(conf.ServerAddr)
-	apiServer := gqserver.New(addr, hostListResolver, querier,
+	apiServer := gqserver.New(conf.ServiceName, addr, hostListResolver, querier,
 		// Set the release mode of GIN depending on the log level
 		server.WithDebugMode(
 			logging.LevelFromString(viper.GetString(conf.LogLevel)) == logging.LevelDebug,

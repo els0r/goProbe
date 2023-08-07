@@ -25,6 +25,11 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+const (
+	// ServiceName is the name of the service as it will show up in telemetry such as metrics, logs, traces, etc.
+	ServiceName = "goprobe"
+)
+
 // demoKeys stores the API keys that should, under no circumstance, be used in production.
 // They coincide with the keys shown in the README file of goProbe
 var demoKeys = map[string]struct{}{
