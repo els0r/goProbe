@@ -19,12 +19,12 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"runtime/pprof"
 	"syscall"
 	"time"
 
 	"github.com/els0r/goProbe/cmd/goProbe/flags"
-	"github.com/els0r/goProbe/pkg/api/goprobe/server"
+	gpserver "github.com/els0r/goProbe/pkg/api/goprobe/server"
+	"github.com/els0r/goProbe/pkg/api/server"
 	"github.com/els0r/goProbe/pkg/capture"
 	"github.com/els0r/goProbe/pkg/logging"
 	"github.com/els0r/goProbe/pkg/version"
@@ -59,8 +59,15 @@ func main() {
 	}
 
 	// Initialize logger
-	err = logging.Init(logging.LevelFromString(config.Logging.Level), logging.Encoding(config.Logging.Encoding),
+	loggerOpts := []logging.Option{
 		logging.WithVersion(appVersion),
+	}
+	if config.Logging.Destination != "" {
+		loggerOpts = append(loggerOpts, logging.WithFileOutput(config.Logging.Destination))
+	}
+
+	err = logging.Init(logging.LevelFromString(config.Logging.Level), logging.Encoding(config.Logging.Encoding),
+		loggerOpts...,
 	)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to initialize logger: %v\n", err)
@@ -69,18 +76,6 @@ func main() {
 
 	logger := logging.Logger()
 	logger.Info("loaded configuration")
-
-	// Setup profiling (if enabled)
-	if flags.CmdLine.ProfilingOutputDir != "" {
-		if err := startProfiling(flags.CmdLine.ProfilingOutputDir); err != nil {
-			logger.Fatal(err)
-		}
-		defer func() {
-			if err := stopProfiling(flags.CmdLine.ProfilingOutputDir); err != nil {
-				logger.Fatal(err)
-			}
-		}()
-	}
 
 	// It doesn't make sense to monitor zero interfaces
 	if len(config.Interfaces) == 0 {
@@ -118,19 +113,17 @@ func main() {
 
 	// configure api server
 	var (
-		apiServer  *server.Server
+		apiServer  *gpserver.Server
 		apiOptions = []server.Option{
-			server.WithDBPath(config.DB.Path),
 			// Set the release mode of GIN depending on the log level
 			server.WithDebugMode(
 				logging.LevelFromString(config.Logging.Level) == logging.LevelDebug,
 			),
+			server.WithProfiling(config.API.Profiling),
+			server.WithMetrics(config.API.Metrics),
 		}
 	)
 
-	// if config.API.Metrics {
-	// 	apiOptions = append(apiOptions, api.WithMetricsExport())
-	// }
 	// if len(config.API.Keys) > 0 {
 	// 	apiOptions = append(apiOptions, api.WithKeys(config.API.Keys))
 	// }
@@ -143,7 +136,8 @@ func main() {
 
 	// create server and start listening for requests
 	if config.API != nil {
-		apiServer = server.New(config.API.Addr, captureManager, apiOptions...)
+		apiServer = gpserver.New(config.API.Addr, captureManager, apiOptions...)
+		apiServer.SetDBPath(config.DB.Path)
 
 		logger.With("addr", config.API.Addr).Info("starting API server")
 		go func() {
@@ -176,37 +170,4 @@ func main() {
 
 	captureManager.Close(fallbackCtx)
 	logger.Info("graceful shut down completed")
-}
-
-func startProfiling(dirPath string) error {
-
-	err := os.MkdirAll(dirPath, 0750)
-	if err != nil {
-		return fmt.Errorf("failed to create pprof directory: %w", err)
-	}
-
-	f, err := os.Create(filepath.Join(filepath.Clean(dirPath), "goprobe_cpu_profile.pprof"))
-	if err != nil {
-		return fmt.Errorf("failed to create CPU profile file: %w", err)
-	}
-	if err := pprof.StartCPUProfile(f); err != nil {
-		return fmt.Errorf("failed to start CPU profiling: %w", err)
-	}
-
-	return nil
-}
-
-func stopProfiling(dirPath string) error {
-
-	pprof.StopCPUProfile()
-
-	f, err := os.Create(filepath.Join(filepath.Clean(dirPath), "goprobe_mem_profile.pprof"))
-	if err != nil {
-		return fmt.Errorf("failed to create memory profile file: %w", err)
-	}
-	if err := pprof.Lookup("allocs").WriteTo(f, 0); err != nil {
-		return fmt.Errorf("failed to start memory profiling: %w", err)
-	}
-
-	return nil
 }

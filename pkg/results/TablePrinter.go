@@ -85,13 +85,13 @@ func columns(selector types.LabelSelector, attributes []types.Attribute, d types
 
 	for _, attrib := range attributes {
 		switch attrib.Name() {
-		case "sip":
+		case types.SipName:
 			cols = append(cols, OutcolSip)
-		case "dip":
+		case types.DipName:
 			cols = append(cols, OutcolDip)
-		case "proto":
+		case types.ProtoName:
 			cols = append(cols, OutcolProto)
-		case "dport":
+		case types.DportName:
 			cols = append(cols, OutcolDport)
 		}
 	}
@@ -616,37 +616,40 @@ func (t *TextTablePrinter) Footer(result *Result) {
 		fmt.Fprintln(t.writer)
 	}
 
+	textFormatter := TextFormatter{}
+
 	// Summary
-	fmt.Fprintf(t.footwriter, "Timespan / Interface\t: [%s, %s] / %s\n",
+	fmt.Fprintf(t.footwriter, "Timespan / Interface\t: [%s, %s] (%s) / %s\n",
 		result.Summary.First.Format(types.DefaultTimeOutputFormat),
 		result.Summary.Last.Format(types.DefaultTimeOutputFormat),
+		formatting.Durationable(result.Summary.Last.Sub(result.Summary.First).Round(time.Minute)),
 		strings.Join(result.Summary.Interfaces, ","))
 	fmt.Fprintf(t.footwriter, "Sorted by\t: %s\n",
 		describe(t.sort, t.direction))
 	if result.Summary.Timings.ResolutionDuration > 0 {
 		fmt.Fprintf(t.footwriter, "Reverse DNS stats\t: RDNS took %s, timeout was %s\n",
-			TextFormatter{}.Duration(result.Summary.Timings.ResolutionDuration),
-			TextFormatter{}.Duration(t.resolveTimeout))
+			formatting.Durationable(result.Summary.Timings.ResolutionDuration),
+			formatting.Durationable(t.resolveTimeout))
 	}
 
 	var hitsDisplayed string
 	if result.Summary.Hits.Displayed < 1000 {
 		hitsDisplayed = fmt.Sprintf("%d", result.Summary.Hits.Displayed)
 	} else {
-		hitsDisplayed = strings.TrimSpace(TextFormatter{}.Count(uint64(result.Summary.Hits.Displayed)))
+		hitsDisplayed = strings.TrimSpace(textFormatter.Count(uint64(result.Summary.Hits.Displayed)))
 	}
 
 	var hitsTotal string
 	if result.Summary.Hits.Total < 1000 {
 		hitsTotal = fmt.Sprintf("%d", result.Summary.Hits.Total)
 	} else {
-		hitsTotal = strings.TrimSpace(TextFormatter{}.Count(uint64(result.Summary.Hits.Total)))
+		hitsTotal = strings.TrimSpace(textFormatter.Count(uint64(result.Summary.Hits.Total)))
 	}
 
 	fmt.Fprintf(t.footwriter, "Query stats\t: displayed top %s hits out of %s in %s\n",
 		hitsDisplayed,
 		hitsTotal,
-		TextFormatter{}.Duration(result.Summary.Timings.QueryDuration))
+		textFormatter.Duration(result.Summary.Timings.QueryDuration))
 	if result.Query.Condition != "" {
 		fmt.Fprintf(t.footwriter, "Conditions:\t: %s\n",
 			result.Query.Condition)

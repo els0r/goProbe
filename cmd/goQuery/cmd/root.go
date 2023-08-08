@@ -32,13 +32,16 @@ var cfgFile string
 var supportedCmds = "{QUERY TYPE|COLUMNS|examples|list|version}"
 
 var rootCmd = &cobra.Command{
-	Use:           "goQuery -i <interfaces> QUERY TYPE",
-	Short:         helpBase,
-	Long:          helpBaseLong,
-	RunE:          entrypoint,
-	Args:          validatePositionalArgs,
-	SilenceUsage:  true,
-	SilenceErrors: true,
+	Use:   "goQuery -i <interfaces> QUERY TYPE",
+	Short: helpBase,
+	Long:  helpBaseLong,
+	// we want to make sure that every command can be profiled
+	PersistentPreRunE:  initProfiling,
+	RunE:               entrypoint,
+	PersistentPostRunE: finishProfiling,
+	Args:               validatePositionalArgs,
+	SilenceUsage:       true,
+	SilenceErrors:      true,
 }
 
 func GetRootCmd() *cobra.Command {
@@ -145,6 +148,8 @@ and I/O load)
 	flags.StringVarP(&cmdLineParams.HostQuery, conf.QueryHostsResolution, "q", "", "Hosts resolution query\n")
 
 	// persistent flags to be also passed to children commands
+	pflags.String(conf.ProfilingOutputDir, "", "Enable and set directory to store CPU and memory profiles")
+
 	pflags.StringVarP(&cmdLineParams.Format, conf.ResultsFormat, "e", query.DefaultFormat,
 		`Output format:
   txt           Output in plain text format (default)
@@ -215,7 +220,7 @@ func initConfig() {
 }
 
 // main program entrypoint
-func entrypoint(cmd *cobra.Command, args []string) error {
+func entrypoint(cmd *cobra.Command, args []string) (err error) {
 	// assign query args
 	var queryArgs = *cmdLineParams
 
@@ -237,15 +242,6 @@ func entrypoint(cmd *cobra.Command, args []string) error {
 	if cmdLineParams.Version {
 		printVersion()
 		return nil
-	}
-
-	// handle the defaults for time
-	if queryArgs.First == "" {
-		// by default, go back one month in time
-		queryArgs.First = time.Now().AddDate(0, -1, 0).Format(time.ANSIC)
-	}
-	if queryArgs.Last == "" {
-		queryArgs.Last = time.Now().Format(time.ANSIC)
 	}
 
 	// check if arguments should be loaded from disk. The cmdLineParams are taken as
@@ -272,6 +268,9 @@ func entrypoint(cmd *cobra.Command, args []string) error {
 		// if we didn't find a supported command, we assume this is the query type
 		queryArgs.Query = args[0]
 	}
+
+	// make sure there's protection against unbounded time intervals
+	queryArgs = setDefaultTimeRange(&queryArgs)
 
 	queryCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	defer stop()
@@ -389,4 +388,28 @@ func entrypoint(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to print query result: %w", err)
 	}
 	return nil
+}
+
+// setDefaultTimeRange handles the defaults for time arguments if they aren't set
+func setDefaultTimeRange(args *query.Args) query.Args {
+	logger := logging.Logger()
+	if args.First == "" {
+		logger.Debug("setting default value for 'first'")
+
+		// protect against queries that are possibly too large and only go back a day if a time attribute
+		// is included. This is only done if first wasn't explicitly set. If it is, it must be assumed that
+		// the caller knows the possible extend of a "time" query
+		if strings.Contains(args.Query, types.TimeName) || strings.Contains(args.Query, types.RawCompoundQuery) {
+			logger.With("query", args.Query).Debug("time attribute detected, limiting time range to one day")
+			args.First = time.Now().AddDate(0, 0, -1).Format(time.ANSIC)
+		} else {
+			// by default, go back one month in time
+			args.First = time.Now().AddDate(0, -1, 0).Format(time.ANSIC)
+		}
+	}
+	if args.Last == "" {
+		logger.Debug("setting default value for 'last'")
+		args.Last = time.Now().Format(time.ANSIC)
+	}
+	return *args
 }

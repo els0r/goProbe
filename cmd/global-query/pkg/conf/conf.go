@@ -7,6 +7,9 @@ const (
 	LogLevel    = loggingKey + ".level"
 	LogEncoding = loggingKey + ".encoding"
 
+	profilingKey     = "profiling"
+	ProfilingEnabled = profilingKey + ".enabled"
+
 	hostsKey         = "hosts"
 	hostsResolverKey = hostsKey + ".resolver"
 

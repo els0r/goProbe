@@ -128,7 +128,7 @@ func (i ipAttribute) String() string {
 
 // Name returns the attributes name
 func (SipAttribute) Name() string {
-	return "sip"
+	return SipName
 }
 
 func (SipAttribute) attributeMarker() {}
@@ -227,6 +227,15 @@ func AllColumns() []string {
 
 const attrSep = ","
 
+const (
+	TalkConvCompoundQuery    = "talk_conv"
+	TalkSrcCompoundQuery     = "talk_src"
+	TalkDstCompoundQuery     = "talk_dst"
+	AppsPortCompoundQuery    = "apps_port"
+	AggTalkPortCompoundQuery = "agg_talk_port"
+	RawCompoundQuery         = "raw"
+)
+
 // ToAttribueNames translates query abbreviations into the attributes they hold
 func ToAttributeNames(queryType string) (attrs []string) {
 	// covers the case where aliases and attribute/label names are mixed (e.g. talk_conv,dport)
@@ -239,17 +248,17 @@ func ToAttributeNames(queryType string) (attrs []string) {
 	}
 
 	switch queryType {
-	case "talk_conv":
+	case TalkConvCompoundQuery:
 		return []string{SipName, DipName}
-	case "talk_src":
+	case TalkSrcCompoundQuery:
 		return []string{SipName}
-	case "talk_dst":
+	case TalkDstCompoundQuery:
 		return []string{DipName}
-	case "apps_port":
+	case AppsPortCompoundQuery:
 		return []string{DportName, ProtoName}
-	case "agg_talk_port":
+	case AggTalkPortCompoundQuery:
 		return []string{SipName, DipName, DportName, ProtoName}
-	case "raw":
+	case RawCompoundQuery:
 		return AllColumns()
 	}
 	// We didn't match any of the preset query types, so we are dealing with

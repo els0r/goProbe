@@ -36,13 +36,16 @@ var (
 
 	// ErrInputSizeTooSmall is thrown if the input size for desiralization is too small to be valid
 	ErrInputSizeTooSmall = errors.New("input size too small to be a GPDir metadata header")
+
+	// ErrDirNotOpen denotes that a GPDir is not (yet) open or has been closed
+	ErrDirNotOpen = errors.New("GPDir not open, call Open() first")
 )
 
 // TrafficMetadata denotes a serializable set of metadata information about traffic stats
 type TrafficMetadata struct {
 	NumV4Entries uint64 `json:"num_v4_entries"`
 	NumV6Entries uint64 `json:"num_v6_entries"`
-	NumDrops     int    `json:"num_drops"`
+	NumDrops     uint64 `json:"num_drops"`
 }
 
 type Stats struct {
@@ -91,7 +94,7 @@ type Metadata struct {
 	BlockTraffic  []TrafficMetadata
 
 	Stats
-	Version int
+	Version uint64
 }
 
 // newMetadata initializes a new Metadata set (internal / serialization use only)
@@ -120,6 +123,7 @@ type GPDir struct {
 	accessMode  int         // Access mode (also forwarded to all GPFiles)
 	permissions os.FileMode // Permissions (also forwarded to all GPFiles)
 
+	isOpen bool
 	*Metadata
 }
 
@@ -186,6 +190,7 @@ func (d *GPDir) Open(options ...Option) error {
 		}
 	}
 
+	d.isOpen = true
 	return nil
 }
 
@@ -201,6 +206,10 @@ func (d *GPDir) NumIPv6EntriesAtIndex(blockIdx int) uint64 {
 
 // ReadBlockAtIndex returns the block for a specified block index from the underlying GPFile
 func (d *GPDir) ReadBlockAtIndex(colIdx types.ColumnIndex, blockIdx int) ([]byte, error) {
+
+	if !d.isOpen {
+		return nil, ErrDirNotOpen
+	}
 
 	// Load column if required
 	_, err := d.Column(colIdx)
@@ -263,15 +272,15 @@ func (d *GPDir) Unmarshal(r ReadWriteSeekCloser) error {
 
 	d.Metadata = newMetadata()
 
-	d.Metadata.Version = int(binary.BigEndian.Uint64(data[0:8]))            // Get header version
-	nBlocks := int(binary.BigEndian.Uint64(data[8:16]))                     // Get flat nummber of blocks
-	d.Metadata.Traffic.NumV4Entries = binary.BigEndian.Uint64(data[16:24])  // Get global number of IPv4 flows
-	d.Metadata.Traffic.NumV6Entries = binary.BigEndian.Uint64(data[24:32])  // Get global number of IPv6 flows
-	d.Metadata.Traffic.NumDrops = int(binary.BigEndian.Uint64(data[32:40])) // Get global number of dropped packets
-	d.Metadata.Counts.BytesRcvd = binary.BigEndian.Uint64(data[40:48])      // Get global Counters (BytesRcvd)
-	d.Metadata.Counts.BytesSent = binary.BigEndian.Uint64(data[48:56])      // Get global Counters (BytesSent)
-	d.Metadata.Counts.PacketsRcvd = binary.BigEndian.Uint64(data[56:64])    // Get global Counters (PacketsRcvd)
-	d.Metadata.Counts.PacketsSent = binary.BigEndian.Uint64(data[64:72])    // Get global Counters (PacketsSent)
+	d.Metadata.Version = binary.BigEndian.Uint64(data[0:8])                // Get header version
+	nBlocks := int(binary.BigEndian.Uint64(data[8:16]))                    // Get flat nummber of blocks
+	d.Metadata.Traffic.NumV4Entries = binary.BigEndian.Uint64(data[16:24]) // Get global number of IPv4 flows
+	d.Metadata.Traffic.NumV6Entries = binary.BigEndian.Uint64(data[24:32]) // Get global number of IPv6 flows
+	d.Metadata.Traffic.NumDrops = binary.BigEndian.Uint64(data[32:40])     // Get global number of dropped packets
+	d.Metadata.Counts.BytesRcvd = binary.BigEndian.Uint64(data[40:48])     // Get global Counters (BytesRcvd)
+	d.Metadata.Counts.BytesSent = binary.BigEndian.Uint64(data[48:56])     // Get global Counters (BytesSent)
+	d.Metadata.Counts.PacketsRcvd = binary.BigEndian.Uint64(data[56:64])   // Get global Counters (PacketsRcvd)
+	d.Metadata.Counts.PacketsSent = binary.BigEndian.Uint64(data[64:72])   // Get global Counters (PacketsSent)
 	pos := 72
 
 	// Get block information
@@ -298,7 +307,7 @@ func (d *GPDir) Unmarshal(r ReadWriteSeekCloser) error {
 	for i := 0; i < nBlocks; i++ {
 		d.BlockTraffic[i].NumV4Entries = uint64(binary.BigEndian.Uint32(data[pos : pos+4]))
 		d.BlockTraffic[i].NumV6Entries = uint64(binary.BigEndian.Uint32(data[pos+4 : pos+8]))
-		d.BlockTraffic[i].NumDrops = int(binary.BigEndian.Uint32(data[pos+8 : pos+12]))
+		d.BlockTraffic[i].NumDrops = uint64(binary.BigEndian.Uint32(data[pos+8 : pos+12]))
 		thisTimestamp := lastTimestamp + int64(binary.BigEndian.Uint32(data[pos+12:pos+16]))
 		for j := 0; j < int(types.ColIdxCount); j++ {
 			d.BlockMetadata[j].BlockList[i].Timestamp = thisTimestamp
@@ -423,6 +432,10 @@ func (d *GPDir) NBlocks() int {
 // Close closes all underlying open GPFiles and cleans up resources
 func (d *GPDir) Close() error {
 
+	defer func() {
+		d.isOpen = false
+	}()
+
 	// Close all open GPFiles
 	var errs []error
 	for i := 0; i < int(types.ColIdxCount); i++ {
@@ -459,6 +472,11 @@ func (d *GPDir) Close() error {
 
 // column returns the underlying GPFile for a specified column (lazy-access)
 func (d *GPDir) Column(colIdx types.ColumnIndex) (*GPFile, error) {
+
+	if !d.isOpen {
+		return nil, ErrDirNotOpen
+	}
+
 	if d.gpFiles[colIdx] == nil {
 		var err error
 		if d.gpFiles[colIdx], err = New(filepath.Join(d.Path(), types.ColumnFileNames[colIdx]+FileSuffix), d.BlockMetadata[colIdx], d.accessMode, d.options...); err != nil {

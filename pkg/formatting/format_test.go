@@ -54,12 +54,13 @@ func TestDuration(t *testing.T) {
 		input    time.Duration
 		expected string
 	}{
-		{0, "0ms"},
+		{0, "0s"},
 		{1 * time.Millisecond, "1ms"},
-		{1 * time.Second, "1.0s"},
-		{1*time.Second + 232*time.Millisecond, "1.2s"},
-		{1*time.Minute + 3*time.Second, "1m 3s"},
-		{1*time.Hour + 3*time.Minute + 3*time.Second, "1h 3m"},
+		{1 * time.Second, "1s"},
+		{1*time.Second + 232*time.Millisecond, "1.232s"},
+		{1*time.Minute + 3*time.Second, "1m3s"},
+		{1*time.Hour + 3*time.Minute + 3*time.Second, "1h3m3s"},
+		{25*time.Hour + 3*time.Minute + 3*time.Second, "1d1h3m3s"},
 	}
 
 	for _, test := range tests {

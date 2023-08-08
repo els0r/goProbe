@@ -78,6 +78,15 @@ You can specify "ANY" to query all interfaces.
 `,
 	"First": `Upper/lower bound on flow timestamp
 
+DEFAULTS
+
+  --first will default to the last 30 days if not provided. In case
+  a "time" attribute is involved (e.g. for "time" or "raw" queries),
+  the default is lowered to the last 24 hours. This is to protect
+  against accidentally querying the entire database.
+
+  --last will default to the current time if not provided
+
 ALLOWED FORMATS
 
   1357800683                            EPOCH

@@ -12,7 +12,7 @@ import (
 // TODO: check with fako1024 if this can be removed already or if this is
 // post-v4-release
 type CaptureMetadata struct {
-	PacketsDropped int
+	PacketsDropped uint64
 }
 
 // InterfaceMetadata describes the time range for which data is available, how many flows

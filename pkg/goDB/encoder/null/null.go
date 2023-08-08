@@ -48,3 +48,6 @@ func (e *Encoder) Decompress(_, out []byte, src io.Reader) (n int, err error) {
 
 	return n, nil
 }
+
+// SetLevel sets / changes the compression level (if supported)
+func (e *Encoder) SetLevel(level int) {}

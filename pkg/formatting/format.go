@@ -21,6 +21,14 @@ func (s Sizeable) String() string {
 	return Size(uint64(s))
 }
 
+// Durationable is a time.Duration that can be printed in a human readable format and
+// will prepend 'd' for 'days' in case the duration is above 24 hours
+type Durationable time.Duration
+
+func (d Durationable) String() string {
+	return Duration(time.Duration(d))
+}
+
 // Count takes a number and prints it in a human readable format,
 // e.g. 1000 -> 1k, 1000000 -> 1M, 1000000000 -> 1G
 func Count(val uint64) string {
@@ -62,14 +70,11 @@ func Size(size uint64) string {
 
 // Duration prints out d in a human-readable duration format
 func Duration(d time.Duration) string {
-	if d/time.Hour != 0 {
-		return fmt.Sprintf("%dh%2dm", d/time.Hour, d%time.Hour/time.Minute)
+	// enhance the classic duration Stringer to print out days
+	days := d / (24 * time.Hour)
+	if days != 0 {
+		d = d - (days * 24 * time.Hour)
+		return fmt.Sprintf("%dd%s", days, d.Round(time.Millisecond))
 	}
-	if d/time.Minute != 0 {
-		return fmt.Sprintf("%dm%2ds", d/time.Minute, d%time.Minute/time.Second)
-	}
-	if d/time.Second != 0 {
-		return fmt.Sprintf("%.1fs", d.Seconds())
-	}
-	return fmt.Sprintf("%dms", d/time.Millisecond)
+	return fmt.Sprintf("%s", d.Round(time.Millisecond))
 }
