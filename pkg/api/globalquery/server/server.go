@@ -1,6 +1,7 @@
 package server
 
 import (
+	"github.com/els0r/goProbe/cmd/global-query/pkg/conf"
 	"github.com/els0r/goProbe/cmd/global-query/pkg/distributed"
 	"github.com/els0r/goProbe/cmd/global-query/pkg/hosts"
 	gqapi "github.com/els0r/goProbe/pkg/api/globalquery"
@@ -16,11 +17,11 @@ type Server struct {
 }
 
 // New creates a new global-query API server
-func New(serviceName, addr string, resolver hosts.Resolver, querier distributed.Querier, opts ...server.Option) *Server {
+func New(addr string, resolver hosts.Resolver, querier distributed.Querier, opts ...server.Option) *Server {
 	server := &Server{
 		hostListResolver: resolver,
 		querier:          querier,
-		DefaultServer:    server.NewDefault(serviceName, addr, opts...),
+		DefaultServer:    server.NewDefault(conf.ServiceName, addr, opts...),
 	}
 
 	server.registerRoutes()

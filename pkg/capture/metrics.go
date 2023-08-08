@@ -42,7 +42,7 @@ var rotationDuration = prometheus.NewHistogram(prometheus.HistogramOpts{
 	Name:      "rotation_duration_seconds",
 	Help:      "Total flow map rotation time, aggregated across all interfaces",
 	// rotation is significantly faster than the writeout. Hence the small buckets
-	Buckets: []float64{0.0001, 0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25},
+	Buckets: []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 0.75, 1},
 })
 
 func init() {

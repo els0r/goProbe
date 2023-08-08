@@ -273,6 +273,7 @@ func (c *Capture) capturePacket() error {
 	c.errMap[err.Error()]++
 
 	// add error counter to exposed metric
+	// TODO: move out to a metric tracked within the c.stats
 	captureErrors.Inc()
 
 	// Shut down the interface thread if too many consecutive decoding failures
