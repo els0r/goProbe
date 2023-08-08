@@ -32,13 +32,16 @@ var cfgFile string
 var supportedCmds = "{QUERY TYPE|COLUMNS|examples|list|version}"
 
 var rootCmd = &cobra.Command{
-	Use:           "goQuery -i <interfaces> QUERY TYPE",
-	Short:         helpBase,
-	Long:          helpBaseLong,
-	RunE:          entrypoint,
-	Args:          validatePositionalArgs,
-	SilenceUsage:  true,
-	SilenceErrors: true,
+	Use:   "goQuery -i <interfaces> QUERY TYPE",
+	Short: helpBase,
+	Long:  helpBaseLong,
+	// we want to make sure that every command can be profiled
+	PersistentPreRunE:  initProfiling,
+	RunE:               entrypoint,
+	PersistentPostRunE: finishProfiling,
+	Args:               validatePositionalArgs,
+	SilenceUsage:       true,
+	SilenceErrors:      true,
 }
 
 func GetRootCmd() *cobra.Command {
@@ -145,6 +148,8 @@ and I/O load)
 	flags.StringVarP(&cmdLineParams.HostQuery, conf.QueryHostsResolution, "q", "", "Hosts resolution query\n")
 
 	// persistent flags to be also passed to children commands
+	pflags.String(conf.ProfilingOutputDir, "", "Enable and set directory to store CPU and memory profiles")
+
 	pflags.StringVarP(&cmdLineParams.Format, conf.ResultsFormat, "e", query.DefaultFormat,
 		`Output format:
   txt           Output in plain text format (default)
@@ -215,7 +220,7 @@ func initConfig() {
 }
 
 // main program entrypoint
-func entrypoint(cmd *cobra.Command, args []string) error {
+func entrypoint(cmd *cobra.Command, args []string) (err error) {
 	// assign query args
 	var queryArgs = *cmdLineParams
 
