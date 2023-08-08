@@ -97,8 +97,8 @@ type APIConfig struct {
 	Keys      []string `json:"keys" yaml:"keys"`
 }
 
-// New creates a new configuration struct with default settings
-func New() *Config {
+// newDefault creates a new configuration struct with default settings
+func newDefault() *Config {
 	return &Config{
 		DB: DBConfig{
 			Path:        defaults.DBPath,
@@ -261,7 +261,7 @@ var (
 
 // Parse attempts to read the configuration from an io.Reader
 func Parse(src io.Reader) (*Config, error) {
-	config := New()
+	config := newDefault()
 
 	// we slurp the bytes form the src in order to unmarshal it into JSON or YAML
 	// TODO: protect this method from cases where src contains a very large file

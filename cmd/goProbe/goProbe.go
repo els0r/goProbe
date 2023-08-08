@@ -112,9 +112,11 @@ func main() {
 	}
 
 	// configure api server
-	var (
-		apiServer  *gpserver.Server
-		apiOptions = []server.Option{
+	var apiServer *gpserver.Server
+
+	// create server and start listening for requests
+	if config.API != nil {
+		var apiOptions = []server.Option{
 			// Set the release mode of GIN depending on the log level
 			server.WithDebugMode(
 				logging.LevelFromString(config.Logging.Level) == logging.LevelDebug,
@@ -124,14 +126,10 @@ func main() {
 			// metrics for memory, cpu, gc performance, etc.
 			server.WithMetrics(config.API.Metrics, []float64{0.01, 0.05, 0.1, 0.25, 1, 5, 10, 30, 60, 300}...),
 		}
-	)
+		// if len(config.API.Keys) > 0 {
+		// 	apiOptions = append(apiOptions, api.WithKeys(config.API.Keys))
+		// }
 
-	// if len(config.API.Keys) > 0 {
-	// 	apiOptions = append(apiOptions, api.WithKeys(config.API.Keys))
-	// }
-
-	// create server and start listening for requests
-	if config.API != nil {
 		apiServer = gpserver.New(gpconf.ServiceName, config.API.Addr, captureManager, apiOptions...)
 		apiServer.SetDBPath(config.DB.Path)
 
