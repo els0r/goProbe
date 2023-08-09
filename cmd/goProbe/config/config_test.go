@@ -14,7 +14,7 @@ func TestValidate(t *testing.T) {
 		input       *Config
 		expectedErr error
 	}{
-		{"new", New(), errorNoInterfacesSpecified},
+		{"new", newDefault(), errorNoInterfacesSpecified},
 		{"valid config",
 			&Config{
 				DB: DBConfig{
@@ -124,6 +124,7 @@ func TestValidate(t *testing.T) {
 		// run each case as a sub test
 		t.Run(test.name, func(t *testing.T) {
 			err := test.input.Validate()
+			t.Log(test.input)
 			assert.ErrorIs(t, err, test.expectedErr)
 		})
 	}

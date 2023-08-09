@@ -436,8 +436,13 @@ func (cm *Manager) rotate(ctx context.Context, writeoutChan chan<- capturetypes.
 	}
 	rg.Wait()
 
+	// observe rotation duration
+	t1 := time.Since(t0)
+	rotationDuration.Observe(float64(t1) / float64(time.Second))
+	interfacesCapturing.Set(float64(len(ifaces)))
+
 	logger.With(
-		"elapsed", time.Since(t0).Round(time.Millisecond).String(),
+		"elapsed", t1.Round(time.Microsecond).String(),
 		"ifaces", ifaces,
 	).Debug("rotated interfaces")
 }

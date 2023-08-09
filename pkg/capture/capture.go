@@ -272,6 +272,10 @@ func (c *Capture) capturePacket() error {
 	c.errCount++
 	c.errMap[err.Error()]++
 
+	// add error counter to exposed metric
+	// TODO: move out to a metric tracked within the c.stats
+	captureErrors.Inc()
+
 	// Shut down the interface thread if too many consecutive decoding failures
 	// have been encountered
 	if c.errCount > ErrorThreshold {
@@ -293,6 +297,14 @@ func (c *Capture) status() (*capturetypes.CaptureStats, error) {
 
 	c.stats.ReceivedTotal += stats.PacketsReceived
 	c.stats.ProcessedTotal += c.stats.Processed
+
+	// add exposed metrics
+	// we do this every 5 minutes only in order not to interfere with the
+	// main packet processing loop. If this counter moves slowly (as in gets
+	// gets an update only every 5 minutes) it's not an issue to understand
+	// processed data volumes across longer time frames
+	packetsProcessed.Add(float64(c.stats.Processed))
+	packetsDropped.Add(float64(stats.PacketsDropped))
 
 	res := capturetypes.CaptureStats{
 		StartedAt:      c.startedAt,

@@ -1,6 +1,7 @@
 package server
 
 import (
+	"github.com/els0r/goProbe/cmd/global-query/pkg/conf"
 	"github.com/els0r/goProbe/cmd/global-query/pkg/distributed"
 	"github.com/els0r/goProbe/cmd/global-query/pkg/hosts"
 	gqapi "github.com/els0r/goProbe/pkg/api/globalquery"
@@ -20,7 +21,7 @@ func New(addr string, resolver hosts.Resolver, querier distributed.Querier, opts
 	server := &Server{
 		hostListResolver: resolver,
 		querier:          querier,
-		DefaultServer:    server.NewDefault(addr, opts...),
+		DefaultServer:    server.NewDefault(conf.ServiceName, addr, opts...),
 	}
 
 	server.registerRoutes()
