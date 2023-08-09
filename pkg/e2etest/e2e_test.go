@@ -413,7 +413,7 @@ func newPcapSource(t testing.TB, name string, data []byte) (res *mockIface) {
 			defer res.Unlock()
 
 			pkt = slimcap.NewIPPacket(pkt, payload, pktType, int(totalLen), ipLayerOffset)
-			hash, isIPv4, auxInfo, err := capture.ParsePacket(pkt.IPLayer(), pkt.Type(), pkt.TotalLen())
+			hash, isIPv4, auxInfo, err := capture.ParsePacket(pkt.IPLayer(), pkt.TotalLen())
 			if err != nil {
 				res.tracking.nErr++
 				return
@@ -509,7 +509,7 @@ func newSyntheticSource(t testing.TB, name string, nPkts int) (res *mockIface) {
 			defer res.Unlock()
 
 			pkt := slimcap.NewIPPacket(nil, payload, pktType, int(totalLen), ipLayerOffset)
-			hash, isIPv4, auxInfo, err := capture.ParsePacket(pkt.IPLayer(), pkt.Type(), pkt.TotalLen())
+			hash, isIPv4, auxInfo, err := capture.ParsePacket(pkt.IPLayer(), pkt.TotalLen())
 			if err != nil {
 				res.tracking.nErr++
 				return

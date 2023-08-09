@@ -23,15 +23,24 @@ const (
 
 	// ErrorThreshold is the maximum amount of consecutive errors that can occur on an interface before capturing is halted.
 	ErrorThreshold = 10000
+
+	// localBufferSizeLimit denotes the maximum buffer size available during rotation
+	localBufferSizeLimit = 8 * 1024 * 1024 // 8 MiB
 )
 
-var defaultSourceInitFn = func(c *Capture) (capture.SourceZeroCopy, error) {
-	return afring.NewSource(c.iface,
-		afring.CaptureLength(link.CaptureLengthMinimalIPv6Transport),
-		afring.BufferSize(c.config.RingBuffer.BlockSize, c.config.RingBuffer.NumBlocks),
-		afring.Promiscuous(c.config.Promisc),
-	)
-}
+var (
+
+	// ErrLocalBufferOverflow signifies that the local packet buffer is full
+	ErrLocalBufferOverflow = errors.New("local packet buffer overflow")
+
+	defaultSourceInitFn = func(c *Capture) (capture.SourceZeroCopy, error) {
+		return afring.NewSource(c.iface,
+			afring.CaptureLength(link.CaptureLengthMinimalIPv6Transport),
+			afring.BufferSize(c.config.RingBuffer.BlockSize, c.config.RingBuffer.NumBlocks),
+			afring.Promiscuous(c.config.Promisc),
+		)
+	}
+)
 
 // sourceInitFn denotes the function used to initialize a capture source,
 // providing the ability to override the default behavior, e.g. in mock tests
@@ -164,7 +173,7 @@ func (c *Capture) run(ctx context.Context) (err error) {
 	// Start up processing and error handling / logging in the
 	// background
 	go logErrors(ctx,
-		c.process(ctx))
+		c.process())
 
 	return
 }
@@ -198,18 +207,12 @@ func (c *Capture) rotate(ctx context.Context) (agg *hashmap.AggFlowMap) {
 	return
 }
 
-type bufPkt struct {
-	ipLayer capture.IPLayer
-	pktType byte
-	pktSize uint32
-}
-
 // process is the heart of the Capture. It listens for network traffic on the
 // network interface and logs the corresponding flows.
 //
 // process keeps running until Close is called on its capture handle or it encounters
 // a serious capture error
-func (c *Capture) process(ctx context.Context) <-chan error {
+func (c *Capture) process() <-chan error {
 
 	captureErrors := make(chan error, 64)
 
@@ -219,8 +222,7 @@ func (c *Capture) process(ctx context.Context) <-chan error {
 		defer c.wgProc.Done()
 
 		// Main packet capture loop which an interface should be in most of the time
-		pktBuf := make([]bufPkt, 0)
-		hasUnblockErr := false
+		localBuf := NewLocalBuffer(c.captureHandle, localBufferSizeLimit)
 		for {
 
 			// Since lock confirmation is only done from a single goroutine (this one)
@@ -231,26 +233,22 @@ func (c *Capture) process(ctx context.Context) <-chan error {
 			// This logic may be slightly more contrived than a select{} statement but it increases
 			// packet throughput by several percent points
 			if len(c.capLock.request) > 0 {
-				<-c.capLock.request // Consume the request
-				// fmt.Println("Confirming lock")
+				<-c.capLock.request             // Consume the lock request
 				c.capLock.confirm <- struct{}{} // Confirm that process() is not processing
-				// <-c.capLock.done                // Consume the request to continue normal processing
 
 				// Continue fetching packets and add them to the local buffer
 				for {
 					if len(c.capLock.done) > 0 {
-						<-c.capLock.done
+						<-c.capLock.done // Consume the unlock request to continue normal processing
 						break
 					}
 
-					// Fetch a copy of the next IP layer (because we need to store the data, so ZeroCopy is out)
-					ipLayer, pktType, pktSize, err := c.captureHandle.NextIPPacket(nil)
+					// Fetch the next packet form the wire
+					ipLayer, pktType, pktSize, err := c.captureHandle.NextIPPacketZeroCopy()
 					if err != nil {
 
-						// If we receive an unblock event while capturing to buffer, keep note that we need to
-						// advance before the next regular capture (unless the next packet is successful again)
+						// If we receive an unblock event while capturing to buffer, continue
 						if errors.Is(err, capture.ErrCaptureUnblocked) { // capture unblocked (during lock)
-							hasUnblockErr = true
 							continue
 						}
 						if errors.Is(err, capture.ErrCaptureStopped) { // capture stopped gracefully
@@ -260,35 +258,34 @@ func (c *Capture) process(ctx context.Context) <-chan error {
 						captureErrors <- fmt.Errorf("capture error: %w", err)
 						return
 					}
-					hasUnblockErr = false
 
-					// Append packet to buffer
-					pktBuf = append(pktBuf, bufPkt{
-						ipLayer, pktType, pktSize,
-					})
+					// Try to append to local buffer. In case the buffer is full, stop buffering and
+					// wait for the unlock request
+					if !localBuf.Add(ipLayer, pktType, pktSize) {
+						captureErrors <- ErrLocalBufferOverflow
+						<-c.capLock.done // Consume the unlock request to continue normal processing
+						break
+					}
 				}
 
 				// Drain buffer if not empty
-				if len(pktBuf) > 0 {
-					for _, pkt := range pktBuf {
-						if err := c.addToFlowLog(pkt.ipLayer, pkt.pktType, pkt.pktSize); err != nil {
+				if localBuf.N() > 0 {
+					for i := 0; i < localBuf.N(); i++ {
+						if err := c.addToFlowLog(localBuf.Get(i)); err != nil {
 							captureErrors <- err
 							return
 						}
 					}
-					pktBuf = pktBuf[:0]
+					localBuf.Reset()
 				}
-			}
 
-			// Check if we already have an unblocking status and advance
-			if hasUnblockErr {
-				hasUnblockErr = false
+				// Advance to the next loop iteration in case there is a pending lock
 				continue
 			}
 
-			// Fetch the next packet or PPOLL even from the source
+			// Fetch the next packet or PPOLL event from the source
 			if err := c.capturePacket(); err != nil {
-				if errors.Is(err, capture.ErrCaptureUnblocked) { // capture unblocked (during lock)
+				if errors.Is(err, capture.ErrCaptureUnblocked) { // capture unblocked
 
 					// Advance to the next loop iteration (during which the pending lock will be
 					// consumed / acted on)
@@ -383,8 +380,7 @@ func (c *Capture) lock() {
 		panic(fmt.Sprintf("unexpectedly failed to unblock capture handle, deadlock inevitable: %s", err))
 	}
 
-	// Wait for confirmation of reception from the processing routine, then
-	// commit the rotation
+	// Wait for confirmation of reception from the processing routine
 	<-c.capLock.confirm
 }
 
@@ -416,7 +412,6 @@ func logErrors(ctx context.Context, errsChan <-chan error) {
 			return
 		case err := <-errsChan:
 			logger.Error(err)
-			return
 		}
 	}
 }

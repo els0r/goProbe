@@ -67,7 +67,7 @@ func InitManager(ctx context.Context, config *config.Config, opts ...ManagerOpti
 	captureManager.startedAt = time.Now()
 
 	if !captureManager.skipWriteoutSchedule {
-		captureManager.ScheduleWriteouts(ctx, time.Duration(goDB.DBWriteInterval)*time.Second)
+		captureManager.ScheduleWriteouts(ctx, 10*time.Second)
 	}
 
 	return captureManager, nil

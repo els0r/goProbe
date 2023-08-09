@@ -157,8 +157,6 @@ func TestHighTrafficDeadlock(t *testing.T) {
 
 func TestMockPacketCapturePerformance(t *testing.T) {
 
-	ctx := context.Background()
-
 	if testing.Short() {
 		t.SkipNow()
 	}
@@ -179,7 +177,7 @@ func TestMockPacketCapturePerformance(t *testing.T) {
 	require.Nil(t, err)
 
 	runtime := 10 * time.Second
-	mockC.process(ctx)
+	mockC.process()
 	time.Sleep(runtime)
 
 	mockSrc.Done()
@@ -271,7 +269,7 @@ func testDeadlockLowTraffic(t *testing.T, maxPkts int) {
 	}()
 
 	mockC := newMockCapture(mockSrc)
-	mockC.process(ctx)
+	mockC.process()
 
 	start := time.Now()
 	doneChan := make(chan error)
@@ -319,7 +317,7 @@ func testDeadlockHighTraffic(t *testing.T) {
 	errChan, err := mockSrc.Run(time.Microsecond)
 	require.Nil(t, err)
 
-	mockC.process(ctx)
+	mockC.process()
 
 	start := time.Now()
 	doneChan := make(chan error)
