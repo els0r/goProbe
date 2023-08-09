@@ -62,7 +62,7 @@ func (l *LocalBuffer) Add(ipLayer capture.IPLayer, pktType byte, pktSize uint32)
 	// Transfer data to the buffer
 	copy(l.data[l.bufPos:], ipLayer)
 	l.data[l.bufPos+l.snapLen] = pktType
-	*(*uint32)(unsafe.Pointer(&l.data[l.bufPos+l.snapLen+1])) = pktSize
+	*(*uint32)(unsafe.Pointer(&l.data[l.bufPos+l.snapLen+1])) = pktSize // #nosec G103
 
 	// Increment buffer position
 	l.bufPos += l.elementSize
@@ -72,7 +72,7 @@ func (l *LocalBuffer) Add(ipLayer capture.IPLayer, pktType byte, pktSize uint32)
 
 // Get fetches the i-th element from the buffer (zero-copy)
 func (l *LocalBuffer) Get(i int) (capture.IPLayer, byte, uint32) {
-	return l.data[i*l.elementSize : i*l.elementSize+l.snapLen], l.data[i*l.elementSize+l.snapLen], *(*uint32)(unsafe.Pointer(&l.data[i*l.elementSize+l.snapLen+1]))
+	return l.data[i*l.elementSize : i*l.elementSize+l.snapLen], l.data[i*l.elementSize+l.snapLen], *(*uint32)(unsafe.Pointer(&l.data[i*l.elementSize+l.snapLen+1])) // #nosec G103
 }
 
 // N returns the number of elements in the buffer
@@ -82,8 +82,9 @@ func (l *LocalBuffer) N() int {
 
 // Reset puts the buffer into its initial state and returns any memory to the pool
 func (l *LocalBuffer) Reset() {
-	l.bufPos = 0
 	memPool.Put(l.data)
+	l.bufPos = 0
+	l.data = nil
 }
 
 ///////////////////////////////////////////////////////////////////////////////////
