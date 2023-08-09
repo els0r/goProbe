@@ -11,6 +11,7 @@ import (
 
 	"github.com/els0r/goProbe/pkg/capture"
 	"github.com/els0r/goProbe/pkg/capture/capturetypes"
+	"github.com/els0r/goProbe/pkg/goDB"
 	"github.com/els0r/goProbe/pkg/goDB/info"
 	"github.com/els0r/goProbe/pkg/results"
 	"github.com/els0r/goProbe/pkg/types"
@@ -90,7 +91,7 @@ func (m mockIfaces) NErr() (res uint64) {
 	return
 }
 
-func (m mockIfaces) BuildResults(t *testing.T, testDir string, resGoQuery results.Result) results.Result {
+func (m mockIfaces) BuildResults(t *testing.T, testDir string, resGoQuery *results.Result) (results.Result, []goDB.InterfaceMetadata) {
 
 	res := results.Result{
 		Status: results.Status{
@@ -100,10 +101,17 @@ func (m mockIfaces) BuildResults(t *testing.T, testDir string, resGoQuery result
 			Interfaces: m.Names(),
 		},
 	}
-	for _, iface := range m {
+	ifaceMetadata := make([]goDB.InterfaceMetadata, len(m))
+	for i, iface := range m {
 		iface.RLock()
+		ifaceMetadata[i].Iface = iface.name
+
+		// Copy summary values that cannot be reproduced by the synthetic test
+		ifaceMetadata[i].First = resGoQuery.Summary.First
+		ifaceMetadata[i].Last = resGoQuery.Summary.Last
+
 		for k, v := range *iface.flows {
-			res.Rows = append(res.Rows, results.Row{
+			row := results.Row{
 				Labels: results.Labels{
 					Iface: iface.name,
 				},
@@ -114,8 +122,16 @@ func (m mockIfaces) BuildResults(t *testing.T, testDir string, resGoQuery result
 					DstPort: types.PortToUint16(k[32:34]),
 				},
 				Counters: v,
-			})
+			}
+
+			res.Rows = append(res.Rows, row)
 			res.Summary.Totals = res.Summary.Totals.Add(v)
+			ifaceMetadata[i].Counts = ifaceMetadata[i].Counts.Add(v)
+			if row.Attributes.SrcIP.Is4() && row.Attributes.DstIP.Is4() {
+				ifaceMetadata[i].Traffic.NumV4Entries++
+			} else {
+				ifaceMetadata[i].Traffic.NumV6Entries++
+			}
 		}
 		iface.RUnlock()
 	}
@@ -138,7 +154,7 @@ func (m mockIfaces) BuildResults(t *testing.T, testDir string, resGoQuery result
 	res.Summary.Last = resGoQuery.Summary.Last
 	res.Summary.Timings = resGoQuery.Summary.Timings
 
-	return res
+	return res, ifaceMetadata
 }
 
 func (m mockIfaces) KillGoProbeOnceDone(cm *capture.Manager) {
