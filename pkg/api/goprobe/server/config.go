@@ -27,17 +27,15 @@ func (server *Server) getConfig(c *gin.Context) {
 		return
 	}
 
-	ctx := c.Request.Context()
-
 	if iface != "" {
-		resp.Ifaces = server.captureManager.Config(ctx, iface)
+		resp.Ifaces = server.captureManager.Config(iface)
 	} else {
 		if ifaces != "" {
 			// fetch all specified
-			resp.Ifaces = server.captureManager.Config(ctx, strings.Split(ifaces, ",")...)
+			resp.Ifaces = server.captureManager.Config(strings.Split(ifaces, ",")...)
 		} else {
 			// otherwise, fetch all
-			resp.Ifaces = server.captureManager.Config(ctx)
+			resp.Ifaces = server.captureManager.Config()
 		}
 	}
 
@@ -46,7 +44,6 @@ func (server *Server) getConfig(c *gin.Context) {
 	}
 
 	c.JSON(resp.StatusCode, resp)
-	return
 }
 
 func (server *Server) putConfig(c *gin.Context) {
