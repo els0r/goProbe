@@ -42,6 +42,10 @@ var (
 	// ErrPacketTruncated indicates that a packet was too short to complete analysis
 	// (e.g. a TCP packet truncated before the TCP flag byte)
 	ErrPacketTruncated = errors.New("packet too short / truncated")
+
+	// ErrPacketFragment indicates that a packet is fragmented and that the fragment doesn't
+	// carry any useful information / transport layer (which will cause it to be ignored)
+	ErrPacketFragmentIgnore = errors.New("packet fragment does not carry relevant information")
 )
 
 // FlowLog stores flows. It is NOT threadsafe.
@@ -84,11 +88,7 @@ func ParsePacket(ipLayer capture.IPLayer, pktType capture.PacketType, pktTotalLe
 
 		isIPv4, protocol = true, ipLayer[9]
 
-		// Parse IPv4 packet information
-		copy(epHash[0:4], ipLayer[12:16])
-		copy(epHash[16:20], ipLayer[16:20])
-
-		// only run the fragmentation checks on fragmented TCP/UDP packets. For
+		// Only run the fragmentation checks on fragmented TCP/UDP packets. For
 		// ESP, we don't have any transport layer information so there's no
 		// need to distinguish between ESP fragments or other ESP traffic
 		//
@@ -96,17 +96,20 @@ func ParsePacket(ipLayer capture.IPLayer, pktType capture.PacketType, pktTotalLe
 		// other IP packet. The fragment offset will of be MTU - 20 bytes (IP layer).
 		if protocol != capturetypes.ESP {
 
-			// check for IP fragmentation
+			// Check for IP fragmentation
 			fragOffset := (uint16(0x1f&ipLayer[6]) << 8) | uint16(ipLayer[7])
 
-			// return decoding error if the packet carries anything other than the
-			// first fragment, i.e. if the packet lacks a transport layer header
+			// Skip packet if it carries anything other than the first fragment,
+			// i.e. if the packet lacks a transport layer header
 			if fragOffset != 0 {
-				fragBits := (0xe0 & ipLayer[6]) >> 5
-				err = fmt.Errorf("fragmented IP packet: offset: %d flags: %d", fragOffset, fragBits)
+				err = ErrPacketFragmentIgnore
 				return
 			}
 		}
+
+		// Parse IPv4 packet information
+		copy(epHash[0:4], ipLayer[12:16])
+		copy(epHash[16:20], ipLayer[16:20])
 
 		if protocol == capturetypes.TCP || protocol == capturetypes.UDP {
 
@@ -189,6 +192,9 @@ func (f *FlowLog) Add(ipLayer capture.IPLayer, pktType capture.PacketType, pktTo
 
 	epHash, isIPv4, auxInfo, err := ParsePacket(ipLayer, pktType, pktTotalLen)
 	if err != nil {
+		if errors.Is(err, ErrPacketFragmentIgnore) {
+			return nil
+		}
 		return err
 	}
 
