@@ -412,17 +412,24 @@ func (cm *Manager) rotate(ctx context.Context, writeoutChan chan<- capturetypes.
 			rg.Run(func() {
 
 				runCtx := withIfaceContext(ctx, mc.iface)
+				logger := logging.FromContext(runCtx)
 
 				// Lock the running capture and perform the rotation
 				mc.lock()
 
 				rotateResult := mc.rotate(runCtx)
 
+				// log errors
+				// TODO: remove, once we expose error information more effectively
+				if len(mc.errMap) > 0 {
+					logger.With("error_map", mc.errMap).Debug("rotation errors")
+				}
+
 				// Since the capture is locked we can safely extract the (capture) status
 				// from the individual interfaces (and unlock no matter what)
 				stats, err := mc.status()
 				if err != nil {
-					logging.FromContext(runCtx).Errorf("failed to get capture stats: %v", err)
+					logger.Errorf("failed to get capture stats: %v", err)
 				}
 				mc.unlock()
 

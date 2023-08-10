@@ -316,7 +316,6 @@ func (c *Capture) capturePacket() error {
 }
 
 func (c *Capture) addToFlowLog(ipLayer capture.IPLayer, pktType capture.PacketType, pktSize uint32) error {
-
 	// Parse / add the received data to the map of flows
 	err := c.flowLog.Add(ipLayer, pktType, pktSize)
 	if err == nil {
