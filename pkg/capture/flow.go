@@ -43,7 +43,7 @@ var (
 	// (e.g. a TCP packet truncated before the TCP flag byte)
 	ErrPacketTruncated = errors.New("packet too short / truncated")
 
-	// ErrPacketFragment indicates that a packet is fragmented and that the fragment doesn't
+	// ErrPacketFragmentIgnore indicates that a packet is fragmented and that the fragment doesn't
 	// carry any useful information / transport layer (which will cause it to be ignored)
 	ErrPacketFragmentIgnore = errors.New("packet fragment does not carry relevant information")
 )
