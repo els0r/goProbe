@@ -23,9 +23,6 @@ const (
 
 	// ErrorThreshold is the maximum amount of consecutive errors that can occur on an interface before capturing is halted.
 	ErrorThreshold = 10000
-
-	// localBufferSizeLimit denotes the maximum buffer size available during rotation
-	localBufferSizeLimit = 8 * 1024 * 1024 // 8 MiB
 )
 
 var (
@@ -222,7 +219,7 @@ func (c *Capture) process() <-chan error {
 		defer c.wgProc.Done()
 
 		// Main packet capture loop which an interface should be in most of the time
-		localBuf := NewLocalBuffer(c.captureHandle, localBufferSizeLimit)
+		localBuf := NewLocalBuffer(c.captureHandle, WithSizeLimit(c.config.LocalBufferSizeLimit))
 		for {
 
 			// Since lock confirmation is only done from a single goroutine (this one)

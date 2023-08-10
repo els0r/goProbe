@@ -63,6 +63,10 @@ type CaptureConfig struct {
 	Promisc bool `json:"promisc" yaml:"promisc"`
 	// used by the ring buffer in capture
 	RingBuffer *RingBufferConfig `json:"ring_buffer" yaml:"ring_buffer"`
+
+	// LocalBufferSizeLimit denotes the maximum size of the local buffer
+	// used to continue capturing while the capture is (b)locked
+	LocalBufferSizeLimit int `json:"local_buffer_size_limit" yaml:"local_buffer_size_limit"`
 }
 
 type RingBufferConfig struct {
@@ -74,8 +78,9 @@ type RingBufferConfig struct {
 }
 
 const (
-	DefaultBlockSize      int = 1 * 1024 * 1024 // 1 MB
-	DefaultRingBufferSize int = 4
+	DefaultRingBufferBlockSize  int = 1 * 1024 * 1024 // 1 MB
+	DefaultRingBufferNumBlocks  int = 4
+	DefaultLocalBufferSizeLimit int = 16 * 1024 * 1024 // 16 MB
 )
 
 // Ifaces stores the per-interface configuration

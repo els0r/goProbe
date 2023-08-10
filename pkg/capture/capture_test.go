@@ -25,10 +25,11 @@ import (
 const randSeed = 10000
 
 var defaultMockIfaceConfig = config.CaptureConfig{
-	Promisc: false,
+	Promisc:              false,
+	LocalBufferSizeLimit: config.DefaultLocalBufferSizeLimit,
 	RingBuffer: &config.RingBufferConfig{
-		BlockSize: config.DefaultRingBufferSize,
-		NumBlocks: 4,
+		BlockSize: config.DefaultRingBufferBlockSize,
+		NumBlocks: config.DefaultRingBufferNumBlocks,
 	},
 }
 

@@ -3,6 +3,7 @@ package capture
 import (
 	"unsafe"
 
+	"github.com/els0r/goProbe/cmd/goProbe/config"
 	"github.com/els0r/goProbe/pkg/goDB/storage/gpfile"
 	"github.com/fako1024/slimcap/capture"
 	"golang.org/x/sys/unix"
@@ -29,14 +30,29 @@ type LocalBuffer struct {
 	bufPos int
 }
 
+func WithSizeLimit(limit int) func(l *LocalBuffer) {
+	return func(l *LocalBuffer) {
+		if limit > 0 {
+			l.sizeLimit = limit
+		}
+	}
+}
+
 // NewLocalBuffer instantiates a new buffer
-func NewLocalBuffer(captureHandle capture.SourceZeroCopy, sizeLimit int) *LocalBuffer {
+func NewLocalBuffer(captureHandle capture.SourceZeroCopy, opts ...func(l *LocalBuffer)) *LocalBuffer {
 	p := captureHandle.NewPacket()
-	return &LocalBuffer{
+	obj := &LocalBuffer{
 		snapLen:     len(p.IPLayer()),
 		elementSize: len(p.IPLayer()) + 5, // snaplen + sizes for pktType and pktSize
-		sizeLimit:   sizeLimit,
+		sizeLimit:   config.DefaultLocalBufferSizeLimit,
 	}
+
+	// Apply functional options, if any
+	for _, opt := range opts {
+		opt(obj)
+	}
+
+	return obj
 }
 
 // Add adds an element to the buffer
