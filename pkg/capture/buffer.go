@@ -95,6 +95,7 @@ func (l *LocalBuffer) grow(newSize int) {
 	l.data = newData
 }
 
+// TODO: With Go 1.21, this is is a built-in function!
 func min(a, b int) int {
 	if a < b {
 		return a
