@@ -1,6 +1,7 @@
 package server
 
 import (
+	"github.com/els0r/goProbe/cmd/goProbe/config"
 	gpapi "github.com/els0r/goProbe/pkg/api/goprobe"
 	"github.com/els0r/goProbe/pkg/api/server"
 	"github.com/els0r/goProbe/pkg/capture"
@@ -29,7 +30,7 @@ func New(addr string, captureManager *capture.Manager, opts ...server.Option) *S
 	server := &Server{
 		dbPath:         defaults.DBPath,
 		captureManager: captureManager,
-		DefaultServer:  server.NewDefault(addr, opts...),
+		DefaultServer:  server.NewDefault(config.ServiceName, addr, opts...),
 	}
 
 	server.registerRoutes()

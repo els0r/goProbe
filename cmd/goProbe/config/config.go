@@ -25,6 +25,11 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+const (
+	// ServiceName is the name of the service as it will show up in telemetry such as metrics, logs, traces, etc.
+	ServiceName = "goprobe"
+)
+
 // demoKeys stores the API keys that should, under no circumstance, be used in production.
 // They coincide with the keys shown in the README file of goProbe
 var demoKeys = map[string]struct{}{
@@ -92,8 +97,8 @@ type APIConfig struct {
 	Keys      []string `json:"keys" yaml:"keys"`
 }
 
-// New creates a new configuration struct with default settings
-func New() *Config {
+// newDefault creates a new configuration struct with default settings
+func newDefault() *Config {
 	return &Config{
 		DB: DBConfig{
 			Path:        defaults.DBPath,
@@ -256,7 +261,7 @@ var (
 
 // Parse attempts to read the configuration from an io.Reader
 func Parse(src io.Reader) (*Config, error) {
-	config := New()
+	config := newDefault()
 
 	// we slurp the bytes form the src in order to unmarshal it into JSON or YAML
 	// TODO: protect this method from cases where src contains a very large file

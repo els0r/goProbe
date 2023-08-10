@@ -241,13 +241,35 @@ func testE2E(t *testing.T, datasets ...[]byte) {
 	// Run GoProbe
 	runGoProbe(t, tempDir, setupSources(t, mockIfaces))
 
+	resGoQueryList := make([]goDB.InterfaceMetadata, 0)
+	runGoQuery(t, &resGoQueryList, []string{
+		"-e", "json",
+		"-l", time.Now().Add(time.Hour).Format(time.ANSIC),
+		"-d", tempDir,
+		"list",
+	})
+
 	// Run GoQuery and build reference results from tracking
-	resGoQuery := runGoQuery(t, tempDir, mockIfaces, 100000)
-	resReference := mockIfaces.BuildResults(t, tempDir, resGoQuery)
+	resGoQuery := new(results.Result)
+	runGoQuery(t, resGoQuery, []string{
+		"-i", strings.Join(mockIfaces.Names(), ","),
+		"-e", "json",
+		"-l", time.Now().Add(time.Hour).Format(time.ANSIC),
+		"-d", tempDir,
+		"-n", strconv.Itoa(100000),
+		"-s", "packets",
+		"sip,dip,dport,proto",
+	})
+	resReference, listReference := mockIfaces.BuildResults(t, tempDir, resGoQuery)
 
 	// Counter consistency checks
 	require.Equal(t, mockIfaces.NProcessed(), resGoQuery.Summary.Totals.PacketsRcvd)
 	require.Equal(t, mockIfaces.NProcessed(), mockIfaces.NRead()-mockIfaces.NErr())
+
+	// List target consistency check (do not fail yet to show details in the next check)
+	if !reflect.DeepEqual(listReference, resGoQueryList) {
+		t.Errorf("Mismatch on goQuery list target, want %+v, have %+v", listReference, resGoQueryList)
+	}
 
 	// Summary consistency check (do not fail yet to show details in the next check)
 	if !reflect.DeepEqual(resReference.Summary, resGoQuery.Summary) {
@@ -313,7 +335,7 @@ func runGoProbe(t *testing.T, testDir string, sourceInitFn func() (mockIfaces, f
 	cancel()
 }
 
-func runGoQuery(t *testing.T, testDir string, mockIfaces mockIfaces, maxEntries int) results.Result {
+func runGoQuery(t *testing.T, res interface{}, args []string) {
 
 	buf := bytes.NewBuffer(nil)
 	old := os.Stdout // keep backup of STDOUT
@@ -331,25 +353,14 @@ func runGoQuery(t *testing.T, testDir string, mockIfaces mockIfaces, maxEntries 
 	}()
 
 	command := cmd.GetRootCmd()
-	command.SetArgs([]string{
-		"-i", strings.Join(mockIfaces.Names(), ","),
-		"-e", "json",
-		"-l", time.Now().Add(time.Hour).Format(time.ANSIC),
-		"-d", testDir,
-		"-n", strconv.Itoa(maxEntries),
-		"-s", "packets",
-		"sip,dip,dport,proto",
-	})
+	command.SetArgs(args)
 
 	require.Nil(t, command.Execute())
 	require.Nil(t, wr.Close())
 	<-copyDone
 	os.Stdout = old // restore the inital STDOUT
 
-	var res results.Result
 	require.Nil(t, jsoniter.NewDecoder(buf).Decode(&res))
-
-	return res
 }
 
 func setupSources(t testing.TB, ifaces mockIfaces) func() (mockIfaces, func(c *capture.Capture) (slimcap.SourceZeroCopy, error)) {

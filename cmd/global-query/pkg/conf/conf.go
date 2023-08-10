@@ -3,6 +3,11 @@ package conf
 import "time"
 
 const (
+	// ServiceName is the name of the service as it will show up in telemetry such as metrics, logs, traces, etc.
+	ServiceName = "global_query"
+)
+
+const (
 	loggingKey  = "logging"
 	LogLevel    = loggingKey + ".level"
 	LogEncoding = loggingKey + ".encoding"
