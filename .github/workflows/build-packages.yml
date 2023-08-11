@@ -27,7 +27,7 @@ jobs:
 
       - name: Generate version file in pkg/version using COMMIT_SHA and SEM_VER
         run: |
-          cd ./pkg/version && go generate && cd ../..
+          cd ./pkg/version && go generate
 
       - name: Build for AMD64
         run: |
@@ -101,7 +101,7 @@ jobs:
 
       - name: Generate version file in pkg/version using COMMIT_SHA and SEM_VER
         run: |
-          cd ./pkg/version && go generate && cd ../..
+          cd ./pkg/version && go generate
 
       - name: Build for AMD64
         run: |
@@ -159,7 +159,7 @@ jobs:
 
       - name: Generate version file in pkg/version using COMMIT_SHA and SEM_VER
         run: |
-          cd ./pkg/version && go generate && cd ../..
+          cd ./pkg/version && go generate
 
       - name: Build for AMD64
         run: |
