@@ -47,7 +47,7 @@ func main() {
 	}
 	appVersion := version.Short()
 	if flags.CmdLine.Version {
-		fmt.Printf("goProbe\n%s", version.Version())
+		fmt.Printf("%s", version.Version())
 		os.Exit(0)
 	}
 

@@ -4,6 +4,8 @@ package version
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"runtime"
 	"time"
 )
@@ -15,19 +17,34 @@ import (
 var (
 	BuildTime = time.Time{}
 	GitSHA    = ""
+	SemVer    = ""
+)
+
+const (
+	devel = "devel"
 )
 
 // Version returns a newline-terminated string describing the current
 // version of the build.
 func Version() string {
+	progName := filepath.Base(os.Args[0])
+
 	if GitSHA == "" {
-		return "devel\n"
+		return progName + " " + devel + "\n"
 	}
 
-	str := fmt.Sprintf(`    Build time:     %s
+	semver := SemVer
+	if semver == "" {
+		semver = devel
+	}
+
+	str := fmt.Sprintf(`%s - %s:
+    Build time:     %s
     Git hash:       %s
     Go versions:    %s
-`, BuildTime.In(time.UTC).Format(time.Stamp+" 2006 UTC"),
+`,
+		progName, semver,
+		BuildTime.In(time.UTC).Format(time.Stamp+" 2006 UTC"),
 		GitSHA,
 		runtime.Version(),
 	)
@@ -35,10 +52,15 @@ func Version() string {
 }
 
 // Short returns a shortened GitSHA string that is equivalent to
-// git rev-parse --short
+// git rev-parse --short. If SemVer has been provided, it will be
+// prepended
 func Short() string {
 	if GitSHA == "" {
-		return "devel"
+		return devel
 	}
-	return GitSHA[0:8]
+	short := GitSHA[0:8]
+	if SemVer != "" {
+		short = SemVer + "-" + short
+	}
+	return short
 }
