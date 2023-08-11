@@ -20,7 +20,7 @@ jobs:
         run: |
           echo "RELEASE_VERSION=${GITHUB_REF#refs/*/v}" >> $GITHUB_ENV
           echo "SEM_VER=${GITHUB_REF#refs/*/v}" >> $GITHUB_ENV
-          echo "COMMIT_SHA=${GITHUB_REF}" >> $GITHUB_ENV
+          echo "COMMIT_SHA=${GITHUB_SHA}" >> $GITHUB_ENV
 
       - name: Check out code into the Go module directory
         uses: actions/checkout@v3
@@ -91,7 +91,7 @@ jobs:
         run: |
           echo "RELEASE_VERSION=${GITHUB_REF#refs/*/v}" >> $GITHUB_ENV
           echo "SEM_VER=${GITHUB_REF#refs/*/v}" >> $GITHUB_ENV
-          echo "COMMIT_SHA=${GITHUB_REF}" >> $GITHUB_ENV
+          echo "COMMIT_SHA=${GITHUB_SHA}" >> $GITHUB_ENV
 
       - name: Install OS dependencies
         run: dnf -y install gcc libzstd-devel lz4-devel
@@ -149,7 +149,7 @@ jobs:
         run: |
           echo "RELEASE_VERSION=${GITHUB_REF#refs/*/v}" >> $GITHUB_ENV
           echo "SEM_VER=${GITHUB_REF#refs/*/v}" >> $GITHUB_ENV
-          echo "COMMIT_SHA=${GITHUB_REF}" >> $GITHUB_ENV
+          echo "COMMIT_SHA=${GITHUB_SHA}" >> $GITHUB_ENV
 
       - name: Install OS dependencies
         run: apk add cmake make gcc libtool git bash musl-dev zstd-dev lz4-dev
