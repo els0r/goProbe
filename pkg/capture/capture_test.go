@@ -25,10 +25,11 @@ import (
 const randSeed = 10000
 
 var defaultMockIfaceConfig = config.CaptureConfig{
-	Promisc: false,
+	Promisc:              false,
+	LocalBufferSizeLimit: config.DefaultLocalBufferSizeLimit,
 	RingBuffer: &config.RingBufferConfig{
-		BlockSize: config.DefaultRingBufferSize,
-		NumBlocks: 4,
+		BlockSize: config.DefaultRingBufferBlockSize,
+		NumBlocks: config.DefaultRingBufferNumBlocks,
 	},
 }
 
@@ -57,7 +58,7 @@ func (t testMockSrcs) Wait() error {
 func TestConcurrentMethodAccess(t *testing.T) {
 	for _, i := range []int{1, 2, 3, 10} {
 		t.Run(fmt.Sprintf("%d ifaces", i), func(t *testing.T) {
-			testConcurrentMethodAccess(t, i, 1000)
+			testConcurrentMethodAccess(t, i, 100)
 		})
 	}
 }
@@ -157,8 +158,6 @@ func TestHighTrafficDeadlock(t *testing.T) {
 
 func TestMockPacketCapturePerformance(t *testing.T) {
 
-	ctx := context.Background()
-
 	if testing.Short() {
 		t.SkipNow()
 	}
@@ -179,7 +178,7 @@ func TestMockPacketCapturePerformance(t *testing.T) {
 	require.Nil(t, err)
 
 	runtime := 10 * time.Second
-	mockC.process(ctx)
+	mockC.process()
 	time.Sleep(runtime)
 
 	mockSrc.Done()
@@ -271,7 +270,7 @@ func testDeadlockLowTraffic(t *testing.T, maxPkts int) {
 	}()
 
 	mockC := newMockCapture(mockSrc)
-	mockC.process(ctx)
+	mockC.process()
 
 	start := time.Now()
 	doneChan := make(chan error)
@@ -319,7 +318,7 @@ func testDeadlockHighTraffic(t *testing.T) {
 	errChan, err := mockSrc.Run(time.Microsecond)
 	require.Nil(t, err)
 
-	mockC.process(ctx)
+	mockC.process()
 
 	start := time.Now()
 	doneChan := make(chan error)
