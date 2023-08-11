@@ -9,6 +9,13 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+const (
+
+	// bufElementAddSize denotes the required fixed size component for the pktType and pktSize
+	// values per element: 1 (pktType) + 4 (uint32)
+	bufElementAddSize = 5
+)
+
 var (
 
 	// Initial size of a buffer
@@ -21,15 +28,17 @@ var (
 // LocalBuffer denotes a local packet buffer used to temporarily capture packets
 // from the source (e.g. during rotation) to avoid a ring / kernel buffer overflow
 type LocalBuffer struct {
-	data []byte
+	data []byte // continuous buffer slice
 
-	sizeLimit   int
-	snapLen     int
-	elementSize int
+	sizeLimit   int // maximum size to which the buffer may grow
+	snapLen     int // capture length / snaplen for the underlying packet source
+	elementSize int // size of an individual element stored in the buffer
 
-	bufPos int
+	bufPos int // current position in continuous buffer slice
 }
 
+// WithSizeLimit allows setting a custom maxium size to which the buffer may grow
+// no further elements can be added via Add() if this limit is reached
 func WithSizeLimit(limit int) func(l *LocalBuffer) {
 	return func(l *LocalBuffer) {
 		if limit > 0 {
@@ -43,7 +52,7 @@ func NewLocalBuffer(captureHandle capture.SourceZeroCopy, opts ...func(l *LocalB
 	p := captureHandle.NewPacket()
 	obj := &LocalBuffer{
 		snapLen:     len(p.IPLayer()),
-		elementSize: len(p.IPLayer()) + 5, // snaplen + sizes for pktType and pktSize
+		elementSize: len(p.IPLayer()) + bufElementAddSize, // snaplen + sizes for pktType and pktSize
 		sizeLimit:   config.DefaultLocalBufferSizeLimit,
 	}
 
@@ -55,7 +64,8 @@ func NewLocalBuffer(captureHandle capture.SourceZeroCopy, opts ...func(l *LocalB
 	return obj
 }
 
-// Add adds an element to the buffer
+// Add adds an element to the buffer, returning ok = true if successful
+// If the buffer is full / may not grow any further, ok is false
 func (l *LocalBuffer) Add(ipLayer capture.IPLayer, pktType byte, pktSize uint32) (ok bool) {
 
 	// Lazily allocate memory only if a packets is added and fetch a continuous memory

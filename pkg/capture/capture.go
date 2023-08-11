@@ -269,6 +269,7 @@ func (c *Capture) process() <-chan error {
 				if localBuf.N() > 0 {
 					for i := 0; i < localBuf.N(); i++ {
 						if err := c.addToFlowLog(localBuf.Get(i)); err != nil {
+							localBuf.Reset()
 							captureErrors <- err
 							return
 						}

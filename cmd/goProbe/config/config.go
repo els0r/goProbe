@@ -171,7 +171,9 @@ func (r *RingBufferConfig) validate() error {
 
 // Equals compares c to cfg and returns true if all fields are identical
 func (c CaptureConfig) Equals(cfg CaptureConfig) bool {
-	return c.Promisc == cfg.Promisc && c.RingBuffer.Equals(cfg.RingBuffer)
+	return c.Promisc == cfg.Promisc &&
+		c.LocalBufferSizeLimit == cfg.LocalBufferSizeLimit &&
+		c.RingBuffer.Equals(cfg.RingBuffer)
 }
 
 // Equals compares r to cfg and returns true if all fields are identical
