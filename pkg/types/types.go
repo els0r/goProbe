@@ -18,6 +18,9 @@ const (
 	IPVersionV6 // IPVersionV6 : IPv6 related node
 )
 
+// ErrIncorrectIPAddrFormat denotes an invalid IP address string formatting
+var ErrIncorrectIPAddrFormat = errors.New("IP parse: incorrect format")
+
 // Merge combines two IPVersion instances
 func (v IPVersion) Merge(v2 IPVersion) IPVersion {
 
@@ -119,15 +122,18 @@ func numZeros(ip []byte) uint8 {
 }
 
 // IPStringToBytes creates a goDB compatible bytes slice from an IP address string
-func IPStringToBytes(ip string) ([]byte, bool, error) {
-	var isIPv4 = strings.Contains(ip, ".")
-
+// and returns it alongside a boolean that denots if the address is IPv4 or not
+func IPStringToBytes(ip string) (ipData []byte, isIPv4 bool, err error) {
 	ipaddr := net.ParseIP(ip)
 	if len(ipaddr) == 0 {
-		return nil, false, errors.New("IP parse: incorrect format")
+		return nil, false, ErrIncorrectIPAddrFormat
 	}
-	if isIPv4 {
-		return []byte{ipaddr[12], ipaddr[13], ipaddr[14], ipaddr[15]}, true, nil
+
+	if isIPv4 = strings.Contains(ip, "."); isIPv4 {
+		ipData = []byte{ipaddr[12], ipaddr[13], ipaddr[14], ipaddr[15]}
+	} else {
+		ipData = ipaddr
 	}
-	return ipaddr, false, nil
+
+	return
 }
