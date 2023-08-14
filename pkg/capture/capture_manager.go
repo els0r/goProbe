@@ -3,6 +3,7 @@ package capture
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -12,7 +13,6 @@ import (
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 	"github.com/els0r/goProbe/pkg/goprobe/writeout"
 	"github.com/els0r/goProbe/pkg/logging"
-	"golang.org/x/exp/slog"
 )
 
 const allowedWriteoutDurationFraction = 0.1

@@ -2,9 +2,8 @@ package logging
 
 import (
 	"context"
+	"log/slog"
 	"runtime"
-
-	"golang.org/x/exp/slog"
 )
 
 type callerHandler struct {

@@ -1,6 +1,6 @@
 module github.com/els0r/goProbe
 
-go 1.18
+go 1.21
 
 require (
 	github.com/fako1024/httpc v1.0.15-0.20230527113611-da5628ef596d
@@ -17,8 +17,8 @@ require (
 	github.com/zeebo/xxh3 v1.0.2
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.41.1
 	go.opentelemetry.io/otel/trace v1.15.1
-	golang.org/x/exp v0.0.0-20230510235704-dd950f8aeaea
 	golang.org/x/net v0.10.0
+	golang.org/x/sys v0.8.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -78,7 +78,6 @@ require (
 	go.opentelemetry.io/otel/metric v0.38.1 // indirect
 	golang.org/x/arch v0.3.0 // indirect
 	golang.org/x/crypto v0.9.0 // indirect
-	golang.org/x/sys v0.8.0 // indirect
 	golang.org/x/text v0.9.0 // indirect
 	google.golang.org/protobuf v1.30.0 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
