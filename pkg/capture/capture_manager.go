@@ -317,7 +317,7 @@ func (cm *Manager) update(ctx context.Context, ifaces config.Ifaces, enable, dis
 	}
 
 	// To avoid any interference the update() logic is protected as a whole
-	// This also allows us to interace with the captures without copying (creating potential races)
+	// This also allows us to interface with the captures without copying (creating potential races)
 	cm.Lock()
 	defer cm.Unlock()
 
@@ -467,8 +467,8 @@ func (cm *Manager) logErrors(ctx context.Context, iface string, errsChan <-chan 
 		case err, ok := <-errsChan:
 			if !ok {
 
-				// To avoid any interference the update() logic is protected as a whole
-				// This also allows us to interace with the captures without copying (creating potential races)
+				// Ensure there is no conflict with calls to update() that might already be
+				// taking down this interface
 				cm.Lock()
 				defer cm.Unlock()
 
