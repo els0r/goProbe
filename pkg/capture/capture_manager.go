@@ -340,7 +340,6 @@ func (cm *Manager) update(ctx context.Context, ifaces config.Ifaces, enable, dis
 
 			if err := mc.close(); err != nil {
 				logger.Errorf("failed to close capture: %s", err)
-				return
 			}
 
 			cm.captures.Delete(mc.iface)
@@ -467,6 +466,11 @@ func (cm *Manager) logErrors(ctx context.Context, iface string, errsChan <-chan 
 			return
 		case err, ok := <-errsChan:
 			if !ok {
+
+				// To avoid any interference the update() logic is protected as a whole
+				// This also allows us to interace with the captures without copying (creating potential races)
+				cm.Lock()
+				defer cm.Unlock()
 
 				// If the error channel was closed prematurely, we have to assume there was
 				// a critical processing error and tear down the interface
