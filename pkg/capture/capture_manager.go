@@ -360,10 +360,15 @@ func (cm *Manager) update(ctx context.Context, ifaces config.Ifaces, enable, dis
 			logger.Info("initializing capture / running packet processing")
 
 			newCap := newCapture(iface, ifaces[iface]).SetSourceInitFn(cm.sourceInitFn)
-			if err := newCap.run(runCtx); err != nil {
+			if err := newCap.run(); err != nil {
 				logger.Errorf("failed to start capture: %s", err)
 				return
 			}
+
+			// Start up processing and error handling / logging in the
+			// background
+			go cm.logErrors(runCtx, iface,
+				newCap.process())
 
 			cm.captures.Set(iface, newCap)
 		})
@@ -452,6 +457,30 @@ func (cm *Manager) rotate(ctx context.Context, writeoutChan chan<- capturetypes.
 		"elapsed", t1.Round(time.Microsecond).String(),
 		"ifaces", ifaces,
 	).Debug("rotated interfaces")
+}
+
+func (cm *Manager) logErrors(ctx context.Context, iface string, errsChan <-chan error) {
+	logger := logging.FromContext(ctx)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case err, ok := <-errsChan:
+			if !ok {
+
+				// If the error channel was closed prematurely, we have to assume there was
+				// a critical processing error and tear down the interface
+				if mc, exists := cm.captures.Get(iface); exists {
+					if err := mc.close(); err != nil {
+						logger.Errorf("failed to close capture: %s", err)
+					}
+					cm.captures.Delete(mc.iface)
+				}
+				return
+			}
+			logger.Error(err)
+		}
+	}
 }
 
 func (cm *Manager) performWriteout(ctx context.Context, timestamp time.Time, ifaces ...string) {

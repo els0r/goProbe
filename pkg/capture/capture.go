@@ -156,7 +156,7 @@ func (c *Capture) Iface() string {
 	return c.iface
 }
 
-func (c *Capture) run(ctx context.Context) (err error) {
+func (c *Capture) run() (err error) {
 
 	// Set up the packet source and capturing
 	c.captureHandle, err = c.sourceInitFn(c)
@@ -166,11 +166,6 @@ func (c *Capture) run(ctx context.Context) (err error) {
 
 	// make sure to store when the capture started
 	c.startedAt = time.Now()
-
-	// Start up processing and error handling / logging in the
-	// background
-	go logErrors(ctx,
-		c.process())
 
 	return
 }
@@ -216,7 +211,10 @@ func (c *Capture) process() <-chan error {
 	c.wgProc.Add(1)
 	go func() {
 
-		defer c.wgProc.Done()
+		defer func() {
+			close(captureErrors)
+			c.wgProc.Done()
+		}()
 
 		// Main packet capture loop which an interface should be in most of the time
 		localBuf := NewLocalBuffer(c.captureHandle, WithSizeLimit(c.config.LocalBufferSizeLimit))
@@ -252,7 +250,7 @@ func (c *Capture) process() <-chan error {
 							return
 						}
 
-						captureErrors <- fmt.Errorf("capture error: %w", err)
+						captureErrors <- fmt.Errorf("capture error while buffering: %w", err)
 						return
 					}
 
@@ -410,17 +408,5 @@ func newCaptureLock() *captureLock {
 		request: make(chan struct{}, 1),
 		confirm: make(chan struct{}),
 		done:    make(chan struct{}, 1),
-	}
-}
-
-func logErrors(ctx context.Context, errsChan <-chan error) {
-	logger := logging.FromContext(ctx)
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case err := <-errsChan:
-			logger.Error(err)
-		}
 	}
 }
