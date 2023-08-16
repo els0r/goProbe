@@ -418,7 +418,7 @@ func (cm *Manager) rotate(ctx context.Context, writeoutChan chan<- capturetypes.
 		if mc, exists := cm.captures.Get(iface); exists {
 
 			runCtx := withIfaceContext(ctx, mc.iface)
-			logger := logging.FromContext(runCtx)
+			logger, lockStart := logging.FromContext(runCtx), time.Now()
 
 			// Lock the running capture in order to safely perform rotation tasks
 			mc.lock()
@@ -437,6 +437,7 @@ func (cm *Manager) rotate(ctx context.Context, writeoutChan chan<- capturetypes.
 
 			stats := <-statsRes
 			mc.unlock()
+			logger.With("elapsed", time.Since(lockStart).Round(time.Microsecond).String()).Debug("interface locked")
 
 			writeoutChan <- capturetypes.TaggedAggFlowMap{
 				Map:   rotateResult,
