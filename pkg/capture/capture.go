@@ -403,10 +403,8 @@ func (c *Capture) fetchStatusInBackground(ctx context.Context) (res chan *captur
 
 func (c *Capture) lock() {
 
-	// Lock / claim the local buffer. Tis will wait until it is actually available,
-	// allowing us to use a single buffer for all interfaces (as long as they are
-	// not locked in parallel)
-	// bufferLock.Lock()
+	// Fetch data from the pool for the local buffer. Tis will wait until it is actually
+	// available, allowing us to use a single buffer for all interfaces
 	buf := memPool.Get(0)
 
 	// Notify the capture that a locked interaction is about to begin, then
