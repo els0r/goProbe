@@ -410,7 +410,7 @@ func (cm *Manager) rotate(ctx context.Context, writeoutChan chan<- capturetypes.
 		return
 	}
 
-	// Iteratively roate all interfaces. Since the rotation results are put on the writeoutChan for
+	// Iteratively rotate all interfaces. Since the rotation results are put on the writeoutChan for
 	// writeout by the DBWriter (which is sequential and certainly slower than the actual in-memory rotation)
 	// there is no significant benefit from running the rotations in parallel, thus allowing us to minimize
 	// congestion _and_ use a single shared local memory buffer
