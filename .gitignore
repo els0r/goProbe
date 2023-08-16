@@ -2,6 +2,7 @@
 *.deb
 *.test
 absolute
+cmd/gpctl/gpctl
 cmd/goProbe/goProbe
 cmd/goQuery/goQuery
 cmd/goConvert/goConvert

@@ -5,6 +5,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"time"
@@ -30,7 +31,8 @@ If the (list of) interface(s) is provided as an argument, it will only
 show the statistics for them. Otherwise, all interfaces are printed
 `,
 
-	RunE: wrapCancellationContext(time.Second, statusEntrypoint),
+	RunE:          wrapCancellationContext(statusEntrypoint),
+	SilenceErrors: true, // Errors are emitted after command completion, avoid duplicate
 }
 
 func init() {
@@ -44,6 +46,12 @@ func statusEntrypoint(ctx context.Context, cmd *cobra.Command, args []string) er
 
 	statuses, lastWriteout, startedAt, err := client.GetInterfaceStatus(ctx, ifaces...)
 	if err != nil {
+
+		// If the error is caused by context timeout / cancellation, skip the usage notification
+		if errors.Is(err, context.DeadlineExceeded) ||
+			errors.Is(err, context.Canceled) {
+			cmd.SilenceUsage = true
+		}
 		return fmt.Errorf("failed to fetch status for interfaces %v: %w", ifaces, err)
 	}
 

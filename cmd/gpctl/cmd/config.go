@@ -21,6 +21,8 @@ import (
 const (
 	flagFile   = "file"
 	flagSilent = "silent"
+
+	defaultQueryDeadline = 3 * time.Second
 )
 
 var (
@@ -40,7 +42,7 @@ show the configuration for them. Otherwise, all configurations are printed
 The list of interfaces is ignored if --file is provided to reload
 goprobe's runtime configuration
 `,
-	RunE:          wrapCancellationContext(time.Second, configEntrypoint),
+	RunE:          wrapCancellationContext(configEntrypoint),
 	SilenceUsage:  true,
 	SilenceErrors: true,
 }
