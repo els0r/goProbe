@@ -337,7 +337,6 @@ func (cm *Manager) update(ctx context.Context, ifaces config.Ifaces, enable, dis
 
 			logger := logging.FromContext(runCtx)
 			logger.Info("closing capture / stopping packet processing")
-
 			if err := mc.close(); err != nil {
 				logger.Errorf("failed to close capture: %s", err)
 			}
@@ -475,6 +474,7 @@ func (cm *Manager) logErrors(ctx context.Context, iface string, errsChan <-chan 
 				// If the error channel was closed prematurely, we have to assume there was
 				// a critical processing error and tear down the interface
 				if mc, exists := cm.captures.Get(iface); exists {
+					logger.Info("closing capture / stopping packet processing")
 					if err := mc.close(); err != nil {
 						logger.Errorf("failed to close capture: %s", err)
 					}
