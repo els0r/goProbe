@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/els0r/goProbe/cmd/gpctl/pkg/conf"
 	"github.com/els0r/goProbe/pkg/api"
@@ -37,7 +36,6 @@ func Execute() {
 		)
 		if logErr != nil {
 			fmt.Fprintf(os.Stderr, "Failed to instantiate CLI logger: %v\n", logErr)
-
 			fmt.Fprintf(os.Stderr, "Error running command: %s\n", err)
 			os.Exit(1)
 		}
@@ -52,6 +50,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.gpctl.yaml)")
 
 	rootCmd.PersistentFlags().StringP(conf.GoProbeServerAddr, "s", "", "server address of goProbe API")
+	rootCmd.PersistentFlags().DurationP(conf.RequestTimeout, "t", defaultRequestTimeout, "request timeout / deadline for goProbe API")
 
 	_ = viper.BindPFlags(rootCmd.PersistentFlags())
 }
@@ -118,13 +117,14 @@ func rootEntrypoint(cmd *cobra.Command, args []string) error {
 type entrypointE func(ctx context.Context, cmd *cobra.Command, args []string) error
 type runE func(cmd *cobra.Command, args []string) error
 
-func wrapCancellationContext(timeout time.Duration, f entrypointE) runE {
+func wrapCancellationContext(f entrypointE) runE {
+
 	return func(cmd *cobra.Command, args []string) error {
 		sdCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 		defer stop()
 
 		// calls to the api shouldn't take longer than one second
-		ctx, cancel := context.WithTimeout(sdCtx, timeout)
+		ctx, cancel := context.WithTimeout(sdCtx, viper.GetDuration(conf.RequestTimeout))
 		defer cancel()
 
 		return f(ctx, cmd, args)
