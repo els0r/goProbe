@@ -42,8 +42,10 @@ const ifaceKey = "interface"
 
 func (server *Server) registerRoutes() {
 	router := server.Router()
+
 	// query
-	router.POST(gpapi.QueryRoute, server.postQuery)
+	router.GET(gpapi.QueryRoute, server.postQuery)  // support for URL-encoded form data GET requests
+	router.POST(gpapi.QueryRoute, server.postQuery) // support for JSON or form-data body POST requests
 
 	// stats
 	statsRoutes := router.Group(gpapi.StatusRoute)

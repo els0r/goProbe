@@ -17,12 +17,22 @@ import (
 
 // NewArgs creates new query arguments with the defaults set
 func NewArgs(query, ifaces string, opts ...Option) *Args {
-	a := &Args{
-		// required args
-		Query:  query,
-		Ifaces: ifaces,
+	a := NewDefaultArgs()
 
-		// defaults
+	// required args
+	a.Query, a.Ifaces = query, ifaces
+
+	// apply functional options
+	for _, opt := range opts {
+		opt(a)
+	}
+	return a
+}
+
+// NewDefaultArgs creates a basic set of query arguments with only the
+// defaults being set
+func NewDefaultArgs() *Args {
+	return &Args{
 		First:      time.Now().AddDate(0, -1, 0).Format(time.ANSIC),
 		Format:     DefaultFormat,
 		In:         DefaultIn,
@@ -36,66 +46,61 @@ func NewArgs(query, ifaces string, opts ...Option) *Args {
 		},
 		SortBy: DefaultSortBy,
 	}
-
-	// apply functional options
-	for _, opt := range opts {
-		opt(a)
-	}
-	return a
 }
 
 // Args bundles the command line/HTTP parameters required to prepare a query statement
 type Args struct {
 	// required
-	Query  string `json:"query" yaml:"query"` // the query type such as sip,dip
-	Ifaces string `json:"ifaces" yaml:"ifaces"`
+	Query  string `json:"query" yaml:"query" form:"query"` // the query type such as sip,dip
+	Ifaces string `json:"ifaces" yaml:"ifaces" form:"ifaces"`
 
-	HostQuery string `json:"host_query,omitempty" yaml:"host_query,omitempty"` // the hosts query
+	HostQuery string `json:"host_query,omitempty" yaml:"host_query,omitempty" form:"host_query,omitempty"` // the hosts query
 
-	Hostname string `json:"hostname,omitempty" yaml:"hostname,omitempty"`
-	HostID   uint   `json:"host_id,omitempty" yaml:"host_id,omitempty"`
+	Hostname string `json:"hostname,omitempty" yaml:"hostname,omitempty" form:"hostname,omitempty"`
+	HostID   uint   `json:"host_id,omitempty" yaml:"host_id,omitempty" form:"host_id,omitempty"`
 
 	// data filtering
-	Condition string `json:"condition,omitempty" yaml:"condition,omitempty"`
+	Condition string `json:"condition,omitempty" yaml:"condition,omitempty" form:"condition,omitempty"`
 
 	// counter addition
-	In  bool `json:"in,omitempty" yaml:"in,omitempty"`
-	Out bool `json:"out,omitempty" yaml:"out,omitempty"`
-	Sum bool `json:"sum,omitempty" yaml:"sum,omitempty"`
+	In  bool `json:"in,omitempty" yaml:"in,omitempty" form:"in,omitempty"`
+	Out bool `json:"out,omitempty" yaml:"out,omitempty"  form:"out,omitempty"`
+	Sum bool `json:"sum,omitempty" yaml:"sum,omitempty" form:"sum,omitempty"`
 
 	// time selection
-	First string `json:"first,omitempty" yaml:"first,omitempty"`
-	Last  string `json:"last,omitempty" yaml:"last,omitempty"`
+	First string `json:"first,omitempty" yaml:"first,omitempty" form:"first,omitempty"`
+	Last  string `json:"last,omitempty" yaml:"last,omitempty" form:"last,omitempty"`
 
 	// formatting
-	Format        string `json:"format,omitempty" yaml:"format,omitempty"`
-	SortBy        string `json:"sort_by,omitempty" yaml:"sort_by,omitempty"` // column to sort by (packets or bytes)
-	NumResults    int    `json:"num_results,omitempty" yaml:"num_results,omitempty"`
-	SortAscending bool   `json:"sort_ascending,omitempty" yaml:"sort_ascending,omitempty"`
-	External      bool   `json:"external,omitempty" yaml:"external,omitempty"`
+	Format        string `json:"format,omitempty" yaml:"format,omitempty" form:"format,omitempty"`
+	SortBy        string `json:"sort_by,omitempty" yaml:"sort_by,omitempty" form:"sort_by,omitempty"` // column to sort by (packets or bytes)
+	NumResults    int    `json:"num_results,omitempty" yaml:"num_results,omitempty" form:"num_results,omitempty" `
+	SortAscending bool   `json:"sort_ascending,omitempty" yaml:"sort_ascending,omitempty" form:"sort_ascending,omitempty"`
+	External      bool   `json:"external,omitempty" yaml:"external,omitempty" form:"external,omitempty"`
 
 	// do-and-exit arguments
-	List    bool `json:"list,omitempty" yaml:"list,omitempty"`
-	Version bool `json:"version,omitempty" yaml:"version,omitempty"`
+	List    bool `json:"list,omitempty" yaml:"list,omitempty" form:"list,omitempty"`
+	Version bool `json:"version,omitempty" yaml:"version,omitempty" form:"version,omitempty"`
 
 	// resolution
+	// Note: Nested structures are not supported for form data, see individual parameters in definition of DNSResolution
 	DNSResolution DNSResolution `json:"dns_resolution,omitempty" yaml:"dns_resolution,omitempty"`
 
 	// file system
-	MaxMemPct int  `json:"max_mem_pct,omitempty" yaml:"max_mem_pct,omitempty"`
-	LowMem    bool `json:"low_mem,omitempty" yaml:"low_mem,omitempty"`
+	MaxMemPct int  `json:"max_mem_pct,omitempty" yaml:"max_mem_pct,omitempty" form:"max_mem_pct,omitempty"`
+	LowMem    bool `json:"low_mem,omitempty" yaml:"low_mem,omitempty" form:"low_mem,omitempty"`
 
 	// stores who produced these args (caller)
-	Caller string `json:"caller,omitempty" yaml:"caller,omitempty"`
+	Caller string `json:"caller,omitempty" yaml:"caller,omitempty" form:"caller,omitempty"`
 
 	// outputs is unexported
 	outputs []io.Writer
 }
 
 type DNSResolution struct {
-	Enabled bool          `json:"enabled" yaml:"enabled"`
-	Timeout time.Duration `json:"timeout,omitempty" yaml:"timeout,omitempty"`
-	MaxRows int           `json:"max_rows,omitempty" yaml:"max_rows,omitempty"`
+	Enabled bool          `json:"enabled" yaml:"enabled" form:"dns_enabled"`
+	Timeout time.Duration `json:"timeout,omitempty" yaml:"timeout,omitempty" form:"dns_timeout,omitempty"`
+	MaxRows int           `json:"max_rows,omitempty" yaml:"max_rows,omitempty" form:"dns_max_rows,omitempty"`
 }
 
 // AddOutputs allows more control over to which outputs the
