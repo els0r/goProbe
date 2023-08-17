@@ -31,7 +31,8 @@ jobs:
 
       - name: Build for AMD64
         run: |
-          GOOS=linux GOARCH=amd64 go build -a -o goProbe -pgo=auto ./cmd/goProbe
+          GOOS=linux GOARCH=amd64 go build -a -tags jsoniter -o goProbe -pgo=auto ./cmd/goProbe
+          GOOS=linux GOARCH=amd64 go build -a -tags jsoniter -o global-query -pgo=auto ./cmd/global-query
           GOOS=linux GOARCH=amd64 go build -a -o goQuery -pgo=auto ./cmd/goQuery
           GOOS=linux GOARCH=amd64 go build -a -o goConvert ./cmd/goConvert
 
@@ -42,9 +43,10 @@ jobs:
 
           # Binaries / Tarball
           cp goProbe .debpkg/usr/local/bin/goProbe
+          cp global-query .debpkg/usr/local/bin/global-query
           cp goQuery .debpkg/usr/local/bin/goQuery
           cp goConvert .debpkg/usr/local/bin/goConvert
-          tar czf ./goprobe_${{ env.RELEASE_VERSION }}_debian_amd64.tar.gz goProbe goQuery goConvert
+          tar czf ./goprobe_${{ env.RELEASE_VERSION }}_debian_amd64.tar.gz goProbe global-query goQuery goConvert
 
           # Config
           cp addon/goprobe.conf.example .debpkg/etc/goprobe.conf.example
@@ -105,7 +107,8 @@ jobs:
 
       - name: Build for AMD64
         run: |
-          GOOS=linux GOARCH=amd64 go build -a -o goProbe -pgo=auto ./cmd/goProbe
+          GOOS=linux GOARCH=amd64 go build -a -tags jsoniter -o goProbe -pgo=auto ./cmd/goProbe
+          GOOS=linux GOARCH=amd64 go build -a -tags jsoniter -o global-query -pgo=auto ./cmd/global-query
           GOOS=linux GOARCH=amd64 go build -a -o goQuery -pgo=auto ./cmd/goQuery
           GOOS=linux GOARCH=amd64 go build -a -o goConvert ./cmd/goConvert
 
@@ -116,9 +119,10 @@ jobs:
 
           # Binaries / Tarball
           cp goProbe .rpmpkg/usr/local/bin/goProbe
+          cp global-query .rpmpkg/usr/local/bin/global-query
           cp goQuery .rpmpkg/usr/local/bin/goQuery
           cp goConvert .rpmpkg/usr/local/bin/goConvert
-          tar czf ./goprobe_${{ env.RELEASE_VERSION }}_fedora_x86_64.tar.gz goProbe goQuery goConvert
+          tar czf ./goprobe_${{ env.RELEASE_VERSION }}_fedora_x86_64.tar.gz goProbe global-query goQuery goConvert
 
           # Config
           cp addon/goprobe.conf.example .rpmpkg/etc/goprobe.conf.example
@@ -163,13 +167,14 @@ jobs:
 
       - name: Build for AMD64
         run: |
-          GOOS=linux GOARCH=amd64 go build -buildvcs=false -a -o goProbe -pgo=auto ./cmd/goProbe
+          GOOS=linux GOARCH=amd64 go build -buildvcs=false -a -tags jsoniter -o goProbe -pgo=auto ./cmd/goProbe
+          GOOS=linux GOARCH=amd64 go build -buildvcs=false -a -tags jsoniter -o global-query -pgo=auto ./cmd/global-query
           GOOS=linux GOARCH=amd64 go build -buildvcs=false -a -o goQuery -pgo=auto ./cmd/goQuery
           GOOS=linux GOARCH=amd64 go build -buildvcs=false -a -o goConvert ./cmd/goConvert
 
       - name: Deploy artifacts
         run: |
-          tar czf ./goprobe_${{ env.RELEASE_VERSION }}_alpine_x86_64.tar.gz goProbe goQuery goConvert
+          tar czf ./goprobe_${{ env.RELEASE_VERSION }}_alpine_x86_64.tar.gz goProbe global-query goQuery goConvert
 
       - name: Store artifacts
         uses: actions/upload-artifact@v3
