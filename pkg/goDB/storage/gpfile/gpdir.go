@@ -139,8 +139,8 @@ func NewDir(basePath string, timestamp int64, accessMode int, options ...Option)
 	dayTimestamp := DirTimestamp(timestamp)
 	dayUnix := time.Unix(dayTimestamp, 0)
 
-	obj.dirPath = filepath.Join(basePath, strconv.Itoa(dayUnix.Year()), fmt.Sprintf("%02d", dayUnix.Month()), strconv.Itoa(int(dayTimestamp)))
-	obj.metaPath = filepath.Join(obj.dirPath, metadataFileName)
+	obj.dirPath = filepath.Clean(filepath.Join(basePath, strconv.Itoa(dayUnix.Year()), fmt.Sprintf("%02d", dayUnix.Month()), strconv.Itoa(int(dayTimestamp))))
+	obj.metaPath = filepath.Clean(filepath.Join(obj.dirPath, metadataFileName))
 	return &obj
 }
 
