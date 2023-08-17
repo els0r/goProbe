@@ -22,7 +22,7 @@ const (
 	flagFile   = "file"
 	flagSilent = "silent"
 
-	defaultQueryDeadline = 3 * time.Second
+	defaultRequestTimeout = 3 * time.Second
 )
 
 var (

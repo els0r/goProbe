@@ -50,7 +50,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.gpctl.yaml)")
 
 	rootCmd.PersistentFlags().StringP(conf.GoProbeServerAddr, "s", "", "server address of goProbe API")
-	rootCmd.PersistentFlags().DurationP(conf.QueryTimeout, "t", defaultQueryDeadline, "timeout / deadline for goProbe API query")
+	rootCmd.PersistentFlags().DurationP(conf.RequestTimeout, "t", defaultRequestTimeout, "request timeout / deadline for goProbe API")
 
 	_ = viper.BindPFlags(rootCmd.PersistentFlags())
 }
@@ -124,7 +124,7 @@ func wrapCancellationContext(f entrypointE) runE {
 		defer stop()
 
 		// calls to the api shouldn't take longer than one second
-		ctx, cancel := context.WithTimeout(sdCtx, viper.GetDuration(conf.QueryTimeout))
+		ctx, cancel := context.WithTimeout(sdCtx, viper.GetDuration(conf.RequestTimeout))
 		defer cancel()
 
 		return f(ctx, cmd, args)
