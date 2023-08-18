@@ -22,6 +22,7 @@ import (
 	"github.com/els0r/goProbe/pkg/defaults"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 	json "github.com/json-iterator/go"
+	"golang.org/x/time/rate"
 	"gopkg.in/yaml.v3"
 )
 
@@ -95,11 +96,13 @@ type LogConfig struct {
 
 // APIConfig stores goProbe's API configuration
 type APIConfig struct {
-	Addr      string   `json:"addr" yaml:"addr"`
-	Metrics   bool     `json:"metrics" yaml:"metrics"`
-	Profiling bool     `json:"profiling" yaml:"profiling"`
-	Timeout   int      `json:"request_timeout" yaml:"request_timeout"`
-	Keys      []string `json:"keys" yaml:"keys"`
+	Addr                 string     `json:"addr" yaml:"addr"`
+	Metrics              bool       `json:"metrics" yaml:"metrics"`
+	Profiling            bool       `json:"profiling" yaml:"profiling"`
+	Timeout              int        `json:"request_timeout" yaml:"request_timeout"`
+	QueryMaxReqPerSecond rate.Limit `json:"query_max_req_per_sec" yaml:"query_max_req_per_sec"`
+	QueryMaxBurst        int        `json:"query_max_burst" yaml:"query_max_burst"`
+	Keys                 []string   `json:"keys" yaml:"keys"`
 }
 
 // newDefault creates a new configuration struct with default settings
@@ -122,13 +125,18 @@ func (l LogConfig) validate() error {
 }
 
 var (
-	errorNoAPIAddrSpecified = errors.New("no API address specified")
-	errorInvalidAPITimeout  = errors.New("the request timeout must be a positive number")
+	errorNoAPIAddrSpecified       = errors.New("no API address specified")
+	errorInvalidAPITimeout        = errors.New("the request timeout must be a positive number")
+	errorInvalidAPIQueryRateLimit = errors.New("the query rate limit values must both be positive numbers")
 )
 
 func (a APIConfig) validate() error {
 	if a.Addr == "" {
 		return errorNoAPIAddrSpecified
+	}
+	if (a.QueryMaxReqPerSecond <= 0. && a.QueryMaxBurst > 0) ||
+		(a.QueryMaxReqPerSecond > 0. && a.QueryMaxBurst <= 0) {
+		return errorInvalidAPIQueryRateLimit
 	}
 	for _, key := range a.Keys {
 		err := checkKeyConstraints(key)

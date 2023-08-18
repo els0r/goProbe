@@ -46,5 +46,4 @@ func (server *Server) getStatus(c *gin.Context) {
 	}
 
 	c.JSON(resp.StatusCode, resp)
-	return
 }

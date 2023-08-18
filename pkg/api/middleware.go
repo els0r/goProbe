@@ -1,6 +1,7 @@
 package api
 
 import (
+	"net/http"
 	"time"
 
 	"github.com/els0r/goProbe/pkg/logging"
@@ -8,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/exp/slog"
+	"golang.org/x/time/rate"
 )
 
 const traceIDKey = "traceID"
@@ -66,6 +68,18 @@ func RequestLoggingMiddleware() gin.HandlerFunc {
 		case 400 <= statusCode:
 			logger.Error(requestMsg)
 		}
+	}
+}
+
+// RateLimitMiddleware creates a global rate limit for all requests, using a maximum of
+// r requests per second and a maximum burst rate of b tokens
+func RateLimitMiddleware(limiter *rate.Limiter) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if !limiter.Allow() {
+			c.AbortWithStatus(http.StatusTooManyRequests)
+			return
+		}
+		c.Next()
 	}
 }
 

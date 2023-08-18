@@ -84,5 +84,4 @@ func (server *Server) putConfig(c *gin.Context) {
 	}
 
 	c.JSON(resp.StatusCode, resp)
-	return
 }

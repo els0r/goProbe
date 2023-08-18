@@ -2,19 +2,19 @@ package server
 
 import (
 	"github.com/els0r/goProbe/cmd/goProbe/config"
+	"github.com/els0r/goProbe/pkg/api"
 	gpapi "github.com/els0r/goProbe/pkg/api/goprobe"
 	"github.com/els0r/goProbe/pkg/api/server"
 	"github.com/els0r/goProbe/pkg/capture"
 	"github.com/els0r/goProbe/pkg/defaults"
-	"github.com/els0r/goProbe/pkg/goprobe/writeout"
+	"github.com/gin-gonic/gin"
 )
 
 // Server runs a goprobe API server
 type Server struct {
 	// goprobe specific variables
-	dbPath          string
-	captureManager  *capture.Manager
-	writeoutHandler *writeout.Handler
+	dbPath         string
+	captureManager *capture.Manager
 
 	*server.DefaultServer
 }
@@ -44,8 +44,12 @@ func (server *Server) registerRoutes() {
 	router := server.Router()
 
 	// query
-	router.GET(gpapi.QueryRoute, server.postQuery)  // support for URL-encoded form data GET requests
-	router.POST(gpapi.QueryRoute, server.postQuery) // support for JSON or form-data body POST requests
+	queryHandlers := gin.HandlersChain{server.postQuery}
+	if limiter, hasLimiter := server.QueryRateLimiter(); hasLimiter {
+		queryHandlers = append(gin.HandlersChain{api.RateLimitMiddleware(limiter)}, queryHandlers...)
+	}
+	router.GET(gpapi.QueryRoute, queryHandlers...)  // support for URL-encoded form data GET requests
+	router.POST(gpapi.QueryRoute, queryHandlers...) // support for JSON or form-data body POST requests
 
 	// stats
 	statsRoutes := router.Group(gpapi.StatusRoute)

@@ -116,6 +116,38 @@ func TestValidate(t *testing.T) {
 			},
 			errorNoAPIAddrSpecified,
 		},
+		{"invalid / missing rate limit continuous rate value",
+			&Config{
+				DB: DBConfig{Path: defaults.DBPath},
+				Interfaces: Ifaces{
+					"eth0": CaptureConfig{
+						RingBuffer: &RingBufferConfig{BlockSize: 1024 * 1024, NumBlocks: 2},
+					},
+				},
+				Logging: LogConfig{Level: "debug", Encoding: "logfmt"},
+				API: &APIConfig{
+					Addr:          "unix:/var/run/goprobe.sock",
+					QueryMaxBurst: 3,
+				},
+			},
+			errorInvalidAPIQueryRateLimit,
+		},
+		{"invalid / missing rate limit burst rate value",
+			&Config{
+				DB: DBConfig{Path: defaults.DBPath},
+				Interfaces: Ifaces{
+					"eth0": CaptureConfig{
+						RingBuffer: &RingBufferConfig{BlockSize: 1024 * 1024, NumBlocks: 2},
+					},
+				},
+				Logging: LogConfig{Level: "debug", Encoding: "logfmt"},
+				API: &APIConfig{
+					Addr:                 "unix:/var/run/goprobe.sock",
+					QueryMaxReqPerSecond: 1.0,
+				},
+			},
+			errorInvalidAPIQueryRateLimit,
+		},
 	}
 
 	// run tests
