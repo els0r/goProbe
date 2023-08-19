@@ -264,7 +264,7 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 	s.NumResults = a.NumResults
 
 	// check for consisten use of the live flag
-	if s.Last < time.Now().AddDate(0, 1, 0).Unix() {
+	if s.Live && s.Last < time.Now().AddDate(0, 1, 0).Unix() {
 		return s, errors.New("live query not possible if query has last timestamp")
 	}
 
