@@ -372,6 +372,8 @@ func (cm *Manager) update(ctx context.Context, ifaces config.Ifaces, enable, dis
 	rg.Wait()
 }
 
+// GetFlowMaps extracts a copy of all active flows and sends them on the provided channel (compatible with normal query
+// processing). This way, live data can be added to a query result
 func (cm *Manager) GetFlowMaps(ctx context.Context, filterFn goDB.FilterFn, writeoutChan chan<- hashmap.AggFlowMapWithMetadata, ifaces ...string) {
 
 	logger, t0 := logging.FromContext(ctx), time.Now()
@@ -405,7 +407,7 @@ func (cm *Manager) GetFlowMaps(ctx context.Context, filterFn goDB.FilterFn, writ
 		}
 	}
 
-	// observe fetch duration
+	// log fetch duration
 	logger.With(
 		"elapsed", time.Since(t0).Round(time.Microsecond).String(),
 		"ifaces", ifaces,

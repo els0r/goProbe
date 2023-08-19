@@ -235,7 +235,7 @@ func (f *FlowLog) Aggregate() (agg *hashmap.AggFlowMap) {
 	for _, v := range f.flowMap {
 
 		// Check if the flow actually has any interesting information for us
-		if !v.HasBeenIdle() {
+		if v.packetsRcvd != 0 || v.packetsSent != 0 {
 
 			// Populate key buffer according to source flow
 			if v.isIPv4 {
