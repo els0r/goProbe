@@ -2,6 +2,7 @@ package query
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -93,6 +94,9 @@ type Args struct {
 	// stores who produced these args (caller)
 	Caller string `json:"caller,omitempty" yaml:"caller,omitempty" form:"caller,omitempty"`
 
+	// request live flow data (in addition to DB)
+	Live bool `json:"live,omitempty" yaml:"live,omitempty" form:"live,omitempty"`
+
 	// outputs is unexported
 	outputs []io.Writer
 }
@@ -158,6 +162,7 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 		Condition:     a.Condition,
 		LowMem:        a.LowMem,
 		Caller:        a.Caller,
+		Live:          a.Live,
 		Output:        os.Stdout, // by default, we write results to the console
 	}
 
@@ -254,9 +259,14 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 
 	// check limits flag
 	if !(0 < a.NumResults) {
-		return s, fmt.Errorf("the printed row limit must be greater than 0")
+		return s, errors.New("the printed row limit must be greater than 0")
 	}
 	s.NumResults = a.NumResults
+
+	// check for consisten use of the live flag
+	if s.Last < time.Now().AddDate(0, 1, 0).Unix() {
+		return s, errors.New("live query not possible if query has last timestamp")
+	}
 
 	// fan-out query results in case multiple writers were supplied
 	writers = append(writers, a.outputs...)

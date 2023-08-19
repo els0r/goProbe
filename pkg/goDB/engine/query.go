@@ -185,12 +185,8 @@ func (qr *QueryRunner) RunStatement(ctx context.Context, stmt *query.Statement) 
 	result.Summary.First = tSpanFirst
 	result.Summary.Last = tSpanLast
 
-	// If enabled (implictly by a non-nil CaptureManager being available), run a live query in the
-	// background / parallel to the DB query and put the results on the same output channel
-	liveQueryWG, err := qr.runLiveQuery(ctx, mapChan, stmt)
-	if err != nil {
-		return nil, fmt.Errorf("failed to execute live query: %w", err)
-	}
+	// If enabled, run a live query in the background / parallel to the DB query and put the results on the same output channel
+	liveQueryWG := qr.runLiveQuery(ctx, mapChan, stmt)
 
 	// spawn reader processing units and make them work on the individual DB blocks
 	// processing by interface is sequential, e.g. for multi-interface queries
@@ -300,15 +296,10 @@ func (qr *QueryRunner) RunStatement(ctx context.Context, stmt *query.Statement) 
 	return result, nil
 }
 
-func (qr *QueryRunner) runLiveQuery(ctx context.Context, mapChan chan hashmap.AggFlowMapWithMetadata, stmt *query.Statement) (wg *sync.WaitGroup, err error) {
+func (qr *QueryRunner) runLiveQuery(ctx context.Context, mapChan chan hashmap.AggFlowMapWithMetadata, stmt *query.Statement) (wg *sync.WaitGroup) {
 	wg = new(sync.WaitGroup)
 
-	if qr.captureManager == nil {
-		return
-	}
-
-	if stmt.Last < time.Now().AddDate(0, 1, 0).Unix() {
-		err = errors.New("live query not possible if query has last timestamp")
+	if !stmt.Live {
 		return
 	}
 

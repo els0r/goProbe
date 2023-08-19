@@ -45,6 +45,9 @@ type Statement struct {
 	// file system
 	MaxMemPct int  `json:"max_mem_pct,omitempty"`
 	LowMem    bool `json:"low_mem,omitempty"`
+
+	// request live flow data (in addition to DB)
+	Live bool `json:"live,omitempty"`
 }
 
 // String prints the executable statement in human-readable form
