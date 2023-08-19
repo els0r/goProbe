@@ -12,6 +12,7 @@ import (
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 	"github.com/els0r/goProbe/pkg/goprobe/writeout"
 	"github.com/els0r/goProbe/pkg/logging"
+	"github.com/els0r/goProbe/pkg/types/hashmap"
 	"golang.org/x/exp/slog"
 )
 
@@ -369,6 +370,46 @@ func (cm *Manager) update(ctx context.Context, ifaces config.Ifaces, enable, dis
 		})
 	}
 	rg.Wait()
+}
+
+func (cm *Manager) GetFlowMaps(ctx context.Context, filterFn goDB.FilterFn, writeoutChan chan<- hashmap.AggFlowMapWithMetadata, ifaces ...string) {
+
+	logger, t0 := logging.FromContext(ctx), time.Now()
+
+	// Build list of interfaces to process (either from all interfaces or from explicit list)
+	// If none are provided / are available, return empty map
+	if ifaces = cm.captures.Ifaces(ifaces...); len(ifaces) == 0 {
+		return
+	}
+
+	for _, iface := range ifaces {
+		mc, exists := cm.captures.Get(iface)
+		if exists {
+
+			runCtx := withIfaceContext(ctx, mc.iface)
+
+			// Lock the running capture and perform the rotation
+			mc.lock()
+			flowMap := mc.flowMap(runCtx)
+			mc.unlock()
+
+			if flowMap != nil {
+				if filterFn != nil {
+					flowMap = filterFn(flowMap)
+				}
+				writeoutChan <- hashmap.AggFlowMapWithMetadata{
+					AggFlowMap: flowMap,
+					Interface:  iface,
+				}
+			}
+		}
+	}
+
+	// observe fetch duration
+	logger.With(
+		"elapsed", time.Since(t0).Round(time.Microsecond).String(),
+		"ifaces", ifaces,
+	).Debug("fetched flow maps")
 }
 
 // Close stops / closes all (or a set of) interfaces

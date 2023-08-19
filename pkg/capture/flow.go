@@ -222,6 +222,35 @@ func (f *FlowLog) Rotate() *hashmap.AggFlowMap {
 	return f.transferAndAggregate()
 }
 
+// Aggregate extracts an AggFlowMap from the currently active flowMap. The flowMap
+// itself is not modified in the process.
+//
+// Returns an AggFlowMap containing all flows since the last call to Rotate.
+func (f *FlowLog) Aggregate() (agg *hashmap.AggFlowMap) {
+
+	agg = hashmap.NewAggFlowMap()
+
+	// Reusable key conversion buffers
+	keyBufV4, keyBufV6 := types.NewEmptyV4Key(), types.NewEmptyV6Key()
+	for _, v := range f.flowMap {
+
+		// Check if the flow actually has any interesting information for us
+		if !v.HasBeenIdle() {
+
+			// Populate key buffer according to source flow
+			if v.isIPv4 {
+				keyBufV4.PutAllV4(v.epHash[0:4], v.epHash[16:20], v.epHash[32:34], v.epHash[36])
+				agg.SetOrUpdate(keyBufV4, v.isIPv4, v.bytesRcvd, v.bytesSent, v.packetsRcvd, v.packetsSent)
+			} else {
+				keyBufV6.PutAllV6(v.epHash[0:16], v.epHash[16:32], v.epHash[32:34], v.epHash[36])
+				agg.SetOrUpdate(keyBufV6, v.isIPv4, v.bytesRcvd, v.bytesSent, v.packetsRcvd, v.packetsSent)
+			}
+		}
+	}
+
+	return
+}
+
 func (f *FlowLog) transferAndAggregate() (agg *hashmap.AggFlowMap) {
 	agg = hashmap.NewAggFlowMap()
 

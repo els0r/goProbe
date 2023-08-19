@@ -36,7 +36,7 @@ func NewDefaultArgs() *Args {
 		First:      time.Now().AddDate(0, -1, 0).Format(time.ANSIC),
 		Format:     DefaultFormat,
 		In:         DefaultIn,
-		Last:       time.Now().Format(time.ANSIC),
+		Last:       time.Now().AddDate(0, 2, 0).Format(time.ANSIC),
 		MaxMemPct:  DefaultMaxMemPct,
 		NumResults: DefaultNumResults,
 		Out:        DefaultOut,
