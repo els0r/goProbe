@@ -130,7 +130,7 @@ type GPDir struct {
 // NewDir instantiates a new directory (doesn't yet do anything)
 func NewDir(basePath string, timestamp int64, accessMode int, options ...Option) *GPDir {
 	obj := GPDir{
-		basePath:    strings.TrimSuffix(basePath, "/"),
+		basePath:    filepath.Clean(strings.TrimSuffix(basePath, "/")),
 		accessMode:  accessMode,
 		permissions: defaultPermissions,
 		options:     options,

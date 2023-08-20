@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"path/filepath"
 
 	"github.com/els0r/goProbe/pkg/logging"
 	"github.com/els0r/goProbe/pkg/query"
@@ -27,9 +26,6 @@ func RunQuery(caller, sourceData string, querier query.Runner, c *gin.Context) {
 		LogAndAbort(ctx, c, http.StatusBadRequest, err)
 		return
 	}
-
-	// Ensure that interfaces cannot contain any path traversal violations
-	queryArgs.Ifaces = filepath.Clean(queryArgs.Ifaces)
 
 	// the default format is json
 	queryArgs.Format = "json"

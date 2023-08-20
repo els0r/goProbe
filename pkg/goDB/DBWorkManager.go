@@ -76,7 +76,7 @@ func NewDBWorkManager(query *Query, dbpath string, iface string, numProcessingUn
 
 	return &DBWorkManager{
 		query:              query,
-		dbIfaceDir:         filepath.Join(dbpath, iface),
+		dbIfaceDir:         filepath.Clean(filepath.Join(dbpath, iface)),
 		iface:              iface,
 		workloadChan:       make(chan DBWorkload, numProcessingUnits*64), // 64 is relatively arbitrary (but we're just sending quite basic objects)
 		numProcessingUnits: numProcessingUnits,
