@@ -333,11 +333,8 @@ func parseIfaceList(dbPath string, ifacelist string) (ifaces []string, err error
 			return nil, err
 		}
 	} else {
-		ifaces = strings.Split(ifacelist, ",")
-		for _, iface := range ifaces {
-			if err = validateIfaceName(iface); err != nil {
-				return
-			}
+		if ifaces, err = parseIfaceNames(ifacelist); err != nil {
+			return
 		}
 	}
 	return
@@ -355,4 +352,14 @@ func validateIfaceName(iface string) error {
 	}
 
 	return nil
+}
+
+func parseIfaceNames(ifacelist string) (ifaces []string, err error) {
+	ifaces = strings.Split(ifacelist, ",")
+	for _, iface := range ifaces {
+		if err = validateIfaceName(iface); err != nil {
+			return
+		}
+	}
+	return
 }
