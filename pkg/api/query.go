@@ -18,11 +18,11 @@ func LogAndAbort(ctx context.Context, c *gin.Context, code int, err error) {
 func RunQuery(caller, sourceData string, querier query.Runner, c *gin.Context) {
 	ctx := c.Request.Context()
 
-	// parse query args from request
-	// queryArgs := query.NewDefaultArgs()
-	queryArgs := new(query.Args)
-	err := c.ShouldBind(queryArgs)
-	if err != nil {
+	// Initialize default quert args
+	var queryArgs = query.DefaultArgs()
+
+	// Parse args from request
+	if err := c.ShouldBind(queryArgs); err != nil {
 		LogAndAbort(ctx, c, http.StatusBadRequest, err)
 		return
 	}
@@ -38,7 +38,7 @@ func RunQuery(caller, sourceData string, querier query.Runner, c *gin.Context) {
 	logger := logging.FromContext(ctx)
 
 	logger.With("args", queryArgs).Info("running query")
-	_, err = queryArgs.Prepare()
+	_, err := queryArgs.Prepare()
 	if err != nil {
 		LogAndAbort(ctx, c, http.StatusBadRequest, fmt.Errorf("failed to prepare query statement: %w", err))
 		return

@@ -18,7 +18,7 @@ import (
 
 // NewArgs creates new query arguments with the defaults set
 func NewArgs(query, ifaces string, opts ...Option) *Args {
-	a := NewDefaultArgs()
+	a := DefaultArgs()
 
 	// required args
 	a.Query, a.Ifaces = query, ifaces
@@ -30,9 +30,9 @@ func NewArgs(query, ifaces string, opts ...Option) *Args {
 	return a
 }
 
-// NewDefaultArgs creates a basic set of query arguments with only the
+// DefaultArgs creates a basic set of query arguments with only the
 // defaults being set
-func NewDefaultArgs() *Args {
+func DefaultArgs() *Args {
 	return &Args{
 		First:      time.Now().AddDate(0, -1, 0).Format(time.ANSIC),
 		Format:     DefaultFormat,

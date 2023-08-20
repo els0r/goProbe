@@ -163,7 +163,7 @@ func (d *GPDir) Open(options ...Option) error {
 	}
 
 	// Attempt to read the metadata from file
-	metadataFile, err := os.Open(filepath.Clean(d.MetadataPath()))
+	metadataFile, err := os.Open(d.MetadataPath())
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
 
