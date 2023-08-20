@@ -355,7 +355,6 @@ func runGoProbe(t *testing.T, testDir string, sourceInitFn func() (mockIfaces, f
 	shutDownCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	captureManager.Close(shutDownCtx)
 	cancel()
-	close(liveFlows)
 
 	return liveFlows
 }

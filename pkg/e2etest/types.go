@@ -208,6 +208,8 @@ func (m mockIfaces) KillGoProbeOnceDone(cm *capture.Manager, flows chan hashmap.
 			panic(err)
 		}
 
+		close(flows)
+
 		return
 	}
 }
