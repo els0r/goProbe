@@ -19,7 +19,8 @@ func RunQuery(caller, sourceData string, querier query.Runner, c *gin.Context) {
 	ctx := c.Request.Context()
 
 	// parse query args from request
-	queryArgs := query.NewDefaultArgs()
+	// queryArgs := query.NewDefaultArgs()
+	queryArgs := new(query.Args)
 	err := c.ShouldBind(queryArgs)
 	if err != nil {
 		LogAndAbort(ctx, c, http.StatusBadRequest, err)
