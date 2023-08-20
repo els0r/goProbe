@@ -343,7 +343,7 @@ func parseIfaceList(dbPath string, ifacelist string) ([]string, error) {
 	return ifaces, nil
 }
 
-var ifaceNameRegexp = regexp.MustCompile(`^[a-zA-Z0-9\.:_-]{1,15}$`)
+var ifaceNameRegexp = regexp.MustCompile(`^[a-zA-Z0-9:_-]{1,15}$`)
 
 func validateIfaceName(iface string) error {
 	if iface == "" {
