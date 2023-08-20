@@ -18,14 +18,14 @@ func LogAndAbort(ctx context.Context, c *gin.Context, code int, err error) {
 func RunQuery(caller, sourceData string, querier query.Runner, c *gin.Context) {
 	ctx := c.Request.Context()
 
-	// Initialize default quert args
+	// Initialize default query args
 	var queryArgs = query.DefaultArgs()
 
 	// Parse args from request
-	if err := c.ShouldBind(queryArgs); err != nil {
-		LogAndAbort(ctx, c, http.StatusBadRequest, err)
-		return
-	}
+	// if err := c.ShouldBind(queryArgs); err != nil {
+	// 	LogAndAbort(ctx, c, http.StatusBadRequest, err)
+	// 	return
+	// }
 
 	// the default format is json
 	queryArgs.Format = "json"
