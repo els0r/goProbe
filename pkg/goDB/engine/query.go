@@ -357,12 +357,12 @@ func validateIfaceName(iface string) error {
 	return nil
 }
 
-func validateIfaceNames(ifacelist string) (ifaces []string, err error) {
-	ifaces = strings.Split(ifacelist, ",")
+func validateIfaceNames(ifacelist string) ([]string, error) {
+	ifaces := strings.Split(ifacelist, ",")
 	for _, iface := range ifaces {
-		if err = validateIfaceName(iface); err != nil {
-			return
+		if err := validateIfaceName(iface); err != nil {
+			return nil, err
 		}
 	}
-	return
+	return ifaces, nil
 }
