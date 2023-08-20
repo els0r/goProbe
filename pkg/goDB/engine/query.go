@@ -322,22 +322,25 @@ func createWorkManager(dbPath string, iface string, tfirst, tlast int64, query *
 	return
 }
 
-func parseIfaceList(dbPath string, ifacelist string) (ifaces []string, err error) {
+func parseIfaceList(dbPath string, ifacelist string) ([]string, error) {
 	if ifacelist == "" {
 		return nil, errors.New("no interface(s) specified")
 	}
 
 	if strings.ToLower(ifacelist) == "any" {
-		ifaces, err = info.GetInterfaces(dbPath)
+		ifaces, err := info.GetInterfaces(dbPath)
 		if err != nil {
 			return nil, err
 		}
-	} else {
-		if ifaces, err = parseIfaceNames(ifacelist); err != nil {
-			return
-		}
+		return ifaces, nil
 	}
-	return
+
+	ifaces, err := validateIfaceNames(ifacelist)
+	if err != nil {
+		return nil, err
+	}
+
+	return ifaces, nil
 }
 
 var ifaceNameRegexp = regexp.MustCompile(`^[a-zA-Z0-9\.:_-]{1,15}$`)
@@ -354,7 +357,7 @@ func validateIfaceName(iface string) error {
 	return nil
 }
 
-func parseIfaceNames(ifacelist string) (ifaces []string, err error) {
+func validateIfaceNames(ifacelist string) (ifaces []string, err error) {
 	ifaces = strings.Split(ifacelist, ",")
 	for _, iface := range ifaces {
 		if err = validateIfaceName(iface); err != nil {
