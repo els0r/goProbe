@@ -87,6 +87,8 @@ func (m *Monitor) Reload(ctx context.Context, fn CallbackFn) error {
 	m.config = config
 	m.Unlock()
 
+	logging.FromContext(ctx).Debugf("config reloaded from %s", m.path)
+
 	return nil
 }
 
@@ -95,7 +97,8 @@ func (m *Monitor) Reload(ctx context.Context, fn CallbackFn) error {
 func (m *Monitor) reloadPeriodically(ctx context.Context, fn CallbackFn) {
 
 	logger := logging.FromContext(ctx)
-	ticker := time.NewTicker(defaultReloadInterval)
+	ticker := time.NewTicker(m.reloadInterval)
+	logger.Infof("starting config monitor (interval: %v)", m.reloadInterval)
 
 	for {
 		select {
@@ -105,7 +108,7 @@ func (m *Monitor) reloadPeriodically(ctx context.Context, fn CallbackFn) {
 			return
 		case <-ticker.C:
 			if err := m.Reload(ctx, fn); err != nil {
-				logger.Errorf("failed to perform period reload: %s", err)
+				logger.Errorf("failed to perform periodic config reload: %s", err)
 			}
 		}
 	}
