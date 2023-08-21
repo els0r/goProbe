@@ -19,13 +19,13 @@ func RunQuery(caller, sourceData string, querier query.Runner, c *gin.Context) {
 	ctx := c.Request.Context()
 
 	// Initialize default query args
-	var queryArgs = query.DefaultArgs()
+	var queryArgs = &query.Args{}
 
 	// Parse args from request
-	if err := c.BindJSON(queryArgs); err != nil {
-		LogAndAbort(ctx, c, http.StatusBadRequest, err)
-		return
-	}
+	// if err := c.ShouldBind(queryArgs); err != nil {
+	// 	LogAndAbort(ctx, c, http.StatusBadRequest, err)
+	// 	return
+	// }
 
 	// the default format is json
 	queryArgs.Format = "json"
