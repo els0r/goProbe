@@ -48,6 +48,11 @@ func InitManager(ctx context.Context, config *config.Config, opts ...ManagerOpti
 		dbPermissions = config.DB.Permissions
 	}
 
+	// If a local buffer config exists, set the values accordingly (before initializing the manager)
+	if config.LocalBuffers != nil {
+		setLocalBuffers(config.LocalBuffers.NumBuffers, config.LocalBuffers.SizeLimit)
+	}
+
 	// Initialize the DB writeout handler
 	writeoutHandler := writeout.NewGoDBHandler(config.DB.Path, encoderType).
 		WithSyslogWriting(config.SyslogFlows).
@@ -409,43 +414,42 @@ func (cm *Manager) rotate(ctx context.Context, writeoutChan chan<- capturetypes.
 		return
 	}
 
-	var rg RunGroup
+	// Iteratively rotate all interfaces. Since the rotation results are put on the writeoutChan for
+	// writeout by the DBWriter (which is sequential and certainly slower than the actual in-memory rotation)
+	// there is no significant benefit from running the rotations in parallel, thus allowing us to minimize
+	// congestion _and_ use a single shared local memory buffer
 	for _, iface := range ifaces {
-		mc, exists := cm.captures.Get(iface)
-		if exists {
-			rg.Run(func() {
+		if mc, exists := cm.captures.Get(iface); exists {
 
-				runCtx := withIfaceContext(ctx, mc.iface)
-				logger := logging.FromContext(runCtx)
+			runCtx := withIfaceContext(ctx, mc.iface)
+			logger, lockStart := logging.FromContext(runCtx), time.Now()
 
-				// Lock the running capture and perform the rotation
-				mc.lock()
+			// Lock the running capture in order to safely perform rotation tasks
+			mc.lock()
 
-				rotateResult := mc.rotate(runCtx)
+			// Extract capture stats in a separate goroutine to minimize rotation duration
+			statsRes := mc.fetchStatusInBackground(runCtx)
 
-				// log errors
-				// TODO: remove, once we expose error information more effectively
-				if len(mc.errMap) > 0 {
-					logger.With("error_map", mc.errMap).Debug("rotation errors")
-				}
+			// Perform the rotation
+			rotateResult := mc.rotate(runCtx)
 
-				// Since the capture is locked we can safely extract the (capture) status
-				// from the individual interfaces (and unlock no matter what)
-				stats, err := mc.status()
-				if err != nil {
-					logger.Errorf("failed to get capture stats: %v", err)
-				}
-				mc.unlock()
+			// log errors
+			// TODO: remove, once we expose error information more effectively
+			if len(mc.errMap) > 0 {
+				logger.With("error_map", mc.errMap).Debug("rotation errors")
+			}
 
-				writeoutChan <- capturetypes.TaggedAggFlowMap{
-					Map:   rotateResult,
-					Stats: *stats,
-					Iface: mc.iface,
-				}
-			})
+			stats := <-statsRes
+			mc.unlock()
+			logger.With("elapsed", time.Since(lockStart).Round(time.Microsecond).String()).Debug("interface locked")
+
+			writeoutChan <- capturetypes.TaggedAggFlowMap{
+				Map:   rotateResult,
+				Stats: *stats,
+				Iface: mc.iface,
+			}
 		}
 	}
-	rg.Wait()
 
 	// observe rotation duration
 	t1 := time.Since(t0)

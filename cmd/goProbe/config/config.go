@@ -17,6 +17,7 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"path/filepath"
 	"sync"
 
 	"github.com/els0r/goProbe/pkg/defaults"
@@ -46,11 +47,12 @@ type validator interface {
 // Config stores goProbe's configuration
 type Config struct {
 	sync.Mutex
-	DB          DBConfig   `json:"db" yaml:"db"`
-	Interfaces  Ifaces     `json:"interfaces" yaml:"interfaces"`
-	SyslogFlows bool       `json:"syslog_flows" yaml:"syslog_flows"`
-	Logging     LogConfig  `json:"logging" yaml:"logging"`
-	API         *APIConfig `json:"api" yaml:"api"`
+	DB           DBConfig           `json:"db" yaml:"db"`
+	Interfaces   Ifaces             `json:"interfaces" yaml:"interfaces"`
+	SyslogFlows  bool               `json:"syslog_flows" yaml:"syslog_flows"`
+	Logging      LogConfig          `json:"logging" yaml:"logging"`
+	API          *APIConfig         `json:"api" yaml:"api"`
+	LocalBuffers *LocalBufferConfig `json:"local_buffers" yaml:"local_buffers"`
 }
 
 type DBConfig struct {
@@ -63,24 +65,32 @@ type CaptureConfig struct {
 	Promisc bool `json:"promisc" yaml:"promisc"`
 	// used by the ring buffer in capture
 	RingBuffer *RingBufferConfig `json:"ring_buffer" yaml:"ring_buffer"`
+}
 
-	// LocalBufferSizeLimit denotes the maximum size of the local buffer
+type LocalBufferConfig struct {
+	// SizeLimit denotes the maximum size of the local buffers (globally)
 	// used to continue capturing while the capture is (b)locked
-	LocalBufferSizeLimit int `json:"local_buffer_size_limit" yaml:"local_buffer_size_limit"`
+	SizeLimit int `json:"size_limit" yaml:"size_limit"`
+
+	// NumBuffers denotes the number of buffers (and hence maximum concurrency
+	// of Status() calls). This should be left at default unless absolutely required
+	NumBuffers int `json:"num_buffers" yaml:"num_buffers"`
 }
 
 type RingBufferConfig struct {
 	// BlockSize specifies the size of a block, which defines, how many packets
 	// can be held within a block
 	BlockSize int `json:"block_size" yaml:"block_size"`
+
 	// NumBlocks guides how many blocks are part of the ring buffer
 	NumBlocks int `json:"num_blocks" yaml:"num_blocks"`
 }
 
 const (
-	DefaultRingBufferBlockSize  int = 1 * 1024 * 1024 // 1 MB
-	DefaultRingBufferNumBlocks  int = 4
-	DefaultLocalBufferSizeLimit int = 16 * 1024 * 1024 // 16 MB
+	DefaultRingBufferBlockSize   int = 1 * 1024 * 1024 // 1 MB
+	DefaultRingBufferNumBlocks   int = 4
+	DefaultLocalBufferSizeLimit  int = 64 * 1024 * 1024 // 64 MB (globally, not per interface)
+	DefaultLocalBufferNumBuffers int = 1                // 1 Buffer should suffice
 )
 
 // Ifaces stores the per-interface configuration
@@ -144,6 +154,21 @@ func (a APIConfig) validate() error {
 }
 
 var (
+	errorLocalBufferSize       = errors.New("local buffer size must be a positive number")
+	errorLocalBufferNumBuffers = errors.New("number of local buffers must be a positive number")
+)
+
+func (l LocalBufferConfig) validate() error {
+	if l.SizeLimit <= 0 {
+		return errorLocalBufferSize
+	}
+	if l.NumBuffers <= 0 {
+		return errorLocalBufferNumBuffers
+	}
+	return nil
+}
+
+var (
 	errorNoRingBufferConfig = errors.New("no ring buffer configuration specified")
 )
 
@@ -172,7 +197,6 @@ func (r *RingBufferConfig) validate() error {
 // Equals compares c to cfg and returns true if all fields are identical
 func (c CaptureConfig) Equals(cfg CaptureConfig) bool {
 	return c.Promisc == cfg.Promisc &&
-		c.LocalBufferSizeLimit == cfg.LocalBufferSizeLimit &&
 		c.RingBuffer.Equals(cfg.RingBuffer)
 }
 
@@ -241,6 +265,9 @@ func (c *Config) Validate() error {
 	if c.API != nil {
 		optValidators = append(optValidators, c.API)
 	}
+	if c.LocalBuffers != nil {
+		optValidators = append(optValidators, c.LocalBuffers)
+	}
 	for _, section := range optValidators {
 		err := section.validate()
 		if err != nil {
@@ -253,7 +280,7 @@ func (c *Config) Validate() error {
 // ParseFile reads in a configuration from a file at `path`.
 // If provided, fields are overwritten from the default configuration
 func ParseFile(path string) (*Config, error) {
-	fd, err := os.Open(path)
+	fd, err := os.Open(filepath.Clean(path))
 	if err != nil {
 		return nil, err
 	}

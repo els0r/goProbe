@@ -25,8 +25,7 @@ import (
 const randSeed = 10000
 
 var defaultMockIfaceConfig = config.CaptureConfig{
-	Promisc:              false,
-	LocalBufferSizeLimit: config.DefaultLocalBufferSizeLimit,
+	Promisc: false,
 	RingBuffer: &config.RingBufferConfig{
 		BlockSize: config.DefaultRingBufferBlockSize,
 		NumBlocks: config.DefaultRingBufferNumBlocks,
@@ -58,48 +57,14 @@ func (t testMockSrcs) Wait() error {
 func TestConcurrentMethodAccess(t *testing.T) {
 	for _, i := range []int{1, 2, 3, 10} {
 		t.Run(fmt.Sprintf("%d ifaces", i), func(t *testing.T) {
-			testConcurrentMethodAccess(t, i, 100)
+			testConcurrentMethodAccess(t, i, 1000)
 		})
 	}
 }
 
 func testConcurrentMethodAccess(t *testing.T, nIfaces, nIterations int) {
 
-	ifaceConfigs := make(config.Ifaces)
-	for i := 0; i < nIfaces; i++ {
-		ifaceConfigs[fmt.Sprintf("mock%00d", i)] = defaultMockIfaceConfig
-	}
-
-	// Setup a temporary directory for the test DB
-	tempDir, err := os.MkdirTemp(os.TempDir(), "goprobe_capture")
-	if err != nil {
-		panic(err)
-	}
-	defer os.RemoveAll(tempDir)
-
-	// Build / initialize mock sources for all interfaces
-	testMockSrcs := make(testMockSrcs)
-	for iface := range ifaceConfigs {
-		mockSrc, errChan := initMockSrc(t, iface)
-		testMockSrcs[iface] = testMockSrc{
-			src:     mockSrc,
-			errChan: errChan,
-		}
-	}
-
-	// Initialize the CaptureManager
-	captureManager := NewManager(
-		writeout.NewGoDBHandler(tempDir, encoders.EncoderTypeLZ4),
-		WithSourceInitFn(func(c *Capture) (capture.SourceZeroCopy, error) {
-			src, exists := testMockSrcs[c.Iface()]
-			if !exists {
-				return nil, fmt.Errorf("failed to initialize missing interface %s", c.Iface())
-			}
-
-			return src.src, nil
-		}),
-	)
-	captureManager.Update(context.Background(), ifaceConfigs)
+	captureManager, ifaceConfigs, testMockSrcs := setupInterfaces(t, defaultMockIfaceConfig, nIfaces)
 
 	time.Sleep(time.Second)
 
@@ -142,6 +107,47 @@ func testConcurrentMethodAccess(t *testing.T, nIfaces, nIterations int) {
 	require.Nil(t, testMockSrcs.Wait())
 
 	captureManager.Close(context.Background())
+}
+
+func setupInterfaces(t *testing.T, cfg config.CaptureConfig, nIfaces int) (*Manager, config.Ifaces, testMockSrcs) {
+
+	ifaceConfigs := make(config.Ifaces)
+	for i := 0; i < nIfaces; i++ {
+		ifaceConfigs[fmt.Sprintf("mock%00d", i)] = cfg
+	}
+
+	// Setup a temporary directory for the test DB
+	tempDir, err := os.MkdirTemp(os.TempDir(), "goprobe_capture")
+	if err != nil {
+		panic(err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Build / initialize mock sources for all interfaces
+	testMockSrcs := make(testMockSrcs)
+	for iface := range ifaceConfigs {
+		mockSrc, errChan := initMockSrc(t, iface)
+		testMockSrcs[iface] = testMockSrc{
+			src:     mockSrc,
+			errChan: errChan,
+		}
+	}
+
+	// Initialize the CaptureManager
+	captureManager := NewManager(
+		writeout.NewGoDBHandler(tempDir, encoders.EncoderTypeLZ4),
+		WithSourceInitFn(func(c *Capture) (capture.SourceZeroCopy, error) {
+			src, exists := testMockSrcs[c.Iface()]
+			if !exists {
+				return nil, fmt.Errorf("failed to initialize missing interface %s", c.Iface())
+			}
+
+			return src.src, nil
+		}),
+	)
+	captureManager.Update(context.Background(), ifaceConfigs)
+
+	return captureManager, ifaceConfigs, testMockSrcs
 }
 
 func TestLowTrafficDeadlock(t *testing.T) {
@@ -218,19 +224,24 @@ func BenchmarkRotation(b *testing.B) {
 	}
 
 	b.Run("rotation", func(b *testing.B) {
+
+		benchData := make([]*FlowLog, b.N)
+		for i := 0; i < len(benchData); i++ {
+			benchData[i] = flowLog.clone()
+		}
+
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			testLog := flowLog.clone()
 
 			// Run best-case scenario (keep all flows)
-			aggMap := testLog.transferAndAggregate()
-			require.EqualValues(b, nFlows, len(testLog.flowMap))
+			aggMap := benchData[i].transferAndAggregate()
+			require.EqualValues(b, nFlows, len(benchData[i].flowMap))
 			require.EqualValues(b, nFlows, aggMap.Len())
 
 			// Run worst-case scenario (keep no flows)
-			aggMap = testLog.transferAndAggregate()
-			require.EqualValues(b, 0, len(testLog.flowMap))
+			aggMap = benchData[i].transferAndAggregate()
+			require.EqualValues(b, 0, len(benchData[i].flowMap))
 			require.EqualValues(b, 0, aggMap.Len())
 		}
 	})
