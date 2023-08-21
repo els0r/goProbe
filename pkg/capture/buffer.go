@@ -21,8 +21,9 @@ var (
 	// Initial size of a buffer
 	initialBufferSize = unix.Getpagesize()
 
-	// Global memory pool used to minimize allocations
-	memPool = gpfile.NewMemPoolNoLimit()
+	// Global (limited) memory pool used to minimize allocations
+	memPool       = gpfile.NewMemPool(config.DefaultLocalBufferNumBuffers)
+	maxBufferSize = config.DefaultLocalBufferSizeLimit
 )
 
 // LocalBuffer denotes a local packet buffer used to temporarily capture packets
@@ -30,59 +31,52 @@ var (
 type LocalBuffer struct {
 	data []byte // continuous buffer slice
 
-	sizeLimit   int // maximum size to which the buffer may grow
 	snapLen     int // capture length / snaplen for the underlying packet source
 	elementSize int // size of an individual element stored in the buffer
 
 	bufPos int // current position in continuous buffer slice
 }
 
-// WithSizeLimit allows setting a custom maxium size to which the buffer may grow
-// no further elements can be added via Add() if this limit is reached
-func WithSizeLimit(limit int) func(l *LocalBuffer) {
-	return func(l *LocalBuffer) {
-		if limit > 0 {
-			l.sizeLimit = limit
-		}
+// NewLocalBuffer instantiates a new buffer
+func NewLocalBuffer(captureHandle capture.SourceZeroCopy) *LocalBuffer {
+	p := captureHandle.NewPacket()
+	return &LocalBuffer{
+		snapLen:     len(p.IPLayer()),
+		elementSize: len(p.IPLayer()) + bufElementAddSize, // snaplen + sizes for pktType and pktSize
 	}
 }
 
-// NewLocalBuffer instantiates a new buffer
-func NewLocalBuffer(captureHandle capture.SourceZeroCopy, opts ...func(l *LocalBuffer)) *LocalBuffer {
-	p := captureHandle.NewPacket()
-	obj := &LocalBuffer{
-		snapLen:     len(p.IPLayer()),
-		elementSize: len(p.IPLayer()) + bufElementAddSize, // snaplen + sizes for pktType and pktSize
-		sizeLimit:   config.DefaultLocalBufferSizeLimit,
-	}
+// Assign sets the actual underlying data slice (obtained from a memory pool) of this buffer
+func (l *LocalBuffer) Assign(data []byte) {
+	l.data = data
+}
 
-	// Apply functional options, if any
-	for _, opt := range opts {
-		opt(obj)
-	}
-
-	return obj
+// Release returns the data slice to the memory pool and resets the buffer position
+func (l *LocalBuffer) Release() {
+	memPool.Put(l.data)
+	l.bufPos = 0
+	l.data = nil
 }
 
 // Add adds an element to the buffer, returning ok = true if successful
 // If the buffer is full / may not grow any further, ok is false
 func (l *LocalBuffer) Add(ipLayer capture.IPLayer, pktType byte, pktSize uint32) (ok bool) {
 
-	// Lazily allocate memory only if a packets is added and fetch a continuous memory
-	// slice from the pool
+	// Ascertain the current size of the underlying data slice (from the memory pool)
+	// and grow if required
 	if len(l.data) == 0 {
-		l.data = memPool.Get(initialBufferSize)
+		l.data = make([]byte, initialBufferSize)
 	}
 
 	// If required, grow the buffer
 	if l.bufPos+l.elementSize >= len(l.data) {
 
 		// If the buffer size is already at its limit, reject the new element
-		if len(l.data) >= l.sizeLimit {
+		if len(l.data) >= maxBufferSize {
 			return false
 		}
 
-		l.grow(min(l.sizeLimit, 2*len(l.data)))
+		l.grow(min(maxBufferSize, 2*len(l.data)))
 	}
 
 	// Transfer data to the buffer
@@ -106,14 +100,17 @@ func (l *LocalBuffer) N() int {
 	return l.bufPos / l.elementSize
 }
 
-// Reset puts the buffer into its initial state and returns any memory to the pool
-func (l *LocalBuffer) Reset() {
-	memPool.Put(l.data)
-	l.bufPos = 0
-	l.data = nil
-}
-
 ///////////////////////////////////////////////////////////////////////////////////
+
+// setLocalBuffers sets the number of (and hence the maximum concurrency for Status() calls) and
+// maximum size of the local memory buffers (globally, not per interface)
+func setLocalBuffers(nBuffers, sizeLimit int) {
+	if memPool != nil {
+		memPool.Clear()
+	}
+	memPool = gpfile.NewMemPool(nBuffers)
+	maxBufferSize = sizeLimit
+}
 
 func (l *LocalBuffer) grow(newSize int) {
 	newData := make([]byte, newSize)

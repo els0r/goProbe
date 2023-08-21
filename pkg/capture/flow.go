@@ -30,8 +30,8 @@ import (
 )
 
 const (
-	ipLayerTypeV4 = 0x04 // 4
-	ipLayerTypeV6 = 0x06 // 6
+	ipLayerTypeV4 = 0x04 // IPv4
+	ipLayerTypeV6 = 0x06 // IPv6
 )
 
 var (
@@ -223,30 +223,31 @@ func (f *FlowLog) Rotate() *hashmap.AggFlowMap {
 }
 
 func (f *FlowLog) transferAndAggregate() (agg *hashmap.AggFlowMap) {
+
+	// Initialize aggregate flow map / result
 	agg = hashmap.NewAggFlowMap()
 
-	// Reusable key conversion buffers
+	// Create reusable key conversion buffers
 	keyBufV4, keyBufV6 := types.NewEmptyV4Key(), types.NewEmptyV6Key()
-	var goDBKey types.Key
 
 	for k, v := range f.flowMap {
 
-		// Populate key buffer according to source flow
-		if v.isIPv4 {
-			keyBufV4.PutAllV4(v.epHash[0:4], v.epHash[16:20], v.epHash[32:34], v.epHash[36])
-			goDBKey = keyBufV4
-		} else {
-			keyBufV6.PutAllV6(v.epHash[0:16], v.epHash[16:32], v.epHash[32:34], v.epHash[36])
-			goDBKey = keyBufV6
-		}
+		// Check if the flow actually has any interesting information for us, otherwise
+		// delete it from the FlowMap
+		if v.packetsRcvd > 0 || v.packetsSent > 0 {
 
-		// Check if the flow actually has any interesting information for us
-		if !v.HasBeenIdle() {
-			agg.SetOrUpdate(goDBKey, v.isIPv4, v.bytesRcvd, v.bytesSent, v.packetsRcvd, v.packetsSent)
+			// Populate key buffer according to source flow and update result
+			if v.isIPv4 {
+				keyBufV4.PutAllV4(v.epHash[0:4], v.epHash[16:20], v.epHash[32:34], v.epHash[36])
+				agg.SetOrUpdate(keyBufV4, true, v.bytesRcvd, v.bytesSent, v.packetsRcvd, v.packetsSent)
+			} else {
+				keyBufV6.PutAllV6(v.epHash[0:16], v.epHash[16:32], v.epHash[32:34], v.epHash[36])
+				agg.SetOrUpdate(keyBufV6, false, v.bytesRcvd, v.bytesSent, v.packetsRcvd, v.packetsSent)
+			}
 
-			// Check whether the flow should be retained for the next interval
+			// Check whether the flow should be retained / reset for the next interval
 			// or thrown away
-			if v.IsWorthKeeping() {
+			if v.directionConfidenceHigh {
 
 				// Reset the flow
 				v.Reset()
@@ -327,28 +328,12 @@ func (f *Flow) UpdateFlow(epHash capturetypes.EPHash, auxInfo byte, pktType capt
 	}
 }
 
-// IsWorthKeeping is used by a flow to check whether it has any interesting direction into
-// worth keeping and whether its counters are non-zero. If they are, it means that
-// the flow was essentially idle in the last time interval and that it can be safely
-// discarded.
-func (f *Flow) IsWorthKeeping() bool {
-	return f.directionConfidenceHigh && !f.HasBeenIdle()
-}
-
 // Reset resets all flow counters
 func (f *Flow) Reset() {
 	f.bytesRcvd = 0
 	f.bytesSent = 0
 	f.packetsRcvd = 0
 	f.packetsSent = 0
-}
-
-// HasBeenIdle checks whether the flow has received packets into any direction. In the flow
-// lifecycle this is the last stage.
-//
-//	New -> Update -> Reset -> Idle -> Delete
-func (f *Flow) HasBeenIdle() bool {
-	return (f.packetsRcvd == 0) && (f.packetsSent == 0)
 }
 
 // FlowInfo summarizes information about a given flow
