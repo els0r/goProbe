@@ -179,7 +179,7 @@ type dbWalkFunc func(numDirs int, dayTimestamp int64) error
 
 func (w *DBWorkManager) walkDB(tfirst, tlast int64, fn dbWalkFunc) (numDirs int, err error) {
 	// Get list of years in main directory (ordered by directory name, i.e. time)
-	yearList, err := os.ReadDir(filepath.Clean(w.dbIfaceDir))
+	yearList, err := os.ReadDir(w.dbIfaceDir)
 	if err != nil {
 		return numDirs, err
 	}
@@ -203,7 +203,7 @@ func (w *DBWorkManager) walkDB(tfirst, tlast int64, fn dbWalkFunc) (numDirs int,
 		}
 
 		// Get list of months in year directory (ordered by directory name, i.e. time)
-		monthList, err := os.ReadDir(filepath.Clean(filepath.Join(w.dbIfaceDir, year.Name())))
+		monthList, err := os.ReadDir(filepath.Join(w.dbIfaceDir, year.Name()))
 		if err != nil {
 			return numDirs, err
 		}
@@ -224,7 +224,7 @@ func (w *DBWorkManager) walkDB(tfirst, tlast int64, fn dbWalkFunc) (numDirs int,
 			}
 
 			// Get list of days in month directory (ordered by directory name, i.e. time)
-			dirList, err := os.ReadDir(filepath.Clean(filepath.Join(w.dbIfaceDir, year.Name(), month.Name())))
+			dirList, err := os.ReadDir(filepath.Join(w.dbIfaceDir, year.Name(), month.Name()))
 			if err != nil {
 				return numDirs, err
 			}
