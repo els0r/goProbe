@@ -22,7 +22,7 @@ func RunQuery(caller, sourceData string, querier query.Runner, c *gin.Context) {
 	var queryArgs = query.DefaultArgs()
 
 	// Parse args from request
-	if err := c.ShouldBind(queryArgs); err != nil {
+	if err := c.BindJSON(queryArgs); err != nil {
 		LogAndAbort(ctx, c, http.StatusBadRequest, err)
 		return
 	}
