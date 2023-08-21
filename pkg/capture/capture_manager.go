@@ -143,6 +143,7 @@ func (cm *Manager) ScheduleWriteouts(ctx context.Context, interval time.Duration
 			select {
 			case <-ctx.Done():
 				logger.Info("stopping rotation handler")
+				ticker.Stop()
 				return
 			default:
 				t0 := time.Now()

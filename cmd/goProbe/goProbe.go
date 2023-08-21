@@ -52,11 +52,12 @@ func main() {
 	}
 
 	// Read / parse config file
-	config, err := gpconf.ParseFile(flags.CmdLine.Config)
+	configMonitor, err := gpconf.NewMonitor(flags.CmdLine.Config)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to load config file: %v\n", err)
+		fmt.Fprintf(os.Stderr, "failed to initialize config file monitor: %v\n", err)
 		os.Exit(1)
 	}
+	config := configMonitor.Config()
 
 	// Initialize logger
 	loggerOpts := []logging.Option{
@@ -110,6 +111,9 @@ func main() {
 	if err != nil {
 		logger.Fatal(err)
 	}
+
+	// Initialize constant monitoring / reloading of the config file
+	configMonitor.Start(ctx, captureManager.Update)
 
 	// configure api server
 	var apiServer *gpserver.Server
