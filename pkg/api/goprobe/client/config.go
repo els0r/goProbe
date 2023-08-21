@@ -56,3 +56,18 @@ func (c *Client) UpdateInterfaceConfigs(ctx context.Context, ifaceConfigs config
 	}
 	return res.Enabled, res.Updated, res.Disabled, nil
 }
+
+// ReloadConfig reads / updates goprobe's runtime configuration with the one from disk
+func (c *Client) ReloadConfig(ctx context.Context) error {
+
+	url := c.NewURL(gpapi.ConfigRoute + gpapi.ConfigReloadRoute)
+
+	req := c.Modify(ctx,
+		httpc.NewWithClient("POST", url, c.Client()),
+	)
+
+	if err := req.RunWithContext(ctx); err != nil {
+		return fmt.Errorf("%w", err)
+	}
+	return nil
+}

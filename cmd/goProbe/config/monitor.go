@@ -56,13 +56,27 @@ func NewMonitor(path string, opts ...MonitorOption) (*Monitor, error) {
 	return obj, nil
 }
 
-// Config safely returns the current configuration
-func (m *Monitor) Config() (cfg *Config) {
+// GetConfig safely returns the current configuration
+func (m *Monitor) GetConfig() (cfg *Config) {
 	m.RLock()
 	cfg = m.config
 	m.RUnlock()
 
 	return
+}
+
+// PutConfig safely updates the configuration with a new one
+func (m *Monitor) PutConfig(cfg *Config) {
+	m.Lock()
+	m.config = cfg
+	m.Unlock()
+}
+
+// PutIfaceConfig safely updates the interface configuration with a new one
+func (m *Monitor) PutIfaceConfig(cfg Ifaces) {
+	m.Lock()
+	m.config.Interfaces = cfg
+	m.Unlock()
 }
 
 // Start initializaes the config monitor background task(s)

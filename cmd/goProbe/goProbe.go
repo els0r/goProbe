@@ -57,7 +57,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "failed to initialize config file monitor: %v\n", err)
 		os.Exit(1)
 	}
-	config := configMonitor.Config()
+	config := configMonitor.GetConfig()
 
 	// Initialize logger
 	loggerOpts := []logging.Option{
@@ -134,7 +134,7 @@ func main() {
 		// 	apiOptions = append(apiOptions, api.WithKeys(config.API.Keys))
 		// }
 
-		apiServer = gpserver.New(config.API.Addr, captureManager, apiOptions...)
+		apiServer = gpserver.New(config.API.Addr, captureManager, configMonitor, apiOptions...)
 		apiServer.SetDBPath(config.DB.Path)
 
 		logger.With("addr", config.API.Addr).Info("starting API server")
