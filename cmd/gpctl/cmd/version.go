@@ -13,6 +13,7 @@ var versionCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		printVersion()
 	},
+	SilenceErrors: true,
 }
 
 func init() {
