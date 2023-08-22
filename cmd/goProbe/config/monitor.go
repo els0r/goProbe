@@ -22,7 +22,7 @@ type Monitor struct {
 }
 
 // CallbackFn denotes a function to be called upon successful reload of the configuration
-type CallbackFn func(context.Context, Ifaces) ([]string, []string, []string, error)
+type CallbackFn func(context.Context, Ifaces) (enabled, updated, disabled []string, err error)
 
 // MonitorOption denotes a functional option for a config monitor
 type MonitorOption func(*Monitor)
@@ -101,7 +101,7 @@ func (m *Monitor) Reload(ctx context.Context, fn CallbackFn) error {
 	m.config = config
 	m.Unlock()
 
-	logging.FromContext(ctx).Debugf("config reloaded from %s", m.path)
+	logging.FromContext(ctx).With("path", m.path).Debugf("config reloaded")
 
 	return nil
 }
@@ -112,7 +112,7 @@ func (m *Monitor) reloadPeriodically(ctx context.Context, fn CallbackFn) {
 
 	logger := logging.FromContext(ctx)
 	ticker := time.NewTicker(m.reloadInterval)
-	logger.Infof("starting config monitor (interval: %v)", m.reloadInterval)
+	logger.With("interval", m.reloadInterval.Round(1*time.Second)).Info("starting config monitor")
 
 	for {
 		select {
