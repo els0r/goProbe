@@ -74,7 +74,7 @@ func (server *Server) putConfig(c *gin.Context) {
 
 	// update the captures
 	server.configMonitor.PutIfaceConfig(ifaceConfigs)
-	if err := server.configMonitor.Reload(c.Request.Context(), server.captureManager.Update); err != nil {
+	if resp.Enabled, resp.Updated, resp.Disabled, err = server.configMonitor.Apply(c.Request.Context(), server.captureManager.Update); err != nil {
 		resp.StatusCode = http.StatusBadRequest
 		resp.Error = err.Error()
 
@@ -86,12 +86,18 @@ func (server *Server) putConfig(c *gin.Context) {
 }
 
 func (server *Server) reloadConfig(c *gin.Context) {
+	resp := &gpapi.ConfigUpdateResponse{}
+	resp.StatusCode = http.StatusOK
 
 	// Reload the configuration and trigger an update for the CaptureManager
-	if err := server.configMonitor.Reload(c.Request.Context(), server.captureManager.Update); err != nil {
-		c.AbortWithError(http.StatusInternalServerError, err)
+	var err error
+	if resp.Enabled, resp.Updated, resp.Disabled, err = server.configMonitor.Reload(c.Request.Context(), server.captureManager.Update); err != nil {
+		resp.StatusCode = http.StatusInternalServerError
+		resp.Error = err.Error()
+
+		c.AbortWithStatusJSON(resp.StatusCode, resp)
 		return
 	}
 
-	c.Status(http.StatusOK)
+	c.JSON(resp.StatusCode, resp)
 }

@@ -84,26 +84,45 @@ func (m *Monitor) Start(ctx context.Context, fn CallbackFn) {
 	go m.reloadPeriodically(ctx, fn)
 }
 
-// Reload triggers a config reload (and executes the callback function, if provided)
-func (m *Monitor) Reload(ctx context.Context, fn CallbackFn) error {
-	config, err := ParseFile(m.path)
-	if err != nil {
-		return fmt.Errorf("failed to reload config file: %w", err)
+// Reload triggers a config reload from disk and triggers the execution of the provided callback (if any)
+func (m *Monitor) Reload(ctx context.Context, fn CallbackFn) (enabled, updated, disabled []string, err error) {
+	cfg, perr := ParseFile(m.path)
+	if perr != nil {
+		err = fmt.Errorf("failed to reload config file: %w", err)
+		return
 	}
 
-	if fn != nil {
-		if _, _, _, err = fn(ctx, config.Interfaces); err != nil {
-			return fmt.Errorf("failed to execute config reload callback function: %w", err)
-		}
-	}
-
-	m.Lock()
-	m.config = config
-	m.Unlock()
+	m.PutConfig(cfg)
 
 	logging.FromContext(ctx).With("path", m.path).Debugf("config reloaded")
 
-	return nil
+	if fn != nil {
+		return m.Apply(ctx, fn)
+	}
+
+	return
+}
+
+// Apply peforms a callback to the provided function and returns its result
+func (m *Monitor) Apply(ctx context.Context, fn CallbackFn) (enabled, updated, disabled []string, err error) {
+
+	if fn == nil {
+		err = fmt.Errorf("no callback function provided")
+		return
+	}
+
+	if enabled, updated, disabled, err = fn(ctx, m.config.Interfaces); err != nil {
+		err = fmt.Errorf("failed to execute config reload callback function: %w", err)
+		return
+	}
+
+	logging.FromContext(ctx).With(
+		"enabled", enabled,
+		"updated", updated,
+		"disabled", disabled,
+	).Debug("config applied")
+
+	return
 }
 
 ////////////////////////////////////////////////////////////////////////
@@ -121,7 +140,7 @@ func (m *Monitor) reloadPeriodically(ctx context.Context, fn CallbackFn) {
 			ticker.Stop()
 			return
 		case <-ticker.C:
-			if err := m.Reload(ctx, fn); err != nil {
+			if _, _, _, err := m.Reload(ctx, fn); err != nil {
 				logger.Errorf("failed to perform periodic config reload: %s", err)
 			}
 		}

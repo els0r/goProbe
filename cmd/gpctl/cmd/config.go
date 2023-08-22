@@ -5,6 +5,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"time"
@@ -20,6 +21,7 @@ import (
 
 const (
 	flagFile   = "file"
+	flagReload = "reload"
 	flagSilent = "silent"
 
 	defaultRequestTimeout = 3 * time.Second
@@ -28,6 +30,7 @@ const (
 var (
 	file   string
 	silent bool
+	reload bool
 )
 
 // configCmd represents the config command
@@ -39,8 +42,9 @@ var configCmd = &cobra.Command{
 If the (list of) interface(s) is provided as an argument, it will only
 show the configuration for them. Otherwise, all configurations are printed
 
-The list of interfaces is ignored if --file is provided to reload
-goprobe's runtime configuration
+The list of interfaces is ignored if -f|--file or -r|--reload is provided (which
+are mutually exclusive and both trigger a change of goprobe's runtime configuration,
+either from the provided file or reloading the on-disk configuration).
 `,
 	RunE:          wrapCancellationContext(configEntrypoint),
 	SilenceUsage:  true,
@@ -51,12 +55,21 @@ func init() {
 	rootCmd.AddCommand(configCmd)
 
 	configCmd.Flags().StringVarP(&file, flagFile, "f", "", "apply config file to goprobe's runtime configuration")
+	configCmd.Flags().BoolVarP(&reload, flagReload, "r", false, "reload on-disk config file and apply it to goprobe's runtime configuration")
 	configCmd.Flags().BoolVar(&silent, flagSilent, false, "don't output interface changes after update")
 }
 
 func configEntrypoint(ctx context.Context, cmd *cobra.Command, args []string) error {
 	client := client.New(viper.GetString(conf.GoProbeServerAddr))
 
+	// If the user specifies both a reload from disk and provided a config, abort (and show usage)
+	if file != "" && reload {
+		cmd.SilenceUsage = false
+		return errors.New("cannot perform both config reload from disk and apply external runtime configuration")
+	}
+	if reload {
+		return reloadConfig(ctx)
+	}
 	if file != "" {
 		return updateConfig(ctx, file, silent)
 	}
@@ -117,6 +130,22 @@ func configEntrypoint(ctx context.Context, cmd *cobra.Command, args []string) er
 	return nil
 }
 
+func reloadConfig(ctx context.Context) error {
+	client := client.New(viper.GetString(conf.GoProbeServerAddr))
+
+	// send update call
+	enabled, updated, disabled, err := client.ReloadConfig(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to trigger reload of goprobe's runtime configuration: %w", err)
+	}
+
+	if !silent {
+		printIfaceChanges(enabled, updated, disabled)
+	}
+
+	return nil
+}
+
 func updateConfig(ctx context.Context, file string, silent bool) error {
 	client := client.New(viper.GetString(conf.GoProbeServerAddr))
 
@@ -138,10 +167,14 @@ func updateConfig(ctx context.Context, file string, silent bool) error {
 		return fmt.Errorf("failed to update goprobe's runtime configuration: %w", err)
 	}
 
-	if silent {
-		return nil
+	if !silent {
+		printIfaceChanges(enabled, updated, disabled)
 	}
 
+	return nil
+}
+
+func printIfaceChanges(enabled, updated, disabled []string) {
 	fmt.Printf(`
      Enabled: %v
      Updated: %v
@@ -149,6 +182,4 @@ func updateConfig(ctx context.Context, file string, silent bool) error {
 
 `, enabled, updated, disabled,
 	)
-
-	return nil
 }
