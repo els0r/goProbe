@@ -12,9 +12,11 @@ import (
 
 // Server runs a goprobe API server
 type Server struct {
+
 	// goprobe specific variables
 	dbPath         string
 	captureManager *capture.Manager
+	configMonitor  *config.Monitor
 
 	*server.DefaultServer
 }
@@ -26,10 +28,11 @@ func (server *Server) SetDBPath(path string) *Server {
 }
 
 // New creates a new goprobe API server
-func New(addr string, captureManager *capture.Manager, opts ...server.Option) *Server {
+func New(addr string, captureManager *capture.Manager, configMonitor *config.Monitor, opts ...server.Option) *Server {
 	server := &Server{
 		dbPath:         defaults.DBPath,
 		captureManager: captureManager,
+		configMonitor:  configMonitor,
 		DefaultServer:  server.NewDefault(config.ServiceName, addr, opts...),
 	}
 
@@ -61,4 +64,5 @@ func (server *Server) registerRoutes() {
 	configRoutes.GET("", server.getConfig)
 	configRoutes.GET("/:"+ifaceKey, server.getConfig)
 	configRoutes.PUT("", server.putConfig)
+	configRoutes.POST(gpapi.ConfigReloadRoute, server.reloadConfig)
 }

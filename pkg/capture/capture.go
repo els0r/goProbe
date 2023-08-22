@@ -156,7 +156,7 @@ func (c *Capture) Iface() string {
 	return c.iface
 }
 
-func (c *Capture) run(ctx context.Context) (err error) {
+func (c *Capture) run() (err error) {
 
 	// Set up the packet source and capturing
 	c.captureHandle, err = c.sourceInitFn(c)
@@ -166,11 +166,6 @@ func (c *Capture) run(ctx context.Context) (err error) {
 
 	// make sure to store when the capture started
 	c.startedAt = time.Now()
-
-	// Start up processing and error handling / logging in the
-	// background
-	go logErrors(ctx,
-		c.process())
 
 	return
 }
@@ -229,10 +224,13 @@ func (c *Capture) process() <-chan error {
 	c.wgProc.Add(1)
 	go func() {
 
-		defer c.wgProc.Done()
+		defer func() {
+			close(captureErrors)
+			c.wgProc.Done()
+		}()
 
 		// Main packet capture loop which an interface should be in most of the time
-		localBuf := NewLocalBuffer(c.captureHandle, WithSizeLimit(c.config.LocalBufferSizeLimit))
+		localBuf := NewLocalBuffer(c.captureHandle)
 		for {
 
 			// Since lock confirmation is only done from a single goroutine (this one)
@@ -243,8 +241,11 @@ func (c *Capture) process() <-chan error {
 			// This logic may be slightly more contrived than a select{} statement but it increases
 			// packet throughput by several percent points
 			if len(c.capLock.request) > 0 {
-				<-c.capLock.request             // Consume the lock request
+				buf := <-c.capLock.request      // Consume the lock request
 				c.capLock.confirm <- struct{}{} // Confirm that process() is not processing
+
+				// Claim / assign the shared data from the memory pool for / to this buffer
+				localBuf.Assign(buf)
 
 				// Continue fetching packets and add them to the local buffer
 				for {
@@ -262,10 +263,12 @@ func (c *Capture) process() <-chan error {
 							continue
 						}
 						if errors.Is(err, capture.ErrCaptureStopped) { // capture stopped gracefully
+							localBuf.Release()
 							return
 						}
 
-						captureErrors <- fmt.Errorf("capture error: %w", err)
+						localBuf.Release()
+						captureErrors <- fmt.Errorf("capture error while buffering: %w", err)
 						return
 					}
 
@@ -282,13 +285,13 @@ func (c *Capture) process() <-chan error {
 				if localBuf.N() > 0 {
 					for i := 0; i < localBuf.N(); i++ {
 						if err := c.addToFlowLog(localBuf.Get(i)); err != nil {
-							localBuf.Reset()
+							localBuf.Release()
 							captureErrors <- err
 							return
 						}
 					}
-					localBuf.Reset()
 				}
+				localBuf.Release()
 
 				// Advance to the next loop iteration in case there is a pending lock
 				continue
@@ -390,14 +393,37 @@ func (c *Capture) status() (*capturetypes.CaptureStats, error) {
 	return &res, nil
 }
 
+func (c *Capture) fetchStatusInBackground(ctx context.Context) (res chan *capturetypes.CaptureStats) {
+	res = make(chan *capturetypes.CaptureStats)
+
+	// Extract capture stats in a separate goroutine to minimize time-to-unblock
+	// This should be finished by the time the rotation has taken place (at which
+	// time the stats can be pulled from the returned channel)
+	go func() {
+		stats, err := c.status()
+		if err != nil {
+			logging.FromContext(ctx).Errorf("failed to get capture stats: %v", err)
+		}
+
+		res <- stats
+		close(res)
+	}()
+
+	return
+}
+
 func (c *Capture) lock() {
+
+	// Fetch data from the pool for the local buffer. Tis will wait until it is actually
+	// available, allowing us to use a single buffer for all interfaces
+	buf := memPool.Get(0)
 
 	// Notify the capture that a locked interaction is about to begin, then
 	// unblock the capture potentially being in a blocking PPOLL syscall
 	// Channel has a depth of one and hence this push is non-blocking. Since
 	// we wait for confirmation there is no possibility of repeated attempts
 	// or race conditions
-	c.capLock.request <- struct{}{}
+	c.capLock.request <- buf
 	if err := c.captureHandle.Unblock(); err != nil {
 		panic(fmt.Sprintf("unexpectedly failed to unblock capture handle, deadlock inevitable: %s", err))
 	}
@@ -409,31 +435,25 @@ func (c *Capture) lock() {
 func (c *Capture) unlock() {
 
 	// Signal that the rotation is complete, releasing the processing routine
+	// Since the done channel has a depth of one an Unblock() event needs to be
+	// sent to ensure that a capture currently waiting for packets in the buffering
+	// state continues to the next iteration in order to observe the unlock request
 	c.capLock.done <- struct{}{}
+	if err := c.captureHandle.Unblock(); err != nil {
+		panic(fmt.Sprintf("unexpectedly failed to unblock capture handle, deadlock inevitable: %s", err))
+	}
 }
 
 type captureLock struct {
-	request chan struct{}
+	request chan []byte
 	confirm chan struct{}
 	done    chan struct{}
 }
 
 func newCaptureLock() *captureLock {
 	return &captureLock{
-		request: make(chan struct{}, 1),
+		request: make(chan []byte, 1),
 		confirm: make(chan struct{}),
 		done:    make(chan struct{}, 1),
-	}
-}
-
-func logErrors(ctx context.Context, errsChan <-chan error) {
-	logger := logging.FromContext(ctx)
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case err := <-errsChan:
-			logger.Error(err)
-		}
 	}
 }

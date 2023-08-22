@@ -49,6 +49,11 @@ func InitManager(ctx context.Context, config *config.Config, opts ...ManagerOpti
 		dbPermissions = config.DB.Permissions
 	}
 
+	// If a local buffer config exists, set the values accordingly (before initializing the manager)
+	if config.LocalBuffers != nil {
+		setLocalBuffers(config.LocalBuffers.NumBuffers, config.LocalBuffers.SizeLimit)
+	}
+
 	// Initialize the DB writeout handler
 	writeoutHandler := writeout.NewGoDBHandler(config.DB.Path, encoderType).
 		WithSyslogWriting(config.SyslogFlows).
@@ -144,6 +149,7 @@ func (cm *Manager) ScheduleWriteouts(ctx context.Context, interval time.Duration
 			select {
 			case <-ctx.Done():
 				logger.Info("stopping rotation handler")
+				ticker.Stop()
 				return
 			default:
 				t0 := time.Now()
@@ -318,7 +324,7 @@ func (cm *Manager) update(ctx context.Context, ifaces config.Ifaces, enable, dis
 	}
 
 	// To avoid any interference the update() logic is protected as a whole
-	// This also allows us to interace with the captures without copying (creating potential races)
+	// This also allows us to interface with the captures without copying (creating potential races)
 	cm.Lock()
 	defer cm.Unlock()
 
@@ -338,10 +344,8 @@ func (cm *Manager) update(ctx context.Context, ifaces config.Ifaces, enable, dis
 
 			logger := logging.FromContext(runCtx)
 			logger.Info("closing capture / stopping packet processing")
-
 			if err := mc.close(); err != nil {
 				logger.Errorf("failed to close capture: %s", err)
-				return
 			}
 
 			cm.captures.Delete(mc.iface)
@@ -361,10 +365,15 @@ func (cm *Manager) update(ctx context.Context, ifaces config.Ifaces, enable, dis
 			logger.Info("initializing capture / running packet processing")
 
 			newCap := newCapture(iface, ifaces[iface]).SetSourceInitFn(cm.sourceInitFn)
-			if err := newCap.run(runCtx); err != nil {
+			if err := newCap.run(); err != nil {
 				logger.Errorf("failed to start capture: %s", err)
 				return
 			}
+
+			// Start up processing and error handling / logging in the
+			// background
+			go cm.logErrors(runCtx, iface,
+				newCap.process())
 
 			cm.captures.Set(iface, newCap)
 		})
@@ -448,43 +457,42 @@ func (cm *Manager) rotate(ctx context.Context, writeoutChan chan<- capturetypes.
 		return
 	}
 
-	var rg RunGroup
+	// Iteratively rotate all interfaces. Since the rotation results are put on the writeoutChan for
+	// writeout by the DBWriter (which is sequential and certainly slower than the actual in-memory rotation)
+	// there is no significant benefit from running the rotations in parallel, thus allowing us to minimize
+	// congestion _and_ use a single shared local memory buffer
 	for _, iface := range ifaces {
-		mc, exists := cm.captures.Get(iface)
-		if exists {
-			rg.Run(func() {
+		if mc, exists := cm.captures.Get(iface); exists {
 
-				runCtx := withIfaceContext(ctx, mc.iface)
-				logger := logging.FromContext(runCtx)
+			runCtx := withIfaceContext(ctx, mc.iface)
+			logger, lockStart := logging.FromContext(runCtx), time.Now()
 
-				// Lock the running capture and perform the rotation
-				mc.lock()
+			// Lock the running capture in order to safely perform rotation tasks
+			mc.lock()
 
-				rotateResult := mc.rotate(runCtx)
+			// Extract capture stats in a separate goroutine to minimize rotation duration
+			statsRes := mc.fetchStatusInBackground(runCtx)
 
-				// log errors
-				// TODO: remove, once we expose error information more effectively
-				if len(mc.errMap) > 0 {
-					logger.With("error_map", mc.errMap).Debug("rotation errors")
-				}
+			// Perform the rotation
+			rotateResult := mc.rotate(runCtx)
 
-				// Since the capture is locked we can safely extract the (capture) status
-				// from the individual interfaces (and unlock no matter what)
-				stats, err := mc.status()
-				if err != nil {
-					logger.Errorf("failed to get capture stats: %v", err)
-				}
-				mc.unlock()
+			// log errors
+			// TODO: remove, once we expose error information more effectively
+			if len(mc.errMap) > 0 {
+				logger.With("error_map", mc.errMap).Debug("rotation errors")
+			}
 
-				writeoutChan <- capturetypes.TaggedAggFlowMap{
-					Map:   rotateResult,
-					Stats: *stats,
-					Iface: mc.iface,
-				}
-			})
+			stats := <-statsRes
+			mc.unlock()
+			logger.With("elapsed", time.Since(lockStart).Round(time.Microsecond).String()).Debug("interface locked")
+
+			writeoutChan <- capturetypes.TaggedAggFlowMap{
+				Map:   rotateResult,
+				Stats: *stats,
+				Iface: mc.iface,
+			}
 		}
 	}
-	rg.Wait()
 
 	// observe rotation duration
 	t1 := time.Since(t0)
@@ -495,6 +503,36 @@ func (cm *Manager) rotate(ctx context.Context, writeoutChan chan<- capturetypes.
 		"elapsed", t1.Round(time.Microsecond).String(),
 		"ifaces", ifaces,
 	).Debug("rotated interfaces")
+}
+
+func (cm *Manager) logErrors(ctx context.Context, iface string, errsChan <-chan error) {
+	logger := logging.FromContext(ctx)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case err, ok := <-errsChan:
+			if !ok {
+
+				// Ensure there is no conflict with calls to update() that might already be
+				// taking down this interface
+				cm.Lock()
+				defer cm.Unlock()
+
+				// If the error channel was closed prematurely, we have to assume there was
+				// a critical processing error and tear down the interface
+				if mc, exists := cm.captures.Get(iface); exists {
+					logger.Info("closing capture / stopping packet processing")
+					if err := mc.close(); err != nil {
+						logger.Errorf("failed to close capture: %s", err)
+					}
+					cm.captures.Delete(mc.iface)
+				}
+				return
+			}
+			logger.Error(err)
+		}
+	}
 }
 
 func (cm *Manager) performWriteout(ctx context.Context, timestamp time.Time, ifaces ...string) {

@@ -25,6 +25,7 @@ var rootCmd = &cobra.Command{
 	Long:              `gpctl goProbe control CLI tool`,
 	PersistentPreRunE: verifyArgs,
 	RunE:              rootEntrypoint,
+	SilenceErrors:     true,
 }
 
 // Execute is the main entrypoint and runs the CLI tool

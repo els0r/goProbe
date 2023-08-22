@@ -43,6 +43,9 @@ type StatusResponse struct {
 // ConfigRoute is the route to query/modify the current configuration
 const ConfigRoute = "/config"
 
+// ConfigReloadRoute is the route to trigger a config reload
+const ConfigReloadRoute = "/_reload"
+
 // ConfigResponse is the response to a config query
 type ConfigResponse struct {
 	response
