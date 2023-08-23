@@ -4,7 +4,7 @@ go 1.21
 
 require (
 	github.com/fako1024/httpc v1.0.15
-	github.com/fako1024/slimcap v0.0.0-20230804130619-6e647c83f7e0
+	github.com/fako1024/slimcap v0.0.0-20230823141905-cc1d3f76270b
 	github.com/fatih/color v1.15.0
 	github.com/gin-contrib/pprof v1.4.0
 	github.com/gin-gonic/gin v1.9.1
