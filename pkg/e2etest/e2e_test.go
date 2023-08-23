@@ -263,8 +263,8 @@ func testE2E(t *testing.T, datasets ...[]byte) {
 	resReference, listReference := mockIfaces.BuildResults(t, tempDir, resGoQuery)
 
 	// Counter consistency checks
-	require.Equal(t, mockIfaces.NProcessed(), resGoQuery.Summary.Totals.PacketsRcvd)
-	require.Equal(t, mockIfaces.NProcessed(), mockIfaces.NRead()-mockIfaces.NErr())
+	require.Equalf(t, mockIfaces.NProcessed(), resGoQuery.Summary.Totals.PacketsRcvd, "expected: %d, actual %d", mockIfaces.NProcessed(), resGoQuery.Summary.Totals.PacketsRcvd)
+	require.Equalf(t, mockIfaces.NProcessed(), mockIfaces.NRead()-mockIfaces.NErr(), "expected: %d, actual %d - %d", mockIfaces.NProcessed(), mockIfaces.NRead(), mockIfaces.NErr())
 
 	// List target consistency check (do not fail yet to show details in the next check)
 	if !reflect.DeepEqual(listReference, resGoQueryList) {
@@ -424,10 +424,13 @@ func newPcapSource(t testing.TB, name string, data []byte) (res *mockIface) {
 			defer res.Unlock()
 
 			pkt = slimcap.NewIPPacket(pkt, payload, pktType, int(totalLen), ipLayerOffset)
-			hash, isIPv4, auxInfo, err := capture.ParsePacket(pkt.IPLayer(), pkt.TotalLen())
-			if err != nil {
+			hash, isIPv4, auxInfo, errno := capture.ParsePacket(pkt.IPLayer(), pkt.TotalLen())
+			if errno > capturetypes.ErrnoOK {
 				res.tracking.nErr++
 				return
+			}
+			if errno != capturetypes.ErrnoPacketFragmentIgnore {
+				res.tracking.nProcessed++
 			}
 
 			hashReverse := hash.Reverse()
@@ -477,8 +480,6 @@ func newPcapSource(t testing.TB, name string, data []byte) (res *mockIface) {
 					}
 				}
 			}
-
-			res.tracking.nProcessed++
 		})
 
 		mockSrc.Pipe(src, res.tracking.done)
@@ -520,10 +521,13 @@ func newSyntheticSource(t testing.TB, name string, nPkts int) (res *mockIface) {
 			defer res.Unlock()
 
 			pkt := slimcap.NewIPPacket(nil, payload, pktType, int(totalLen), ipLayerOffset)
-			hash, isIPv4, auxInfo, err := capture.ParsePacket(pkt.IPLayer(), pkt.TotalLen())
-			if err != nil {
+			hash, isIPv4, auxInfo, errno := capture.ParsePacket(pkt.IPLayer(), pkt.TotalLen())
+			if errno > capturetypes.ErrnoOK {
 				res.tracking.nErr++
 				return
+			}
+			if errno != capturetypes.ErrnoPacketFragmentIgnore {
+				res.tracking.nProcessed++
 			}
 
 			hashReverse := hash.Reverse()
@@ -573,8 +577,6 @@ func newSyntheticSource(t testing.TB, name string, nPkts int) (res *mockIface) {
 					}
 				}
 			}
-
-			res.tracking.nProcessed++
 		})
 
 		mockSrc.Run()

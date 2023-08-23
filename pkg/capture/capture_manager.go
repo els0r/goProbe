@@ -433,12 +433,6 @@ func (cm *Manager) rotate(ctx context.Context, writeoutChan chan<- capturetypes.
 			// Perform the rotation
 			rotateResult := mc.rotate(runCtx)
 
-			// log errors
-			// TODO: remove, once we expose error information more effectively
-			if len(mc.errMap) > 0 {
-				logger.With("error_map", mc.errMap).Debug("rotation errors")
-			}
-
 			stats := <-statsRes
 			mc.unlock()
 			logger.With("elapsed", time.Since(lockStart).Round(time.Microsecond).String()).Debug("interface locked")
