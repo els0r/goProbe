@@ -13,7 +13,6 @@ package capture
 //
 /////////////////////////////////////////////////////////////////////////////////
 import (
-	"errors"
 	"fmt"
 	"io"
 	"text/tabwriter"
@@ -32,20 +31,6 @@ import (
 const (
 	ipLayerTypeV4 = 0x04 // IPv4
 	ipLayerTypeV6 = 0x06 // IPv6
-)
-
-var (
-
-	// ErrInvalidIPHeader indicates that neither IPv4 nor IPv6 header / packet was received
-	ErrInvalidIPHeader = errors.New("received neither IPv4 nor IPv6 IP header")
-
-	// ErrPacketTruncated indicates that a packet was too short to complete analysis
-	// (e.g. a TCP packet truncated before the TCP flag byte)
-	ErrPacketTruncated = errors.New("packet too short / truncated")
-
-	// ErrPacketFragmentIgnore indicates that a packet is fragmented and that the fragment doesn't
-	// carry any useful information / transport layer (which will cause it to be ignored)
-	ErrPacketFragmentIgnore = errors.New("packet fragment does not carry relevant information")
 )
 
 // FlowLog stores flows. It is NOT threadsafe.
@@ -79,7 +64,7 @@ func (f *FlowLog) Flows() map[string]*Flow {
 
 // ParsePacket processes / extracts all information contained in the IP layer received
 // from a capture source and converts it to a hash and flags to be added to the flow map
-func ParsePacket(ipLayer capture.IPLayer, pktTotalLen uint32) (epHash capturetypes.EPHash, isIPv4 bool, auxInfo byte, err error) {
+func ParsePacket(ipLayer capture.IPLayer, pktTotalLen uint32) (epHash capturetypes.EPHash, isIPv4 bool, auxInfo byte, errno capturetypes.ParsingErrno) {
 
 	var protocol byte
 	if ipLayerType := ipLayer.Type(); ipLayerType == ipLayerTypeV4 {
@@ -102,7 +87,7 @@ func ParsePacket(ipLayer capture.IPLayer, pktTotalLen uint32) (epHash capturetyp
 			// Skip packet if it carries anything other than the first fragment,
 			// i.e. if the packet lacks a transport layer header
 			if fragOffset != 0 {
-				err = ErrPacketFragmentIgnore
+				errno = capturetypes.ErrnoPacketFragmentIgnore
 				return
 			}
 		}
@@ -129,7 +114,7 @@ func ParsePacket(ipLayer capture.IPLayer, pktTotalLen uint32) (epHash capturetyp
 
 			if protocol == capturetypes.TCP {
 				if len(ipLayer) < ipv4.HeaderLen+13 {
-					err = ErrPacketTruncated
+					errno = capturetypes.ErrnoPacketTruncated
 					return
 				}
 				auxInfo = ipLayer[ipv4.HeaderLen+13] // store TCP flags
@@ -166,7 +151,7 @@ func ParsePacket(ipLayer capture.IPLayer, pktTotalLen uint32) (epHash capturetyp
 
 			if protocol == capturetypes.TCP {
 				if len(ipLayer) < ipv6.HeaderLen+13 {
-					err = ErrPacketTruncated
+					errno = capturetypes.ErrnoPacketTruncated
 					return
 				}
 				auxInfo = ipLayer[ipv6.HeaderLen+13] // store TCP flags
@@ -176,26 +161,27 @@ func ParsePacket(ipLayer capture.IPLayer, pktTotalLen uint32) (epHash capturetyp
 		}
 
 	} else {
-		err = ErrInvalidIPHeader
+		errno = capturetypes.ErrnoInvalidIPHeader
 		return
 	}
 
 	epHash[36] = protocol
 
+	errno = capturetypes.ErrnoOK
 	return
 }
 
 // Add a packet to the flow log. If the packet belongs to a flow
 // already present in the log, the flow will be updated. Otherwise,
 // a new flow will be created.
-func (f *FlowLog) Add(ipLayer capture.IPLayer, pktType capture.PacketType, pktTotalLen uint32) error {
+func (f *FlowLog) Add(ipLayer capture.IPLayer, pktType capture.PacketType, pktTotalLen uint32) capturetypes.ParsingErrno {
 
-	epHash, isIPv4, auxInfo, err := ParsePacket(ipLayer, pktTotalLen)
-	if err != nil {
-		if errors.Is(err, ErrPacketFragmentIgnore) {
-			return nil
+	epHash, isIPv4, auxInfo, errno := ParsePacket(ipLayer, pktTotalLen)
+	if errno > capturetypes.ErrnoOK {
+		if errno.ParsingFailed() {
+			return errno
 		}
-		return err
+		return capturetypes.ErrnoOK
 	}
 
 	// update or assign the flow
@@ -210,7 +196,7 @@ func (f *FlowLog) Add(ipLayer capture.IPLayer, pktType capture.PacketType, pktTo
 		}
 	}
 
-	return nil
+	return capturetypes.ErrnoOK
 }
 
 // Rotate rotates the flow log. All flows are reset to no packets and traffic.

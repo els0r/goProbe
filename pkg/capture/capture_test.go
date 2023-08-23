@@ -365,7 +365,6 @@ func newMockCapture(src capture.SourceZeroCopy) *Capture {
 		iface:         src.Link().Name,
 		capLock:       newCaptureLock(),
 		flowLog:       NewFlowLog(),
-		errMap:        make(map[string]int),
 		captureHandle: src,
 	}
 }
