@@ -22,7 +22,7 @@ import (
 )
 
 const (
-	flagExtended = "extended"
+	flagDetailed = "detailed"
 )
 
 // statusCmd represents the stats command
@@ -39,12 +39,12 @@ show the statistics for them. Otherwise, all interfaces are printed
 	SilenceErrors: true, // Errors are emitted after command completion, avoid duplicate
 }
 
-var extended bool
+var detailed bool
 
 func init() {
 	rootCmd.AddCommand(statusCmd)
 
-	statusCmd.Flags().BoolVarP(&extended, flagExtended, "e", false, "print extended interface statistics (packet parsing errors)")
+	statusCmd.Flags().BoolVarP(&detailed, flagDetailed, "v", false, "print extended interface statistics (packet parsing errors)")
 }
 
 func statusEntrypoint(ctx context.Context, cmd *cobra.Command, args []string) error {
@@ -100,7 +100,7 @@ func statusEntrypoint(ctx context.Context, cmd *cobra.Command, args []string) er
 		"received", "+ received",
 		"processed", "+ processed",
 		"dropped", "+ dropped", "for"}
-	if extended {
+	if detailed {
 		for _, parsingErrnoName := range capturetypes.ParsingErrnoNames {
 			headerRow2 = append(headerRow2, parsingErrnoName)
 		}
@@ -135,7 +135,7 @@ func statusEntrypoint(ctx context.Context, cmd *cobra.Command, args []string) er
 			formatting.Countable(ifaceStatus.ProcessedTotal), formatting.Countable(ifaceStatus.Processed),
 			formatting.Countable(ifaceStatus.DroppedTotal), dropped,
 			time.Since(ifaceStatus.StartedAt).Round(time.Second).String()}
-		if extended {
+		if detailed {
 			for _, parsingErrno := range ifaceStatus.ParsingErrors {
 				ifaceRow = append(ifaceRow, tablewriter.CreateCell(formatting.Countable(parsingErrno), &tablewriter.CellStyle{Alignment: tablewriter.AlignRight}))
 			}
