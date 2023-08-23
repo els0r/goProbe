@@ -126,8 +126,10 @@ func TestValidate(t *testing.T) {
 				},
 				Logging: LogConfig{Level: "debug", Encoding: "logfmt"},
 				API: &APIConfig{
-					Addr:          "unix:/var/run/goprobe.sock",
-					QueryMaxBurst: 3,
+					Addr: "unix:/var/run/goprobe.sock",
+					QueryRateLimit: QueryRateLimitConfig{
+						MaxBurst: 3,
+					},
 				},
 			},
 			errorInvalidAPIQueryRateLimit,
@@ -142,8 +144,10 @@ func TestValidate(t *testing.T) {
 				},
 				Logging: LogConfig{Level: "debug", Encoding: "logfmt"},
 				API: &APIConfig{
-					Addr:                 "unix:/var/run/goprobe.sock",
-					QueryMaxReqPerSecond: 1.0,
+					Addr: "unix:/var/run/goprobe.sock",
+					QueryRateLimit: QueryRateLimitConfig{
+						MaxReqPerSecond: 1.0,
+					},
 				},
 			},
 			errorInvalidAPIQueryRateLimit,

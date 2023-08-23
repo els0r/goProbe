@@ -1,7 +1,6 @@
 package query
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -13,8 +12,11 @@ import (
 	"github.com/els0r/goProbe/pkg/query/dns"
 	"github.com/els0r/goProbe/pkg/results"
 	"github.com/els0r/goProbe/pkg/types"
+	jsoniter "github.com/json-iterator/go"
 	"golang.org/x/exp/slog"
 )
+
+var maxTimeStr = fmt.Sprintf("%d", types.MaxTime.Unix())
 
 // NewArgs creates new query arguments with the defaults set
 func NewArgs(query, ifaces string, opts ...Option) *Args {
@@ -37,7 +39,7 @@ func DefaultArgs() *Args {
 		First:      time.Now().AddDate(0, -1, 0).Format(time.ANSIC),
 		Format:     DefaultFormat,
 		In:         DefaultIn,
-		Last:       time.Now().AddDate(0, 2, 0).Format(time.ANSIC),
+		Last:       maxTimeStr,
 		MaxMemPct:  DefaultMaxMemPct,
 		NumResults: DefaultNumResults,
 		Out:        DefaultOut,
@@ -101,6 +103,7 @@ type Args struct {
 	outputs []io.Writer
 }
 
+// DNSResolution contains DNS query / resolution related config arguments / parameters
 type DNSResolution struct {
 	Enabled bool          `json:"enabled" yaml:"enabled" form:"dns_enabled"`
 	Timeout time.Duration `json:"timeout,omitempty" yaml:"timeout,omitempty" form:"dns_timeout,omitempty"`
@@ -140,9 +143,10 @@ func (a *Args) String() string {
 	return str
 }
 
+// LogValue creates an slog compatible value from an Args instance
 func (a *Args) LogValue() slog.Value {
 	val := "<marshal failed>"
-	b, err := json.Marshal(a)
+	b, err := jsoniter.Marshal(a)
 	if err == nil {
 		val = string(b)
 	}
@@ -263,8 +267,8 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 	}
 	s.NumResults = a.NumResults
 
-	// check for consisten use of the live flag
-	if s.Live && s.Last < time.Now().AddDate(0, 1, 0).Unix() {
+	// check for consistent use of the live flag
+	if s.Live && s.Last != types.MaxTime.Unix() {
 		return s, errors.New("live query not possible if query has last timestamp")
 	}
 

@@ -121,16 +121,19 @@ func main() {
 	// create server and start listening for requests
 	if config.API != nil {
 		var apiOptions = []server.Option{
+
 			// Set the release mode of GIN depending on the log level
 			server.WithDebugMode(
 				logging.LevelFromString(config.Logging.Level) == logging.LevelDebug,
 			),
 			server.WithProfiling(config.API.Profiling),
+
 			// this line will enable not only HTTP request metrics, but also the default prometheus golang client
 			// metrics for memory, cpu, gc performance, etc.
 			server.WithMetrics(config.API.Metrics, []float64{0.01, 0.05, 0.1, 0.25, 1, 5, 10, 30, 60, 300}...),
+
 			// enable global query rate limit if provided
-			server.WithQueryRateLimit(config.API.QueryMaxReqPerSecond, config.API.QueryMaxBurst),
+			server.WithQueryRateLimit(config.API.QueryRateLimit.MaxReqPerSecond, config.API.QueryRateLimit.MaxBurst),
 		}
 		// if len(config.API.Keys) > 0 {
 		// 	apiOptions = append(apiOptions, api.WithKeys(config.API.Keys))
