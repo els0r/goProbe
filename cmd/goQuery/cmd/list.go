@@ -89,7 +89,7 @@ func listInterfaces(dbPath string, ifaces ...string) error {
 	// create work managers
 	var dbWorkerManagers = make([]*goDB.DBWorkManager, 0, len(ifaceDirs))
 	for _, iface := range ifaceDirs {
-		wm, err := goDB.NewDBWorkManager(dbPath, iface, runtime.NumCPU())
+		wm, err := goDB.NewDBWorkManager(goDB.NewMetadataQuery(), dbPath, iface, runtime.NumCPU())
 		if err != nil {
 			return fmt.Errorf("failed to set up work manager for %s: %w", iface, err)
 		}

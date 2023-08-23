@@ -194,6 +194,19 @@ func (c *Capture) rotate(ctx context.Context) (agg *hashmap.AggFlowMap) {
 	return
 }
 
+func (c *Capture) flowMap(ctx context.Context) (agg *hashmap.AggFlowMap) {
+
+	logger := logging.FromContext(ctx)
+
+	if c.flowLog.Len() == 0 {
+		logger.Debug("there are currently no flow records available")
+		return
+	}
+	agg = c.flowLog.Aggregate()
+
+	return
+}
+
 // process is the heart of the Capture. It listens for network traffic on the
 // network interface and logs the corresponding flows.
 //

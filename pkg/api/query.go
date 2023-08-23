@@ -8,6 +8,7 @@ import (
 	"github.com/els0r/goProbe/pkg/logging"
 	"github.com/els0r/goProbe/pkg/query"
 	"github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin/binding"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -19,28 +20,32 @@ func LogAndAbort(ctx context.Context, c *gin.Context, code int, err error) {
 func RunQuery(caller, sourceData string, querier query.Runner, c *gin.Context) {
 	ctx := c.Request.Context()
 
-	// parse query args from request
-	var queryArgs = new(query.Args)
-	err := jsoniter.NewDecoder(c.Request.Body).Decode(queryArgs)
-	if err != nil {
-		LogAndAbort(ctx, c, http.StatusBadRequest, err)
-		return
+	// Initialize default query args
+	var queryArgs = query.DefaultArgs()
+
+	// Attempt to parse args from request JSON body
+	if err := jsoniter.NewDecoder(c.Request.Body).Decode(queryArgs); err != nil {
+
+		// If that failed, attempt to bind the URL form data
+		if err = binding.Form.Bind(c.Request, queryArgs); err != nil {
+			LogAndAbort(ctx, c, http.StatusBadRequest, err)
+			return
+		}
 	}
 
-	// the default format is json
+	// Set default format for an API query is JSON
 	queryArgs.Format = "json"
-
 	if queryArgs.Caller == "" {
 		queryArgs.Caller = caller
 	}
 
-	// check if the statement can be created
 	logger := logging.FromContext(ctx)
 
+	// Check if the statement can be created
 	logger.With("args", queryArgs).Info("running query")
-	_, err = queryArgs.Prepare()
+	_, err := queryArgs.Prepare()
 	if err != nil {
-		LogAndAbort(ctx, c, http.StatusBadRequest, fmt.Errorf("failed to prepare query statement: %v", err))
+		LogAndAbort(ctx, c, http.StatusBadRequest, fmt.Errorf("failed to prepare query statement: %w", err))
 		return
 	}
 

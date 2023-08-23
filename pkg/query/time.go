@@ -173,7 +173,7 @@ func ParseTimeRange(firstStr, lastStr string) (first, last int64, err error) {
 	if firstStr != "" {
 		first, err = ParseTimeArgument(firstStr)
 		if err != nil {
-			err = fmt.Errorf("%w for --first: %s", errorInvalidTimeFormat, err)
+			err = fmt.Errorf("%w for --first: %w", errorInvalidTimeFormat, err)
 			return
 		}
 	}
@@ -183,7 +183,7 @@ func ParseTimeRange(firstStr, lastStr string) (first, last int64, err error) {
 	} else {
 		last, err = ParseTimeArgument(lastStr)
 		if err != nil {
-			err = fmt.Errorf("%w for --last: %s", errorInvalidTimeFormat, err)
+			err = fmt.Errorf("%w for --last: %w", errorInvalidTimeFormat, err)
 			return
 		}
 	}
@@ -220,15 +220,16 @@ func ParseTimeArgument(timeString string) (int64, error) {
 	// try to interpret string as unix timestamp
 	i, err := strconv.ParseInt(timeString, 10, 64)
 	if err == nil {
-		return i, err
+		return i, nil
 	}
 
 	// then check other time formats
 	for _, tFormat := range timeFormats {
 		t, err = time.ParseInLocation(tFormat, timeString, loc)
 		if err == nil {
-			return t.Unix(), err
+			return t.Unix(), nil
 		}
 	}
-	return 0, errors.New("unable to parse time format")
+
+	return 0, fmt.Errorf("unable to parse time format: %w", err)
 }

@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/netip"
 	"strings"
+	"time"
 )
 
 // IPVersion denotes the IP layer version (if any) of a conditional node
@@ -20,6 +21,9 @@ const (
 
 // ErrIncorrectIPAddrFormat denotes an invalid IP address string formatting
 var ErrIncorrectIPAddrFormat = errors.New("IP parse: incorrect format")
+
+// MaxTime denotes the latest timestamp that can be used
+var MaxTime = time.Unix(1<<63-62135596801, 999999999)
 
 // Merge combines two IPVersion instances
 func (v IPVersion) Merge(v2 IPVersion) IPVersion {

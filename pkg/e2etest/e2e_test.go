@@ -31,6 +31,7 @@ import (
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 	"github.com/els0r/goProbe/pkg/results"
 	"github.com/els0r/goProbe/pkg/types"
+	"github.com/els0r/goProbe/pkg/types/hashmap"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/stretchr/testify/require"
 
@@ -238,8 +239,11 @@ func testE2E(t *testing.T, datasets ...[]byte) {
 		mockIfaces = append(mockIfaces, newPcapSource(t, fmt.Sprintf("mock%03d", i+1), data))
 	}
 
-	// Run GoProbe
-	runGoProbe(t, tempDir, setupSources(t, mockIfaces))
+	// Run GoProbe (storing a copy of all processed live flows)
+	liveFlowResults := make(map[string]hashmap.AggFlowMapWithMetadata)
+	for liveFlowMap := range runGoProbe(t, tempDir, setupSources(t, mockIfaces)) {
+		liveFlowResults[liveFlowMap.Interface] = liveFlowMap
+	}
 
 	resGoQueryList := make([]goDB.InterfaceMetadata, 0)
 	runGoQuery(t, &resGoQueryList, []string{
@@ -276,6 +280,23 @@ func testE2E(t *testing.T, datasets ...[]byte) {
 		t.Errorf("Mismatch on goQuery summary, want %+v, have %+v", resReference.Summary, resGoQuery.Summary)
 	}
 
+	// Cross-check aggregated flow logs from the live capture with the respective mock interface flows
+	for _, mockIface := range mockIfaces {
+		aggMap := mockIface.aggregate()
+		require.Equal(t, aggMap.Len(), liveFlowResults[mockIface.name].Len())
+
+		for it := aggMap.PrimaryMap.Iter(); it.Next(); {
+			compVal, exists := liveFlowResults[mockIface.name].PrimaryMap.Get(it.Key())
+			require.True(t, exists)
+			require.EqualValues(t, it.Val(), compVal)
+		}
+		for j, it := 0, aggMap.SecondaryMap.Iter(); it.Next(); j++ {
+			compVal, exists := liveFlowResults[mockIface.name].SecondaryMap.Get(it.Key())
+			require.True(t, exists)
+			require.EqualValues(t, it.Val(), compVal)
+		}
+	}
+
 	// Since testify creates very unreadable output when comparing the struct directly we build a stringified
 	// version of the result rows and compare that
 	refRows := make([]string, len(resReference.Rows))
@@ -295,7 +316,7 @@ func testE2E(t *testing.T, datasets ...[]byte) {
 	require.EqualValues(t, refRows, resRows)
 }
 
-func runGoProbe(t *testing.T, testDir string, sourceInitFn func() (mockIfaces, func(c *capture.Capture) (slimcap.SourceZeroCopy, error))) {
+func runGoProbe(t *testing.T, testDir string, sourceInitFn func() (mockIfaces, func(c *capture.Capture) (slimcap.SourceZeroCopy, error))) chan hashmap.AggFlowMapWithMetadata {
 
 	// We quit on encountering SIGUSR2 (instead of the ususal SIGTERM or SIGINT)
 	// to avoid killing the test
@@ -324,7 +345,8 @@ func runGoProbe(t *testing.T, testDir string, sourceInitFn func() (mockIfaces, f
 
 	// Wait until goProbe is done processing all packets, then kill it in the
 	// background via the SIGUSR2 signal
-	go mockIfaces.KillGoProbeOnceDone(captureManager)
+	liveFlows := make(chan hashmap.AggFlowMapWithMetadata, capture.MaxIfaces)
+	go mockIfaces.KillGoProbeOnceDone(captureManager, liveFlows)
 
 	// Wait for the interrupt signal
 	<-ctx.Done()
@@ -333,6 +355,8 @@ func runGoProbe(t *testing.T, testDir string, sourceInitFn func() (mockIfaces, f
 	shutDownCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	captureManager.Close(shutDownCtx)
 	cancel()
+
+	return liveFlows
 }
 
 func runGoQuery(t *testing.T, res interface{}, args []string) {
