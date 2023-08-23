@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"strings"
 	"time"
@@ -13,7 +14,6 @@ import (
 	"github.com/els0r/goProbe/pkg/results"
 	"github.com/els0r/goProbe/pkg/types"
 	jsoniter "github.com/json-iterator/go"
-	"golang.org/x/exp/slog"
 )
 
 var maxTimeStr = fmt.Sprintf("%d", types.MaxTime.Unix())

@@ -6,13 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"strings"
 	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"golang.org/x/exp/slog"
 )
 
 // testLogger captures the log output from slog and logs it via the testing.T object,

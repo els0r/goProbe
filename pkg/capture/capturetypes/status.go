@@ -1,9 +1,6 @@
 package capturetypes
 
 import (
-	"fmt"
-	"sort"
-	"strings"
 	"time"
 
 	"github.com/els0r/goProbe/pkg/types/hashmap"
@@ -25,20 +22,31 @@ type TaggedAggFlowMap struct {
 type InterfaceStats map[string]CaptureStats
 
 // CaptureStats stores the capture stores its statistics
-// TODO: Track errors and similar counters in metrics
 type CaptureStats struct {
+
 	// StartedAt denotes the time when the capture was started
 	StartedAt time.Time `json:"started_at"`
+
 	// Received denotes the number of packets received
 	Received uint64 `json:"received"`
-	// Received denotes the number of packets received since the capture was started
+
+	// ReceivedTotal denotes the number of packets received since the capture was started
 	ReceivedTotal uint64 `json:"received_total"`
+
 	// Processed denotes the number of packets processed by the capture
 	Processed uint64 `json:"processed"`
-	// Processed denotes the number of packets processed since the capture was started
+
+	// ProcessedTotal denotes the number of packets processed since the capture was started
 	ProcessedTotal uint64 `json:"processed_total"`
+
 	// Dropped denotes the number of packets dropped
 	Dropped uint64 `json:"dropped"`
+
+	// DroppedTotal denotes the number of packets dropped since the capture was started
+	DroppedTotal uint64 `json:"dropped_total"`
+
+	// ParsingErrors denotes all packet parsing errors / failures encountered
+	ParsingErrors ParsingErrTracker `json:"parsing_errors,omitempty"`
 }
 
 // AddStats is a convenience method to total capture stats. This is relevant in the scope of
@@ -61,22 +69,4 @@ func SubStats(a, b *CaptureStats) {
 	}
 	a.Received -= b.Received
 	a.Dropped -= b.Dropped
-}
-
-// ErrorMap stores all encountered pcap errors and their number of occurrence
-type ErrorMap map[string]int
-
-// String prints the errors that occurred during capturing
-func (e ErrorMap) String() string {
-	var errs = make([]string, len(e))
-
-	i := 0
-	for err, count := range e {
-		errs[i] = fmt.Sprintf("%s (%d)", err, count)
-		i++
-	}
-	sort.Slice(errs, func(i, j int) bool {
-		return errs[i] < errs[j]
-	})
-	return strings.Join(errs, "; ")
 }

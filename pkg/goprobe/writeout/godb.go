@@ -3,6 +3,7 @@ package writeout
 import (
 	"context"
 	"io/fs"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -10,7 +11,6 @@ import (
 	"github.com/els0r/goProbe/pkg/goDB"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 	"github.com/els0r/goProbe/pkg/logging"
-	"golang.org/x/exp/slog"
 )
 
 // GoDBHandler denotes a GoDB writeout handler

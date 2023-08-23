@@ -2,8 +2,7 @@ package logging
 
 import (
 	"context"
-
-	"golang.org/x/exp/slog"
+	"log/slog"
 )
 
 // levelSplitHandler is able to treat error and standard output differently and route

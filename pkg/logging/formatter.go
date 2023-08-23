@@ -3,10 +3,9 @@ package logging
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"time"
-
-	"golang.org/x/exp/slog"
 )
 
 type formatter struct {

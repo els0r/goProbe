@@ -2,13 +2,13 @@ package api
 
 import (
 	"net/http"
+	"log/slog"
 	"time"
 
 	"github.com/els0r/goProbe/pkg/logging"
 	"github.com/gin-contrib/pprof"
 	"github.com/gin-gonic/gin"
 	"go.opentelemetry.io/otel/trace"
-	"golang.org/x/exp/slog"
 	"golang.org/x/time/rate"
 )
 

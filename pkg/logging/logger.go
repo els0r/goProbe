@@ -1,9 +1,8 @@
 package logging
 
 import (
+	"log/slog"
 	"strings"
-
-	"golang.org/x/exp/slog"
 )
 
 const (

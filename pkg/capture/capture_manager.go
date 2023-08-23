@@ -3,6 +3,7 @@ package capture
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -13,7 +14,6 @@ import (
 	"github.com/els0r/goProbe/pkg/goprobe/writeout"
 	"github.com/els0r/goProbe/pkg/logging"
 	"github.com/els0r/goProbe/pkg/types/hashmap"
-	"golang.org/x/exp/slog"
 )
 
 const allowedWriteoutDurationFraction = 0.1
@@ -475,12 +475,6 @@ func (cm *Manager) rotate(ctx context.Context, writeoutChan chan<- capturetypes.
 
 			// Perform the rotation
 			rotateResult := mc.rotate(runCtx)
-
-			// log errors
-			// TODO: remove, once we expose error information more effectively
-			if len(mc.errMap) > 0 {
-				logger.With("error_map", mc.errMap).Debug("rotation errors")
-			}
 
 			stats := <-statsRes
 			mc.unlock()

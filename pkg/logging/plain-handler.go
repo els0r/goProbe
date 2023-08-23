@@ -3,10 +3,9 @@ package logging
 import (
 	"context"
 	"io"
+	"log/slog"
 	"sync"
 	"unicode"
-
-	"golang.org/x/exp/slog"
 )
 
 type plainHandler struct {
