@@ -85,8 +85,8 @@ func TestPopulation(t *testing.T) {
 			testPacket := params.genDummyPacket(0)
 			refHash, refIsIPv4 := params.genEPHash()
 
-			epHash, isIPv4, _, err := ParsePacket(testPacket.IPLayer(), testPacket.TotalLen())
-			require.Nil(t, err, "population error")
+			epHash, isIPv4, _, errno := ParsePacket(testPacket.IPLayer(), testPacket.TotalLen())
+			require.Equal(t, capturetypes.ErrnoOK, errno, "population error")
 
 			require.Equal(t, refHash, epHash)
 			require.Equal(t, refIsIPv4, isIPv4)

@@ -13,7 +13,7 @@ func (server *Server) postQuery(c *gin.Context) {
 	api.RunQuery(
 		fmt.Sprintf("goProbe/%s", version.Short()),
 		"local DB",
-		engine.NewQueryRunner(server.dbPath),
+		engine.NewQueryRunnerWithLiveData(server.dbPath, server.captureManager),
 		c,
 	)
 }

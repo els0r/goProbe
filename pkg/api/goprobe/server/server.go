@@ -2,10 +2,12 @@ package server
 
 import (
 	"github.com/els0r/goProbe/cmd/goProbe/config"
+	"github.com/els0r/goProbe/pkg/api"
 	gpapi "github.com/els0r/goProbe/pkg/api/goprobe"
 	"github.com/els0r/goProbe/pkg/api/server"
 	"github.com/els0r/goProbe/pkg/capture"
 	"github.com/els0r/goProbe/pkg/defaults"
+	"github.com/gin-gonic/gin"
 )
 
 // Server runs a goprobe API server
@@ -43,8 +45,14 @@ const ifaceKey = "interface"
 
 func (server *Server) registerRoutes() {
 	router := server.Router()
+
 	// query
-	router.POST(gpapi.QueryRoute, server.postQuery)
+	queryHandlers := gin.HandlersChain{server.postQuery}
+	if limiter, hasLimiter := server.QueryRateLimiter(); hasLimiter {
+		queryHandlers = append(gin.HandlersChain{api.RateLimitMiddleware(limiter)}, queryHandlers...)
+	}
+	router.GET(gpapi.QueryRoute, queryHandlers...)  // support for URL-encoded form data GET requests
+	router.POST(gpapi.QueryRoute, queryHandlers...) // support for JSON or form-data body POST requests
 
 	// stats
 	statsRoutes := router.Group(gpapi.StatusRoute)

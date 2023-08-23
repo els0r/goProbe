@@ -20,9 +20,6 @@ const (
 
 	// MaxIfaces is the maximum number of interfaces we can monitor
 	MaxIfaces = 1024
-
-	// ErrorThreshold is the maximum amount of consecutive errors that can occur on an interface before capturing is halted.
-	ErrorThreshold = 10000
 )
 
 var (
@@ -122,9 +119,8 @@ type Capture struct {
 	captureHandle capture.SourceZeroCopy
 	sourceInitFn  sourceInitFn
 
-	// Error map for logging errors more properly
-	errMap   capturetypes.ErrorMap
-	errCount int
+	// Error tracking (type / errno specific)
+	// parsingErrors ParsingErrTracker
 
 	// WaitGroup tracking active processing
 	wgProc sync.WaitGroup
@@ -140,7 +136,6 @@ func newCapture(iface string, config config.CaptureConfig) *Capture {
 		config:       config,
 		capLock:      newCaptureLock(),
 		flowLog:      NewFlowLog(),
-		errMap:       make(map[string]int),
 		sourceInitFn: defaultSourceInitFn,
 	}
 }
@@ -195,6 +190,19 @@ func (c *Capture) rotate(ctx context.Context) (agg *hashmap.AggFlowMap) {
 		return
 	}
 	agg = c.flowLog.Rotate()
+
+	return
+}
+
+func (c *Capture) flowMap(ctx context.Context) (agg *hashmap.AggFlowMap) {
+
+	logger := logging.FromContext(ctx)
+
+	if c.flowLog.Len() == 0 {
+		logger.Debug("there are currently no flow records available")
+		return
+	}
+	agg = c.flowLog.Aggregate()
 
 	return
 }
@@ -271,11 +279,7 @@ func (c *Capture) process() <-chan error {
 				// Drain buffer if not empty
 				if localBuf.N() > 0 {
 					for i := 0; i < localBuf.N(); i++ {
-						if err := c.addToFlowLog(localBuf.Get(i)); err != nil {
-							localBuf.Release()
-							captureErrors <- err
-							return
-						}
+						c.addToFlowLog(localBuf.Get(i))
 					}
 				}
 				localBuf.Release()
@@ -316,37 +320,22 @@ func (c *Capture) capturePacket() error {
 		return fmt.Errorf("capture error: %w", err)
 	}
 
-	return c.addToFlowLog(ipLayer, pktType, pktSize)
+	c.addToFlowLog(ipLayer, pktType, pktSize)
+	return nil
 }
 
-func (c *Capture) addToFlowLog(ipLayer capture.IPLayer, pktType capture.PacketType, pktSize uint32) error {
+func (c *Capture) addToFlowLog(ipLayer capture.IPLayer, pktType capture.PacketType, pktSize uint32) {
+
 	// Parse / add the received data to the map of flows
-	err := c.flowLog.Add(ipLayer, pktType, pktSize)
-	if err == nil {
-		c.stats.Processed++
-		c.errCount = 0
-
-		return nil
-	}
-
+	errno := c.flowLog.Add(ipLayer, pktType, pktSize)
 	c.stats.Processed++
-	c.errCount++
-	c.errMap[err.Error()]++
-
-	// add error counter to exposed metric
-	// TODO: move out to a metric tracked within the c.stats
-	captureErrors.Inc()
-
-	// Shut down the interface thread if too many consecutive decoding failures
-	// have been encountered
-	if c.errCount > ErrorThreshold {
-		return fmt.Errorf("the last %d packets could not be decoded: [%s]",
-			ErrorThreshold,
-			c.errMap.String(),
-		)
+	if errno == capturetypes.ErrnoOK {
+		return
 	}
 
-	return nil
+	if errno.ParsingFailed() {
+		c.stats.ParsingErrors[errno]++
+	}
 }
 
 func (c *Capture) status() (*capturetypes.CaptureStats, error) {
@@ -358,6 +347,7 @@ func (c *Capture) status() (*capturetypes.CaptureStats, error) {
 
 	c.stats.ReceivedTotal += stats.PacketsReceived
 	c.stats.ProcessedTotal += c.stats.Processed
+	c.stats.DroppedTotal += stats.PacketsDropped
 
 	// add exposed metrics
 	// we do this every 5 minutes only in order not to interfere with the
@@ -366,16 +356,21 @@ func (c *Capture) status() (*capturetypes.CaptureStats, error) {
 	// processed data volumes across longer time frames
 	packetsProcessed.Add(float64(c.stats.Processed))
 	packetsDropped.Add(float64(stats.PacketsDropped))
+	captureErrors.Add(float64(c.stats.ParsingErrors.Sum()))
 
 	res := capturetypes.CaptureStats{
 		StartedAt:      c.startedAt,
 		Received:       stats.PacketsReceived,
 		ReceivedTotal:  c.stats.ReceivedTotal,
-		Dropped:        stats.PacketsDropped,
 		Processed:      c.stats.Processed,
 		ProcessedTotal: c.stats.ProcessedTotal,
+		Dropped:        stats.PacketsDropped,
+		DroppedTotal:   c.stats.DroppedTotal,
+		ParsingErrors:  c.stats.ParsingErrors,
 	}
+
 	c.stats.Processed = 0
+	c.stats.ParsingErrors.Reset()
 
 	return &res, nil
 }

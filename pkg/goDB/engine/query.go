@@ -2,14 +2,18 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
+	"regexp"
 	"runtime"
 	"runtime/debug"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/els0r/goProbe/pkg/capture"
 	"github.com/els0r/goProbe/pkg/goDB"
 	"github.com/els0r/goProbe/pkg/goDB/conditions/node"
 	"github.com/els0r/goProbe/pkg/goDB/info"
@@ -23,14 +27,23 @@ import (
 // QueryRunner implements the Runner interface to execute queries
 // against the goDB flow database
 type QueryRunner struct {
-	query  *goDB.Query
-	dbPath string
+	query          *goDB.Query
+	captureManager *capture.Manager
+	dbPath         string
 }
 
 // NewQueryRunner creates a new query runner
 func NewQueryRunner(dbPath string) *QueryRunner {
 	return &QueryRunner{
 		dbPath: dbPath,
+	}
+}
+
+// NewQueryRunnerWithLiveData creates a new query runner that acts on both DB and live data
+func NewQueryRunnerWithLiveData(dbPath string, captureManager *capture.Manager) *QueryRunner {
+	return &QueryRunner{
+		dbPath:         dbPath,
+		captureManager: captureManager,
 	}
 }
 
@@ -57,7 +70,7 @@ func (qr *QueryRunner) RunStatement(ctx context.Context, stmt *query.Statement) 
 
 	// cross-check parameters
 	if len(stmt.Ifaces) == 0 {
-		return res, fmt.Errorf("no interfaces provided")
+		return res, errors.New("no interfaces provided")
 	}
 
 	sort.Slice(stmt.Ifaces, func(i, j int) bool {
@@ -79,7 +92,7 @@ func (qr *QueryRunner) RunStatement(ctx context.Context, stmt *query.Statement) 
 
 	qr.query = goDB.NewQuery(queryAttributes, queryConditional, stmt.LabelSelector).LowMem(stmt.LowMem)
 	if qr.query == nil {
-		return res, fmt.Errorf("query is not executable")
+		return res, errors.New("query is not executable")
 	}
 
 	result.Query = results.Query{
@@ -117,7 +130,7 @@ func (qr *QueryRunner) RunStatement(ctx context.Context, stmt *query.Statement) 
 	go func() {
 		select {
 		case err = <-memErrors:
-			err = fmt.Errorf("%w: %v", errorMemoryBreach, err)
+			err = fmt.Errorf("%w: %w", errorMemoryBreach, err)
 			cancelQuery()
 
 			// close the map channel. This will make sure that the aggregation routine
@@ -173,13 +186,19 @@ func (qr *QueryRunner) RunStatement(ctx context.Context, stmt *query.Statement) 
 	result.Summary.First = tSpanFirst
 	result.Summary.Last = tSpanLast
 
+	// If enabled, run a live query in the background / parallel to the DB query and put the results on the same output channel
+	liveQueryWG := qr.runLiveQuery(ctx, mapChan, stmt)
+
 	// spawn reader processing units and make them work on the individual DB blocks
 	// processing by interface is sequential, e.g. for multi-interface queries
 	for _, workManager := range workManagers {
 		workManager.ExecuteWorkerReadJobs(queryCtx, mapChan)
 	}
 
-	// we are done with all worker jobs
+	// In case a live query is being performed in the background, ensure it is done
+	liveQueryWG.Wait()
+
+	// We are done with all worker jobs, close the ouput / result channel
 	close(mapChan)
 
 	// wait for the job to complete, then call a garbage collection
@@ -278,33 +297,72 @@ func (qr *QueryRunner) RunStatement(ctx context.Context, stmt *query.Statement) 
 	return result, nil
 }
 
-func createWorkManager(dbPath string, iface string, tfirst, tlast int64, query *goDB.Query, numProcessingUnits int) (workManager *goDB.DBWorkManager, nonempty bool, err error) {
-	workManager, err = goDB.NewDBWorkManager(dbPath, iface, numProcessingUnits)
-	if err != nil {
-		return nil, false, fmt.Errorf("could not initialize query work manager for interface '%s': %s", iface, err)
+func (qr *QueryRunner) runLiveQuery(ctx context.Context, mapChan chan hashmap.AggFlowMapWithMetadata, stmt *query.Statement) (wg *sync.WaitGroup) {
+	wg = new(sync.WaitGroup)
+
+	if !stmt.Live {
+		return
 	}
-	nonempty, err = workManager.CreateWorkerJobs(tfirst, tlast, query)
+
+	wg.Add(1)
+	go func() {
+		qr.captureManager.GetFlowMaps(ctx, goDB.QueryFilter(qr.query), mapChan, stmt.Ifaces...)
+		wg.Done()
+	}()
+
 	return
 }
 
-func parseIfaceList(dbPath string, ifacelist string) (ifaces []string, err error) {
+func createWorkManager(dbPath string, iface string, tfirst, tlast int64, query *goDB.Query, numProcessingUnits int) (workManager *goDB.DBWorkManager, nonempty bool, err error) {
+	workManager, err = goDB.NewDBWorkManager(query, dbPath, iface, numProcessingUnits)
+	if err != nil {
+		return nil, false, fmt.Errorf("could not initialize query work manager for interface '%s': %w", iface, err)
+	}
+	nonempty, err = workManager.CreateWorkerJobs(tfirst, tlast)
+	return
+}
+
+func parseIfaceList(dbPath string, ifacelist string) ([]string, error) {
 	if ifacelist == "" {
-		return nil, fmt.Errorf("no interface(s) specified")
+		return nil, errors.New("no interface(s) specified")
 	}
 
 	if strings.ToLower(ifacelist) == "any" {
-		ifaces, err = info.GetInterfaces(dbPath)
+		ifaces, err := info.GetInterfaces(dbPath)
 		if err != nil {
 			return nil, err
 		}
-	} else {
-		ifaces = strings.Split(ifacelist, ",")
-		for _, iface := range ifaces {
-			if iface == "" {
-				err = fmt.Errorf("interface list contains empty interface name")
-				return
-			}
+		return ifaces, nil
+	}
+
+	ifaces, err := validateIfaceNames(ifacelist)
+	if err != nil {
+		return nil, err
+	}
+
+	return ifaces, nil
+}
+
+var ifaceNameRegexp = regexp.MustCompile(`^[a-zA-Z0-9\.:_-]{1,15}$`)
+
+func validateIfaceName(iface string) error {
+	if iface == "" {
+		return errors.New("interface list contains empty interface name")
+	}
+
+	if !ifaceNameRegexp.MatchString(iface) {
+		return fmt.Errorf("interface name `%s` is invalid", iface)
+	}
+
+	return nil
+}
+
+func validateIfaceNames(ifacelist string) ([]string, error) {
+	ifaces := strings.Split(ifacelist, ",")
+	for _, iface := range ifaces {
+		if err := validateIfaceName(iface); err != nil {
+			return nil, err
 		}
 	}
-	return
+	return ifaces, nil
 }

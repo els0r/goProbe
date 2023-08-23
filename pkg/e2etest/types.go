@@ -15,6 +15,7 @@ import (
 	"github.com/els0r/goProbe/pkg/goDB/info"
 	"github.com/els0r/goProbe/pkg/results"
 	"github.com/els0r/goProbe/pkg/types"
+	"github.com/els0r/goProbe/pkg/types/hashmap"
 	"github.com/fako1024/slimcap/capture/afpacket/afring"
 	"github.com/stretchr/testify/require"
 
@@ -40,6 +41,29 @@ type mockIface struct {
 }
 
 type mockIfaces []*mockIface
+
+func (m *mockIface) aggregate() hashmap.AggFlowMapWithMetadata {
+
+	result := hashmap.NewAggFlowMap()
+
+	// Reusable key conversion buffers
+	keyBufV4, keyBufV6 := types.NewEmptyV4Key(), types.NewEmptyV6Key()
+	for k, v := range *m.flows {
+
+		if types.RawIPToAddr(k[0:16]).Is4() && types.RawIPToAddr(k[16:32]).Is4() {
+			keyBufV4.PutAllV4(k[0:4], k[16:20], k[32:34], k[36])
+			result.SetOrUpdate(keyBufV4, true, v.BytesRcvd, v.BytesSent, v.PacketsRcvd, v.PacketsSent)
+		} else {
+			keyBufV6.PutAllV6(k[0:16], k[16:32], k[32:34], k[36])
+			result.SetOrUpdate(keyBufV6, false, v.BytesRcvd, v.BytesSent, v.PacketsRcvd, v.PacketsSent)
+		}
+	}
+
+	return hashmap.AggFlowMapWithMetadata{
+		AggFlowMap: result,
+		Interface:  m.name,
+	}
+}
 
 func (m mockIfaces) Names() (names []string) {
 	names = make([]string, len(m))
@@ -157,7 +181,7 @@ func (m mockIfaces) BuildResults(t *testing.T, testDir string, resGoQuery *resul
 	return res, ifaceMetadata
 }
 
-func (m mockIfaces) KillGoProbeOnceDone(cm *capture.Manager) {
+func (m mockIfaces) KillGoProbeOnceDone(cm *capture.Manager, flows chan hashmap.AggFlowMapWithMetadata) {
 
 	// Wait until all mock data has been consumed (e.g. from a pcap file)
 	m.WaitUntilDoneReading()
@@ -177,10 +201,14 @@ func (m mockIfaces) KillGoProbeOnceDone(cm *capture.Manager) {
 			continue
 		}
 
+		cm.GetFlowMaps(ctx, nil, flows)
+
 		// Send the termination signal to goProbe
 		if err := syscall.Kill(syscall.Getpid(), syscall.SIGUSR2); err != nil {
 			panic(err)
 		}
+
+		close(flows)
 
 		return
 	}

@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"io"
 	"testing"
 
@@ -82,6 +83,56 @@ func TestSimpleQuery(t *testing.T) {
 			_, err := NewQueryRunner(TestDB).Run(context.Background(), a)
 			if err != nil {
 				t.Fatalf("execute query: %s", err)
+			}
+		})
+	}
+}
+
+func TestInterfaceValidation(t *testing.T) {
+
+	// create args
+	var tests = []struct {
+		iface       string
+		expectedErr error
+	}{
+		{
+			"",
+			errors.New("interface list contains empty interface name"),
+		},
+		{
+			"eth/0",
+			errors.New("interface name `eth/0` is invalid"),
+		},
+		{
+			"eth 0",
+			errors.New("interface name `eth 0` is invalid"),
+		},
+		{
+			"thisinterfacenameisfartoolongtobesupported",
+			errors.New("interface name `thisinterfacenameisfartoolongtobesupported` is invalid"),
+		},
+		{
+			"eth.15",
+			nil,
+		},
+		{
+			"eth:0",
+			nil,
+		},
+	}
+
+	// run table-driven test
+	for _, test := range tests {
+		t.Run(test.iface, func(t *testing.T) {
+			err := validateIfaceName(test.iface)
+			if test.expectedErr != nil {
+				if err == nil || err.Error() != test.expectedErr.Error() {
+					t.Fatalf("unexpected result for interface name validation: %s", err)
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("unexpected result for interface name validation: %s", err)
+				}
 			}
 		})
 	}

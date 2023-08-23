@@ -23,12 +23,15 @@ import (
 	"github.com/els0r/goProbe/pkg/defaults"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 	json "github.com/json-iterator/go"
+	"golang.org/x/time/rate"
 	"gopkg.in/yaml.v3"
 )
 
 const (
 	// ServiceName is the name of the service as it will show up in telemetry such as metrics, logs, traces, etc.
 	ServiceName = "goprobe"
+
+	maxConfigSize = 16 * 1024 * 1024 // 16 MiB
 )
 
 // demoKeys stores the API keys that should, under no circumstance, be used in production.
@@ -55,19 +58,26 @@ type Config struct {
 	LocalBuffers *LocalBufferConfig `json:"local_buffers" yaml:"local_buffers"`
 }
 
+// DBConfig stores the local on-disk database configuration
 type DBConfig struct {
 	Path        string      `json:"path" yaml:"path"`
 	EncoderType string      `json:"encoder_type" yaml:"encoder_type"`
 	Permissions fs.FileMode `json:"permissions" yaml:"permissions"`
 }
 
+// CaptureConfig stores the capture / buffer related configuration for an individual interface
 type CaptureConfig struct {
+
+	// Promisc enables / disables promiscuous capture mode
 	Promisc bool `json:"promisc" yaml:"promisc"`
-	// used by the ring buffer in capture
+
+	// RingBuffer denotes the kernel ring buffer configuration of this interface
 	RingBuffer *RingBufferConfig `json:"ring_buffer" yaml:"ring_buffer"`
 }
 
+// LocalBufferConfig stores the shared local in-memory buffer configuration
 type LocalBufferConfig struct {
+
 	// SizeLimit denotes the maximum size of the local buffers (globally)
 	// used to continue capturing while the capture is (b)locked
 	SizeLimit int `json:"size_limit" yaml:"size_limit"`
@@ -77,7 +87,9 @@ type LocalBufferConfig struct {
 	NumBuffers int `json:"num_buffers" yaml:"num_buffers"`
 }
 
+// RingBufferConfig stores the kernel ring buffer related configuration for an individual interface
 type RingBufferConfig struct {
+
 	// BlockSize specifies the size of a block, which defines, how many packets
 	// can be held within a block
 	BlockSize int `json:"block_size" yaml:"block_size"`
@@ -103,13 +115,20 @@ type LogConfig struct {
 	Encoding    string `json:"encoding" yaml:"encoding"`
 }
 
+// QueryRateLimitConfig contains query rate limiting related config arguments / parameters
+type QueryRateLimitConfig struct {
+	MaxReqPerSecond rate.Limit `json:"max_req_per_sec" yaml:"max_req_per_sec"`
+	MaxBurst        int        `json:"max_burst" yaml:"max_burst"`
+}
+
 // APIConfig stores goProbe's API configuration
 type APIConfig struct {
-	Addr      string   `json:"addr" yaml:"addr"`
-	Metrics   bool     `json:"metrics" yaml:"metrics"`
-	Profiling bool     `json:"profiling" yaml:"profiling"`
-	Timeout   int      `json:"request_timeout" yaml:"request_timeout"`
-	Keys      []string `json:"keys" yaml:"keys"`
+	Addr           string               `json:"addr" yaml:"addr"`
+	Metrics        bool                 `json:"metrics" yaml:"metrics"`
+	Profiling      bool                 `json:"profiling" yaml:"profiling"`
+	Timeout        int                  `json:"request_timeout" yaml:"request_timeout"`
+	Keys           []string             `json:"keys" yaml:"keys"`
+	QueryRateLimit QueryRateLimitConfig `json:"query_rate_limit" yaml:"query_rate_limit"`
 }
 
 // newDefault creates a new configuration struct with default settings
@@ -132,13 +151,18 @@ func (l LogConfig) validate() error {
 }
 
 var (
-	errorNoAPIAddrSpecified = errors.New("no API address specified")
-	errorInvalidAPITimeout  = errors.New("the request timeout must be a positive number")
+	errorNoAPIAddrSpecified       = errors.New("no API address specified")
+	errorInvalidAPITimeout        = errors.New("the request timeout must be a positive number")
+	errorInvalidAPIQueryRateLimit = errors.New("the query rate limit values must both be positive numbers")
 )
 
 func (a APIConfig) validate() error {
 	if a.Addr == "" {
 		return errorNoAPIAddrSpecified
+	}
+	if (a.QueryRateLimit.MaxReqPerSecond <= 0. && a.QueryRateLimit.MaxBurst > 0) ||
+		(a.QueryRateLimit.MaxReqPerSecond > 0. && a.QueryRateLimit.MaxBurst <= 0) {
+		return errorInvalidAPIQueryRateLimit
 	}
 	for _, key := range a.Keys {
 		err := checkKeyConstraints(key)
@@ -297,9 +321,11 @@ var (
 func Parse(src io.Reader) (*Config, error) {
 	config := newDefault()
 
-	// we slurp the bytes form the src in order to unmarshal it into JSON or YAML
-	// TODO: protect this method from cases where src contains a very large file
-	b, err := io.ReadAll(src)
+	// Slurp the bytes form the src in order to unmarshal it into JSON or YAML
+	// In order to protect this method from cases where src contains a very large file we limit reading
+	// to a maximum size of <maxConfigSize>
+	limitedReader := &io.LimitedReader{R: src, N: maxConfigSize}
+	b, err := io.ReadAll(limitedReader)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read bytes: %w", err)
 	}
@@ -307,7 +333,7 @@ func Parse(src io.Reader) (*Config, error) {
 	if jsonErr := json.Unmarshal(b, config); jsonErr != nil {
 		yamlErr := yaml.Unmarshal(b, config)
 		if yamlErr != nil {
-			return nil, fmt.Errorf("%w: JSON: %v; YAML: %v", errorUnmarshalConfig, jsonErr, yamlErr)
+			return nil, fmt.Errorf("%w: JSON: %w; YAML: %w", errorUnmarshalConfig, jsonErr, yamlErr)
 		}
 	}
 

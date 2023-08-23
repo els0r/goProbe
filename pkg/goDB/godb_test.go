@@ -169,7 +169,11 @@ func generateFlows() *hashmap.AggFlowMap {
 func testWorkload(t *testing.T, c testCase, dryRun bool) {
 
 	// Instantiate a new DBWorkManager
-	workMgr, err := NewDBWorkManager(c.path, c.iface, c.numWorkers)
+	workMgr, err := NewDBWorkManager(NewQuery([]types.Attribute{
+		types.SipAttribute{},
+		types.DipAttribute{},
+		types.DportAttribute{},
+		types.ProtoAttribute{}}, nil, types.LabelSelector{}), c.path, c.iface, c.numWorkers)
 	if c.expectedErr == nil {
 		require.Nil(t, err)
 	} else {
@@ -181,11 +185,6 @@ func testWorkload(t *testing.T, c testCase, dryRun bool) {
 	nonempty, err := workMgr.CreateWorkerJobs(
 		c.queryStart.Unix(),
 		c.queryEnd.Unix(),
-		NewQuery([]types.Attribute{
-			types.SipAttribute{},
-			types.DipAttribute{},
-			types.DportAttribute{},
-			types.ProtoAttribute{}}, nil, types.LabelSelector{}),
 	)
 	require.Nil(t, err)
 

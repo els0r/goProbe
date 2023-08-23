@@ -11,6 +11,7 @@ import (
 	"github.com/els0r/goProbe/pkg/telemetry/metrics"
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus"
+	"golang.org/x/time/rate"
 )
 
 const (
@@ -35,6 +36,9 @@ type DefaultServer struct {
 
 	serviceName string // serviceName is the name of the program that serves the API, e.g. global-query
 	addr        string
+
+	// global rate limiting for queries
+	queryRateLimiter *rate.Limiter
 
 	srv    *http.Server
 	router *gin.Engine
@@ -62,6 +66,15 @@ func WithMetrics(enabled bool, requestDurationBuckets ...float64) Option {
 	return func(server *DefaultServer) {
 		server.metrics = enabled
 		server.requestDurationBuckets = requestDurationBuckets
+	}
+}
+
+// WithQueryRateLimit enables a global rate limit for query calls
+func WithQueryRateLimit(r rate.Limit, b int) Option {
+	return func(server *DefaultServer) {
+		if r > 0. {
+			server.queryRateLimiter = rate.NewLimiter(r, b)
+		}
 	}
 }
 
@@ -99,6 +112,11 @@ func NewDefault(serviceName, addr string, opts ...Option) *DefaultServer {
 // Router returns the gin.Engine used by the DefaultServer
 func (server *DefaultServer) Router() *gin.Engine {
 	return server.router
+}
+
+// QueryRateLimiter returns the global rate limiter, if enabled (if not it return nil and false)
+func (server *DefaultServer) QueryRateLimiter() (*rate.Limiter, bool) {
+	return server.queryRateLimiter, server.queryRateLimiter != nil
 }
 
 func (server *DefaultServer) registerMiddlewares() {
