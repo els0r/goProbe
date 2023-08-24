@@ -77,8 +77,8 @@ github.com/fako1024/gotools/concurrency v0.0.0-20230821104146-b3b1387dec32 h1:Nv
 github.com/fako1024/gotools/concurrency v0.0.0-20230821104146-b3b1387dec32/go.mod h1:4mhi2XPVVG6s5zDqL5brEXq2sVZSb4K96zKEJiWrSFs=
 github.com/fako1024/httpc v1.0.15 h1:HyNdnSCT+6J1xHRtRlsDeVkBkhNhaFdTyUdLl5++Xlo=
 github.com/fako1024/httpc v1.0.15/go.mod h1:nBXDuoouYUotAgt6t7fxrsnBJWbrhWXDQW1k9A7DNOg=
-github.com/fako1024/slimcap v0.0.0-20230804130619-6e647c83f7e0 h1:sInlPKJBQwQ69qT3OftNbbgfBJc2pbMLPnBhcn6qaxM=
-github.com/fako1024/slimcap v0.0.0-20230804130619-6e647c83f7e0/go.mod h1:yux7ThjYmysyyk1YefBe3Eyzchp8dG+w5afA4Nje/dE=
+github.com/fako1024/slimcap v0.0.0-20230823141905-cc1d3f76270b h1:Jpwizsea1R3rAnRnM3UStnoi76ZWpMQ/5ZUldSS8l+E=
+github.com/fako1024/slimcap v0.0.0-20230823141905-cc1d3f76270b/go.mod h1:yux7ThjYmysyyk1YefBe3Eyzchp8dG+w5afA4Nje/dE=
 github.com/fatih/color v1.15.0 h1:kOqh6YHBtK8aywxGerMG2Eq3H6Qgoqeo13Bk2Mv/nBs=
 github.com/fatih/color v1.15.0/go.mod h1:0h5ZqXfHYED7Bhv2ZJamyIOUej9KtShiJESRwBDUSsw=
 github.com/felixge/httpsnoop v1.0.3 h1:s/nj+GCswXYzN5v2DpNMuMQYe+0DDwt5WVCU6CWBdXk=
