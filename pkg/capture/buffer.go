@@ -4,7 +4,7 @@ import (
 	"unsafe"
 
 	"github.com/els0r/goProbe/cmd/goProbe/config"
-	"github.com/els0r/goProbe/pkg/goDB/storage/gpfile"
+	"github.com/fako1024/gotools/concurrency"
 	"github.com/fako1024/slimcap/capture"
 	"golang.org/x/sys/unix"
 )
@@ -22,7 +22,7 @@ var (
 	initialBufferSize = unix.Getpagesize()
 
 	// Global (limited) memory pool used to minimize allocations
-	memPool       = gpfile.NewMemPool(config.DefaultLocalBufferNumBuffers)
+	memPool       = concurrency.NewMemPool(config.DefaultLocalBufferNumBuffers)
 	maxBufferSize = config.DefaultLocalBufferSizeLimit
 )
 
@@ -108,7 +108,7 @@ func setLocalBuffers(nBuffers, sizeLimit int) {
 	if memPool != nil {
 		memPool.Clear()
 	}
-	memPool = gpfile.NewMemPool(nBuffers)
+	memPool = concurrency.NewMemPool(nBuffers)
 	maxBufferSize = sizeLimit
 }
 

@@ -5,6 +5,7 @@ import (
 
 	"github.com/els0r/goProbe/pkg/goDB/encoder"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
+	"github.com/fako1024/gotools/concurrency"
 )
 
 // Option defines optional arguments to gpfile
@@ -18,7 +19,7 @@ type optionSetterCommon interface {
 // optionSetterFile denotes options that apply to GPFile only
 type optionSetterFile interface {
 	optionSetterCommon
-	setMemPool(MemPoolGCable)
+	setMemPool(concurrency.MemPoolGCable)
 	setEncoder(encoder.Encoder)
 	setEncoderTypeLevel(encoders.Type, int)
 }
@@ -45,7 +46,7 @@ func WithEncoderTypeLevel(t encoders.Type, l int) Option {
 // upon first read access to minimize I/O load.
 // Seeking is handled by replacing the underlying file with a seekable
 // in-memory structure (c.f. readWriteSeekCloser interface)
-func WithReadAll(pool MemPoolGCable) Option {
+func WithReadAll(pool concurrency.MemPoolGCable) Option {
 	return func(o any) {
 		if obj, ok := o.(optionSetterFile); ok {
 			obj.setMemPool(pool)

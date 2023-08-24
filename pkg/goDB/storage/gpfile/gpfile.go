@@ -10,10 +10,11 @@ import (
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/null"
 	"github.com/els0r/goProbe/pkg/goDB/storage"
+	"github.com/fako1024/gotools/concurrency"
 )
 
 // Global pool for reusable memory buffers
-var bufPool = NewMemPoolNoLimit()
+var bufPool = concurrency.NewMemPoolNoLimit()
 
 const (
 	// FileSuffix denotes the suffix used for the raw data stored
@@ -46,7 +47,7 @@ type GPFile struct {
 	filename string
 
 	// file denotes the pointer to the data file
-	file            ReadWriteSeekCloser
+	file            concurrency.ReadWriteSeekCloser
 	fileWriteBuffer *bufio.Writer
 
 	// header denotes the block header (list of blocks) contained in this file
@@ -72,7 +73,7 @@ type GPFile struct {
 	uncompData, blockData []byte
 
 	// Memory pool (optional)
-	memPool MemPoolGCable
+	memPool concurrency.MemPoolGCable
 }
 
 // New returns a new GPFile object to read and write goProbe flow data
@@ -263,7 +264,7 @@ func (g *GPFile) writeBlock(timestamp int64, blockData []byte) error {
 	return nil
 }
 
-func (g *GPFile) RawFile() ReadWriteSeekCloser {
+func (g *GPFile) RawFile() concurrency.ReadWriteSeekCloser {
 	return g.file
 }
 
@@ -319,7 +320,7 @@ func (g *GPFile) open(flags int) (err error) {
 		g.fileWriteBuffer = bufio.NewWriter(g.file)
 	}
 	if flags == ModeRead && g.memPool != nil {
-		if g.file, err = NewMemFile(g.file, g.memPool); err != nil {
+		if g.file, err = concurrency.NewMemFile(g.file, g.memPool); err != nil {
 			return err
 		}
 	}
@@ -331,7 +332,7 @@ func (g *GPFile) setPermissions(permissions fs.FileMode) {
 	g.permissions = permissions
 }
 
-func (g *GPFile) setMemPool(pool MemPoolGCable) {
+func (g *GPFile) setMemPool(pool concurrency.MemPoolGCable) {
 	g.memPool = pool
 }
 

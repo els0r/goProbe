@@ -15,11 +15,11 @@ import (
 	"io/fs"
 	"path/filepath"
 
-	"github.com/els0r/goProbe/pkg/goDB/encoder/bitpack"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 	"github.com/els0r/goProbe/pkg/goDB/storage/gpfile"
 	"github.com/els0r/goProbe/pkg/types"
 	"github.com/els0r/goProbe/pkg/types/hashmap"
+	"github.com/fako1024/gotools/bitpack"
 )
 
 const DefaultPermissions = fs.FileMode(0644)

@@ -10,7 +10,7 @@ import (
 	"github.com/els0r/goProbe/pkg/goDB/encoder"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 	"github.com/els0r/goProbe/pkg/goDB/storage"
-	"github.com/els0r/goProbe/pkg/goDB/storage/gpfile"
+	"github.com/fako1024/gotools/concurrency"
 )
 
 const (
@@ -68,7 +68,7 @@ type GPFile struct {
 	filename string
 
 	// file denotes the pointer to the data file
-	file            gpfile.ReadWriteSeekCloser
+	file            concurrency.ReadWriteSeekCloser
 	fileWriteBuffer *bufio.Writer
 
 	// header denotes the block header (list of blocks) contained in this file
@@ -91,7 +91,7 @@ type GPFile struct {
 	uncompData, blockData []byte
 
 	// Memory pool (optional)
-	memPool gpfile.MemPoolGCable
+	memPool concurrency.MemPoolGCable
 }
 
 // Option defines optional arguments to gpfile
@@ -108,7 +108,7 @@ func WithEncoder(e encoders.Type) Option {
 // upon first read access to minimize I/O load.
 // Seeking is handled by replacing the underlying file with a seekable
 // in-memory structure (c.f. readWriteSeekCloser interface)
-func WithReadAll(pool gpfile.MemPoolGCable) Option {
+func WithReadAll(pool concurrency.MemPoolGCable) Option {
 	return func(g *GPFile) {
 		g.memPool = pool
 	}
@@ -327,7 +327,7 @@ func (g *GPFile) open(flags int) (err error) {
 		g.fileWriteBuffer = bufio.NewWriter(g.file)
 	}
 	if flags == ModeRead && g.memPool != nil {
-		if g.file, err = gpfile.NewMemFile(g.file, g.memPool); err != nil {
+		if g.file, err = concurrency.NewMemFile(g.file, g.memPool); err != nil {
 			return err
 		}
 	}

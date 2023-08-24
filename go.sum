@@ -71,6 +71,10 @@ github.com/envoyproxy/go-control-plane v0.9.4/go.mod h1:6rpuAdCZL397s3pYoYcLgu1m
 github.com/envoyproxy/go-control-plane v0.9.7/go.mod h1:cwu0lG7PUMfa9snN8LXBig5ynNVH9qI8YYLbd1fK2po=
 github.com/envoyproxy/go-control-plane v0.9.9-0.20201210154907-fd9021fe5dad/go.mod h1:cXg6YxExXjJnVBQHBLXeUAgxn2UodCpnH306RInaBQk=
 github.com/envoyproxy/protoc-gen-validate v0.1.0/go.mod h1:iSmxcyjqTsJpI2R4NaDN7+kN2VEUnK/pcBlmesArF7c=
+github.com/fako1024/gotools/bitpack v0.0.0-20230821104146-b3b1387dec32 h1:eLKddYxI92U+O5aKXEvkO2k2pYL4cLEX1Xi9GqwQT5w=
+github.com/fako1024/gotools/bitpack v0.0.0-20230821104146-b3b1387dec32/go.mod h1:jIAeVjDhiPMpliXJ2IhbvoTCZb3eCxT4zIElDQXQEhc=
+github.com/fako1024/gotools/concurrency v0.0.0-20230821104146-b3b1387dec32 h1:NvjhIGv7B/0Q3fUTECeGP9ivhrvZLugOmhYDqNB5awk=
+github.com/fako1024/gotools/concurrency v0.0.0-20230821104146-b3b1387dec32/go.mod h1:4mhi2XPVVG6s5zDqL5brEXq2sVZSb4K96zKEJiWrSFs=
 github.com/fako1024/httpc v1.0.15 h1:HyNdnSCT+6J1xHRtRlsDeVkBkhNhaFdTyUdLl5++Xlo=
 github.com/fako1024/httpc v1.0.15/go.mod h1:nBXDuoouYUotAgt6t7fxrsnBJWbrhWXDQW1k9A7DNOg=
 github.com/fako1024/slimcap v0.0.0-20230804130619-6e647c83f7e0 h1:sInlPKJBQwQ69qT3OftNbbgfBJc2pbMLPnBhcn6qaxM=

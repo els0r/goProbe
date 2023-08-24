@@ -24,13 +24,14 @@ import (
 	"time"
 
 	"github.com/els0r/goProbe/pkg/goDB/encoder"
-	"github.com/els0r/goProbe/pkg/goDB/encoder/bitpack"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 	"github.com/els0r/goProbe/pkg/goDB/storage"
 	"github.com/els0r/goProbe/pkg/goDB/storage/gpfile"
 	"github.com/els0r/goProbe/pkg/logging"
 	"github.com/els0r/goProbe/pkg/types"
 	"github.com/els0r/goProbe/pkg/types/hashmap"
+	"github.com/fako1024/gotools/bitpack"
+	"github.com/fako1024/gotools/concurrency"
 )
 
 const (
@@ -63,7 +64,7 @@ type DBWorkManager struct {
 
 	nWorkloads          uint64
 	nWorkloadsProcessed uint64
-	memPool             gpfile.MemPoolGCable
+	memPool             concurrency.MemPoolGCable
 }
 
 // NewDBWorkManager sets up a new work manager for executing queries
@@ -104,7 +105,7 @@ func (w *DBWorkManager) CreateWorkerJobs(tfirst int64, tlast int64) (nonempty bo
 		gpFileOptions []gpfile.Option
 	)
 	if !w.query.lowMem {
-		w.memPool = gpfile.NewMemPool(w.numProcessingUnits * len(w.query.columnIndices))
+		w.memPool = concurrency.NewMemPool(w.numProcessingUnits * len(w.query.columnIndices))
 		gpFileOptions = append(gpFileOptions, gpfile.WithReadAll(w.memPool))
 	}
 
@@ -261,7 +262,7 @@ func (w *DBWorkManager) ReadMetadata(tfirst int64, tlast int64) (*InterfaceMetad
 	// loop over directory list in order to create the timestamp pairs
 	var gpFileOptions []gpfile.Option
 	if !query.lowMem {
-		w.memPool = gpfile.NewMemPool(w.numProcessingUnits * len(query.columnIndices))
+		w.memPool = concurrency.NewMemPool(w.numProcessingUnits * len(query.columnIndices))
 		gpFileOptions = append(gpFileOptions, gpfile.WithReadAll(w.memPool))
 	}
 

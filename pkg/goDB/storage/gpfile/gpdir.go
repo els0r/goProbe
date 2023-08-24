@@ -14,6 +14,7 @@ import (
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 	"github.com/els0r/goProbe/pkg/goDB/storage"
 	"github.com/els0r/goProbe/pkg/types"
+	"github.com/fako1024/gotools/concurrency"
 )
 
 const (
@@ -28,7 +29,7 @@ const (
 var (
 
 	// Global memory pool used to minimize allocations
-	metaDataMemPool = NewMemPoolNoLimit()
+	metaDataMemPool = concurrency.NewMemPoolNoLimit()
 
 	// ErrExceedsEncodingSize covers edge case scenarios where a block might (theoretically)
 	// contain data that exceeds the encoding width of 32-bit
@@ -252,10 +253,10 @@ func (d *GPDir) TimeRange() (first int64, last int64) {
 }
 
 // Unmarshal reads and unmarshals a serialized metadata set into the GPDir instance
-func (d *GPDir) Unmarshal(r ReadWriteSeekCloser) error {
+func (d *GPDir) Unmarshal(r concurrency.ReadWriteSeekCloser) error {
 
 	// Read the file into a buffer to avoid any allocation and maximize throughput
-	memFile, err := NewMemFile(r, metaDataMemPool)
+	memFile, err := concurrency.NewMemFile(r, metaDataMemPool)
 	if err != nil {
 		return err
 	}
@@ -320,7 +321,7 @@ func (d *GPDir) Unmarshal(r ReadWriteSeekCloser) error {
 }
 
 // Marshal marshals and writes the metadata of the GPDir instance into serialized metadata set
-func (d *GPDir) Marshal(w ReadWriteSeekCloser) error {
+func (d *GPDir) Marshal(w concurrency.ReadWriteSeekCloser) error {
 
 	nBlocks := len(d.BlockTraffic)
 	size := 8 + // Overall number of blocks

@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/els0r/goProbe/pkg/goDB/encoder/bitpack"
 	"github.com/els0r/goProbe/pkg/types"
 	"github.com/els0r/goProbe/pkg/types/hashmap"
+	"github.com/fako1024/gotools/bitpack"
 )
 
 type ModernFileSet struct {
