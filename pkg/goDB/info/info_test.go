@@ -56,7 +56,7 @@ func TestHostIDFallbackErrors(t *testing.T) {
 		testPath, err := os.MkdirTemp("/tmp", "hostid")
 		require.Nil(t, err)
 		defer os.RemoveAll(testPath)
-		os.Chmod(testPath, 0400)
+		require.Nil(t, os.Chmod(testPath, 0400))
 
 		id, err := fallbackHostID(testPath)
 		require.EqualError(t, err, fmt.Errorf("open %s: permission denied", filepath.Join(testPath, fallbackIDFileName)).Error())
@@ -68,7 +68,7 @@ func TestHostIDFallbackErrors(t *testing.T) {
 		testPath, err := os.MkdirTemp("/tmp", "hostid")
 		require.Nil(t, err)
 		defer os.RemoveAll(testPath)
-		os.Chmod(testPath, 0500)
+		require.Nil(t, os.Chmod(testPath, 0500))
 
 		id, err := fallbackHostID(testPath)
 		require.EqualError(t, err, fmt.Errorf("failed to store new fallback host ID: open %s: permission denied", filepath.Join(testPath, fallbackIDFileName)).Error())

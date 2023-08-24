@@ -11,6 +11,8 @@ import (
 )
 
 const (
+
+	// UnknownID denotes an unknown / non-determinable host ID
 	UnknownID = "UNKNOWN"
 
 	fallbackIDFileName = "host.id"
@@ -25,7 +27,7 @@ func GetHostID(fallbackPath string) string {
 		// In case a fallback location was provided, attempt to read from or
 		// generate a new host ID there
 		if fallbackPath != "" {
-			id, err = fallbackHostID(fallbackPath)
+			id, _ = fallbackHostID(fallbackPath)
 		}
 	}
 
@@ -41,7 +43,7 @@ func fallbackHostID(basePath string) (string, error) {
 
 	// Attempt to read the fallback ID
 	fallbackIDPath := filepath.Join(basePath, fallbackIDFileName)
-	idData, err := os.ReadFile(fallbackIDPath)
+	idData, err := os.ReadFile(filepath.Clean(fallbackIDPath))
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
 

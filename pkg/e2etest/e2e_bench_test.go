@@ -62,9 +62,10 @@ func runBenchmarkCaptureThroughput(t *testing.T, runtime time.Duration, randomiz
 		WithPermissions(goDB.DefaultPermissions)
 
 	captureManager := capture.NewManager(writeoutHandler, capture.WithSourceInitFn(setupSyntheticUnblockingSource(t, randomize, addReturn)))
-	captureManager.Update(ctx, config.Ifaces{
+	_, _, _, err = captureManager.Update(ctx, config.Ifaces{
 		"mock": defaultCaptureConfig,
 	})
+	require.Nil(t, err)
 
 	go func() {
 		time.Sleep(runtime)
@@ -158,8 +159,8 @@ func setupSyntheticUnblockingSource(t testing.TB, randomize, addReturn bool) fun
 			}
 		}
 
-		mockSrc.Run(time.Microsecond)
+		_, err = mockSrc.Run(time.Microsecond)
 
-		return mockSrc, nil
+		return mockSrc, err
 	}
 }

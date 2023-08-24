@@ -261,8 +261,7 @@ func entrypoint(cmd *cobra.Command, args []string) (err error) {
 			return errors.New("no query type or command provided")
 		}
 		if args[0] == "help" {
-			cmd.Help()
-			return nil
+			return cmd.Help()
 		}
 
 		// if we didn't find a supported command, we assume this is the query type

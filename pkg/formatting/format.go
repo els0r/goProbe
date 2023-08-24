@@ -76,5 +76,5 @@ func Duration(d time.Duration) string {
 		d = d - (days * 24 * time.Hour)
 		return fmt.Sprintf("%dd%s", days, d.Round(time.Millisecond))
 	}
-	return fmt.Sprintf("%s", d.Round(time.Millisecond))
+	return d.Round(time.Millisecond).String()
 }

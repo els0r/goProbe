@@ -45,17 +45,17 @@ func DirectionFromString(s string) Direction {
 }
 
 // MarshalJSON implements the Marshaler interface for sort order
-func (d Direction) MarshalJSON() ([]byte, error) {
+func (d *Direction) MarshalJSON() ([]byte, error) {
 	return jsoniter.Marshal(d.String())
 }
 
 // UnmarshalJSON implements the Unmarshaler interface
-func (d Direction) UnmarshalJSON(b []byte) error {
+func (d *Direction) UnmarshalJSON(b []byte) error {
 	var str string
 	err := jsoniter.Unmarshal(b, &str)
 	if err != nil {
 		return err
 	}
-	d = DirectionFromString(str)
+	*d = DirectionFromString(str)
 	return nil
 }

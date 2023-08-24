@@ -154,7 +154,7 @@ func BenchmarkEncodersCompress(b *testing.B) {
 			buf := bytes.NewBuffer(nil)
 
 			for i := 0; i < b.N; i++ {
-				enc.Compress(encodingCorpus, nil, buf)
+				_, _ = enc.Compress(encodingCorpus, nil, buf)
 				_ = buf
 				buf.Reset()
 			}
@@ -189,7 +189,7 @@ func BenchmarkEncodersDecompress(b *testing.B) {
 			out := make([]byte, nBytes)
 			in := make([]byte, nWritten)
 			for i := 0; i < b.N; i++ {
-				enc.Decompress(in, out, buf)
+				_, _ = enc.Decompress(in, out, buf)
 
 				_ = in
 				_ = out
@@ -230,7 +230,7 @@ func BenchmarkLevelsCompress(b *testing.B) {
 				tmp := make([]byte, 1725)
 
 				for i := 0; i < b.N; i++ {
-					enc.Compress(encodingCorpus, tmp, buf)
+					_, _ = enc.Compress(encodingCorpus, tmp, buf)
 					_ = buf
 					buf.Reset()
 				}

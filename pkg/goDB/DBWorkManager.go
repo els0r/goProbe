@@ -321,6 +321,9 @@ func (w *DBWorkManager) ReadMetadata(tfirst int64, tlast int64) (*InterfaceMetad
 	}
 
 	_, err := w.walkDB(tfirst, tlast, walkFunc)
+	if err != nil {
+		return nil, err
+	}
 
 	// compute the metadata for the last block. This will be partial if the last timestamp is smaller than the last
 	// block captured for the day

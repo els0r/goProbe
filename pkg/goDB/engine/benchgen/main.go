@@ -222,8 +222,6 @@ type TestTuple struct {
 	Condition string
 }
 
-const testDir = "src/github.com/els0r/goProbe/pkg/query"
-
 func main() {
 
 	var (
@@ -237,26 +235,22 @@ func main() {
 	err = os.RemoveAll(outfile)
 	if err != nil {
 		log.Fatalf("failed to remove previous benchmarks: %s", err)
-		os.Exit(1)
 	}
 
-	allBenchmarksFile, err = os.OpenFile(outfile, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0755)
+	allBenchmarksFile, err = os.OpenFile(outfile, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0600)
 	if err != nil {
 		log.Fatalf("failed to load static benchmarks: %s", err)
-		os.Exit(1)
 	}
 
 	// write benchmarks base
-	_, err = fmt.Fprintf(allBenchmarksFile, benchmarkBase)
+	_, err = fmt.Fprint(allBenchmarksFile, benchmarkBase)
 	if err != nil {
 		log.Fatalf("failed to write static benchmarks: %s", err)
-		os.Exit(1)
 	}
 
 	masterTmpl, err = template.New("master").Funcs(funcMap).Parse(benchmarkTemplate)
 	if err != nil {
 		log.Fatalf("failed to create template: %s", err)
-		os.Exit(1)
 	}
 
 	// create the struct slice
@@ -350,6 +344,5 @@ var numResults = [...]int{
 }
 
 func getCondition(id string) string {
-	cond, _ := testConditions[id]
-	return cond
+	return testConditions[id]
 }

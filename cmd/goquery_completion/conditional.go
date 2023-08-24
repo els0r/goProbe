@@ -138,10 +138,7 @@ func conditional(args []string) []string {
 			return nil
 		}
 
-		var startedNewToken bool
-		startedNewToken = len(tokens) == 0 || strings.LastIndex(conditional, tokens[len(tokens)-1])+len(tokens[len(tokens)-1]) < len(conditional)
-
-		if startedNewToken {
+		if startedNewToken := len(tokens) == 0 || strings.LastIndex(conditional, tokens[len(tokens)-1])+len(tokens[len(tokens)-1]) < len(conditional); startedNewToken {
 			tokens = append(tokens, "")
 		}
 

@@ -70,14 +70,14 @@ type keyIndParserItem struct {
 // IfaceStringParser parses iface strings
 type IfaceStringParser struct{}
 
-// // ParseKey writes element to the Iface key
+// ParseKey writes an element to the Iface key
 func (i *IfaceStringParser) ParseKey(element string, key *types.ExtendedKey) error {
 
 	// Not very pretty: We basically just append the string and its length to the end
 	ifaceBytes := []byte(element)
 	newKey := make([]byte, len(*key)+len(ifaceBytes)+4)
 	pos := copy(newKey, *key)
-	pos += copy(newKey[pos:], ifaceBytes)
+	copy(newKey[pos:], ifaceBytes)
 	binary.BigEndian.PutUint32(newKey[len(newKey)-4:], uint32(len(element)))
 
 	*key = newKey
@@ -191,7 +191,6 @@ func parseCommandLineArgs(cfg *Config) {
 
 func printUsage(msg string) {
 	fmt.Println(msg + ".\nUsage: ./goConvert -in <input file path> -out <output folder> [-n <number of lines to read> -schema <schema string> -iface <interface>]")
-	return
 }
 
 func main() {

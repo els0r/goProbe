@@ -264,9 +264,9 @@ func describe(o SortOrder, d types.Direction) string {
 //
 // Note that some impementations may start printing data before you call Print().
 type TablePrinter interface {
-	AddRow(row Row)
+	AddRow(row Row) error
 	AddRows(ctx context.Context, rows Rows) error
-	Footer(result *Result)
+	Footer(result *Result) error
 	Print(result *Result) error
 }
 
@@ -395,18 +395,21 @@ func NewCSVTablePrinter(b basePrinter) *CSVTablePrinter {
 	for _, col := range c.cols {
 		c.fields = append(c.fields, headers[col])
 	}
-	c.writer.Write(c.fields)
+	// Since these fields are static this should never fail
+	if err := c.writer.Write(c.fields); err != nil {
+		panic(err)
+	}
 
 	return &c
 }
 
 // AddRow writes a row to the CSVTablePrinter
-func (c *CSVTablePrinter) AddRow(row Row) {
+func (c *CSVTablePrinter) AddRow(row Row) error {
 	c.fields = c.fields[:0]
 	for _, col := range c.cols {
 		c.fields = append(c.fields, extract(CSVFormatter{}, c.ips2domains, c.totals, row, col))
 	}
-	c.writer.Write(c.fields)
+	return c.writer.Write(c.fields)
 }
 
 func (c *CSVTablePrinter) AddRows(ctx context.Context, rows Rows) error {
@@ -414,7 +417,7 @@ func (c *CSVTablePrinter) AddRows(ctx context.Context, rows Rows) error {
 }
 
 // Footer appends the CSV footer to the table
-func (c *CSVTablePrinter) Footer(result *Result) {
+func (c *CSVTablePrinter) Footer(result *Result) error {
 	var summaryEntries [CountOutcol]string
 	summaryEntries[OutcolInPkts] = "Overall packets"
 	summaryEntries[OutcolInBytes] = "Overall data volume (bytes)"
@@ -428,11 +431,18 @@ func (c *CSVTablePrinter) Footer(result *Result) {
 	summaryEntries[OutcolBothBytesSent] = "Sent data volume (bytes)"
 	for _, col := range c.cols {
 		if summaryEntries[col] != "" {
-			c.writer.Write([]string{summaryEntries[col], extractTotal(CSVFormatter{}, c.totals, col)})
+			if err := c.writer.Write([]string{summaryEntries[col], extractTotal(CSVFormatter{}, c.totals, col)}); err != nil {
+				return err
+			}
 		}
 	}
-	c.writer.Write([]string{"Sorting and flow direction", describe(c.sort, c.direction)})
-	c.writer.Write([]string{"Interface", c.ifaces})
+	if err := c.writer.Write([]string{"Sorting and flow direction", describe(c.sort, c.direction)}); err != nil {
+		return err
+	}
+	if err := c.writer.Write([]string{"Interface", c.ifaces}); err != nil {
+		return err
+	}
+	return nil
 }
 
 // Print flushes the writer and actually prints out all CSV rows contained in the table printer
@@ -546,19 +556,22 @@ func addRows(ctx context.Context, p TablePrinter, rows Rows) error {
 			// printer filling was cancelled
 			return fmt.Errorf("query cancelled before fully filled. %d/%d rows processed", i, len(rows))
 		default:
-			p.AddRow(row)
+			if err := p.AddRow(row); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
 }
 
 // AddRow adds a flow entry to the table printer
-func (t *TextTablePrinter) AddRow(row Row) {
+func (t *TextTablePrinter) AddRow(row Row) error {
 	for _, col := range t.cols {
 		fmt.Fprintf(t.writer, "%s\t", extract(TextFormatter{}, t.ips2domains, t.totals, row, col))
 	}
 	fmt.Fprintln(t.writer)
 	t.numPrinted++
+	return nil
 }
 
 func (t *TextTablePrinter) AddRows(ctx context.Context, rows Rows) error {
@@ -566,7 +579,7 @@ func (t *TextTablePrinter) AddRows(ctx context.Context, rows Rows) error {
 }
 
 // Footer appends the summary to the table printer
-func (t *TextTablePrinter) Footer(result *Result) {
+func (t *TextTablePrinter) Footer(result *Result) error {
 	var isTotal [CountOutcol]bool
 	isTotal[OutcolInPkts] = true
 	isTotal[OutcolInBytes] = true
@@ -654,6 +667,8 @@ func (t *TextTablePrinter) Footer(result *Result) {
 		fmt.Fprintf(t.footwriter, "Conditions:\t: %s\n",
 			result.Query.Condition)
 	}
+
+	return nil
 }
 
 // Print flushes the table printer and outputs all entries to stdout

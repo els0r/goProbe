@@ -417,8 +417,6 @@ func (m *Map) iter(it *Iter) {
 	it.startBucket = int(r & m.bucketMask())
 	it.bucket = it.startBucket
 	it.offset = uint8(r >> (64 - bucketCntBits))
-
-	return
 }
 
 func (m *Map) mapaccessK(key Key) (*Key, *Val) {

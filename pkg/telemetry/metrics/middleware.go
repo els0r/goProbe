@@ -28,8 +28,6 @@ type Prometheus struct {
 
 	additionalMetrics []prometheus.Collector
 
-	router *gin.Engine
-
 	metricsPath string
 
 	// gin.Context string to use as a prometheus URL label
