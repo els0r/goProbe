@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -252,7 +251,7 @@ func entrypoint(cmd *cobra.Command, args []string) (err error) {
 			return fmt.Errorf("failed to read query args from %s: %w", argsLocation, err)
 		}
 		// unmarshal arguments into the command line parameters
-		if err = json.Unmarshal(argumentsJSON, &queryArgs); err != nil {
+		if err = jsoniter.Unmarshal(argumentsJSON, &queryArgs); err != nil {
 			return fmt.Errorf("failed to unmarshal JSON query args %s: %w", string(argumentsJSON), err)
 		}
 	} else {

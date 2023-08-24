@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -14,6 +13,7 @@ import (
 	"github.com/els0r/goProbe/pkg/goDB"
 	"github.com/els0r/goProbe/pkg/goDB/info"
 	"github.com/els0r/goProbe/pkg/query"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -108,7 +108,7 @@ func listInterfaces(dbPath string, ifaces ...string) error {
 	}
 
 	if queryArgs.Format == "json" {
-		return json.NewEncoder(output).Encode(ifacesMetadata)
+		return jsoniter.NewEncoder(output).Encode(ifacesMetadata)
 	}
 
 	// empty line before table header

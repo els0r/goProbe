@@ -1,12 +1,12 @@
 package results
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/netip"
 	"testing"
 
 	"github.com/els0r/goProbe/pkg/types"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -37,7 +37,7 @@ func TestMerge(t *testing.T) {
 
 			assert.Equal(t, test.expected, out)
 
-			b, _ := json.MarshalIndent(out, "", "  ")
+			b, _ := jsoniter.MarshalIndent(out, "", "  ")
 			fmt.Println(string(b))
 		})
 	}

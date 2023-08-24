@@ -13,7 +13,6 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
-	"io/ioutil"
 	"reflect"
 	"strings"
 )
@@ -190,7 +189,7 @@ func callMain(arg ...string) *exec.Cmd {
 
 func TestConversion(t *testing.T) {
 	// write the testing string to a file
-	if err := ioutil.WriteFile("./data.csv", []byte(inputCSV), 0755); err != nil {
+	if err := os.WriteFile("./data.csv", []byte(inputCSV), 0755); err != nil {
 		t.Fatalf("Failed to set up test data: %s", err.Error())
 	}
 

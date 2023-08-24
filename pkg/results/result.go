@@ -1,7 +1,6 @@
 package results
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -12,6 +11,7 @@ import (
 	"time"
 
 	"github.com/els0r/goProbe/pkg/types"
+	jsoniter "github.com/json-iterator/go"
 )
 
 var (
@@ -215,7 +215,7 @@ func (l Labels) MarshalJSON() ([]byte, error) {
 	if !l.Timestamp.IsZero() {
 		aux.Timestamp = &l.Timestamp
 	}
-	return json.Marshal(aux)
+	return jsoniter.Marshal(aux)
 }
 
 // String prints all result labels
@@ -276,7 +276,7 @@ func (a Attributes) MarshalJSON() ([]byte, error) {
 	if a.DstIP.IsValid() {
 		aux.DstIP = &a.DstIP
 	}
-	return json.Marshal(aux)
+	return jsoniter.Marshal(aux)
 }
 
 // String prints all result attributes

@@ -22,7 +22,7 @@ import (
 
 	"github.com/els0r/goProbe/pkg/defaults"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
-	json "github.com/json-iterator/go"
+	jsoniter "github.com/json-iterator/go"
 	"golang.org/x/time/rate"
 	"gopkg.in/yaml.v3"
 )
@@ -330,7 +330,7 @@ func Parse(src io.Reader) (*Config, error) {
 		return nil, fmt.Errorf("failed to read bytes: %w", err)
 	}
 
-	if jsonErr := json.Unmarshal(b, config); jsonErr != nil {
+	if jsonErr := jsoniter.Unmarshal(b, config); jsonErr != nil {
 		yamlErr := yaml.Unmarshal(b, config)
 		if yamlErr != nil {
 			return nil, fmt.Errorf("%w: JSON: %w; YAML: %w", errorUnmarshalConfig, jsonErr, yamlErr)
