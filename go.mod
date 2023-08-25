@@ -20,7 +20,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.16.0
 	golang.org/x/net v0.14.0
 	golang.org/x/sys v0.11.0
-	golang.org/x/time v0.1.0
+	golang.org/x/time v0.3.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -42,7 +42,7 @@ require (
 	github.com/go-openapi/swag v0.22.4 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect
-	github.com/go-playground/validator/v10 v10.15.0 // indirect
+	github.com/go-playground/validator/v10 v10.15.1 // indirect
 	github.com/goccy/go-json v0.10.2 // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
@@ -69,7 +69,7 @@ require (
 	github.com/spf13/cast v1.5.1 // indirect
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
-	github.com/subosito/gotenv v1.4.2 // indirect
+	github.com/subosito/gotenv v1.6.0 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.2.11 // indirect
 	go.opentelemetry.io/otel v1.16.0 // indirect
