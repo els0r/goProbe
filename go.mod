@@ -7,7 +7,6 @@ require (
 	github.com/fako1024/gotools/concurrency v0.0.0-20230821104146-b3b1387dec32
 	github.com/fako1024/httpc v1.0.15
 	github.com/fako1024/slimcap v0.0.0-20230823141905-cc1d3f76270b
-	github.com/fatih/color v1.15.0
 	github.com/gin-contrib/pprof v1.4.0
 	github.com/gin-gonic/gin v1.9.1
 	github.com/json-iterator/go v1.1.12
@@ -54,7 +53,6 @@ require (
 	github.com/leodido/go-urn v1.2.4 // indirect
 	github.com/magiconair/properties v1.8.7 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
-	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.19 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.4 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
