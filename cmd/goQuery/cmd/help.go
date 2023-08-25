@@ -1,28 +1,23 @@
 package cmd
 
-import (
-	"fmt"
-
-	"github.com/els0r/goProbe/cmd/goQuery/pkg/conf"
-)
-
-var usageBase = fmt.Sprintf(`goQuery -i <interfaces> [-h] [-c <conditions>] [-s <column>] [-a] [--in|--out|--sum] [-n <max_n>]
-  [-f|--%s <timestamp>] [-l|--%s <timestamp>] [-e|--%s txt|csv|json] %s
-  [-d|--%s <db-path>] [-q|--%s] [--%s] [--%s] [--%s]
-  [-r|--%s] [--%s] [--%s]
-  [--%s]
-`,
-	conf.First, conf.Last, conf.ResultsFormat, supportedCmds,
-	conf.QueryDBPath,
-	conf.QueryHostsResolution,
-	conf.QueryServerAddr,
-	conf.QueryTimeout,
-	conf.StoredQuery,
-	conf.DNSResolutionEnabled,
-	conf.DNSResolutionTimeout,
-	conf.DNSResolutionMaxRows,
-	conf.LogLevel,
-)
+// TODO: This part is currently unused - cross check if that is intentional (in which case it can be removed)
+// var usageBase = fmt.Sprintf(`goQuery -i <interfaces> [-h] [-c <conditions>] [-s <column>] [-a] [--in|--out|--sum] [-n <max_n>]
+//   [-f|--%s <timestamp>] [-l|--%s <timestamp>] [-e|--%s txt|csv|json] %s
+//   [-d|--%s <db-path>] [-q|--%s] [--%s] [--%s] [--%s]
+//   [-r|--%s] [--%s] [--%s]
+//   [--%s]
+// `,
+// 	conf.First, conf.Last, conf.ResultsFormat, supportedCmds,
+// 	conf.QueryDBPath,
+// 	conf.QueryHostsResolution,
+// 	conf.QueryServerAddr,
+// 	conf.QueryTimeout,
+// 	conf.StoredQuery,
+// 	conf.DNSResolutionEnabled,
+// 	conf.DNSResolutionTimeout,
+// 	conf.DNSResolutionMaxRows,
+// 	conf.LogLevel,
+// )
 
 const helpBase = `
   Flow database query tool to extract flow statistics from the goDB database

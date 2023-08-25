@@ -26,6 +26,7 @@ const (
 	initKeyVersion = "version"
 )
 
+// Option denotes a functional option for the logging configuration
 type Option func(*loggingConfig) error
 
 // WithOutput sets the log output
@@ -46,7 +47,7 @@ func WithErrorOutput(w io.Writer) Option {
 }
 
 var (
-	emptyFilePathError = errors.New("empty filepath provided")
+	errEmptyFilePath = errors.New("empty filepath provided")
 )
 
 const (
@@ -63,10 +64,10 @@ const (
 // - any other filepath: logs will be written to the file
 //
 // The special filepaths are case insensitive, e.g. DEVNULL works just as well
-func WithFileOutput(filepath string) Option {
+func WithFileOutput(path string) Option {
 	return func(lc *loggingConfig) error {
 		var output io.Writer
-		switch strings.ToLower(filepath) { // ToLower will allow users to pass STDERR for example
+		switch strings.ToLower(path) { // ToLower will allow users to pass STDERR for example
 		case stdoutOutput:
 			output = os.Stdout
 		case stderrOutput:
@@ -74,9 +75,9 @@ func WithFileOutput(filepath string) Option {
 		case devnullOutput:
 			output = io.Discard
 		case "":
-			return emptyFilePathError
+			return errEmptyFilePath
 		default:
-			f, err := os.OpenFile(filepath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+			f, err := os.OpenFile(filepath.Clean(path), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666) // #nosec G302
 			if err != nil {
 				return fmt.Errorf("failed to open file: %w", err)
 			}
@@ -273,9 +274,8 @@ func getFields(ctx context.Context) (loggerFields, bool) {
 //
 // The strength of this approach is that labels set in parent context are accessible
 func WithFields(ctx context.Context, fields ...slog.Attr) context.Context {
-	var (
-		newFields loggerFields = newLoggerFields()
-	)
+
+	newFields := newLoggerFields()
 
 	if ctx == nil {
 		ctx = context.Background()

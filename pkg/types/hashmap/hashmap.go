@@ -1,18 +1,18 @@
-// package hashmap implemets a modified version of Go's map type using type
+// Package hashmap implemets a modified version of Go's map type using type
 // parameters. See https://github.com/golang/go/blob/master/src/runtime/map.go
 package hashmap
 
 import (
 	"github.com/zeebo/xxh3"
 
-	_ "unsafe"
+	_ "unsafe" // required to allow linking to runtime.fastrand64
 )
 
 // Use the same PRNG as the native map implementation in map.go by linking it
 // directly from runtime
 //
-//go:linkname runtime_fastrand64 runtime.fastrand64
-func runtime_fastrand64() uint64
+//go:linkname runtimeFastrand64 runtime.fastrand64
+func runtimeFastrand64() uint64
 
 const (
 	// Maximum number of key/val pairs a bucket can hold.
@@ -646,7 +646,7 @@ func isEmpty(x uint8) bool {
 func generateSeed() uint64 {
 	var s uint64
 	for {
-		s = runtime_fastrand64()
+		s = runtimeFastrand64()
 		// Ensure the seed isn't zero
 		if s != 0 {
 			break

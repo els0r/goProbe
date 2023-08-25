@@ -12,6 +12,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
+// LegacyFileSet denotes a collection of all files required to read / parse a legacy DB directory
 type LegacyFileSet struct {
 	sipFile   *LegacyGPFile
 	dipFile   *LegacyGPFile
@@ -24,6 +25,7 @@ type LegacyFileSet struct {
 	pktsSentFile  *LegacyGPFile
 }
 
+// NewLegacyFileSet instantiates a new legacy DB file set
 func NewLegacyFileSet(path string) (*LegacyFileSet, error) {
 	var (
 		err     error
@@ -66,6 +68,7 @@ func NewLegacyFileSet(path string) (*LegacyFileSet, error) {
 	return &fileSet, nil
 }
 
+// Close closes a legacy DB file set
 func (l LegacyFileSet) Close() error {
 	var errs []error
 	if err := l.sipFile.Close(); err != nil {
@@ -99,6 +102,7 @@ func (l LegacyFileSet) Close() error {
 	return nil
 }
 
+// GetTimestamps returns all timestamps of a legacy DB file set
 func (l LegacyFileSet) GetTimestamps() ([]int64, error) {
 	return l.bytesRcvdFile.timestamps, nil
 }
@@ -115,6 +119,7 @@ func (l LegacyFileSet) getBlock(f *LegacyGPFile, ts int64) ([]byte, error) {
 	return block, nil
 }
 
+// GetBlock extracts a specific block from a legacy DB file set
 func (l LegacyFileSet) GetBlock(ts int64) (*hashmap.AggFlowMap, error) {
 	data := hashmap.NewAggFlowMap()
 
@@ -182,6 +187,7 @@ func (l LegacyFileSet) GetBlock(ts int64) (*hashmap.AggFlowMap, error) {
 	return data, nil
 }
 
+// MetadataFileName denotes the static filename for the metadata
 const MetadataFileName = "meta.json"
 
 // BlockMetadata represents metadata for one database block.
@@ -203,12 +209,7 @@ type Metadata struct {
 	Blocks []BlockMetadata `json:"blocks"`
 }
 
-// NewMetadata creates a new Metdata struct
-func NewMetadata() *Metadata {
-	return &Metadata{}
-}
-
-// GetBlock return the block metadata for a given timestamp
+// GetBlock returns the block metadata for a given timestamp
 func (m *Metadata) GetBlock(ts int64) (BlockMetadata, error) {
 	for _, block := range m.Blocks {
 		if block.Timestamp == ts {
@@ -223,38 +224,21 @@ func (m *Metadata) GetBlock(ts int64) (BlockMetadata, error) {
 func ReadMetadata(path string) (*Metadata, error) {
 	var result Metadata
 
-	f, err := os.Open(path)
+	f, err := os.Open(filepath.Clean(path))
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer func() {
+		if cerr := f.Close(); cerr != nil && err == nil {
+			err = cerr
+		}
+	}()
 
 	if err := jsoniter.NewDecoder(f).Decode(&result); err != nil {
 		return nil, err
 	}
 
 	return &result, nil
-}
-
-// TryReadMetadata attempts to read the given metadata file.
-// If an error occurs, a fresh Metadata struct is returned.
-func TryReadMetadata(path string) *Metadata {
-	meta, err := ReadMetadata(path)
-	if err != nil {
-		return NewMetadata()
-	}
-	return meta
-}
-
-// WriteMetadata stores the metadata on disk
-func WriteMetadata(path string, meta *Metadata) error {
-	f, err := os.Create(path)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	return jsoniter.NewEncoder(f).Encode(meta)
 }
 
 func rawIPToAddr(ip []byte) netip.Addr {

@@ -302,9 +302,9 @@ func main() {
 		log.Fatal(err)
 	}
 
-	allBenchmarksFile.Close()
-
-	os.Exit(0)
+	if err = allBenchmarksFile.Close(); err != nil {
+		log.Fatal(err)
+	}
 }
 
 var testConditions = map[string]string{

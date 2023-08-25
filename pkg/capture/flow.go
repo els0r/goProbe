@@ -64,7 +64,7 @@ func (f *FlowLog) Flows() map[string]*Flow {
 
 // ParsePacket processes / extracts all information contained in the IP layer received
 // from a capture source and converts it to a hash and flags to be added to the flow map
-func ParsePacket(ipLayer capture.IPLayer, pktTotalLen uint32) (epHash capturetypes.EPHash, isIPv4 bool, auxInfo byte, errno capturetypes.ParsingErrno) {
+func ParsePacket(ipLayer capture.IPLayer) (epHash capturetypes.EPHash, isIPv4 bool, auxInfo byte, errno capturetypes.ParsingErrno) {
 
 	var protocol byte
 	if ipLayerType := ipLayer.Type(); ipLayerType == ipLayerTypeV4 {
@@ -176,7 +176,7 @@ func ParsePacket(ipLayer capture.IPLayer, pktTotalLen uint32) (epHash capturetyp
 // a new flow will be created.
 func (f *FlowLog) Add(ipLayer capture.IPLayer, pktType capture.PacketType, pktTotalLen uint32) capturetypes.ParsingErrno {
 
-	epHash, isIPv4, auxInfo, errno := ParsePacket(ipLayer, pktTotalLen)
+	epHash, isIPv4, auxInfo, errno := ParsePacket(ipLayer)
 	if errno > capturetypes.ErrnoOK {
 		if errno.ParsingFailed() {
 			return errno

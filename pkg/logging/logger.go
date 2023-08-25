@@ -5,6 +5,7 @@ import (
 	"strings"
 )
 
+// Names for common log levels
 const (
 	LevelDebug = slog.LevelDebug
 	LevelInfo  = slog.LevelInfo
@@ -70,6 +71,7 @@ func LevelFromString(lvl string) slog.Level {
 	return LevelUnknown
 }
 
+// L denotes a logger structure, wrapping a formatter
 type L struct {
 	*formatter
 }

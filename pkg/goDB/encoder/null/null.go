@@ -31,7 +31,7 @@ func (e *Encoder) Close() error {
 }
 
 // Compress directly writes "data" to "dst" without any further manipulation
-func (e *Encoder) Compress(data, buf []byte, dst io.Writer) (n int, err error) {
+func (e *Encoder) Compress(data, _ []byte, dst io.Writer) (n int, err error) {
 	return dst.Write(data)
 }
 
@@ -50,4 +50,4 @@ func (e *Encoder) Decompress(_, out []byte, src io.Reader) (n int, err error) {
 }
 
 // SetLevel sets / changes the compression level (if supported)
-func (e *Encoder) SetLevel(level int) {}
+func (e *Encoder) SetLevel(_ int) {}

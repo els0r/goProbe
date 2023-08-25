@@ -12,7 +12,7 @@ import (
 	"github.com/spf13/viper"
 )
 
-func initProfiling(_ *cobra.Command, args []string) error {
+func initProfiling(_ *cobra.Command, _ []string) error {
 	// Setup profiling (if enabled)
 	profilingOutputDir := viper.GetString(conf.ProfilingOutputDir)
 	if profilingOutputDir != "" {

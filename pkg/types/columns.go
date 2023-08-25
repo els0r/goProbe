@@ -19,15 +19,17 @@ import (
 	"github.com/els0r/goProbe/pkg/goDB/protocols"
 )
 
+// ColumnIndex denotes a static index for one of the supported DB columns
 type ColumnIndex int
 
+// IPSizeOf implies that the size of an IP column is variable (hence a negative number)
 const IPSizeOf = -1
 
 // Indices for all column types
 const (
 	// First the attribute columns...
-	SipColIdx, _ ColumnIndex = iota, iota
-	DipColIdx, _
+	SIPColIdx, _ ColumnIndex = iota, iota
+	DIPColIdx, _
 	ProtoColIdx, _
 	DportColIdx, _
 
@@ -41,8 +43,8 @@ const (
 
 // Sizeof (entry) for all column types
 const (
-	SipSizeof   int = IPSizeOf
-	DipSizeof   int = IPSizeOf
+	SIPSizeof   int = IPSizeOf
+	DIPSizeof   int = IPSizeOf
 	ProtoSizeof int = 1
 	DportSizeof int = 2
 )
@@ -54,8 +56,8 @@ const (
 	HostIDName   = "hostid"
 	IfaceName    = "iface"
 
-	SipName   = "sip"
-	DipName   = "dip"
+	SIPName   = "sip"
+	DIPName   = "dip"
 	DportName = "dport"
 	ProtoName = "proto"
 
@@ -71,15 +73,18 @@ func (c ColumnIndex) IsCounterCol() bool {
 	return c >= ColIdxAttributeCount && c <= PacketsSentColIdx
 }
 
+// ColumnSizeofs returns the data sizes for each column
 var ColumnSizeofs = [ColIdxCount]int{
-	SipSizeof, DipSizeof, ProtoSizeof, DportSizeof,
+	SIPSizeof, DIPSizeof, ProtoSizeof, DportSizeof,
 }
 
+// ColumnFileNames returns the name / title for each column
 var ColumnFileNames = [ColIdxCount]string{
-	SipName, DipName, ProtoName, DportName,
+	SIPName, DIPName, ProtoName, DportName,
 	BytesRcvdName, BytesSentName, PktsRcvdName, PktsSentName,
 }
 
+// Column denotes a generic column and enforces the existence of certain methods
 type Column interface {
 	Name() string
 	Width() Width
@@ -107,8 +112,8 @@ type ipAttribute struct {
 	data []byte
 }
 
-// SipAttribute implements the source IP attribute
-type SipAttribute struct {
+// SIPAttribute implements the source IP attribute
+type SIPAttribute struct {
 	ipAttribute
 }
 
@@ -122,47 +127,51 @@ func (ipAttribute) Resolvable() bool {
 	return true
 }
 
+// String returns the string representation of the attribute
 func (i ipAttribute) String() string {
 	return RawIPToString(i.data[:])
 }
 
 // Name returns the attributes name
-func (SipAttribute) Name() string {
-	return SipName
+func (SIPAttribute) Name() string {
+	return SIPName
 }
 
-func (SipAttribute) attributeMarker() {}
+func (SIPAttribute) attributeMarker() {}
 
-// DipAttribute implements the destination IP attribute
-type DipAttribute struct {
+// DIPAttribute implements the destination IP attribute
+type DIPAttribute struct {
 	ipAttribute
 }
 
 // Name returns the attribute's name
-func (DipAttribute) Name() string {
-	return DipName
+func (DIPAttribute) Name() string {
+	return DIPName
 }
 
-func (DipAttribute) attributeMarker() {}
+func (DIPAttribute) attributeMarker() {}
 
 // ProtoAttribute implements the IP protocol attribute
 type ProtoAttribute struct {
 	data uint8
 }
 
+// String returns the string representation of the IP protocol  attribute
 func (p ProtoAttribute) String() string {
 	return protocols.GetIPProto(int(p.data))
 }
 
+// Width returns the amount of bytes the IP protocol attribute takes up on disk
 func (ProtoAttribute) Width() Width {
 	return ProtoWidth
 }
 
-// Name returns the attribute's name
+// Name returns the IP protocol attribute's name
 func (ProtoAttribute) Name() string {
 	return ProtoName
 }
 
+// Resolvable returns if the IP protocol attribute is resolvable
 func (ProtoAttribute) Resolvable() bool {
 	return false
 }
@@ -174,59 +183,66 @@ type DportAttribute struct {
 	data []byte
 }
 
+// Width returns the amount of bytes the destination port attribute takes up on disk
 func (DportAttribute) Width() Width {
 	return DPortWidth
 }
 
+// String returns the string representation of the destination port attribute
 func (d DportAttribute) String() string {
 	return fmt.Sprint(d.ToUint16())
 }
 
+// Resolvable returns if the destination port is resolvable
 func (DportAttribute) Resolvable() bool {
 	return false
 }
 
+// ToUint16 converts the destination port to a uint16 representation
 func (d DportAttribute) ToUint16() uint16 {
 	return PortToUint16(d.data)
 }
 
+// PortToUint16 converts a uint16 number to a port
 func PortToUint16(b []byte) uint16 {
 	return binary.BigEndian.Uint16(b[:])
 }
 
-// Name returns the attribute's name
+// Name returns the destination port attribute name
 func (DportAttribute) Name() string {
 	return DportName
 }
 
 func (DportAttribute) attributeMarker() {}
 
-// NewAttribute returns an Attribute for the given name. If no such attribute
+// NewAttribute returns an attribute for the given name. If no such attribute
 // exists, an error is returned.
 func NewAttribute(name string) (Attribute, error) {
 	// name/alias to attribute matching
 	switch name {
-	case SipName, "src":
-		return SipAttribute{}, nil
-	case DipName, "dst":
-		return DipAttribute{}, nil
+	case SIPName, "src":
+		return SIPAttribute{}, nil
+	case DIPName, "dst":
+		return DIPAttribute{}, nil
 	case ProtoName, "protocol", "ipproto":
 		return ProtoAttribute{}, nil
 	case DportName, "port":
 		return DportAttribute{}, nil
 	default:
-		return nil, fmt.Errorf("Unknown attribute name: '%s'", name)
+		return nil, fmt.Errorf("unknown attribute name: '%s'", name)
 	}
 }
 
+// AllColumns returns a set of all column names / titles
 func AllColumns() []string {
 	return []string{
-		TimeName, HostnameName, HostIDName, IfaceName, SipName, DipName, DportName, ProtoName,
+		TimeName, HostnameName, HostIDName, IfaceName, SIPName, DIPName, DportName, ProtoName,
 	}
 }
 
 const attrSep = ","
 
+// Static shorthands for some column combinations
 const (
 	TalkConvCompoundQuery    = "talk_conv"
 	TalkSrcCompoundQuery     = "talk_src"
@@ -236,7 +252,7 @@ const (
 	RawCompoundQuery         = "raw"
 )
 
-// ToAttribueNames translates query abbreviations into the attributes they hold
+// ToAttributeNames translates query abbreviations into the attributes they hold
 func ToAttributeNames(queryType string) (attrs []string) {
 	// covers the case where aliases and attribute/label names are mixed (e.g. talk_conv,dport)
 	qtSplit := strings.Split(queryType, attrSep)
@@ -249,15 +265,15 @@ func ToAttributeNames(queryType string) (attrs []string) {
 
 	switch queryType {
 	case TalkConvCompoundQuery:
-		return []string{SipName, DipName}
+		return []string{SIPName, DIPName}
 	case TalkSrcCompoundQuery:
-		return []string{SipName}
+		return []string{SIPName}
 	case TalkDstCompoundQuery:
-		return []string{DipName}
+		return []string{DIPName}
 	case AppsPortCompoundQuery:
 		return []string{DportName, ProtoName}
 	case AggTalkPortCompoundQuery:
-		return []string{SipName, DipName, DportName, ProtoName}
+		return []string{SIPName, DIPName, DportName, ProtoName}
 	case RawCompoundQuery:
 		return AllColumns()
 	}

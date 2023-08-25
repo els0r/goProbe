@@ -26,7 +26,7 @@ func (ph *plainHandler) Enabled(_ context.Context, level slog.Level) bool {
 	return level >= ph.level
 }
 
-func (ph *plainHandler) Handle(ctx context.Context, r slog.Record) error {
+func (ph *plainHandler) Handle(_ context.Context, r slog.Record) error {
 	runes := []rune(r.Message)
 
 	// upper case the first letter

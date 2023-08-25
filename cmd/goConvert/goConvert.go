@@ -14,21 +14,22 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/binary"
 	"errors"
+	"io"
 	"io/fs"
 	"os"
-	"os/exec"
 	"runtime"
 	"runtime/debug"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 
 	// for metrics export to metricsbeat
 	_ "expvar"
 
+	"github.com/els0r/goProbe/pkg/capture/capturetypes"
 	"github.com/els0r/goProbe/pkg/goDB"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 	"github.com/els0r/goProbe/pkg/logging"
@@ -153,9 +154,9 @@ func (c *CSVConverter) readSchema(schema string) error {
 		if _, isIfaceParser := c.KeyParsers[j].parser.(*IfaceStringParser); isIfaceParser {
 			return true
 		}
-		_, isSipParser := c.KeyParsers[i].parser.(*goDB.SipStringParser)
-		_, isDipParser := c.KeyParsers[i].parser.(*goDB.DipStringParser)
-		return isSipParser || isDipParser
+		_, isSIPParser := c.KeyParsers[i].parser.(*goDB.SIPStringParser)
+		_, isDIPParser := c.KeyParsers[i].parser.(*goDB.DIPStringParser)
+		return isSIPParser || isDIPParser
 	})
 
 	// if only NOP parsers were created, it means that the
@@ -215,26 +216,24 @@ func main() {
 	}
 	logger := logging.Logger()
 
-	// get number of lines to read in the specified file
-	cmd := exec.Command("wc", "-l", config.FilePath)
-	out, cmderr := cmd.Output()
-	if cmderr != nil {
-		logger.Fatalf("could not obtain line count on file %s", config.FilePath)
+	// open file
+	var file *os.File
+	if file, err = os.Open(config.FilePath); err != nil {
+		logger.Fatalf("file open error: %s", err)
 	}
 
-	nlString := strings.Split(string(out), " ")
-	nlInFile, _ := strconv.ParseInt(nlString[0], 10, 32)
-	if int(nlInFile) < config.NumLines && nlInFile > 0 {
-		config.NumLines = int(nlInFile)
+	// get number of lines to read in the specified file
+	nlInFile, err := lineCounter(file)
+	if err != nil {
+		logger.Fatalf("could not obtain line count on file %s", config.FilePath)
+	}
+	if nlInFile < config.NumLines && nlInFile > 0 {
+		config.NumLines = nlInFile
 	}
 
 	logger.Infof("Converting %d rows in file %s", config.NumLines, config.FilePath)
-
-	// open file
-	var file *os.File
-
-	if file, err = os.Open(config.FilePath); err != nil {
-		logger.Fatalf("file open error: %s", err)
+	if _, err = file.Seek(0, 0); err != nil {
+		logger.Fatalf("failed to seek to beginning of file %s after determining line count: %s", config.FilePath, err)
 	}
 
 	// create a CSV converter
@@ -282,7 +281,7 @@ func main() {
 				mapWriters[fm.iface] = goDB.NewDBWriter(config.SavePath, fm.iface, encoders.Type(config.EncoderType)).Permissions(dbPermissions)
 			}
 
-			if err = mapWriters[fm.iface].Write(fm.data, goDB.CaptureMetadata{}, fm.tstamp); err != nil {
+			if err = mapWriters[fm.iface].Write(fm.data, capturetypes.CaptureStats{}, fm.tstamp); err != nil {
 				fmt.Printf("Failed to write block at %d: %s\n", fm.tstamp, err)
 				// TODO: bail here?
 				os.Exit(1)
@@ -382,9 +381,8 @@ func main() {
 						fmt.Println(err)
 					}
 					continue
-				} else {
-					fmt.Println(err)
 				}
+				fmt.Println(err)
 			}
 			rowKey = &rowKeyV4
 		}
@@ -445,4 +443,23 @@ func incompleteFlowMap(m map[int64]*hashmap.AggFlowMap) int64 {
 		}
 	}
 	return recent
+}
+
+func lineCounter(r io.Reader) (int, error) {
+	buf := make([]byte, 32*1024)
+	count := 0
+	lineSep := []byte{'\n'}
+
+	for {
+		c, err := r.Read(buf)
+		count += bytes.Count(buf[:c], lineSep)
+
+		switch {
+		case err == io.EOF:
+			return count, nil
+
+		case err != nil:
+			return count, err
+		}
+	}
 }

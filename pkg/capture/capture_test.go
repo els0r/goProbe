@@ -123,10 +123,10 @@ func setupInterfaces(t *testing.T, cfg config.CaptureConfig, nIfaces int) (*Mana
 
 	// Setup a temporary directory for the test DB
 	tempDir, err := os.MkdirTemp(os.TempDir(), "goprobe_capture")
-	if err != nil {
-		panic(err)
-	}
-	defer os.RemoveAll(tempDir)
+	require.Nil(t, err)
+	defer func(t *testing.T) {
+		require.Nil(t, os.RemoveAll(tempDir))
+	}(t)
 
 	// Build / initialize mock sources for all interfaces
 	testMockSrcs := make(testMockSrcs)

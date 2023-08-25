@@ -165,7 +165,7 @@ func (m mockIfaces) BuildResults(t *testing.T, testDir string, resGoQuery *resul
 	res.Summary.Hits.Total = len(res.Rows)
 	res.Summary.Hits.Displayed = len(res.Rows)
 
-	res.Query.Attributes = []string{"sip", "dip", "dport", "proto"}
+	res.Query.Attributes = []string{types.SIPName, types.DIPName, types.DportName, types.ProtoName}
 	hostname, err := os.Hostname()
 	require.Nil(t, err)
 	for i := 0; i < len(res.Rows); i++ {

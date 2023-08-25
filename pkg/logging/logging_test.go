@@ -47,7 +47,7 @@ func TestFileOutputOption(t *testing.T) {
 		{"stdout", nil, false},
 		{"stderr", nil, false},
 		{"devnull", nil, false},
-		{"", emptyFilePathError, false},
+		{"", errEmptyFilePath, false},
 		{"tmpfile", nil, true},
 	}
 
@@ -57,7 +57,7 @@ func TestFileOutputOption(t *testing.T) {
 			_, err := New(LevelDebug, EncodingLogfmt, WithFileOutput(test.in))
 			require.ErrorIs(t, test.expectedError, err)
 			if test.clean {
-				os.RemoveAll(test.in)
+				require.Nil(t, os.RemoveAll(test.in))
 			}
 		})
 	}
@@ -168,7 +168,7 @@ type lineCounterOutput struct {
 }
 
 // Write implements the io.Writer interface
-func (l *lineCounterOutput) Write(data []byte) (n int, err error) {
+func (l *lineCounterOutput) Write(_ []byte) (n int, err error) {
 	l.lines++
 	return n, err
 }
@@ -365,13 +365,13 @@ func TestCustomLogMessages(t *testing.T) {
 	})
 
 	t.Run("fatal", func(t *testing.T) {
-		logger := FromContext(nil).exiter(mockExiter{t})
+		logger := FromContext(nil).exiter(mockExiter{t}) //nolint:staticcheck // SA1012
 		logger.With("left", 42).Fatal("this my dearest friends, is where I leave you")
 		logger.Fatalf("this my dearest friends, is where I leave %s", "you")
 	})
 
 	t.Run("panic", func(t *testing.T) {
-		logger := FromContext(nil).panicker(mockPanicker{t})
+		logger := FromContext(nil).panicker(mockPanicker{t}) //nolint:staticcheck // SA1012
 		logger.With("left", 24).Panic("this my dearest friends, is where I leave you")
 		logger.Panicf("this my dearest friends, is where I leave %s", "you")
 	})
@@ -379,7 +379,7 @@ func TestCustomLogMessages(t *testing.T) {
 
 // tests the edge cases in context creation
 func TestNewContext(t *testing.T) {
-	ctx := WithFields(nil)
+	ctx := WithFields(nil) //nolint:staticcheck // SA1012
 	require.NotNil(t, ctx)
 
 	ctx = WithFields(ctx, slog.Attr{})

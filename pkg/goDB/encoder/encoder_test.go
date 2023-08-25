@@ -146,7 +146,12 @@ func BenchmarkEncodersCompress(b *testing.B) {
 			if err != nil {
 				b.Fatalf("Failed to instantiate encoder of type %s: %s", encType, err)
 			}
-			defer enc.Close()
+
+			defer func(b *testing.B) {
+				if err := enc.Close(); err != nil {
+					b.Fatalf("Failed to close encoder of type %s: %s", encType, err)
+				}
+			}(b)
 
 			b.ReportAllocs()
 			b.SetBytes(nBytes)

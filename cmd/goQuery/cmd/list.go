@@ -46,7 +46,7 @@ be broken up into IPv4 and IPv6 flows and the drops for that interface will be s
 `)
 }
 
-func listInterfacesEntrypoint(cmd *cobra.Command, args []string) error {
+func listInterfacesEntrypoint(_ *cobra.Command, args []string) error {
 	return listInterfaces(viper.GetString(conf.QueryDBPath), args...)
 }
 

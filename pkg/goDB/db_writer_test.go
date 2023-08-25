@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/els0r/goProbe/pkg/capture/capturetypes"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 	"github.com/els0r/goProbe/pkg/goDB/storage/gpfile"
 	"github.com/els0r/goProbe/pkg/types/hashmap"
@@ -34,7 +35,7 @@ func TestPanicDuringWrite(t *testing.T) {
 
 	t.Run("Write", func(t *testing.T) {
 		require.Panics(t, func() {
-			err := w.Write(testMap, CaptureMetadata{}, timestamp)
+			err := w.Write(testMap, capturetypes.CaptureStats{}, timestamp)
 			_ = err
 		})
 		dirs, err := os.ReadDir(dirPath)
@@ -46,9 +47,9 @@ func TestPanicDuringWrite(t *testing.T) {
 		require.Panics(t, func() {
 			err := w.WriteBulk([]BulkWorkload{
 				{
-					FlowMap:     testMap,
-					CaptureMeta: CaptureMetadata{},
-					Timestamp:   timestamp,
+					FlowMap:      testMap,
+					CaptureStats: capturetypes.CaptureStats{},
+					Timestamp:    timestamp,
 				},
 			}, timestamp)
 			_ = err

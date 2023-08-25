@@ -105,7 +105,7 @@ func TestFilePermissions(t *testing.T) {
 			stat, err := os.Stat(testFilePath)
 			require.Nil(t, err, "failed to call Stat() on new GPFile")
 			require.Equal(t, stat.Mode().Perm(), perm, stat.Mode().String())
-			require.Nil(t, gpf.Delete(), "failed to delete test file")
+			require.Nil(t, gpf.delete(), "failed to delete test file")
 		})
 	}
 }
@@ -118,7 +118,6 @@ func TestFailedRead(t *testing.T) {
 func TestCreateFile(t *testing.T) {
 	gpf, err := New(testFilePath, newMetadata().BlockMetadata[0], ModeWrite)
 	require.Nil(t, err, "failed to create new GPFile")
-	defer gpf.Delete()
 
 	require.Nil(t, gpf.validateBlocks(0), "failed to validate blocks")
 	require.Nil(t, gpf.Close(), "failed to close test file")
@@ -127,7 +126,9 @@ func TestCreateFile(t *testing.T) {
 func TestWriteFile(t *testing.T) {
 	gpf, err := New(testFilePath, newMetadata().BlockMetadata[0], ModeWrite)
 	require.Nil(t, err, "failed to create new GPFile")
-	defer gpf.Delete()
+	defer func(t *testing.T) {
+		require.Nil(t, gpf.delete())
+	}(t)
 
 	timestamp := time.Now()
 	require.Nil(t, gpf.writeBlock(timestamp.Unix(), []byte{1, 2, 3, 4}), "failed to write block")
@@ -150,7 +151,9 @@ func testRoundtrip(t *testing.T, encType encoders.Type) {
 
 	gpf, err := New(testFilePath, m.BlockMetadata[0], ModeWrite, WithEncoder(enc))
 	require.Nil(t, err, "failed to create new GPFile")
-	defer gpf.Delete()
+	defer func(t *testing.T) {
+		require.Nil(t, gpf.delete())
+	}(t)
 
 	for i := 0; i < 1001; i++ {
 
@@ -210,7 +213,7 @@ func testRoundtrip(t *testing.T, encType encoders.Type) {
 		require.Equalf(t, blockData, expectedData, "unexpected data at block timetamp %v", blockItem.Timestamp)
 	}
 
-	require.Error(t, gpf.open(ModeRead), "expected error trying to re-open already open file, got none")
+	require.Error(t, gpf.open(), "expected error trying to re-open already open file, got none")
 	require.Nil(t, gpf.Close(), "failed to close test file")
 }
 
@@ -218,7 +221,7 @@ func TestInvalidMetadata(t *testing.T) {
 
 	require.Nil(t, os.RemoveAll("/tmp/test_db"))
 	require.Nil(t, os.MkdirAll("/tmp/test_db/1970/01/0", 0750), "error creating test dir for reading")
-	require.Nil(t, os.WriteFile("/tmp/test_db/1970/01/0/.blockmeta", []byte{0x1}, 0644), "error creating test metdadata for reading")
+	require.Nil(t, os.WriteFile("/tmp/test_db/1970/01/0/.blockmeta", []byte{0x1}, 0600), "error creating test metdadata for reading")
 
 	testDir := NewDir("/tmp/test_db", 1000, ModeRead)
 	require.ErrorIs(t, testDir.Open(), ErrInputSizeTooSmall)

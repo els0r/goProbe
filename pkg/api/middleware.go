@@ -1,8 +1,8 @@
 package api
 
 import (
-	"net/http"
 	"log/slog"
+	"net/http"
 	"time"
 
 	"github.com/els0r/goProbe/pkg/logging"
@@ -35,6 +35,7 @@ func TraceIDMiddleware() gin.HandlerFunc {
 
 const requestMsg = "handled request"
 
+// RequestLoggingMiddleware logs all requests received via the including hander chain
 func RequestLoggingMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		logger := logging.FromContext(c.Request.Context())

@@ -111,7 +111,7 @@ func verifyArgs(cmd *cobra.Command, _ []string) error {
 	return nil
 }
 
-func rootEntrypoint(cmd *cobra.Command, args []string) error {
+func rootEntrypoint(_ *cobra.Command, _ []string) error {
 	return fmt.Errorf("no sub-command provided")
 }
 

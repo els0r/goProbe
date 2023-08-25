@@ -37,7 +37,9 @@ func TestWorkload(t *testing.T) {
 	// Initialize temporary test directory
 	testPath, err := os.MkdirTemp("/tmp", "goDB")
 	require.Nil(t, err)
-	defer os.RemoveAll(testPath)
+	defer func(t *testing.T) {
+		require.Nil(t, os.RemoveAll(testPath))
+	}(t)
 	require.Nil(t, os.Mkdir(filepath.Join(testPath, "eth0"), 0700))
 
 	t.Run("invalid_numWorkers", func(t *testing.T) {
@@ -136,7 +138,7 @@ func populateTestDir(t *testing.T, basePath, iface string, timestamp time.Time) 
 	f := gpfile.NewDir(testPath, timestamp.Unix(), gpfile.ModeWrite)
 	require.Nil(t, f.Open())
 
-	data, update := dbData(iface, timestamp.Unix()+300, generateFlows())
+	data, update := dbData(generateFlows())
 	require.Nil(t, f.WriteBlocks(timestamp.Unix()+300, gpfile.TrafficMetadata{
 		NumV4Entries: update.Traffic.NumV4Entries,
 		NumV6Entries: update.Traffic.NumV6Entries,
@@ -170,8 +172,8 @@ func testWorkload(t *testing.T, c testCase, dryRun bool) {
 
 	// Instantiate a new DBWorkManager
 	workMgr, err := NewDBWorkManager(NewQuery([]types.Attribute{
-		types.SipAttribute{},
-		types.DipAttribute{},
+		types.SIPAttribute{},
+		types.DIPAttribute{},
 		types.DportAttribute{},
 		types.ProtoAttribute{}}, nil, types.LabelSelector{}), c.path, c.iface, c.numWorkers)
 	if c.expectedErr == nil {

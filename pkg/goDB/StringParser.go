@@ -22,6 +22,7 @@ import (
 	"github.com/els0r/goProbe/pkg/types"
 )
 
+// ErrIPVersionMismatch signifies that there is an IPv4 / IPv6 mismatch
 var ErrIPVersionMismatch error
 
 // StringKeyParser is used for mapping a string to it's goDB key
@@ -37,13 +38,13 @@ type StringValParser interface {
 // NewStringKeyParser selects a string parser based on the attribute
 func NewStringKeyParser(kind string) StringKeyParser {
 	switch kind {
-	case "sip":
-		return &SipStringParser{}
-	case "dip":
-		return &DipStringParser{}
-	case "dport":
+	case types.SIPName:
+		return &SIPStringParser{}
+	case types.DIPName:
+		return &DIPStringParser{}
+	case types.DportName:
 		return &DportStringParser{}
-	case "proto":
+	case types.ProtoName:
 		return &ProtoStringParser{}
 	case "time":
 		return &TimeStringParser{}
@@ -73,11 +74,11 @@ type NOPStringParser struct{}
 
 // attribute parsers
 
-// SipStringParser parses sip strings
-type SipStringParser struct{}
+// SIPStringParser parses sip strings
+type SIPStringParser struct{}
 
-// DipStringParser parses dip strings
-type DipStringParser struct{}
+// DIPStringParser parses dip strings
+type DIPStringParser struct{}
 
 // DportStringParser parses dport strings
 type DportStringParser struct{}
@@ -105,17 +106,17 @@ type PacketsRecStringParser struct{}
 type PacketsSentStringParser struct{}
 
 // ParseKey is a no-op
-func (n *NOPStringParser) ParseKey(element string, key *types.ExtendedKey) error {
+func (n *NOPStringParser) ParseKey(_ string, _ *types.ExtendedKey) error {
 	return nil
 }
 
 // ParseVal is a no-op
-func (n *NOPStringParser) ParseVal(element string, val *types.Counters) error {
+func (n *NOPStringParser) ParseVal(_ string, _ *types.Counters) error {
 	return nil
 }
 
 // ParseKey parses a source IP string and writes it to the source IP key slice
-func (s *SipStringParser) ParseKey(element string, key *types.ExtendedKey) error {
+func (s *SIPStringParser) ParseKey(element string, key *types.ExtendedKey) error {
 	ipBytes, _, err := types.IPStringToBytes(element)
 	if err != nil {
 		return fmt.Errorf("could not parse 'sip' attribute: %w", err)
@@ -124,12 +125,12 @@ func (s *SipStringParser) ParseKey(element string, key *types.ExtendedKey) error
 		return ErrIPVersionMismatch
 	}
 
-	key.Key().PutSip(ipBytes)
+	key.Key().PutSIP(ipBytes)
 	return nil
 }
 
 // ParseKey parses a destination IP string and writes it to the desintation IP key slice
-func (d *DipStringParser) ParseKey(element string, key *types.ExtendedKey) error {
+func (d *DIPStringParser) ParseKey(element string, key *types.ExtendedKey) error {
 	ipBytes, _, err := types.IPStringToBytes(element)
 	if err != nil {
 		return fmt.Errorf("could not parse 'dip' attribute: %w", err)
@@ -138,7 +139,7 @@ func (d *DipStringParser) ParseKey(element string, key *types.ExtendedKey) error
 		return ErrIPVersionMismatch
 	}
 
-	key.Key().PutDip(ipBytes)
+	key.Key().PutDIP(ipBytes)
 	return nil
 }
 

@@ -49,6 +49,7 @@ type TrafficMetadata struct {
 	NumDrops     uint64 `json:"num_drops"`
 }
 
+// Stats denotes statistics for a GPDir instance
 type Stats struct {
 	Counts  types.Counters  `json:"counts"`
 	Traffic TrafficMetadata `json:"traffic"`
@@ -172,9 +173,8 @@ func (d *GPDir) Open(options ...Option) error {
 			// an empty one
 			if d.accessMode == ModeRead {
 				return fmt.Errorf("metadata file `%s` missing", d.MetadataPath())
-			} else {
-				d.Metadata = newMetadata()
 			}
+			d.Metadata = newMetadata()
 		} else {
 			return fmt.Errorf("error reading metadata file `%s`: %w", d.MetadataPath(), err)
 		}
@@ -349,15 +349,15 @@ func (d *GPDir) Marshal(w concurrency.ReadWriteSeekCloser) error {
 	data := metaDataMemPool.Get(size)
 	defer metaDataMemPool.Put(data)
 
-	binary.BigEndian.PutUint64(data[0:8], uint64(d.Metadata.Version))                // Store header version
-	binary.BigEndian.PutUint64(data[8:16], uint64(nBlocks))                          // Store flat nummber of blocks
-	binary.BigEndian.PutUint64(data[16:24], uint64(d.Metadata.Traffic.NumV4Entries)) // Store global number of IPv4 flows
-	binary.BigEndian.PutUint64(data[24:32], uint64(d.Metadata.Traffic.NumV6Entries)) // Store global number of IPv6 flows
-	binary.BigEndian.PutUint64(data[32:40], uint64(d.Metadata.Traffic.NumDrops))     // Store global number of dropped packets
-	binary.BigEndian.PutUint64(data[40:48], uint64(d.Metadata.Counts.BytesRcvd))     // Store global Counters (BytesRcvd)
-	binary.BigEndian.PutUint64(data[48:56], uint64(d.Metadata.Counts.BytesSent))     // Store global Counters (BytesSent)
-	binary.BigEndian.PutUint64(data[56:64], uint64(d.Metadata.Counts.PacketsRcvd))   // Store global Counters (PacketsRcvd)
-	binary.BigEndian.PutUint64(data[64:72], uint64(d.Metadata.Counts.PacketsSent))   // Store global Counters (PacketsSent)
+	binary.BigEndian.PutUint64(data[0:8], d.Metadata.Version)                // Store header version
+	binary.BigEndian.PutUint64(data[8:16], uint64(nBlocks))                  // Store flat nummber of blocks
+	binary.BigEndian.PutUint64(data[16:24], d.Metadata.Traffic.NumV4Entries) // Store global number of IPv4 flows
+	binary.BigEndian.PutUint64(data[24:32], d.Metadata.Traffic.NumV6Entries) // Store global number of IPv6 flows
+	binary.BigEndian.PutUint64(data[32:40], d.Metadata.Traffic.NumDrops)     // Store global number of dropped packets
+	binary.BigEndian.PutUint64(data[40:48], d.Metadata.Counts.BytesRcvd)     // Store global Counters (BytesRcvd)
+	binary.BigEndian.PutUint64(data[48:56], d.Metadata.Counts.BytesSent)     // Store global Counters (BytesSent)
+	binary.BigEndian.PutUint64(data[56:64], d.Metadata.Counts.PacketsRcvd)   // Store global Counters (PacketsRcvd)
+	binary.BigEndian.PutUint64(data[64:72], d.Metadata.Counts.PacketsSent)   // Store global Counters (PacketsSent)
 	pos := 72
 
 	if nBlocks > 0 {
@@ -471,7 +471,7 @@ func (d *GPDir) Close() error {
 	return nil
 }
 
-// column returns the underlying GPFile for a specified column (lazy-access)
+// Column returns the underlying GPFile for a specified column (lazy-access)
 func (d *GPDir) Column(colIdx types.ColumnIndex) (*GPFile, error) {
 
 	if !d.isOpen {

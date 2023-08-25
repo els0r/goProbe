@@ -71,7 +71,9 @@ func testStartStop(t *testing.T) {
 	if err != nil {
 		panic(err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func(t *testing.T) {
+		require.Nil(t, os.RemoveAll(tempDir))
+	}(t)
 
 	// We quit on encountering SIGUSR2 (instead of the ususal SIGTERM or SIGINT)
 	// to avoid killing the test
@@ -228,9 +230,11 @@ func testE2E(t *testing.T, datasets ...[]byte) {
 	// Setup a temporary directory for the test DB
 	tempDir, err := os.MkdirTemp(os.TempDir(), "goprobe_e2e")
 	if err != nil {
-		panic(err)
+		require.Nil(t, err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func(t *testing.T) {
+		require.Nil(t, os.RemoveAll(tempDir))
+	}(t)
 
 	// Define mock interfaces
 	var mockIfaces mockIfaces
@@ -240,7 +244,7 @@ func testE2E(t *testing.T, datasets ...[]byte) {
 
 	// Run GoProbe (storing a copy of all processed live flows)
 	liveFlowResults := make(map[string]hashmap.AggFlowMapWithMetadata)
-	for liveFlowMap := range runGoProbe(t, tempDir, setupSources(t, mockIfaces)) {
+	for liveFlowMap := range runGoProbe(t, tempDir, setupSources(mockIfaces)) {
 		liveFlowResults[liveFlowMap.Interface] = liveFlowMap
 	}
 
@@ -386,7 +390,7 @@ func runGoQuery(t *testing.T, res interface{}, args []string) {
 	require.Nil(t, jsoniter.NewDecoder(buf).Decode(&res))
 }
 
-func setupSources(t testing.TB, ifaces mockIfaces) func() (mockIfaces, func(c *capture.Capture) (slimcap.SourceZeroCopy, error)) {
+func setupSources(ifaces mockIfaces) func() (mockIfaces, func(c *capture.Capture) (slimcap.SourceZeroCopy, error)) {
 
 	fnMap := make(map[string]func(c *capture.Capture) (slimcap.SourceZeroCopy, error))
 	for _, mockIface := range ifaces {
@@ -447,7 +451,7 @@ func newPcapSource(t testing.TB, name string, data []byte) (res *mockIface) {
 			defer res.Unlock()
 
 			pkt = slimcap.NewIPPacket(pkt, payload, pktType, int(totalLen), ipLayerOffset)
-			hash, isIPv4, auxInfo, errno := capture.ParsePacket(pkt.IPLayer(), pkt.TotalLen())
+			hash, isIPv4, auxInfo, errno := capture.ParsePacket(pkt.IPLayer())
 			if errno > capturetypes.ErrnoOK {
 				res.tracking.nErr++
 				return

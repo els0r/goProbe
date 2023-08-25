@@ -30,8 +30,8 @@ type Query struct {
 	// Explicity attribute flags that allow granular processing logic
 	// without having to rely on array loops
 	hasAttrTime, hasAttrIface                          bool
-	hasAttrSip, hasAttrDip, hasAttrDport, hasAttrProto bool
-	hasCondSip, hasCondDip, hasCondDport, hasCondProto bool
+	hasAttrSIP, hasAttrDIP, hasAttrDport, hasAttrProto bool
+	hasCondSIP, hasCondDIP, hasCondDport, hasCondProto bool
 	ipVersion                                          types.IPVersion
 
 	// metadataOnly will determine if all relevant information to answer the query can be
@@ -63,10 +63,10 @@ type Query struct {
 // the condition attributes.
 func queryAttributeNameToColumnIndex(name string) (colIdx types.ColumnIndex) {
 	colIdx, ok := map[string]types.ColumnIndex{
-		"sip":   types.SipColIdx,
-		"dip":   types.DipColIdx,
-		"proto": types.ProtoColIdx,
-		"dport": types.DportColIdx}[name]
+		types.SIPName:   types.SIPColIdx,
+		types.DIPName:   types.DIPColIdx,
+		types.ProtoName: types.ProtoColIdx,
+		types.DportName: types.DportColIdx}[name]
 	if !ok {
 		panic("Unknown query attribute " + name)
 	}
@@ -77,12 +77,12 @@ func queryAttributeNameToColumnIndex(name string) (colIdx types.ColumnIndex) {
 // because snet and dnet are only allowed in conditionals.
 func conditionalAttributeNameToColumnIndex(name string) (colIdx types.ColumnIndex) {
 	colIdx, ok := map[string]types.ColumnIndex{
-		"sip":   types.SipColIdx,
-		"snet":  types.SipColIdx,
-		"dip":   types.DipColIdx,
-		"dnet":  types.DipColIdx,
-		"proto": types.ProtoColIdx,
-		"dport": types.DportColIdx}[name]
+		types.SIPName:   types.SIPColIdx,
+		"snet":          types.SIPColIdx,
+		types.DIPName:   types.DIPColIdx,
+		"dnet":          types.DIPColIdx,
+		types.ProtoName: types.ProtoColIdx,
+		types.DportName: types.DportColIdx}[name]
 	if !ok {
 		panic("Unknown conditional attribute " + name)
 	}
@@ -90,15 +90,15 @@ func conditionalAttributeNameToColumnIndex(name string) (colIdx types.ColumnInde
 }
 
 var queryAttributeColumnFlagSetters = [types.ColIdxAttributeCount]func(q *Query){
-	func(q *Query) { q.hasAttrSip = true },
-	func(q *Query) { q.hasAttrDip = true },
+	func(q *Query) { q.hasAttrSIP = true },
+	func(q *Query) { q.hasAttrDIP = true },
 	func(q *Query) { q.hasAttrProto = true },
 	func(q *Query) { q.hasAttrDport = true },
 }
 
 var queryConditionalColumnFlagSetters = [types.ColIdxAttributeCount]func(q *Query){
-	func(q *Query) { q.hasCondSip = true },
-	func(q *Query) { q.hasCondDip = true },
+	func(q *Query) { q.hasCondSIP = true },
+	func(q *Query) { q.hasCondDIP = true },
 	func(q *Query) { q.hasCondProto = true },
 	func(q *Query) { q.hasCondDport = true },
 }

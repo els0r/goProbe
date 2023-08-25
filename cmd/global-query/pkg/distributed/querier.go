@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/els0r/goProbe/pkg/api/goprobe/client"
 	"github.com/els0r/goProbe/pkg/query"
@@ -11,31 +12,43 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// QuerierType denotes the type of the querier instance
 type QuerierType string
 
 const (
+
+	// APIClientQuerierType provides the name for the API-based querier
 	APIClientQuerierType QuerierType = "api"
 )
 
+// Querier provides a general interface for all query executors
 type Querier interface {
+
+	// CreateQueryWorkload prepares and executes the workload required to perform the query
 	CreateQueryWorkload(ctx context.Context, host string, args *query.Args) (*QueryWorkload, error)
 }
 
+// APIClientQuerier implements an API-based querier, fulfilling the Querier interface
 type APIClientQuerier struct {
 	apiEndpoints map[string]*client.Config
 }
 
+// NewAPIClientQuerier instantiates a new API-based querier
 func NewAPIClientQuerier(cfgPath string) (*APIClientQuerier, error) {
 	a := &APIClientQuerier{
 		apiEndpoints: make(map[string]*client.Config),
 	}
 
 	// read in the endpoints config
-	f, err := os.Open(cfgPath)
+	f, err := os.Open(filepath.Clean(cfgPath))
 	if err != nil {
 		return nil, fmt.Errorf("failed to open config: %w", err)
 	}
-	defer f.Close()
+	defer func() {
+		if cerr := f.Close(); cerr != nil && err == nil {
+			err = cerr
+		}
+	}()
 
 	err = yaml.NewDecoder(f).Decode(a.apiEndpoints)
 	if err != nil {
@@ -44,7 +57,8 @@ func NewAPIClientQuerier(cfgPath string) (*APIClientQuerier, error) {
 	return a, nil
 }
 
-func (a *APIClientQuerier) CreateQueryWorkload(ctx context.Context, host string, args *query.Args) (*QueryWorkload, error) {
+// CreateQueryWorkload prepares and executes the workload required to perform the query
+func (a *APIClientQuerier) CreateQueryWorkload(_ context.Context, host string, args *query.Args) (*QueryWorkload, error) {
 	qw := &QueryWorkload{
 		Host: host,
 		Args: args,
@@ -69,6 +83,6 @@ type errorRunner struct {
 	err error
 }
 
-func (e *errorRunner) Run(ctx context.Context, args *query.Args) (*results.Result, error) {
+func (e *errorRunner) Run(_ context.Context, _ *query.Args) (*results.Result, error) {
 	return nil, e.err
 }

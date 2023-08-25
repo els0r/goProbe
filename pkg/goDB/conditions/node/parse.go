@@ -30,7 +30,15 @@
 
 package node
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+
+	"github.com/els0r/goProbe/pkg/types"
+)
+
+// errEmptyConditional is a sentinel error indicating that an emoty conditional was parsed
+var errEmptyConditional = errors.New("empty conditional")
 
 // Parses the given conditional into an AST.
 //
@@ -40,7 +48,7 @@ import "fmt"
 // an error will be thrown.
 func parseConditional(tokens []string) (conditionalNode Node, err error) {
 	if len(tokens) == 0 {
-		return nil, nil
+		return nil, errEmptyConditional
 	}
 
 	p := newParser(tokens)
@@ -160,8 +168,7 @@ func (p *parser) accept(token string) bool {
 
 // Like accept, but the parse fails if the argument token doesn't equal the current token.
 func (p *parser) expect(token string) {
-	if p.accept(token) {
-	} else {
+	if !p.accept(token) {
 		p.die("Expected %v, but didn't get it.\n", token)
 		return
 	}
@@ -311,7 +318,7 @@ func (p *parser) condition() (result Node) {
 // Corresponds to grammar rule "attribute"
 func (p *parser) attribute() (result string) {
 	attributes := []string{
-		"dip", "sip", "dnet", "snet", "dport", "proto", // non-sugar
+		types.DIPName, types.SIPName, "dnet", "snet", types.DportName, types.ProtoName, // non-sugar
 		"dst", "src", "host", "net", "port", "protocol", "ipproto", // sugar
 	}
 	for _, attrib := range attributes {

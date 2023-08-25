@@ -28,7 +28,8 @@ import (
 
 var cfgFile string
 
-var supportedCmds = "{QUERY TYPE|COLUMNS|examples|list|version}"
+// TODO: This part is currently unused - cross check if that is intentional (in which case it can be removed)
+// var supportedCmds = "{QUERY TYPE|COLUMNS|examples|list|version}"
 
 var rootCmd = &cobra.Command{
 	Use:   "goQuery -i <interfaces> QUERY TYPE",
@@ -43,6 +44,7 @@ var rootCmd = &cobra.Command{
 	SilenceErrors:      true,
 }
 
+// GetRootCmd allows access to the root command of the binary
 func GetRootCmd() *cobra.Command {
 	return rootCmd
 }

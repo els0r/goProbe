@@ -10,6 +10,7 @@ import (
 	"github.com/fako1024/gotools/bitpack"
 )
 
+// ModernFileSet denotes a collection of all files required to read / parse a DB directory
 type ModernFileSet struct {
 	sipFile   *GPFile
 	dipFile   *GPFile
@@ -22,6 +23,7 @@ type ModernFileSet struct {
 	pktsSentFile  *GPFile
 }
 
+// NewModernFileSet instantiates a new DB file set
 func NewModernFileSet(path string) (*ModernFileSet, error) {
 	var (
 		err     error
@@ -64,6 +66,7 @@ func NewModernFileSet(path string) (*ModernFileSet, error) {
 	return &fileSet, nil
 }
 
+// Close closes a DB file set
 func (l ModernFileSet) Close() error {
 	var errs []error
 	if err := l.sipFile.Close(); err != nil {
@@ -97,6 +100,7 @@ func (l ModernFileSet) Close() error {
 	return nil
 }
 
+// GetTimestamps returns all timestamps of a DB file set
 func (l ModernFileSet) GetTimestamps() ([]int64, error) {
 
 	blocks, err := l.sipFile.Blocks()
@@ -120,6 +124,7 @@ func (l ModernFileSet) getBlock(f *GPFile, ts int64) ([]byte, error) {
 	return block, nil
 }
 
+// GetBlock extracts a specific block from a DB file set
 func (l ModernFileSet) GetBlock(ts int64) (*hashmap.AggFlowMap, error) {
 	data := hashmap.NewAggFlowMap()
 

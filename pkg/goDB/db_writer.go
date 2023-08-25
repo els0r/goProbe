@@ -15,6 +15,7 @@ import (
 	"io/fs"
 	"path/filepath"
 
+	"github.com/els0r/goProbe/pkg/capture/capturetypes"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 	"github.com/els0r/goProbe/pkg/goDB/storage/gpfile"
 	"github.com/els0r/goProbe/pkg/types"
@@ -22,6 +23,7 @@ import (
 	"github.com/fako1024/gotools/bitpack"
 )
 
+// DefaultPermissions denotes the default permissions used during writeout
 const DefaultPermissions = fs.FileMode(0644)
 
 // DBWriter writes goProbe flows to goDB database files
@@ -57,7 +59,7 @@ func (w *DBWriter) EncoderLevel(level int) *DBWriter {
 }
 
 // Write takes an aggregated flow map and its metadata and writes it to disk for a given timestamp
-func (w *DBWriter) Write(flowmap *hashmap.AggFlowMap, captureMeta CaptureMetadata, timestamp int64) error {
+func (w *DBWriter) Write(flowmap *hashmap.AggFlowMap, captureStats capturetypes.CaptureStats, timestamp int64) error {
 	var (
 		data   [types.ColIdxCount][]byte
 		update gpfile.Stats
@@ -69,11 +71,11 @@ func (w *DBWriter) Write(flowmap *hashmap.AggFlowMap, captureMeta CaptureMetadat
 		return fmt.Errorf("failed to create / open daily directory: %w", err)
 	}
 
-	data, update = dbData(w.iface, timestamp, flowmap)
+	data, update = dbData(flowmap)
 	if err := dir.WriteBlocks(timestamp, gpfile.TrafficMetadata{
 		NumV4Entries: update.Traffic.NumV4Entries,
 		NumV6Entries: update.Traffic.NumV6Entries,
-		NumDrops:     captureMeta.PacketsDropped,
+		NumDrops:     captureStats.Dropped,
 	}, update.Counts, data); err != nil {
 		return err
 	}
@@ -83,9 +85,9 @@ func (w *DBWriter) Write(flowmap *hashmap.AggFlowMap, captureMeta CaptureMetadat
 
 // BulkWorkload denotes a set of workloads / writes to perform during WriteBulk()
 type BulkWorkload struct {
-	FlowMap     *hashmap.AggFlowMap
-	CaptureMeta CaptureMetadata
-	Timestamp   int64
+	FlowMap      *hashmap.AggFlowMap
+	CaptureStats capturetypes.CaptureStats
+	Timestamp    int64
 }
 
 // WriteBulk takes multiple aggregated flow maps and their metadata and writes it to disk for a given timestamp
@@ -101,11 +103,11 @@ func (w *DBWriter) WriteBulk(workloads []BulkWorkload, dirTimestamp int64) (err 
 	}
 
 	for _, workload := range workloads {
-		data, update = dbData(w.iface, workload.Timestamp, workload.FlowMap)
+		data, update = dbData(workload.FlowMap)
 		if err := dir.WriteBlocks(workload.Timestamp, gpfile.TrafficMetadata{
 			NumV4Entries: update.Traffic.NumV4Entries,
 			NumV6Entries: update.Traffic.NumV6Entries,
-			NumDrops:     workload.CaptureMeta.PacketsDropped,
+			NumDrops:     workload.CaptureStats.Dropped,
 		}, update.Counts, data); err != nil {
 			return err
 		}
@@ -114,7 +116,7 @@ func (w *DBWriter) WriteBulk(workloads []BulkWorkload, dirTimestamp int64) (err 
 	return dir.Close()
 }
 
-func dbData(iface string, timestamp int64, aggFlowMap *hashmap.AggFlowMap) ([types.ColIdxCount][]byte, gpfile.Stats) {
+func dbData(aggFlowMap *hashmap.AggFlowMap) ([types.ColIdxCount][]byte, gpfile.Stats) {
 	var dbData [types.ColIdxCount][]byte
 	var summUpdate gpfile.Stats
 
@@ -152,8 +154,8 @@ func dbData(iface string, timestamp int64, aggFlowMap *hashmap.AggFlowMap) ([typ
 			// attributes
 			dbData[types.DportColIdx] = append(dbData[types.DportColIdx], flow.GetDport()...)
 			dbData[types.ProtoColIdx] = append(dbData[types.ProtoColIdx], flow.GetProto())
-			dbData[types.SipColIdx] = append(dbData[types.SipColIdx], flow.GetSip()...)
-			dbData[types.DipColIdx] = append(dbData[types.DipColIdx], flow.GetDip()...)
+			dbData[types.SIPColIdx] = append(dbData[types.SIPColIdx], flow.GetSIP()...)
+			dbData[types.DIPColIdx] = append(dbData[types.DIPColIdx], flow.GetDIP()...)
 		}
 	}
 

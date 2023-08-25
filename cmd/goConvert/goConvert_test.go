@@ -182,14 +182,14 @@ func TestMain(m *testing.M) {
 }
 
 func callMain(arg ...string) *exec.Cmd {
-	cmd := exec.Command(os.Args[0], "-test.run=TestCallMain")
+	cmd := exec.Command(os.Args[0], "-test.run=TestCallMain") // #nosec G204
 	cmd.Env = append(os.Environ(), fmt.Sprintf("%s=%s", magicEnvVar, arg))
 	return cmd
 }
 
 func TestConversion(t *testing.T) {
 	// write the testing string to a file
-	if err := os.WriteFile("./data.csv", []byte(inputCSV), 0755); err != nil {
+	if err := os.WriteFile("./data.csv", []byte(inputCSV), 0600); err != nil {
 		t.Fatalf("Failed to set up test data: %s", err.Error())
 	}
 
@@ -255,11 +255,11 @@ func TestCallMain(t *testing.T) {
 	}
 }
 
-func TestParsers(t *testing.T) {
+func testParsers(t *testing.T) {
 	var (
 		err      error
-		rowKeyV4 types.ExtendedKey = types.NewEmptyV4Key().ExtendEmpty()
-		rowKeyV6 types.ExtendedKey = types.NewEmptyV6Key().ExtendEmpty()
+		rowKeyV4 = types.NewEmptyV4Key().ExtendEmpty()
+		rowKeyV6 = types.NewEmptyV6Key().ExtendEmpty()
 		rowVal   types.Counters
 	)
 	rowKey := &rowKeyV4
@@ -278,9 +278,9 @@ func TestParsers(t *testing.T) {
 				return true
 			}
 
-			_, isSipParser := conv.KeyParsers[i].parser.(*goDB.SipStringParser)
-			_, isDipParser := conv.KeyParsers[i].parser.(*goDB.DipStringParser)
-			return isSipParser || isDipParser
+			_, isSIPParser := conv.KeyParsers[i].parser.(*goDB.SIPStringParser)
+			_, isDIPParser := conv.KeyParsers[i].parser.(*goDB.DIPStringParser)
+			return isSIPParser || isDIPParser
 		})
 
 		fields := strings.Split(tt.input, ",")
@@ -292,9 +292,8 @@ func TestParsers(t *testing.T) {
 						t.Fatalf("%s", err.Error())
 					}
 					continue
-				} else {
-					t.Fatalf("%s", err.Error())
 				}
+				t.Fatalf("%s", err.Error())
 			}
 			rowKey = &rowKeyV4
 		}

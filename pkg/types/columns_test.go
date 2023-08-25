@@ -19,8 +19,8 @@ import (
 )
 
 var (
-	Sip      = [16]byte{0xA1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}
-	Dip      = [16]byte{3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5, 8, 9, 7, 9, 3}
+	SIP      = [16]byte{0xA1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}
+	DIP      = [16]byte{3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5, 8, 9, 7, 9, 3}
 	Dport    = []byte{0xCB, 0xF1}
 	Protocol = uint8(6)
 	Time     = 0
@@ -31,8 +31,8 @@ var tests = []struct {
 	Name             string
 	ExtractedStrings string
 }{
-	{SipAttribute{ipAttribute{data: Sip[:]}}, "sip", "a102:304:506:708:90a:b0c:d0e:f10"},
-	{DipAttribute{ipAttribute{data: Dip[:]}}, "dip", "301:401:509:206:503:508:907:903"},
+	{SIPAttribute{ipAttribute{data: SIP[:]}}, "sip", "a102:304:506:708:90a:b0c:d0e:f10"},
+	{DIPAttribute{ipAttribute{data: DIP[:]}}, "dip", "301:401:509:206:503:508:907:903"},
 	{DportAttribute{Dport}, "dport", "52209"},
 	{ProtoAttribute{Protocol}, "proto", "TCP"},
 }
@@ -64,7 +64,7 @@ func TestNewAttribute(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unexpected error: %s", err)
 	}
-	if "sip" != attrib.Name() {
+	if attrib.Name() != "sip" {
 		t.Fatalf("Wrong attribute")
 	}
 
@@ -72,7 +72,7 @@ func TestNewAttribute(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unexpected error: %s", err)
 	}
-	if "dip" != attrib.Name() {
+	if attrib.Name() != "dip" {
 		t.Fatalf("Wrong attribute")
 	}
 
@@ -88,19 +88,19 @@ var parseQueryTypeTests = []struct {
 	OutHasAttrTime  bool
 	OutHasAttrIface bool
 }{
-	{"sip", []Attribute{SipAttribute{}}, false, false},
-	{"src", []Attribute{SipAttribute{}}, false, false},
-	{"dst", []Attribute{DipAttribute{}}, false, false},
-	{"talk_src", []Attribute{SipAttribute{}}, false, false},
-	{"sip,dip,dip,sip,dport", []Attribute{SipAttribute{}, DipAttribute{}, DportAttribute{}}, false, false},
-	{"sip,dip,dip,iface,sip,dport", []Attribute{SipAttribute{}, DipAttribute{}, DportAttribute{}}, false, true},
-	{"sip,dip,dst,src,dport", []Attribute{SipAttribute{}, DipAttribute{}, DportAttribute{}}, false, false},
-	{"src,dst,dip,sip,dport", []Attribute{SipAttribute{}, DipAttribute{}, DportAttribute{}}, false, false},
-	{"sip,dip,dip,sip,dport,talk_src", []Attribute{SipAttribute{}, DipAttribute{}, DportAttribute{}}, false, false},
-	{"sip,dip,time,dip,sip,dport", []Attribute{SipAttribute{}, DipAttribute{}, DportAttribute{}}, true, false},
-	{"talk_src,dip", []Attribute{SipAttribute{}, DipAttribute{}}, false, false},
-	{"talk_src,src", []Attribute{SipAttribute{}}, false, false},
-	{"raw", []Attribute{SipAttribute{}, DipAttribute{}, DportAttribute{}, ProtoAttribute{}}, true, true},
+	{"sip", []Attribute{SIPAttribute{}}, false, false},
+	{"src", []Attribute{SIPAttribute{}}, false, false},
+	{"dst", []Attribute{DIPAttribute{}}, false, false},
+	{"talk_src", []Attribute{SIPAttribute{}}, false, false},
+	{"sip,dip,dip,sip,dport", []Attribute{SIPAttribute{}, DIPAttribute{}, DportAttribute{}}, false, false},
+	{"sip,dip,dip,iface,sip,dport", []Attribute{SIPAttribute{}, DIPAttribute{}, DportAttribute{}}, false, true},
+	{"sip,dip,dst,src,dport", []Attribute{SIPAttribute{}, DIPAttribute{}, DportAttribute{}}, false, false},
+	{"src,dst,dip,sip,dport", []Attribute{SIPAttribute{}, DIPAttribute{}, DportAttribute{}}, false, false},
+	{"sip,dip,dip,sip,dport,talk_src", []Attribute{SIPAttribute{}, DIPAttribute{}, DportAttribute{}}, false, false},
+	{"sip,dip,time,dip,sip,dport", []Attribute{SIPAttribute{}, DIPAttribute{}, DportAttribute{}}, true, false},
+	{"talk_src,dip", []Attribute{SIPAttribute{}, DIPAttribute{}}, false, false},
+	{"talk_src,src", []Attribute{SIPAttribute{}}, false, false},
+	{"raw", []Attribute{SIPAttribute{}, DIPAttribute{}, DportAttribute{}, ProtoAttribute{}}, true, true},
 }
 
 func TestParseQueryType(t *testing.T) {

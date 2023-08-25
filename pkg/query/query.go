@@ -17,6 +17,7 @@ func (s *Statement) log() {
 	// TODO: use proper logger
 }
 
+// Print prints a statement to the result
 func (s *Statement) Print(ctx context.Context, result *results.Result) error {
 	var sip, dip types.Attribute
 
@@ -83,7 +84,7 @@ func (s *Statement) Print(ctx context.Context, result *results.Result) error {
 	go func() {
 		select {
 		case memErr = <-memErrors:
-			memErr = fmt.Errorf("%w: %v", heap.ErrorMemoryBreach, err)
+			memErr = fmt.Errorf("%w: %w", heap.ErrorMemoryBreach, err)
 			printCancel()
 			return
 		case <-printCtx.Done():
@@ -97,6 +98,13 @@ func (s *Statement) Print(ctx context.Context, result *results.Result) error {
 		}
 		return err
 	}
-	printer.Footer(result)
+	err = printer.Footer(result)
+	if err != nil {
+		if memErr != nil {
+			return memErr
+		}
+		return err
+	}
+
 	return printer.Print(result)
 }

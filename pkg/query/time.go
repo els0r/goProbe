@@ -167,7 +167,7 @@ var (
 	errorInvalidTimeInterval = errors.New("invalid time interval")
 )
 
-// ParsetimeRange will run ParseTimeArgument for a range and validate if the interval is
+// ParseTimeRange will run ParseTimeArgument for a range and validate if the interval is
 // non-zero
 func ParseTimeRange(firstStr, lastStr string) (first, last int64, err error) {
 	if firstStr != "" {

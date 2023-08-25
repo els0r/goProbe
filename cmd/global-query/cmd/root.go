@@ -33,6 +33,7 @@ var rootCmd = &cobra.Command{
 	SilenceUsage:  true,
 }
 
+// Execute is the main entrypoint and runs the CLI tool
 func Execute() {
 	err := rootCmd.Execute()
 	if err != nil {

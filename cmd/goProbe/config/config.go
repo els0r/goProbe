@@ -99,10 +99,10 @@ type RingBufferConfig struct {
 }
 
 const (
-	DefaultRingBufferBlockSize   int = 1 * 1024 * 1024 // 1 MB
-	DefaultRingBufferNumBlocks   int = 4
-	DefaultLocalBufferSizeLimit  int = 64 * 1024 * 1024 // 64 MB (globally, not per interface)
-	DefaultLocalBufferNumBuffers int = 1                // 1 Buffer should suffice
+	DefaultRingBufferBlockSize   int = 1 * 1024 * 1024  // DefaultRingBufferBlockSize : 1 MB
+	DefaultRingBufferNumBlocks   int = 4                // DefaultRingBufferNumBlocks : 4
+	DefaultLocalBufferSizeLimit  int = 64 * 1024 * 1024 // DefaultLocalBufferSizeLimit : 64 MB (globally, not per interface)
+	DefaultLocalBufferNumBuffers int = 1                // DefaultLocalBufferNumBuffers : 1 (should suffice)
 )
 
 // Ifaces stores the per-interface configuration
@@ -308,7 +308,11 @@ func ParseFile(path string) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer fd.Close()
+	defer func() {
+		if cerr := fd.Close(); cerr != nil && err == nil {
+			err = cerr
+		}
+	}()
 
 	return Parse(fd)
 }
