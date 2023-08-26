@@ -43,8 +43,9 @@ goProbe deviates from traditional NetFlow as flow capturing and collection is ru
 
 Refer to the Releases section to install the software suite.
 
-To start capturing, configure [goProbe](./cmd/goProbe/). To query data produced by it, run [goQuery](./cmd/goQuery/).
+To start capturing, configure [goProbe](./cmd/goProbe/). To query data produced by it, run [goQuery](./cmd/goQuery/). To query across a fleet of hosts, deploy [global-query](./cmd/global-query/).
 
+![](./img/goprobe_system_overview.png)
 
 ## goDB
 
