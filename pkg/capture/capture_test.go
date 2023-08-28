@@ -1,3 +1,6 @@
+//go:build !slimcap_nomock
+// +build !slimcap_nomock
+
 package capture
 
 import (

@@ -1,4 +1,5 @@
-//go:build !race
+//go:build !slimcap_nomock
+// +build !slimcap_nomock
 
 package e2etest
 
@@ -89,8 +90,8 @@ func runBenchmarkCaptureThroughput(t *testing.T, runtime time.Duration, randomiz
 	cancel()
 }
 
-func setupSyntheticUnblockingSource(t testing.TB, randomize, addReturn bool) func(c *capture.Capture) (slimcap.SourceZeroCopy, error) {
-	return func(c *capture.Capture) (slimcap.SourceZeroCopy, error) {
+func setupSyntheticUnblockingSource(t testing.TB, randomize, addReturn bool) func(c *capture.Capture) (capture.Source, error) {
+	return func(c *capture.Capture) (capture.Source, error) {
 
 		mockSrc, err := afring.NewMockSourceNoDrain(c.Iface(),
 			afring.CaptureLength(link.CaptureLengthMinimalIPv6Transport),

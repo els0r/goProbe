@@ -1,3 +1,6 @@
+//go:build !slimcap_nomock
+// +build !slimcap_nomock
+
 package e2etest
 
 import (
@@ -96,7 +99,7 @@ func testStartStop(t *testing.T) {
 			Destination: "logfmt",
 			Level:       "warn",
 		},
-	}, capture.WithSourceInitFn(func(c *capture.Capture) (slimcap.SourceZeroCopy, error) {
+	}, capture.WithSourceInitFn(func(c *capture.Capture) (capture.Source, error) {
 		mockSrc, err := afring.NewMockSource(c.Iface(),
 			afring.CaptureLength(link.CaptureLengthMinimalIPv6Transport),
 			afring.Promiscuous(false),
@@ -319,7 +322,7 @@ func testE2E(t *testing.T, datasets ...[]byte) {
 	require.EqualValues(t, refRows, resRows)
 }
 
-func runGoProbe(t *testing.T, testDir string, sourceInitFn func() (mockIfaces, func(c *capture.Capture) (slimcap.SourceZeroCopy, error))) chan hashmap.AggFlowMapWithMetadata {
+func runGoProbe(t *testing.T, testDir string, sourceInitFn func() (mockIfaces, func(c *capture.Capture) (capture.Source, error))) chan hashmap.AggFlowMapWithMetadata {
 
 	// We quit on encountering SIGUSR2 (instead of the ususal SIGTERM or SIGINT)
 	// to avoid killing the test
@@ -390,15 +393,15 @@ func runGoQuery(t *testing.T, res interface{}, args []string) {
 	require.Nil(t, jsoniter.NewDecoder(buf).Decode(&res))
 }
 
-func setupSources(ifaces mockIfaces) func() (mockIfaces, func(c *capture.Capture) (slimcap.SourceZeroCopy, error)) {
+func setupSources(ifaces mockIfaces) func() (mockIfaces, func(c *capture.Capture) (capture.Source, error)) {
 
-	fnMap := make(map[string]func(c *capture.Capture) (slimcap.SourceZeroCopy, error))
+	fnMap := make(map[string]func(c *capture.Capture) (capture.Source, error))
 	for _, mockIface := range ifaces {
 		fnMap[mockIface.name] = mockIface.sourceInitFn
 	}
 
-	return func() (mockIfaces, func(c *capture.Capture) (slimcap.SourceZeroCopy, error)) {
-		return ifaces, func(c *capture.Capture) (slimcap.SourceZeroCopy, error) {
+	return func() (mockIfaces, func(c *capture.Capture) (capture.Source, error)) {
+		return ifaces, func(c *capture.Capture) (capture.Source, error) {
 			mockIfaceFn, ok := fnMap[c.Iface()]
 			if !ok {
 				return nil, fmt.Errorf("unable to find interface `%s` in list of mock interfaces", c.Iface())
@@ -421,7 +424,7 @@ func newPcapSource(t testing.TB, name string, data []byte) (res *mockIface) {
 		RWMutex: sync.RWMutex{},
 	}
 
-	res.sourceInitFn = func(c *capture.Capture) (slimcap.SourceZeroCopy, error) {
+	res.sourceInitFn = func(c *capture.Capture) (capture.Source, error) {
 
 		res.Lock()
 		defer res.Unlock()
