@@ -2,12 +2,14 @@ package info
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 const (
@@ -16,6 +18,12 @@ const (
 	fallbackIDFileName = "host.id"
 	hostIDLen          = 16 // 128 bit in line with defaults of /etc/machine-id
 )
+
+var runtimeID string
+
+func init() {
+	runtimeID = generateRuntimeID()
+}
 
 // GetHostID is a method that returns a system's unique identifier
 func GetHostID(fallbackPath string) string {
@@ -30,6 +38,11 @@ func GetHostID(fallbackPath string) string {
 	}
 
 	return id
+}
+
+// RuntimeID returns the unique runtime ID of this binary
+func RuntimeID() string {
+	return runtimeID
 }
 
 func fallbackHostID(basePath string) (string, error) {
@@ -78,4 +91,9 @@ func generateHostID() (string, error) {
 
 func sanitizeHostID(idData []byte) string {
 	return strings.TrimRight(string(idData), "\n")
+}
+
+func generateRuntimeID() string {
+	hash := sha256.Sum256([]byte(time.Now().UTC().String()))
+	return fmt.Sprintf("%s_%x", GetHostID(""), hash)
 }
