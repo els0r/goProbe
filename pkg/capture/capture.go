@@ -225,7 +225,7 @@ func (c *Capture) process() <-chan error {
 		}()
 
 		// Main packet capture loop which an interface should be in most of the time
-		localBuf := NewLocalBuffer(c.captureHandle)
+		localBuf := new(LocalBuffer)
 		for {
 
 			// Since lock confirmation is only done from a single goroutine (this one)
@@ -267,9 +267,12 @@ func (c *Capture) process() <-chan error {
 						return
 					}
 
+					// Parse the packet and extract relevant data for future addition to the flow log
+					epHash, isIPv4, auxInfo, errno := ParsePacket(ipLayer)
+
 					// Try to append to local buffer. In case the buffer is full, stop buffering and
 					// wait for the unlock request
-					if !localBuf.Add(ipLayer, pktType, pktSize) {
+					if !localBuf.Add(epHash, pktType, pktSize, isIPv4, auxInfo, errno) {
 						captureErrors <- ErrLocalBufferOverflow
 						<-c.capLock.done // Consume the unlock request to continue normal processing
 						break
@@ -320,14 +323,17 @@ func (c *Capture) capturePacket() error {
 		return fmt.Errorf("capture error: %w", err)
 	}
 
-	c.addToFlowLog(ipLayer, pktType, pktSize)
+	// Parse the packet, extract relevant data and add to the flow log
+	epHash, isIPv4, auxInfo, errno := ParsePacket(ipLayer)
+	c.addToFlowLog(epHash, pktType, pktSize, isIPv4, auxInfo, errno)
+
 	return nil
 }
 
-func (c *Capture) addToFlowLog(ipLayer capture.IPLayer, pktType capture.PacketType, pktSize uint32) {
+func (c *Capture) addToFlowLog(epHash capturetypes.EPHash, pktType byte, pktSize uint32, isIPv4 bool, auxInfo byte, errno capturetypes.ParsingErrno) {
 
 	// Parse / add the received data to the map of flows
-	errno := c.flowLog.Add(ipLayer, pktType, pktSize)
+	errno = c.flowLog.Add(epHash, pktType, pktSize, isIPv4, auxInfo, errno)
 	c.stats.Processed++
 	if errno == capturetypes.ErrnoOK {
 		return

@@ -226,7 +226,8 @@ func BenchmarkRotation(b *testing.B) {
 	flowLog := NewFlowLog()
 	for i := uint64(0); i < nFlows; i++ {
 		*(*uint64)(unsafe.Pointer(&ipLayer[16])) = i // #nosec G103
-		require.Equal(b, capturetypes.ErrnoOK, flowLog.Add(ipLayer, capture.PacketOutgoing, 128))
+		epHash, isIPv4, auxInfo, errno := ParsePacket(ipLayer)
+		require.Equal(b, capturetypes.ErrnoOK, flowLog.Add(epHash, capture.PacketOutgoing, 128, isIPv4, auxInfo, errno))
 	}
 	for _, flow := range flowLog.flowMap {
 		flow.directionConfidenceHigh = true
@@ -264,7 +265,8 @@ func BenchmarkRotation(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			require.Nil(b, testLog.Add(pkt.IPLayer(), capture.PacketOutgoing, 128))
+			epHash, isIPv4, auxInfo, errno := ParsePacket(pkt.IPLayer())
+			require.Equal(b, capturetypes.ErrnoOK, testLog.Add(epHash, capture.PacketOutgoing, 128, isIPv4, auxInfo, errno))
 		}
 	})
 
