@@ -67,15 +67,15 @@ The `.meta` files are vitally important and - if deleted, corrupted or modified 
 
 #### Compression
 
-`goDB` natively supports compression. The design rationale was to sacrifice CPU cycles in order to decrease I/O load. This has proven to drastically increase performance, especially on queries involving several days and a high number of stored flow records.
+`goDB` natively supports compression. The design rationale was to sacrifice CPU cycles in order to decrease I/O load. This has proven to drastically increase performance, especially on queries involving several days and a high number of stored flow records. 
 
 Supported compression algorithms are:
 
-* [lz4](https://code.google.com/p/lz4/)
-* [zstd](https://github.com/valyala/gozstd)
+* [lz4](https://github.com/lz4/lz4)
+* [zstd](https://github.com/facebook/zstd)
 * None (not recommended)
 
-Check [encoder.go](./pkg/goDB/encoder/encoder.go) for the enumeration of supported compression algorithms and the definition fo the `Encoder` interface.
+Check [encoder.go](./pkg/goDB/encoder/encoder.go) for the enumeration of supported compression algorithms and the definition fo the `Encoder` interface. Compression features are available by linking against system-level libraries (`liblz4` and `libzstd`, respectively), so those must be available at runtime (and consequently their development libraries are required if the project is build from source).
 
 ### Ingesting Flow data from CSV
 
@@ -114,12 +114,12 @@ _goquery() {
 
 ### Supported Operating Systems
 
-goProbe is currently set up to run on Linux based systems and Mac OS X. Tested versions include (but are most likely not limited to):
+goProbe is currently set up to run on Linux based systems only (this might change in the future). Tested versions include (but are most likely not limited to):
 
-* Debian 7-10
-* Fedora 28-32
-* Ubuntu 14.04/15.04
-* Mac OS X 10.14.3
+* Debian >= 7.0 `[=> liblz4-1,libzstd1]`
+* Fedora >= 28 `[=> lz4-libs,libzstd]`
+* Ubuntu >= 14.04 `[=> liblz4-1,libzstd1]`
+* Alpine >= 3.14 `[=> lz4-dev,zstd-dev]`
 
 ## Authors & Contributors
 
@@ -127,16 +127,15 @@ goProbe is currently set up to run on Linux based systems and Mac OS X. Tested v
 * Fabian Kohn
 * Lorenz Breidenbach
 
-This software was developed at [Open Systems AG](https://www.open.ch/) in close collaboration with the [Distributed Computing Group](http://www.disco.ethz.ch/) at the [Swiss Federal Institute of Technology](https://www.ethz.ch/en.html).
+This software was initially developed at [Open Systems AG](https://www.open.ch/) in close collaboration with the [Distributed Computing Group](http://www.disco.ethz.ch/) at the [Swiss Federal Institute of Technology](https://www.ethz.ch/en.html).
 
 This repository has been forked off the Open Systems repository end of 2018 and has now been detached as a standalone project (September 2020). Bug fixes and development of new features is done in this repository.
 
 It has undergone an almost complete re-write with version 4 in 2023.
 
-## Bug Reports
+## Bug Reports & Feature Requests
 
-
-Please use the [issue tracker](https://github.com/els0r/goProbe/issues) for bugs and feature requests.
+Please use the [issue tracker](https://github.com/els0r/goProbe/issues) for bugs and feature requests (or any other matter).
 
 ## License
 
