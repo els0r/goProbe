@@ -20,16 +20,14 @@ Conversion tools:
 
 As the name suggests, all components are written in [Go](https://golang.org/).
 
-## Migrating to Version 4
-
-There are breaking changes for:
-
-* the database format
-* goProbe's configuration file format
-* goProbe's API endpoints
-* the JSON results format from `goQuery`
-
-To convert your existing pre-v4 DB to a `v4.x` compatible format, please refer to the [legacy](./cmd/legacy) conversion tool.
+> [!WARNING]  
+> **Migrating to Version 4** - There are breaking changes for:
+> * the database format
+> * goProbe's configuration file format
+> * goProbe's API endpoints
+> * the JSON results format from `goQuery`
+>
+> To convert your existing pre-v4 DB to a `v4.x` compatible format, please refer to the [legacy](./cmd/legacy) conversion tool.
 
 ## Introduction
 
@@ -114,7 +112,7 @@ _goquery() {
 
 ### Supported Operating Systems
 
-goProbe is currently set up to run on Linux based systems only (this might change in the future). Tested versions include (but are most likely not limited to):
+goProbe is currently set up to run on Linux based systems only (this might change in the future). Tested versions and their system level library dependencies include (but are most likely not limited to):
 
 * Debian >= 7.0 `[=> liblz4-1,libzstd1]`
 * Fedora >= 28 `[=> lz4-libs,libzstd]`
