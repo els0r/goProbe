@@ -1,0 +1,130 @@
+openapi: 3.0.0
+info:
+  title: Args and DNSResolution Specification
+  version: 1.0.0
+paths:
+  /args:
+    post:
+      summary: Create Args
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Args'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Args'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Args'
+        '400':
+          description: Bad request
+components:
+  schemas:
+    Args:
+      type: object
+      properties:
+        query:
+          type: string
+          description: The query type such as sip, dip
+        ifaces:
+          type: string
+        host_query:
+          type: string
+          nullable: true
+          description: The hosts query
+        hostname:
+          type: string
+          nullable: true
+        host_id:
+          type: integer
+          nullable: true
+        condition:
+          type: string
+          nullable: true
+          description: Data filtering
+        in:
+          type: boolean
+          nullable: true
+          description: Counter addition
+        out:
+          type: boolean
+          nullable: true
+        sum:
+          type: boolean
+          nullable: true
+        first:
+          type: string
+          nullable: true
+          description: Time selection
+        last:
+          type: string
+          nullable: true
+        format:
+          type: string
+          nullable: true
+          description: Formatting
+        sort_by:
+          type: string
+          nullable: true
+          description: Column to sort by (packets or bytes)
+        num_results:
+          type: integer
+          nullable: true
+        sort_ascending:
+          type: boolean
+          nullable: true
+        external:
+          type: boolean
+          nullable: true
+        list:
+          type: boolean
+          nullable: true
+          description: Do-and-exit arguments
+        version:
+          type: boolean
+          nullable: true
+        dns_resolution:
+          $ref: '#/components/schemas/DNSResolution'
+        max_mem_pct:
+          type: integer
+          nullable: true
+          description: File system
+        low_mem:
+          type: boolean
+          nullable: true
+        caller:
+          type: string
+          nullable: true
+          description: Stores who produced these args (caller)
+        live:
+          type: boolean
+          nullable: true
+          description: Request live flow data (in addition to DB)
+      required:
+        - query
+        - ifaces
+      additionalProperties: false
+
+    DNSResolution:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+          description: DNS query resolution enabled
+        timeout:
+          type: string
+          nullable: true
+          description: DNS query timeout duration
+        max_rows:
+          type: integer
+          nullable: true
+          description: Maximum number of rows for DNS query
+      required:
+        - enabled
+      additionalProperties: false

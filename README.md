@@ -9,7 +9,6 @@
 This package comprises:
 
 * [goProbe](./cmd/goProbe/) - A high-througput, lightweight, concurrent, network packet aggregator
-* [goDB](./pkg/goDB/) - A small, high-performance, columnar database for flow data (pkg)
 * [goQuery](./cmd/goQuery/) - CLI tool for high-performance querying of goDB flow data acquired by goProbe
 * [gpctl](./cmd/gpctl/) - CLI tool to interact with a running goProbe instance (for status and capture configuration)
 
@@ -18,9 +17,13 @@ Conversion tools:
 * [goConvert](./cmd/goConvert/) - Helper binary to convert goProbe-flow data stored in `csv` files
 * [legacy](./cmd/legacy/) - DB conversion tool to convert `.gpf` files - needed for upgrade to a `v4.x` compatible format
 
+Data backends:
+
+* [goDB](./pkg/goDB/) - A small, high-performance, columnar database for flow data (pkg)
+
 As the name suggests, all components are written in [Go](https://golang.org/).
 
-> [!WARNING]  
+> [!WARNING]
 > **Migrating to Version 4** - There are breaking changes for:
 > * the database format
 > * goProbe's configuration file format
@@ -65,7 +68,7 @@ The `.meta` files are vitally important and - if deleted, corrupted or modified 
 
 #### Compression
 
-`goDB` natively supports compression. The design rationale was to sacrifice CPU cycles in order to decrease I/O load. This has proven to drastically increase performance, especially on queries involving several days and a high number of stored flow records. 
+`goDB` natively supports compression. The design rationale was to sacrifice CPU cycles in order to decrease I/O load. This has proven to drastically increase performance, especially on queries involving several days and a high number of stored flow records.
 
 Supported compression algorithms are:
 
@@ -74,20 +77,6 @@ Supported compression algorithms are:
 * None (not recommended)
 
 Check [encoder.go](./pkg/goDB/encoder/encoder.go) for the enumeration of supported compression algorithms and the definition fo the `Encoder` interface. Compression features are available by linking against system-level libraries (`liblz4` and `libzstd`, respectively), so those must be available at runtime (and consequently their development libraries are required if the project is build from source).
-
-### Ingesting Flow data from CSV
-
-If you use `goConvert`, you need to make sure that the data which you are importing is _temporally ordered_ and provides a column which stores UNIX timestamps. An example `csv` file may look as follows:
-
-```sh
-# HEADER: bytes_rcvd,bytes_sent,dip,dport,packets_rcvd,packets_sent,proto,sip,tstamp
-...
-40,72,172.23.34.171,8080,1,1,6,10.11.72.28,1392997558
-40,72,172.23.34.171,49362,1,1,6,10.11.72.28,1392999058
-...
-```
-
-You *must* abide by this structure, otherwise the conversion will fail.
 
 ### Bash autocompletion
 
