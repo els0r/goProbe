@@ -58,33 +58,33 @@ func generateCompareValue(condition *conditionNode) error {
 	// amount of bytes, the check is performed directly in order to avoid the
 	// overhead induced by a for loop
 	switch condition.attribute {
-	case "sip":
+	case types.SIPName:
 		condition.ipVersion = ipVersion
 		switch condition.comparator {
 		case "=":
 			condition.compareValue = func(currentValue types.Key) bool {
-				return bytes.Equal(currentValue.GetSip(), value)
+				return bytes.Equal(currentValue.GetSIP(), value)
 			}
 			return nil
 		case "!=":
 			condition.compareValue = func(currentValue types.Key) bool {
-				return !bytes.Equal(currentValue.GetSip(), value)
+				return !bytes.Equal(currentValue.GetSIP(), value)
 			}
 			return nil
 		default:
 			return fmt.Errorf("comparator %q not allowed for attribute %q", condition.comparator, condition.attribute)
 		}
-	case "dip":
+	case types.DIPName:
 		condition.ipVersion = ipVersion
 		switch condition.comparator {
 		case "=":
 			condition.compareValue = func(currentValue types.Key) bool {
-				return bytes.Equal(currentValue.GetDip(), value)
+				return bytes.Equal(currentValue.GetDIP(), value)
 			}
 			return nil
 		case "!=":
 			condition.compareValue = func(currentValue types.Key) bool {
-				return !bytes.Equal(currentValue.GetDip(), value)
+				return !bytes.Equal(currentValue.GetDIP(), value)
 			}
 			return nil
 		default:
@@ -96,7 +96,7 @@ func generateCompareValue(condition *conditionNode) error {
 		// at which the netmask is non-zero) have to be checked. This form of
 		// lazy checking can be applied to both IPv4 and IPv6 networks
 		var lenBytes int
-		index := int(netmask / 8)
+		index := netmask / 8
 		toShift := uint8(8 - netmask%8) // number of zeros in netmask
 
 		// check if the netmask does not describe an RFC network class
@@ -115,7 +115,7 @@ func generateCompareValue(condition *conditionNode) error {
 					// the network address
 					ip[index] = ip[index] & netmaskByte
 
-					return bytes.Equal(ip.GetSip()[:lenBytes], value[:lenBytes])
+					return bytes.Equal(ip.GetSIP()[:lenBytes], value[:lenBytes])
 				}
 				return nil
 			case "!=":
@@ -125,7 +125,7 @@ func generateCompareValue(condition *conditionNode) error {
 					// the network address
 					ip[index] = ip[index] & netmaskByte
 
-					return !bytes.Equal(ip.GetSip()[:lenBytes], value[:lenBytes])
+					return !bytes.Equal(ip.GetSIP()[:lenBytes], value[:lenBytes])
 				}
 				return nil
 			default:
@@ -137,12 +137,12 @@ func generateCompareValue(condition *conditionNode) error {
 			switch condition.comparator {
 			case "=":
 				condition.compareValue = func(currentValue types.Key) bool {
-					return bytes.Equal(currentValue.GetSip()[:index], value[:index])
+					return bytes.Equal(currentValue.GetSIP()[:index], value[:index])
 				}
 				return nil
 			case "!=":
 				condition.compareValue = func(currentValue types.Key) bool {
-					return !bytes.Equal(currentValue.GetSip()[:index], value[:index])
+					return !bytes.Equal(currentValue.GetSIP()[:index], value[:index])
 				}
 				return nil
 			default:
@@ -155,7 +155,7 @@ func generateCompareValue(condition *conditionNode) error {
 		// at which the netmask is non-zero) have to be checked. This form of
 		// lazy checking can be applied to both IPv4 and IPv6 networks
 		var lenBytes int
-		index := int(netmask / 8)
+		index := netmask / 8
 		toShift := uint8(8 - netmask%8) // number of zeros in netmask
 
 		// check if the netmask does not describe an RFC network class
@@ -174,7 +174,7 @@ func generateCompareValue(condition *conditionNode) error {
 					// the network address
 					ip[index] = ip[index] & netmaskByte
 
-					return bytes.Equal(ip.GetDip()[:lenBytes], value[:lenBytes])
+					return bytes.Equal(ip.GetDIP()[:lenBytes], value[:lenBytes])
 				}
 				return nil
 			case "!=":
@@ -184,7 +184,7 @@ func generateCompareValue(condition *conditionNode) error {
 					// the network address
 					ip[index] = ip[index] & netmaskByte
 
-					return !bytes.Equal(ip.GetDip()[:lenBytes], value[:lenBytes])
+					return !bytes.Equal(ip.GetDIP()[:lenBytes], value[:lenBytes])
 				}
 				return nil
 			default:
@@ -196,19 +196,19 @@ func generateCompareValue(condition *conditionNode) error {
 			switch condition.comparator {
 			case "=":
 				condition.compareValue = func(currentValue types.Key) bool {
-					return bytes.Equal(currentValue.GetDip()[:index], value[:index])
+					return bytes.Equal(currentValue.GetDIP()[:index], value[:index])
 				}
 				return nil
 			case "!=":
 				condition.compareValue = func(currentValue types.Key) bool {
-					return !bytes.Equal(currentValue.GetDip()[:index], value[:index])
+					return !bytes.Equal(currentValue.GetDIP()[:index], value[:index])
 				}
 				return nil
 			default:
 				return fmt.Errorf("comparator %q not allowed for attribute %q", condition.comparator, condition.attribute)
 			}
 		}
-	case "dport":
+	case types.DportName:
 		switch condition.comparator {
 		case "=":
 			condition.compareValue = func(currentValue types.Key) bool {
@@ -243,7 +243,7 @@ func generateCompareValue(condition *conditionNode) error {
 		default:
 			return fmt.Errorf("comparator %q not allowed for attribute %q", condition.comparator, condition.attribute)
 		}
-	case "proto":
+	case types.ProtoName:
 		switch condition.comparator {
 		case "=":
 			condition.compareValue = func(currentValue types.Key) bool {
@@ -316,7 +316,7 @@ func conditionBytesAndNetmask(condition conditionNode) ([]byte, int, types.IPVer
 	switch comparator {
 	case "=", "!=", "<", ">", "<=", ">=":
 		switch attribute {
-		case "dip", "sip":
+		case types.DIPName, types.SIPName:
 			condBytes, isIPv4, err = types.IPStringToBytes(value)
 			if err != nil {
 				return nil, 0, types.IPVersionNone, fmt.Errorf("could not parse IP address: %s", value)
@@ -371,7 +371,7 @@ func conditionBytesAndNetmask(condition conditionNode) ([]byte, int, types.IPVer
 				condBytes[netmask/8] &= uint8(0xFF) << uint8(8-(netmask%8))
 			}
 
-		case "proto":
+		case types.ProtoName:
 			if num, err = strconv.ParseUint(value, 10, 8); err != nil {
 				if num, isIn = protocols.GetIPProtoID(value); !isIn {
 					return nil, 0, types.IPVersionNone, fmt.Errorf("could not parse protocol value: %w", err)
@@ -379,7 +379,7 @@ func conditionBytesAndNetmask(condition conditionNode) ([]byte, int, types.IPVer
 			}
 
 			condBytes = []byte{uint8(num & 0xff)}
-		case "dport":
+		case types.DportName:
 			if num, err = strconv.ParseUint(value, 10, 16); err != nil {
 				return nil, 0, types.IPVersionNone, fmt.Errorf("could not parse dport value: %w", err)
 			}

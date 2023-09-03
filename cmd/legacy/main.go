@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/els0r/goProbe/pkg/capture/capturetypes"
 	"github.com/els0r/goProbe/pkg/goDB"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 	"github.com/els0r/goProbe/pkg/goDB/storage/gpfile"
@@ -72,7 +73,7 @@ func main() {
 	}
 
 	if profilePath != "" {
-		f, err := os.Create(profilePath)
+		f, err := os.Create(filepath.Clean(profilePath))
 		if err != nil {
 			logger.Fatalf("failed to create CPU profile file: %s", err)
 		}
@@ -248,8 +249,8 @@ func (c converter) convertDir(w work, dryRun bool) error {
 
 		bulkWorkload = append(bulkWorkload, goDB.BulkWorkload{
 			FlowMap: block.data,
-			CaptureMeta: goDB.CaptureMetadata{
-				PacketsDropped: ensureUnsigned(blockMetadata.PcapPacketsDropped) + ensureUnsigned(blockMetadata.PcapPacketsIfDropped),
+			CaptureStats: capturetypes.CaptureStats{
+				Dropped: ensureUnsigned(blockMetadata.PcapPacketsDropped) + ensureUnsigned(blockMetadata.PcapPacketsIfDropped),
 			},
 			Timestamp: block.ts,
 		})

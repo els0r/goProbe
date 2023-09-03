@@ -12,6 +12,7 @@
 package node
 
 import (
+	"errors"
 	"fmt"
 	"testing"
 )
@@ -46,7 +47,7 @@ var negationNormalFormTests = []struct {
 func TestNegationNormalForm(t *testing.T) {
 	for _, test := range negationNormalFormTests {
 		node, err := parseConditional(test.inTokens)
-		if err != nil {
+		if err != nil && !errors.Is(err, errEmptyConditional) {
 			t.Fatalf("Parsing %v unexpectly failed. Error:\n%v", test.inTokens, err)
 		}
 		nnfNode := negationNormalForm(node)

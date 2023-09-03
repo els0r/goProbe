@@ -10,6 +10,7 @@ import (
 	"github.com/fako1024/httpc"
 )
 
+// Client denotes a global query client
 type Client struct {
 	*client.DefaultClient
 }
@@ -18,7 +19,7 @@ const (
 	clientName = "global-query-client"
 )
 
-// NewClient creates a new client for the global-query API
+// New creates a new client for the global-query API
 func New(addr string, opts ...client.Option) *Client {
 	opts = append(opts, client.WithName(clientName))
 	return &Client{
@@ -31,6 +32,7 @@ func (c *Client) Run(ctx context.Context, args *query.Args) (*results.Result, er
 	return c.Query(ctx, args)
 }
 
+// Query performs the global query and returns its result
 func (c *Client) Query(ctx context.Context, args *query.Args) (*results.Result, error) {
 	// use a copy of the arguments, since some fields are modified by the client
 	queryArgs := *args

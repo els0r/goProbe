@@ -11,7 +11,10 @@
 
 package node
 
-import "testing"
+import (
+	"errors"
+	"testing"
+)
 
 var parseConditionalTests = []struct {
 	inTokens  []string
@@ -59,12 +62,12 @@ func TestParseConditional(t *testing.T) {
 
 func TestParseConditionalEmpty(t *testing.T) {
 	ast, err := parseConditional(nil)
-	if ast != nil || err != nil {
+	if ast != nil || err == nil || !errors.Is(err, errEmptyConditional) {
 		t.Fatalf("TestParseConditionalEmpty expected: nil, nil Got: %v, %v", ast, err)
 	}
 
 	ast, err = parseConditional([]string{})
-	if ast != nil || err != nil {
+	if ast != nil || err == nil || !errors.Is(err, errEmptyConditional) {
 		t.Fatalf("TestParseConditionalEmpty expected: nil, nil Got: %v, %v", ast, err)
 	}
 }

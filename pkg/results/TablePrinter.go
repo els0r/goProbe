@@ -38,8 +38,8 @@ const (
 	OutcolHostID
 	OutcolIface
 	// attributes
-	OutcolSip
-	OutcolDip
+	OutcolSIP
+	OutcolDIP
 	OutcolDport
 	OutcolProto
 	// counters
@@ -64,6 +64,11 @@ const (
 	CountOutcol
 )
 
+const (
+	packetsStr = "packets"
+	bytesStr   = "bytes"
+)
+
 // columns returns the list of OutputColumns that (might) be printed.
 // timed indicates whether we're supposed to print timestamps. attributes lists
 // all attributes we have to print. d tells us which counters to print.
@@ -85,10 +90,10 @@ func columns(selector types.LabelSelector, attributes []types.Attribute, d types
 
 	for _, attrib := range attributes {
 		switch attrib.Name() {
-		case types.SipName:
-			cols = append(cols, OutcolSip)
-		case types.DipName:
-			cols = append(cols, OutcolDip)
+		case types.SIPName:
+			cols = append(cols, OutcolSIP)
+		case types.DIPName:
+			cols = append(cols, OutcolDIP)
 		case types.ProtoName:
 			cols = append(cols, OutcolProto)
 		case types.DportName:
@@ -171,9 +176,9 @@ func extract(format Formatter, ips2domains map[string]string, totals types.Count
 	case OutcolHostID:
 		return format.String(row.Labels.HostID)
 
-	case OutcolSip:
+	case OutcolSIP:
 		return format.String(tryLookup(ips2domains, row.Attributes.SrcIP.String()))
-	case OutcolDip:
+	case OutcolDIP:
 		return format.String(tryLookup(ips2domains, row.Attributes.DstIP.String()))
 	case OutcolDport:
 		return format.String(fmt.Sprintf("%d", row.Attributes.DstPort))
@@ -264,9 +269,9 @@ func describe(o SortOrder, d types.Direction) string {
 //
 // Note that some impementations may start printing data before you call Print().
 type TablePrinter interface {
-	AddRow(row Row)
+	AddRow(row Row) error
 	AddRows(ctx context.Context, rows Rows) error
-	Footer(result *Result)
+	Footer(result *Result) error
 	Print(result *Result) error
 }
 
@@ -312,6 +317,7 @@ func newBasePrinter(
 	return result
 }
 
+// NewTablePrinter instantiates a new table printer
 func NewTablePrinter(output io.Writer, format string,
 	sort SortOrder,
 	labelSel types.LabelSelector,
@@ -321,7 +327,7 @@ func NewTablePrinter(output io.Writer, format string,
 	totals types.Counters,
 	numFlows int,
 	resolveTimeout time.Duration,
-	queryType string,
+	_ string,
 	ifaces string) (TablePrinter, error) {
 	b := newBasePrinter(output, sort, labelSel, direction, attributes, ips2domains, totals, ifaces)
 
@@ -386,53 +392,61 @@ func NewCSVTablePrinter(b basePrinter) *CSVTablePrinter {
 	}
 
 	headers := append(types.AllColumns(), []string{
-		"packets", "%", "data vol.", "%",
-		"packets", "%", "data vol.", "%",
-		"packets", "%", "data vol.", "%",
+		packetsStr, "%", "data vol.", "%",
+		packetsStr, "%", "data vol.", "%",
+		packetsStr, "%", "data vol.", "%",
 		"packets received", "packets sent", "%", "data vol. received", "data vol. sent", "%",
 	}...)
 
 	for _, col := range c.cols {
 		c.fields = append(c.fields, headers[col])
 	}
-	c.writer.Write(c.fields)
+	// Since these fields are static this should never fail
+	if err := c.writer.Write(c.fields); err != nil {
+		panic(err)
+	}
 
 	return &c
 }
 
 // AddRow writes a row to the CSVTablePrinter
-func (c *CSVTablePrinter) AddRow(row Row) {
+func (c *CSVTablePrinter) AddRow(row Row) error {
 	c.fields = c.fields[:0]
 	for _, col := range c.cols {
 		c.fields = append(c.fields, extract(CSVFormatter{}, c.ips2domains, c.totals, row, col))
 	}
-	c.writer.Write(c.fields)
+	return c.writer.Write(c.fields)
 }
 
+// AddRows adds several flow entries to the CSVTablePrinter
 func (c *CSVTablePrinter) AddRows(ctx context.Context, rows Rows) error {
 	return addRows(ctx, c, rows)
 }
 
-// Footer appends the CSV footer to the table
-func (c *CSVTablePrinter) Footer(result *Result) {
+// Footer appends the CSV footer to the CSVTablePrinter
+func (c *CSVTablePrinter) Footer(_ *Result) error {
 	var summaryEntries [CountOutcol]string
 	summaryEntries[OutcolInPkts] = "Overall packets"
 	summaryEntries[OutcolInBytes] = "Overall data volume (bytes)"
-	summaryEntries[OutcolOutPkts] = "Overall packets"
-	summaryEntries[OutcolOutBytes] = "Overall data volume (bytes)"
-	summaryEntries[OutcolSumPkts] = "Overall packets"
-	summaryEntries[OutcolSumBytes] = "Overall data volume (bytes)"
+	summaryEntries[OutcolOutPkts] = summaryEntries[OutcolInPkts]
+	summaryEntries[OutcolOutBytes] = summaryEntries[OutcolInBytes]
+	summaryEntries[OutcolSumPkts] = summaryEntries[OutcolInPkts]
+	summaryEntries[OutcolSumBytes] = summaryEntries[OutcolInBytes]
 	summaryEntries[OutcolBothPktsRcvd] = "Received packets"
 	summaryEntries[OutcolBothPktsSent] = "Sent packets"
 	summaryEntries[OutcolBothBytesRcvd] = "Received data volume (bytes)"
 	summaryEntries[OutcolBothBytesSent] = "Sent data volume (bytes)"
 	for _, col := range c.cols {
 		if summaryEntries[col] != "" {
-			c.writer.Write([]string{summaryEntries[col], extractTotal(CSVFormatter{}, c.totals, col)})
+			if err := c.writer.Write([]string{summaryEntries[col], extractTotal(CSVFormatter{}, c.totals, col)}); err != nil {
+				return err
+			}
 		}
 	}
-	c.writer.Write([]string{"Sorting and flow direction", describe(c.sort, c.direction)})
-	c.writer.Write([]string{"Interface", c.ifaces})
+	if err := c.writer.Write([]string{"Sorting and flow direction", describe(c.sort, c.direction)}); err != nil {
+		return err
+	}
+	return c.writer.Write([]string{"Interface", c.ifaces})
 }
 
 // Print flushes the writer and actually prints out all CSV rows contained in the table printer
@@ -505,16 +519,16 @@ func NewTextTablePrinter(b basePrinter, numFlows int, resolveTimeout time.Durati
 	}
 
 	var header1 [CountOutcol]string
-	header1[OutcolInPkts] = "packets"
-	header1[OutcolInBytes] = "bytes"
-	header1[OutcolOutPkts] = "packets"
-	header1[OutcolOutBytes] = "bytes"
-	header1[OutcolSumPkts] = "packets"
-	header1[OutcolSumBytes] = "bytes"
-	header1[OutcolBothPktsRcvd] = "packets"
-	header1[OutcolBothPktsSent] = "packets"
-	header1[OutcolBothBytesRcvd] = "bytes"
-	header1[OutcolBothBytesSent] = "bytes"
+	header1[OutcolInPkts] = packetsStr
+	header1[OutcolInBytes] = bytesStr
+	header1[OutcolOutPkts] = packetsStr
+	header1[OutcolOutBytes] = bytesStr
+	header1[OutcolSumPkts] = packetsStr
+	header1[OutcolSumBytes] = bytesStr
+	header1[OutcolBothPktsRcvd] = packetsStr
+	header1[OutcolBothPktsSent] = packetsStr
+	header1[OutcolBothBytesRcvd] = bytesStr
+	header1[OutcolBothBytesSent] = bytesStr
 
 	var header2 = append(types.AllColumns(), []string{
 		"in", "%", "in", "%",
@@ -546,27 +560,31 @@ func addRows(ctx context.Context, p TablePrinter, rows Rows) error {
 			// printer filling was cancelled
 			return fmt.Errorf("query cancelled before fully filled. %d/%d rows processed", i, len(rows))
 		default:
-			p.AddRow(row)
+			if err := p.AddRow(row); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
 }
 
 // AddRow adds a flow entry to the table printer
-func (t *TextTablePrinter) AddRow(row Row) {
+func (t *TextTablePrinter) AddRow(row Row) error {
 	for _, col := range t.cols {
 		fmt.Fprintf(t.writer, "%s\t", extract(TextFormatter{}, t.ips2domains, t.totals, row, col))
 	}
 	fmt.Fprintln(t.writer)
 	t.numPrinted++
+	return nil
 }
 
+// AddRows adds several flow entries to the table printer
 func (t *TextTablePrinter) AddRows(ctx context.Context, rows Rows) error {
 	return addRows(ctx, t, rows)
 }
 
 // Footer appends the summary to the table printer
-func (t *TextTablePrinter) Footer(result *Result) {
+func (t *TextTablePrinter) Footer(result *Result) error {
 	var isTotal [CountOutcol]bool
 	isTotal[OutcolInPkts] = true
 	isTotal[OutcolInBytes] = true
@@ -654,19 +672,27 @@ func (t *TextTablePrinter) Footer(result *Result) {
 		fmt.Fprintf(t.footwriter, "Conditions:\t: %s\n",
 			result.Query.Condition)
 	}
+
+	return nil
 }
 
 // Print flushes the table printer and outputs all entries to stdout
 func (t *TextTablePrinter) Print(result *Result) error {
 	fmt.Fprintln(t.output) // newline between prompt and results
-	t.writer.Flush()
+	if err := t.writer.Flush(); err != nil {
+		return err
+	}
 	fmt.Fprintln(t.output)
-	t.footwriter.Flush()
+	if err := t.footwriter.Flush(); err != nil {
+		return err
+	}
 	fmt.Fprintln(t.output)
 
 	// print the host list if it  isn't covered by the above already
 	if len(result.HostsStatuses) > 1 {
-		result.HostsStatuses.Print(t.output)
+		if err := result.HostsStatuses.Print(t.output); err != nil {
+			return err
+		}
 		fmt.Fprintln(t.output)
 	}
 	return nil

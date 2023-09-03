@@ -16,7 +16,7 @@ const memFilePath = "/proc/meminfo"
 func getPhysMem() (float64, error) {
 	var memFile *os.File
 	var ferr error
-	if memFile, ferr = os.OpenFile(memFilePath, os.O_RDONLY, 0444); ferr != nil {
+	if memFile, ferr = os.OpenFile(memFilePath, os.O_RDONLY, 0600); ferr != nil {
 		return 0.0, fmt.Errorf("unable to open %s: %w", memFilePath, ferr)
 	}
 

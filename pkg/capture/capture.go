@@ -27,7 +27,7 @@ var (
 	// ErrLocalBufferOverflow signifies that the local packet buffer is full
 	ErrLocalBufferOverflow = errors.New("local packet buffer overflow")
 
-	defaultSourceInitFn = func(c *Capture) (capture.SourceZeroCopy, error) {
+	defaultSourceInitFn = func(c *Capture) (Source, error) {
 		return afring.NewSource(c.iface,
 			afring.CaptureLength(link.CaptureLengthMinimalIPv6Transport),
 			afring.BufferSize(c.config.RingBuffer.BlockSize, c.config.RingBuffer.NumBlocks),
@@ -38,7 +38,7 @@ var (
 
 // sourceInitFn denotes the function used to initialize a capture source,
 // providing the ability to override the default behavior, e.g. in mock tests
-type sourceInitFn func(*Capture) (capture.SourceZeroCopy, error)
+type sourceInitFn func(*Capture) (Source, error)
 
 // Captures denotes a named set of Capture instances, wrapping a map and the
 // required synchronization of all its actions
@@ -116,7 +116,7 @@ type Capture struct {
 	flowLog *FlowLog
 
 	// Generic handle / source for packet capture
-	captureHandle capture.SourceZeroCopy
+	captureHandle Source
 	sourceInitFn  sourceInitFn
 
 	// Error tracking (type / errno specific)

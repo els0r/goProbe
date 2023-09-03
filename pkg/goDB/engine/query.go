@@ -63,6 +63,7 @@ func (qr *QueryRunner) Run(ctx context.Context, args *query.Args) (res *results.
 	return qr.RunStatement(ctx, stmt)
 }
 
+// RunStatement executes the prepared statement and generates the results
 func (qr *QueryRunner) RunStatement(ctx context.Context, stmt *query.Statement) (res *results.Result, err error) {
 	result := results.New()
 	result.Start()
@@ -223,13 +224,13 @@ func (qr *QueryRunner) RunStatement(ctx context.Context, stmt *query.Statement) 
 	var sip, dip, dport, proto types.Attribute
 	for _, attribute := range qr.query.Attributes {
 		switch attribute.Name() {
-		case "sip":
+		case types.SIPName:
 			sip = attribute
-		case "dip":
+		case types.DIPName:
 			dip = attribute
-		case "dport":
+		case types.DportName:
 			dport = attribute
-		case "proto":
+		case types.ProtoName:
 			proto = attribute
 		}
 	}
@@ -254,10 +255,10 @@ func (qr *QueryRunner) RunStatement(ctx context.Context, stmt *query.Statement) 
 			rs[count].Labels.Hostname = hostname
 
 			if sip != nil {
-				rs[count].Attributes.SrcIP = types.RawIPToAddr(key.Key().GetSip())
+				rs[count].Attributes.SrcIP = types.RawIPToAddr(key.Key().GetSIP())
 			}
 			if dip != nil {
-				rs[count].Attributes.DstIP = types.RawIPToAddr(key.Key().GetDip())
+				rs[count].Attributes.DstIP = types.RawIPToAddr(key.Key().GetDIP())
 			}
 			if proto != nil {
 				rs[count].Attributes.IPProto = key.Key().GetProto()

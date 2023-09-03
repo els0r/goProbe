@@ -24,13 +24,14 @@ import (
 	"time"
 
 	"github.com/els0r/goProbe/pkg/goDB/encoder"
-	"github.com/els0r/goProbe/pkg/goDB/encoder/bitpack"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 	"github.com/els0r/goProbe/pkg/goDB/storage"
 	"github.com/els0r/goProbe/pkg/goDB/storage/gpfile"
 	"github.com/els0r/goProbe/pkg/logging"
 	"github.com/els0r/goProbe/pkg/types"
 	"github.com/els0r/goProbe/pkg/types/hashmap"
+	"github.com/fako1024/gotools/bitpack"
+	"github.com/fako1024/gotools/concurrency"
 )
 
 const (
@@ -63,7 +64,7 @@ type DBWorkManager struct {
 
 	nWorkloads          uint64
 	nWorkloadsProcessed uint64
-	memPool             gpfile.MemPoolGCable
+	memPool             concurrency.MemPoolGCable
 }
 
 // NewDBWorkManager sets up a new work manager for executing queries
@@ -104,7 +105,7 @@ func (w *DBWorkManager) CreateWorkerJobs(tfirst int64, tlast int64) (nonempty bo
 		gpFileOptions []gpfile.Option
 	)
 	if !w.query.lowMem {
-		w.memPool = gpfile.NewMemPool(w.numProcessingUnits * len(w.query.columnIndices))
+		w.memPool = concurrency.NewMemPool(w.numProcessingUnits * len(w.query.columnIndices))
 		gpFileOptions = append(gpFileOptions, gpfile.WithReadAll(w.memPool))
 	}
 
@@ -171,7 +172,7 @@ func (w *DBWorkManager) CreateWorkerJobs(tfirst int64, tlast int64) (nonempty bo
 	return 0 < numDirs, nil
 }
 
-func skipNonMatching(isDir bool, name string) bool {
+func skipNonMatching(isDir bool) bool {
 	return !isDir
 }
 
@@ -189,7 +190,7 @@ func (w *DBWorkManager) walkDB(tfirst, tlast int64, fn dbWalkFunc) (numDirs int,
 	for _, year := range yearList {
 
 		// Skip obvious non-matching entries
-		if skipNonMatching(year.IsDir(), year.Name()) {
+		if skipNonMatching(year.IsDir()) {
 			continue
 		}
 
@@ -209,7 +210,7 @@ func (w *DBWorkManager) walkDB(tfirst, tlast int64, fn dbWalkFunc) (numDirs int,
 		}
 		for _, month := range monthList {
 			// Skip obvious non-matching entries
-			if skipNonMatching(month.IsDir(), month.Name()) {
+			if skipNonMatching(month.IsDir()) {
 				continue
 			}
 
@@ -230,7 +231,7 @@ func (w *DBWorkManager) walkDB(tfirst, tlast int64, fn dbWalkFunc) (numDirs int,
 			}
 
 			for _, file := range dirList {
-				if skipNonMatching(file.IsDir(), file.Name()) {
+				if skipNonMatching(file.IsDir()) {
 					continue
 				}
 				dayTimestamp, err := strconv.ParseInt(file.Name(), 10, 64)
@@ -253,6 +254,7 @@ func (w *DBWorkManager) walkDB(tfirst, tlast int64, fn dbWalkFunc) (numDirs int,
 	return numDirs, nil
 }
 
+// ReadMetadata extracts the metadata for a time range from the DB
 func (w *DBWorkManager) ReadMetadata(tfirst int64, tlast int64) (*InterfaceMetadata, error) {
 	aggMetadata := &InterfaceMetadata{Iface: w.iface}
 
@@ -261,7 +263,7 @@ func (w *DBWorkManager) ReadMetadata(tfirst int64, tlast int64) (*InterfaceMetad
 	// loop over directory list in order to create the timestamp pairs
 	var gpFileOptions []gpfile.Option
 	if !query.lowMem {
-		w.memPool = gpfile.NewMemPool(w.numProcessingUnits * len(query.columnIndices))
+		w.memPool = concurrency.NewMemPool(w.numProcessingUnits * len(query.columnIndices))
 		gpFileOptions = append(gpFileOptions, gpfile.WithReadAll(w.memPool))
 	}
 
@@ -320,6 +322,9 @@ func (w *DBWorkManager) ReadMetadata(tfirst int64, tlast int64) (*InterfaceMetad
 	}
 
 	_, err := w.walkDB(tfirst, tlast, walkFunc)
+	if err != nil {
+		return nil, err
+	}
 
 	// compute the metadata for the last block. This will be partial if the last timestamp is smaller than the last
 	// block captured for the day
@@ -403,8 +408,8 @@ func (w *DBWorkManager) readMetadataAndEvaluate(workDir *gpfile.GPDir, blocks []
 		}
 
 		// Check whether all blocks have matching number of entries
-		stats.Traffic.NumV4Entries = uint64(workDir.NumIPv4EntriesAtIndex(ind))
-		stats.Traffic.NumV6Entries = uint64(workDir.NumIPv6EntriesAtIndex(ind))
+		stats.Traffic.NumV4Entries = workDir.NumIPv4EntriesAtIndex(ind)
+		stats.Traffic.NumV6Entries = workDir.NumIPv6EntriesAtIndex(ind)
 
 		numEntries := bitpack.Len(colBlocks[types.BytesRcvdColIdx])
 		for _, colIdx := range w.query.columnIndices {
@@ -459,7 +464,11 @@ func (w *DBWorkManager) grabAndProcessWorkload(ctx context.Context, wg *sync.Wai
 			logger.Error(err)
 			mapChan <- hashmap.NilAggFlowMapWithMetadata
 		}
-		defer enc.Close()
+		defer func() {
+			if cerr := enc.Close(); cerr != nil && err == nil {
+				err = cerr
+			}
+		}()
 
 		var workload DBWorkload
 		for chanOpen := true; chanOpen; {
@@ -573,9 +582,9 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workDir *gpfile.GPDir, enc encoder
 				}
 			} else {
 				if types.ColumnSizeofs[colIdx] == types.IPSizeOf {
-					if l != (numEntries-int(numV4Entries))*types.IPv6Width+int(numV4Entries)*types.IPv4Width {
+					if l != (numEntries-numV4Entries)*types.IPv6Width+numV4Entries*types.IPv4Width {
 						blockBroken = true
-						logger.With("block", b, "column", types.ColumnFileNames[colIdx]).Warnf("Incorrect number of entries in variable block size file. Expected file length %d, have %d", (numEntries-int(numV4Entries))*types.IPv6Width+int(numV4Entries)*types.IPv4Width, l)
+						logger.With("block", b, "column", types.ColumnFileNames[colIdx]).Warnf("Incorrect number of entries in variable block size file. Expected file length %d, have %d", (numEntries-numV4Entries)*types.IPv6Width+numV4Entries*types.IPv4Width, l)
 						break
 					}
 				} else {
@@ -613,8 +622,8 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workDir *gpfile.GPDir, enc encoder
 		pktsRcvdValues = bitpack.UnpackInto(blocks[types.PacketsRcvdColIdx], pktsRcvdValues)
 		pktsSentValues = bitpack.UnpackInto(blocks[types.PacketsSentColIdx], pktsSentValues)
 
-		sipBlocks := blocks[types.SipColIdx]
-		dipBlocks := blocks[types.DipColIdx]
+		sipBlocks := blocks[types.SIPColIdx]
+		dipBlocks := blocks[types.DIPColIdx]
 		dportBlocks := blocks[types.DportColIdx]
 		protoBlocks := blocks[types.ProtoColIdx]
 
@@ -633,7 +642,7 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workDir *gpfile.GPDir, enc encoder
 			if i == numV4Entries {
 
 				// Skip switching to secondary map if IPs are not part of the query attributes
-				if w.query.hasAttrSip || w.query.hasAttrDip {
+				if w.query.hasAttrSIP || w.query.hasAttrDIP {
 					key = v6Key
 					isIPv4 = false
 				}
@@ -644,18 +653,18 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workDir *gpfile.GPDir, enc encoder
 			}
 
 			// Populate key for current entry
-			if w.query.hasAttrSip {
+			if w.query.hasAttrSIP {
 				if isIPv4 {
-					key.PutSip(sipBlocks[i*4 : i*4+4])
+					key.PutSIP(sipBlocks[i*4 : i*4+4])
 				} else {
-					key.PutSip(sipBlocks[numV4Entries*4+(i-numV4Entries)*16 : numV4Entries*4+(i-numV4Entries)*16+16])
+					key.PutSIP(sipBlocks[numV4Entries*4+(i-numV4Entries)*16 : numV4Entries*4+(i-numV4Entries)*16+16])
 				}
 			}
-			if w.query.hasAttrDip {
+			if w.query.hasAttrDIP {
 				if isIPv4 {
-					key.PutDipV4(dipBlocks[i*4 : i*4+4])
+					key.PutDIPV4(dipBlocks[i*4 : i*4+4])
 				} else {
-					key.PutDipV6(dipBlocks[numV4Entries*4+(i-numV4Entries)*16 : numV4Entries*4+(i-numV4Entries)*16+16])
+					key.PutDIPV6(dipBlocks[numV4Entries*4+(i-numV4Entries)*16 : numV4Entries*4+(i-numV4Entries)*16+16])
 				}
 			}
 			if w.query.hasAttrProto {
@@ -670,18 +679,18 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workDir *gpfile.GPDir, enc encoder
 			if !conditionalSatisfied {
 
 				// Populate comparison value for current entry
-				if w.query.hasCondSip {
+				if w.query.hasCondSIP {
 					if condIsIPv4 {
-						comparisonValue.PutSip(sipBlocks[i*4 : i*4+4])
+						comparisonValue.PutSIP(sipBlocks[i*4 : i*4+4])
 					} else {
-						comparisonValue.PutSip(sipBlocks[numV4Entries*4+(i-numV4Entries)*16 : numV4Entries*4+(i-numV4Entries)*16+16])
+						comparisonValue.PutSIP(sipBlocks[numV4Entries*4+(i-numV4Entries)*16 : numV4Entries*4+(i-numV4Entries)*16+16])
 					}
 				}
-				if w.query.hasCondDip {
+				if w.query.hasCondDIP {
 					if condIsIPv4 {
-						comparisonValue.PutDipV4(dipBlocks[i*4 : i*4+4])
+						comparisonValue.PutDIPV4(dipBlocks[i*4 : i*4+4])
 					} else {
-						comparisonValue.PutDipV6(dipBlocks[numV4Entries*4+(i-numV4Entries)*16 : numV4Entries*4+(i-numV4Entries)*16+16])
+						comparisonValue.PutDIPV6(dipBlocks[numV4Entries*4+(i-numV4Entries)*16 : numV4Entries*4+(i-numV4Entries)*16+16])
 					}
 				}
 				if w.query.hasCondProto {

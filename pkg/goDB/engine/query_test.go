@@ -72,9 +72,9 @@ func TestSimpleQuery(t *testing.T) {
 	// run table-driven test
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+
 			// append output capture (to dev null, since this test only checks if the query
 			// can be exectued
-			test.opts = append(test.opts)
 
 			// create args
 			a := query.NewArgs(test.query, test.iface, test.opts...).AddOutputs(io.Discard)

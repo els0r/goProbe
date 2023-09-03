@@ -14,6 +14,8 @@
 
 package capturetypes
 
+// Direction denotes if the detected packet direction should remain or changed, based
+// on flow analysis
 type Direction uint8
 
 // Direction detection states

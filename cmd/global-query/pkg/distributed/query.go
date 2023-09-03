@@ -13,6 +13,8 @@ import (
 	"github.com/els0r/goProbe/pkg/types"
 )
 
+// QueryRunner denotes a query runner / executor, wrapping a Querier interface instance with
+// other fields required to perform a distributed query
 type QueryRunner struct {
 	resolver hosts.Resolver
 	querier  Querier
@@ -31,17 +33,19 @@ func WithMaxConcurrent(n int) QueryOption {
 	}
 }
 
-func NewQueryRunner(resolver hosts.Resolver, querier Querier, opts ...QueryOption) *QueryRunner {
-	qr := &QueryRunner{
+// NewQueryRunner instantiates a new distributed query runner
+func NewQueryRunner(resolver hosts.Resolver, querier Querier, opts ...QueryOption) (qr *QueryRunner) {
+	qr = &QueryRunner{
 		resolver: resolver,
 		querier:  querier,
 	}
 	for _, opt := range opts {
 		opt(qr)
 	}
-	return qr
+	return
 }
 
+// Run executes / runs the query and creates the final result structure
 func (q *QueryRunner) Run(ctx context.Context, args *query.Args) (*results.Result, error) {
 	// use a copy of the arguments, since some fields are modified by the querier
 	queryArgs := *args
@@ -59,7 +63,7 @@ func (q *QueryRunner) Run(ctx context.Context, args *query.Args) (*results.Resul
 
 	hostList, err := q.resolver.Resolve(ctx, queryArgs.HostQuery)
 	if err != nil {
-		return nil, fmt.Errorf("failed to resolve host list: %v", err)
+		return nil, fmt.Errorf("failed to resolve host list: %w", err)
 	}
 
 	// log the query
@@ -76,7 +80,7 @@ func (q *QueryRunner) Run(ctx context.Context, args *query.Args) (*results.Resul
 
 	finalResult := aggregateResults(ctx, stmt,
 		runQueries(ctx, numRunners,
-			prepareQueries(ctx, q.querier, hostList, &queryArgs, numRunners),
+			prepareQueries(ctx, q.querier, hostList, &queryArgs),
 		),
 	)
 
@@ -93,7 +97,7 @@ func (q *QueryRunner) Run(ctx context.Context, args *query.Args) (*results.Resul
 
 // prepareQueries creates query workloads for all hosts in the host list and returns the channel it sends the
 // workloads on
-func prepareQueries(ctx context.Context, querier Querier, hostList hosts.Hosts, args *query.Args, maxConcurrent int) <-chan *QueryWorkload {
+func prepareQueries(ctx context.Context, querier Querier, hostList hosts.Hosts, args *query.Args) <-chan *QueryWorkload {
 	workloads := make(chan *QueryWorkload)
 
 	go func(ctx context.Context) {
@@ -234,6 +238,7 @@ func aggregateResults(ctx context.Context, stmt *query.Statement, queryResults <
 	}
 }
 
+// QueryWorkload denotes an individual workload to perform a query on a remote host
 type QueryWorkload struct {
 	Host string
 

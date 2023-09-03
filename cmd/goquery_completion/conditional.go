@@ -15,6 +15,7 @@ import (
 
 	"github.com/els0r/goProbe/pkg/goDB/conditions"
 	"github.com/els0r/goProbe/pkg/goDB/protocols"
+	"github.com/els0r/goProbe/pkg/types"
 )
 
 func openParens(tokens []string) int {
@@ -43,39 +44,39 @@ func nextAll(prevprev, prev string, openParens int) []suggestion {
 		return []suggestion{
 			s("!", false),
 			s("(", false),
-			s("dip", false),
-			s("sip", false),
+			s(types.DIPName, false),
+			s(types.SIPName, false),
 			s("dnet", false),
 			s("snet", false),
 			s("dst", false),
 			s("src", false),
 			s("host", false),
 			s("net", false),
-			s("dport", false),
+			s(types.DportName, false),
 			s("port", false),
-			s("proto", false),
+			s(types.ProtoName, false),
 		}
 	case "!":
 		return []suggestion{
 			s("(", false),
-			s("dip", false),
-			s("sip", false),
+			s(types.DIPName, false),
+			s(types.SIPName, false),
 			s("dnet", false),
 			s("snet", false),
 			s("dst", false),
 			s("src", false),
 			s("host", false),
 			s("net", false),
-			s("dport", false),
+			s(types.DportName, false),
 			s("port", false),
-			s("proto", false),
+			s(types.ProtoName, false),
 		}
-	case "dip", "sip", "dnet", "snet", "dst", "src", "host", "net":
+	case types.DIPName, types.SIPName, "dnet", "snet", "dst", "src", "host", "net":
 		return []suggestion{
 			s("=", false),
 			s("!=", false),
 		}
-	case "dport", "port", "proto":
+	case types.DportName, "port", types.ProtoName:
 		return []suggestion{
 			s("=", false),
 			s("!=", false),
@@ -86,7 +87,7 @@ func nextAll(prevprev, prev string, openParens int) []suggestion {
 		}
 	case "=", "!=", "<", ">", "<=", ">=":
 		switch prevprev {
-		case "proto":
+		case types.ProtoName:
 			var result []suggestion
 			for name := range protocols.IPProtocolIDs {
 				result = append(result, suggestion{name, name + " ...", openParens == 0})
@@ -138,10 +139,7 @@ func conditional(args []string) []string {
 			return nil
 		}
 
-		var startedNewToken bool
-		startedNewToken = len(tokens) == 0 || strings.LastIndex(conditional, tokens[len(tokens)-1])+len(tokens[len(tokens)-1]) < len(conditional)
-
-		if startedNewToken {
+		if startedNewToken := len(tokens) == 0 || strings.LastIndex(conditional, tokens[len(tokens)-1])+len(tokens[len(tokens)-1]) < len(conditional); startedNewToken {
 			tokens = append(tokens, "")
 		}
 

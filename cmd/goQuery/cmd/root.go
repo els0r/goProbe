@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -29,7 +28,8 @@ import (
 
 var cfgFile string
 
-var supportedCmds = "{QUERY TYPE|COLUMNS|examples|list|version}"
+// TODO: This part is currently unused - cross check if that is intentional (in which case it can be removed)
+// var supportedCmds = "{QUERY TYPE|COLUMNS|examples|list|version}"
 
 var rootCmd = &cobra.Command{
 	Use:   "goQuery -i <interfaces> QUERY TYPE",
@@ -44,6 +44,7 @@ var rootCmd = &cobra.Command{
 	SilenceErrors:      true,
 }
 
+// GetRootCmd allows access to the root command of the binary
 func GetRootCmd() *cobra.Command {
 	return rootCmd
 }
@@ -252,7 +253,7 @@ func entrypoint(cmd *cobra.Command, args []string) (err error) {
 			return fmt.Errorf("failed to read query args from %s: %w", argsLocation, err)
 		}
 		// unmarshal arguments into the command line parameters
-		if err = json.Unmarshal(argumentsJSON, &queryArgs); err != nil {
+		if err = jsoniter.Unmarshal(argumentsJSON, &queryArgs); err != nil {
 			return fmt.Errorf("failed to unmarshal JSON query args %s: %w", string(argumentsJSON), err)
 		}
 	} else {
@@ -261,8 +262,7 @@ func entrypoint(cmd *cobra.Command, args []string) (err error) {
 			return errors.New("no query type or command provided")
 		}
 		if args[0] == "help" {
-			cmd.Help()
-			return nil
+			return cmd.Help()
 		}
 
 		// if we didn't find a supported command, we assume this is the query type

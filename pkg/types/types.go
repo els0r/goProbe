@@ -47,16 +47,20 @@ func (v IPVersion) IsLimited() bool {
 	return v >= IPVersionV4
 }
 
+// Status denotes a generic execution status for display
 type Status string
 
+// Definition of some common status results
 const (
 	StatusError Status = "error"
 	StatusEmpty Status = "empty"
 	StatusOK    Status = "ok"
 )
 
+// DefaultTimeOutputFormat denotes the default time format to use when displaying time.Time information
 const DefaultTimeOutputFormat = "2006-01-02 15:04:05"
 
+// LabelSelector defines a selector based on several conditions / parameters
 type LabelSelector struct {
 	Timestamp bool `json:"timestamp,omitempty"`
 	Iface     bool `json:"iface,omitempty"`
@@ -64,8 +68,10 @@ type LabelSelector struct {
 	HostID    bool `json:"host_id,omitempty"`
 }
 
+// Width denotes the on-screen column width based on column type
 type Width = int
 
+// Widths for all used columns
 const (
 	IPv6Width  Width = 16
 	IPv4Width  Width = 4
@@ -75,6 +81,7 @@ const (
 	TimestampWidth Width = 8
 )
 
+// Basic constants used to simplify column width calculations
 const (
 	sipPos       = 0
 	dipPosIPv4   = IPv4Width

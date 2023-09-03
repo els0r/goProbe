@@ -23,7 +23,7 @@ const (
 	maxMultipartMemory = 32 << 20 // 32 MiB
 )
 
-// Option denotes a functional option for the DefaultServer
+// Option denotes a functional option fo a default server instance
 type Option func(*DefaultServer)
 
 // DefaultServer is the default API server, allowing middlewares and settings to be

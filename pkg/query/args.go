@@ -216,8 +216,6 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 
 	// check external calls
 	if a.External {
-		a.Condition = results.ExcludeManagementNet(a.Condition)
-
 		if a.In && a.Out {
 			a.Sum, a.In, a.Out = true, false, false
 		}

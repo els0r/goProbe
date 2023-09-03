@@ -107,9 +107,7 @@ func (h *GoDBHandler) handleIfaceWriteout(ctx context.Context, timestamp time.Ti
 	}
 
 	// Write to database, update summary
-	err := h.dbWriters[taggedMap.Iface].Write(taggedMap.Map, goDB.CaptureMetadata{
-		PacketsDropped: taggedMap.Stats.Dropped,
-	}, timestamp.Unix())
+	err := h.dbWriters[taggedMap.Iface].Write(taggedMap.Map, taggedMap.Stats, timestamp.Unix())
 	if err != nil {
 		logger.Errorf("failed to perform writeout: %s", err)
 	}

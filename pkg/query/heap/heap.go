@@ -11,6 +11,8 @@ import (
 
 // Parameters for checking memory consumption of query
 const (
+
+	// MemCheckInterval denotes the frequency at which the memory consumption is checked
 	MemCheckInterval = 1 * time.Second
 
 	// Variables for manual garbage collection calls
@@ -19,6 +21,8 @@ const (
 )
 
 var (
+
+	// ErrorMemoryBreach denotes that the provided / requested maximum memory usage has been exceeded
 	ErrorMemoryBreach = errors.New("maximum memory breach")
 )
 

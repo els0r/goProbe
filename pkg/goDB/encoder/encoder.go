@@ -44,7 +44,7 @@ func New(t encoders.Type) (Encoder, error) {
 	case encoders.EncoderTypeZSTD:
 		return zstd.New(), nil
 	default:
-		return nil, fmt.Errorf("Unsupported encoder: %v", t)
+		return nil, fmt.Errorf("unsupported encoder: %v", t)
 	}
 }
 

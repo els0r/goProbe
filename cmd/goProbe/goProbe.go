@@ -93,6 +93,7 @@ func main() {
 	defer stop()
 
 	// Create DB directory if it doesn't exist already.
+	// #nosec G301
 	if err := os.MkdirAll(filepath.Clean(config.DB.Path), 0755); err != nil {
 		logger.Fatalf("failed to create database directory: %v", err)
 	}

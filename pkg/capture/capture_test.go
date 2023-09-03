@@ -1,3 +1,6 @@
+//go:build !slimcap_nomock
+// +build !slimcap_nomock
+
 package capture
 
 import (
@@ -8,6 +11,7 @@ import (
 	"net"
 	"os"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 	"unsafe"
@@ -71,6 +75,7 @@ func testConcurrentMethodAccess(t *testing.T, nIfaces, nIterations int) {
 	wg := sync.WaitGroup{}
 	wg.Add(3)
 
+	var errCount uint64
 	go func() {
 		ctx := context.Background()
 		prng := rand.New(rand.NewSource(randSeed)) // #nosec G404
@@ -96,13 +101,16 @@ func testConcurrentMethodAccess(t *testing.T, nIfaces, nIterations int) {
 	go func() {
 		ctx := context.Background()
 		for i := 0; i < nIterations; i++ {
-			captureManager.Update(ctx, ifaceConfigs)
+			if _, _, _, err := captureManager.Update(ctx, ifaceConfigs); err != nil {
+				atomic.AddUint64(&errCount, 1)
+			}
 		}
 		wg.Done()
 	}()
 
 	wg.Wait()
 
+	require.Zero(t, atomic.LoadUint64(&errCount))
 	testMockSrcs.Done()
 	require.Nil(t, testMockSrcs.Wait())
 
@@ -118,10 +126,10 @@ func setupInterfaces(t *testing.T, cfg config.CaptureConfig, nIfaces int) (*Mana
 
 	// Setup a temporary directory for the test DB
 	tempDir, err := os.MkdirTemp(os.TempDir(), "goprobe_capture")
-	if err != nil {
-		panic(err)
-	}
-	defer os.RemoveAll(tempDir)
+	require.Nil(t, err)
+	defer func(t *testing.T) {
+		require.Nil(t, os.RemoveAll(tempDir))
+	}(t)
 
 	// Build / initialize mock sources for all interfaces
 	testMockSrcs := make(testMockSrcs)
@@ -145,7 +153,8 @@ func setupInterfaces(t *testing.T, cfg config.CaptureConfig, nIfaces int) (*Mana
 			return src.src, nil
 		}),
 	)
-	captureManager.Update(context.Background(), ifaceConfigs)
+	_, _, _, err = captureManager.Update(context.Background(), ifaceConfigs)
+	require.Nil(t, err)
 
 	return captureManager, ifaceConfigs, testMockSrcs
 }
@@ -216,8 +225,8 @@ func BenchmarkRotation(b *testing.B) {
 
 	flowLog := NewFlowLog()
 	for i := uint64(0); i < nFlows; i++ {
-		*(*uint64)(unsafe.Pointer(&ipLayer[16])) = i
-		require.Nil(b, flowLog.Add(ipLayer, capture.PacketOutgoing, 128))
+		*(*uint64)(unsafe.Pointer(&ipLayer[16])) = i // #nosec G103
+		require.Equal(b, capturetypes.ErrnoOK, flowLog.Add(ipLayer, capture.PacketOutgoing, 128))
 	}
 	for _, flow := range flowLog.flowMap {
 		flow.directionConfidenceHigh = true

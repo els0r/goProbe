@@ -19,6 +19,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
+// DefaultClient denotes the default client used for all requests
 type DefaultClient struct {
 	client  *http.Client
 	timeout time.Duration
@@ -197,7 +198,7 @@ func (t *transport) RoundTrip(r *http.Request) (*http.Response, error) {
 }
 
 // Modify activates retry behavior, timeout handling and authorization via the stored key
-func (c *DefaultClient) Modify(ctx context.Context, req *httpc.Request) *httpc.Request {
+func (c *DefaultClient) Modify(_ context.Context, req *httpc.Request) *httpc.Request {
 
 	req = req.Headers(httpc.Params{
 		server.RuntimeIDHeaderKey: info.RuntimeID(),

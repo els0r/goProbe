@@ -7,6 +7,7 @@ const (
 	ServiceName = "global_query"
 )
 
+// Definnitions for command line parameters / arguments
 const (
 	loggingKey  = "logging"
 	LogLevel    = loggingKey + ".level"
@@ -31,6 +32,7 @@ const (
 	ServerShutdownGracePeriod = serverKey + ".shutdowngraceperiod"
 )
 
+// Global defaults for command line parameters / arguments
 const (
 	DefaultLogLevel    = "info"
 	DefaultLogEncoding = "logfmt"

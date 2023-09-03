@@ -18,8 +18,6 @@ import (
 	"github.com/els0r/goProbe/pkg/types/hashmap"
 	"github.com/fako1024/slimcap/capture/afpacket/afring"
 	"github.com/stretchr/testify/require"
-
-	slimcap "github.com/fako1024/slimcap/capture"
 )
 
 type mockTracking struct {
@@ -35,7 +33,7 @@ type mockIface struct {
 	src          *afring.MockSource
 	tracking     *mockTracking
 	flows        *map[capturetypes.EPHash]types.Counters
-	sourceInitFn func(c *capture.Capture) (slimcap.SourceZeroCopy, error)
+	sourceInitFn func(c *capture.Capture) (capture.Source, error)
 
 	sync.RWMutex
 }
@@ -165,7 +163,7 @@ func (m mockIfaces) BuildResults(t *testing.T, testDir string, resGoQuery *resul
 	res.Summary.Hits.Total = len(res.Rows)
 	res.Summary.Hits.Displayed = len(res.Rows)
 
-	res.Query.Attributes = []string{"sip", "dip", "dport", "proto"}
+	res.Query.Attributes = []string{types.SIPName, types.DIPName, types.DportName, types.ProtoName}
 	hostname, err := os.Hostname()
 	require.Nil(t, err)
 	for i := 0; i < len(res.Rows); i++ {

@@ -16,6 +16,8 @@ import (
 	"regexp"
 	"sort"
 	"time"
+
+	"github.com/els0r/goProbe/pkg/types"
 )
 
 var hostnameRegexp = regexp.MustCompile(`[a-zA-Z0-9\-]+(?:\.[a-zA-Z0-9\-]+)*\.?`)
@@ -32,7 +34,7 @@ func resolve(node Node, timeout time.Duration) (Node, error) {
 	hostnames := make(map[string]struct{})
 	_, err := node.transform(func(node conditionNode) (Node, error) {
 		// We only expect a hostname in sip or dip attributes
-		if node.attribute != "sip" && node.attribute != "dip" {
+		if node.attribute != types.SIPName && node.attribute != types.DIPName {
 			return node, nil
 		}
 
@@ -90,7 +92,7 @@ func resolve(node Node, timeout time.Duration) (Node, error) {
 	// Rewrite all conditions involving hostnames to use IPs
 	return node.transform(func(node conditionNode) (Node, error) {
 		// We only expect a domain in sip or dip attributes
-		if node.attribute != "sip" && node.attribute != "dip" {
+		if node.attribute != types.SIPName && node.attribute != types.DIPName {
 			return node, nil
 		}
 

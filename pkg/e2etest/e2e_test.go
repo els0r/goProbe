@@ -1,3 +1,6 @@
+//go:build !slimcap_nomock
+// +build !slimcap_nomock
+
 package e2etest
 
 import (
@@ -8,7 +11,6 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"net"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -72,7 +74,9 @@ func testStartStop(t *testing.T) {
 	if err != nil {
 		panic(err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func(t *testing.T) {
+		require.Nil(t, os.RemoveAll(tempDir))
+	}(t)
 
 	// We quit on encountering SIGUSR2 (instead of the ususal SIGTERM or SIGINT)
 	// to avoid killing the test
@@ -95,7 +99,7 @@ func testStartStop(t *testing.T) {
 			Destination: "logfmt",
 			Level:       "warn",
 		},
-	}, capture.WithSourceInitFn(func(c *capture.Capture) (slimcap.SourceZeroCopy, error) {
+	}, capture.WithSourceInitFn(func(c *capture.Capture) (capture.Source, error) {
 		mockSrc, err := afring.NewMockSource(c.Iface(),
 			afring.CaptureLength(link.CaptureLengthMinimalIPv6Transport),
 			afring.Promiscuous(false),
@@ -229,9 +233,11 @@ func testE2E(t *testing.T, datasets ...[]byte) {
 	// Setup a temporary directory for the test DB
 	tempDir, err := os.MkdirTemp(os.TempDir(), "goprobe_e2e")
 	if err != nil {
-		panic(err)
+		require.Nil(t, err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func(t *testing.T) {
+		require.Nil(t, os.RemoveAll(tempDir))
+	}(t)
 
 	// Define mock interfaces
 	var mockIfaces mockIfaces
@@ -241,7 +247,7 @@ func testE2E(t *testing.T, datasets ...[]byte) {
 
 	// Run GoProbe (storing a copy of all processed live flows)
 	liveFlowResults := make(map[string]hashmap.AggFlowMapWithMetadata)
-	for liveFlowMap := range runGoProbe(t, tempDir, setupSources(t, mockIfaces)) {
+	for liveFlowMap := range runGoProbe(t, tempDir, setupSources(mockIfaces)) {
 		liveFlowResults[liveFlowMap.Interface] = liveFlowMap
 	}
 
@@ -316,7 +322,7 @@ func testE2E(t *testing.T, datasets ...[]byte) {
 	require.EqualValues(t, refRows, resRows)
 }
 
-func runGoProbe(t *testing.T, testDir string, sourceInitFn func() (mockIfaces, func(c *capture.Capture) (slimcap.SourceZeroCopy, error))) chan hashmap.AggFlowMapWithMetadata {
+func runGoProbe(t *testing.T, testDir string, sourceInitFn func() (mockIfaces, func(c *capture.Capture) (capture.Source, error))) chan hashmap.AggFlowMapWithMetadata {
 
 	// We quit on encountering SIGUSR2 (instead of the ususal SIGTERM or SIGINT)
 	// to avoid killing the test
@@ -387,15 +393,15 @@ func runGoQuery(t *testing.T, res interface{}, args []string) {
 	require.Nil(t, jsoniter.NewDecoder(buf).Decode(&res))
 }
 
-func setupSources(t testing.TB, ifaces mockIfaces) func() (mockIfaces, func(c *capture.Capture) (slimcap.SourceZeroCopy, error)) {
+func setupSources(ifaces mockIfaces) func() (mockIfaces, func(c *capture.Capture) (capture.Source, error)) {
 
-	fnMap := make(map[string]func(c *capture.Capture) (slimcap.SourceZeroCopy, error))
+	fnMap := make(map[string]func(c *capture.Capture) (capture.Source, error))
 	for _, mockIface := range ifaces {
 		fnMap[mockIface.name] = mockIface.sourceInitFn
 	}
 
-	return func() (mockIfaces, func(c *capture.Capture) (slimcap.SourceZeroCopy, error)) {
-		return ifaces, func(c *capture.Capture) (slimcap.SourceZeroCopy, error) {
+	return func() (mockIfaces, func(c *capture.Capture) (capture.Source, error)) {
+		return ifaces, func(c *capture.Capture) (capture.Source, error) {
 			mockIfaceFn, ok := fnMap[c.Iface()]
 			if !ok {
 				return nil, fmt.Errorf("unable to find interface `%s` in list of mock interfaces", c.Iface())
@@ -418,7 +424,7 @@ func newPcapSource(t testing.TB, name string, data []byte) (res *mockIface) {
 		RWMutex: sync.RWMutex{},
 	}
 
-	res.sourceInitFn = func(c *capture.Capture) (slimcap.SourceZeroCopy, error) {
+	res.sourceInitFn = func(c *capture.Capture) (capture.Source, error) {
 
 		res.Lock()
 		defer res.Unlock()
@@ -448,7 +454,7 @@ func newPcapSource(t testing.TB, name string, data []byte) (res *mockIface) {
 			defer res.Unlock()
 
 			pkt = slimcap.NewIPPacket(pkt, payload, pktType, int(totalLen), ipLayerOffset)
-			hash, isIPv4, auxInfo, errno := capture.ParsePacket(pkt.IPLayer(), pkt.TotalLen())
+			hash, isIPv4, auxInfo, errno := capture.ParsePacket(pkt.IPLayer())
 			if errno > capturetypes.ErrnoOK {
 				res.tracking.nErr++
 				return
@@ -514,121 +520,123 @@ func newPcapSource(t testing.TB, name string, data []byte) (res *mockIface) {
 	return
 }
 
-func newSyntheticSource(t testing.TB, name string, nPkts int) (res *mockIface) {
+// Note: Currently unused, but may be useful in the future and is hence kept here in
+// commented form
+// func newSyntheticSource(t testing.TB, name string, nPkts int) (res *mockIface) {
 
-	res = &mockIface{
-		name:     name,
-		src:      &afring.MockSource{},
-		tracking: &mockTracking{},
-		flows:    &map[capturetypes.EPHash]types.Counters{},
-		RWMutex:  sync.RWMutex{},
-	}
+// 	res = &mockIface{
+// 		name:     name,
+// 		src:      &afring.MockSource{},
+// 		tracking: &mockTracking{},
+// 		flows:    &map[capturetypes.EPHash]types.Counters{},
+// 		RWMutex:  sync.RWMutex{},
+// 	}
 
-	res.sourceInitFn = func(c *capture.Capture) (slimcap.SourceZeroCopy, error) {
+// 	res.sourceInitFn = func(c *capture.Capture) (slimcap.SourceZeroCopy, error) {
 
-		res.Lock()
-		defer res.Unlock()
+// 		res.Lock()
+// 		defer res.Unlock()
 
-		mockSrc, err := afring.NewMockSource(c.Iface(),
-			afring.CaptureLength(link.CaptureLengthMinimalIPv6Transport),
-			afring.Promiscuous(false),
-			afring.BufferSize(1024*1024, 4),
-		)
-		if err != nil {
-			return nil, err
-		}
-		*res.src = *mockSrc
+// 		mockSrc, err := afring.NewMockSource(c.Iface(),
+// 			afring.CaptureLength(link.CaptureLengthMinimalIPv6Transport),
+// 			afring.Promiscuous(false),
+// 			afring.BufferSize(1024*1024, 4),
+// 		)
+// 		if err != nil {
+// 			return nil, err
+// 		}
+// 		*res.src = *mockSrc
 
-		mockSrc.PacketAddCallbackFn(func(payload []byte, totalLen uint32, pktType, ipLayerOffset byte) {
+// 		mockSrc.PacketAddCallbackFn(func(payload []byte, totalLen uint32, pktType, ipLayerOffset byte) {
 
-			res.Lock()
-			defer res.Unlock()
+// 			res.Lock()
+// 			defer res.Unlock()
 
-			pkt := slimcap.NewIPPacket(nil, payload, pktType, int(totalLen), ipLayerOffset)
-			hash, isIPv4, auxInfo, errno := capture.ParsePacket(pkt.IPLayer(), pkt.TotalLen())
-			if errno > capturetypes.ErrnoOK {
-				res.tracking.nErr++
-				return
-			}
-			if errno != capturetypes.ErrnoPacketFragmentIgnore {
-				res.tracking.nProcessed++
-			}
+// 			pkt := slimcap.NewIPPacket(nil, payload, pktType, int(totalLen), ipLayerOffset)
+// 			hash, isIPv4, auxInfo, errno := capture.ParsePacket(pkt.IPLayer(), pkt.TotalLen())
+// 			if errno > capturetypes.ErrnoOK {
+// 				res.tracking.nErr++
+// 				return
+// 			}
+// 			if errno != capturetypes.ErrnoPacketFragmentIgnore {
+// 				res.tracking.nProcessed++
+// 			}
 
-			hashReverse := hash.Reverse()
-			if direction := capturetypes.ClassifyPacketDirection(hash, isIPv4, auxInfo); direction != capturetypes.DirectionUnknown {
-				if direction == capturetypes.DirectionReverts || direction == capturetypes.DirectionMaybeReverts {
-					hash, hashReverse = hashReverse, hash
-				}
-			}
+// 			hashReverse := hash.Reverse()
+// 			if direction := capturetypes.ClassifyPacketDirection(hash, isIPv4, auxInfo); direction != capturetypes.DirectionUnknown {
+// 				if direction == capturetypes.DirectionReverts || direction == capturetypes.DirectionMaybeReverts {
+// 					hash, hashReverse = hashReverse, hash
+// 				}
+// 			}
 
-			hash[34], hash[35] = 0, 0
-			hashReverse[34], hashReverse[35] = 0, 0
+// 			hash[34], hash[35] = 0, 0
+// 			hashReverse[34], hashReverse[35] = 0, 0
 
-			if flow, exists := (*res.flows)[hash]; exists {
-				if pkt.Type() != slimcap.PacketOutgoing {
-					(*res.flows)[hash] = flow.Add(types.Counters{
-						PacketsRcvd: 1,
-						BytesRcvd:   uint64(totalLen),
-					})
-				} else {
-					(*res.flows)[hash] = flow.Add(types.Counters{
-						PacketsSent: 1,
-						BytesSent:   uint64(totalLen),
-					})
-				}
-			} else if flow, exists = (*res.flows)[hashReverse]; exists {
-				if pkt.Type() != slimcap.PacketOutgoing {
-					(*res.flows)[hashReverse] = flow.Add(types.Counters{
-						PacketsRcvd: 1,
-						BytesRcvd:   uint64(totalLen),
-					})
-				} else {
-					(*res.flows)[hashReverse] = flow.Add(types.Counters{
-						PacketsSent: 1,
-						BytesSent:   uint64(totalLen),
-					})
-				}
-			} else {
-				if pkt.Type() != slimcap.PacketOutgoing {
-					(*res.flows)[hash] = types.Counters{
-						PacketsRcvd: 1,
-						BytesRcvd:   uint64(totalLen),
-					}
-				} else {
-					(*res.flows)[hash] = types.Counters{
-						PacketsSent: 1,
-						BytesSent:   uint64(totalLen),
-					}
-				}
-			}
-		})
+// 			if flow, exists := (*res.flows)[hash]; exists {
+// 				if pkt.Type() != slimcap.PacketOutgoing {
+// 					(*res.flows)[hash] = flow.Add(types.Counters{
+// 						PacketsRcvd: 1,
+// 						BytesRcvd:   uint64(totalLen),
+// 					})
+// 				} else {
+// 					(*res.flows)[hash] = flow.Add(types.Counters{
+// 						PacketsSent: 1,
+// 						BytesSent:   uint64(totalLen),
+// 					})
+// 				}
+// 			} else if flow, exists = (*res.flows)[hashReverse]; exists {
+// 				if pkt.Type() != slimcap.PacketOutgoing {
+// 					(*res.flows)[hashReverse] = flow.Add(types.Counters{
+// 						PacketsRcvd: 1,
+// 						BytesRcvd:   uint64(totalLen),
+// 					})
+// 				} else {
+// 					(*res.flows)[hashReverse] = flow.Add(types.Counters{
+// 						PacketsSent: 1,
+// 						BytesSent:   uint64(totalLen),
+// 					})
+// 				}
+// 			} else {
+// 				if pkt.Type() != slimcap.PacketOutgoing {
+// 					(*res.flows)[hash] = types.Counters{
+// 						PacketsRcvd: 1,
+// 						BytesRcvd:   uint64(totalLen),
+// 					}
+// 				} else {
+// 					(*res.flows)[hash] = types.Counters{
+// 						PacketsSent: 1,
+// 						BytesSent:   uint64(totalLen),
+// 					}
+// 				}
+// 			}
+// 		})
 
-		mockSrc.Run()
-		var n = uint16(nPkts)
-		go func() {
-			for i := uint16(1); i <= n; i++ {
-				for j := uint16(1); j <= n; j++ {
+// 		mockSrc.Run()
+// 		var n = uint16(nPkts)
+// 		go func() {
+// 			for i := uint16(1); i <= n; i++ {
+// 				for j := uint16(1); j <= n; j++ {
 
-					p, err := slimcap.BuildPacket(
-						net.ParseIP(fmt.Sprintf("1.2.3.%d", i%254+1)),
-						net.ParseIP(fmt.Sprintf("4.5.6.%d", j%254+1)),
-						i,
-						j,
-						17, []byte{byte(i), byte(j)}, byte(i+j)%5, int(i+j))
-					require.Nil(t, err)
+// 					p, err := slimcap.BuildPacket(
+// 						net.ParseIP(fmt.Sprintf("1.2.3.%d", i%254+1)),
+// 						net.ParseIP(fmt.Sprintf("4.5.6.%d", j%254+1)),
+// 						i,
+// 						j,
+// 						17, []byte{byte(i), byte(j)}, byte(i+j)%5, int(i+j))
+// 					require.Nil(t, err)
 
-					require.Nil(t, mockSrc.AddPacket(p))
-				}
-			}
-			mockSrc.FinalizeBlock(false)
-			mockSrc.Done()
-		}()
+// 					require.Nil(t, mockSrc.AddPacket(p))
+// 				}
+// 			}
+// 			mockSrc.FinalizeBlock(false)
+// 			mockSrc.Done()
+// 		}()
 
-		return mockSrc, nil
-	}
+// 		return mockSrc, nil
+// 	}
 
-	return
-}
+// 	return
+// }
 
 func TestMain(m *testing.M) {
 

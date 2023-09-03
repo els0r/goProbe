@@ -10,7 +10,10 @@
 
 package node
 
-import "testing"
+import (
+	"errors"
+	"testing"
+)
 
 var desugarTests = []struct {
 	inTokens []string
@@ -47,7 +50,7 @@ var desugarTests = []struct {
 func TestDesugar(t *testing.T) {
 	for _, test := range desugarTests {
 		node, err := parseConditional(test.inTokens)
-		if err != nil {
+		if err != nil && !errors.Is(err, errEmptyConditional) {
 			t.Fatalf("Parsing %v unexpectly failed. Error:\n%v", test.inTokens, err)
 		}
 

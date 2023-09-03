@@ -12,12 +12,12 @@ type Type uint8
 // When implementing new encoders, make sure to add the type above MaxEncoderType. Otherwise, compatibility
 // with existing databases is broken
 const (
-	EncoderTypeLZ4Custom Type = iota // LZ4 encoder / compressor with custom checksum stripping (default, hence allocated the value 0)
-	EncoderTypeNull                  // Null encoder
-	EncoderTypeZSTD                  // ZSTD encoder / compressor
-	EncoderTypeLZ4                   // LZ4 encoder / compressor based on available lz4 system library (1.9.4 recommended for performance)
+	EncoderTypeLZ4Custom Type = iota // EncoderTypeLZ4Custom : LZ4 encoder / compressor with custom checksum stripping (default, hence allocated the value 0)
+	EncoderTypeNull                  // EncoderTypeNull : Null encoder
+	EncoderTypeZSTD                  // EncoderTypeZSTD : ZSTD encoder / compressor
+	EncoderTypeLZ4                   // EncoderTypeLZ4 ; LZ4 encoder / compressor based on available lz4 system library (1.9.4 recommended for performance)
 
-	// should always be the last entry
+	// MaxEncoderType should always be the last entry
 	MaxEncoderType = EncoderTypeLZ4
 )
 
@@ -45,6 +45,6 @@ func GetTypeByString(t string) (Type, error) {
 	case "zstd":
 		return EncoderTypeZSTD, nil
 	default:
-		return EncoderTypeNull, fmt.Errorf("Unsupported encoder: %v", t)
+		return EncoderTypeNull, fmt.Errorf("unsupported encoder: %v", t)
 	}
 }

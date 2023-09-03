@@ -40,10 +40,10 @@ func (l List) Sort() List {
 
 		iv, jv := l[i], l[j]
 
-		if comp := bytes.Compare(iv.GetSip(), jv.GetSip()); comp != 0 {
+		if comp := bytes.Compare(iv.GetSIP(), jv.GetSIP()); comp != 0 {
 			return comp < 0
 		}
-		if comp := bytes.Compare(iv.GetDip(), jv.GetDip()); comp != 0 {
+		if comp := bytes.Compare(iv.GetDIP(), jv.GetDIP()); comp != 0 {
 			return comp < 0
 		}
 		if comp := bytes.Compare(iv.GetDport(), jv.GetDport()); comp != 0 {

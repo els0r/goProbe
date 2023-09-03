@@ -2,8 +2,9 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"os"
-	"strconv"
+	"path/filepath"
 
 	"github.com/els0r/goProbe/pkg/goDB/encoder"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/lz4cust"
@@ -50,7 +51,7 @@ func NewLegacyGPFile(p string) (*LegacyGPFile, error) {
 	)
 
 	// open file if it exists and read header
-	if f, err = os.Open(p); err != nil {
+	if f, err = os.Open(filepath.Clean(p)); err != nil {
 		return nil, err
 	}
 	if nH, err = f.Read(bufH); err != nil {
@@ -63,13 +64,13 @@ func NewLegacyGPFile(p string) (*LegacyGPFile, error) {
 		return nil, err
 	}
 	if nH != BufSize {
-		return nil, errors.New("Invalid header (blocks)")
+		return nil, errors.New("invalid header (blocks)")
 	}
 	if nTS != BufSize {
-		return nil, errors.New("Invalid header (lookup table)")
+		return nil, errors.New("invalid header (lookup table)")
 	}
 	if nLen != BufSize {
-		return nil, errors.New("Invalid header (block lengths)")
+		return nil, errors.New("invalid header (block lengths)")
 	}
 
 	// read the header information
@@ -93,7 +94,7 @@ func NewLegacyGPFile(p string) (*LegacyGPFile, error) {
 // ReadBlock returns the data for a given block in the file
 func (f *LegacyGPFile) ReadBlock(block int) ([]byte, error) {
 	if f.timestamps[block] == 0 && f.blocks[block] == 0 && f.lengths[block] == 0 {
-		return nil, errors.New("Block " + strconv.Itoa(block) + " is empty")
+		return nil, fmt.Errorf("block %d is empty", block)
 	}
 
 	var (
@@ -139,7 +140,7 @@ func (f *LegacyGPFile) ReadBlock(block int) ([]byte, error) {
 		return nil, err
 	}
 	if int64(uncompLen) != f.lengths[block] {
-		return nil, errors.New("Incorrect number of bytes read for decompression")
+		return nil, errors.New("incorrect number of bytes read for decompression")
 	}
 	f.lastSeekPos += readLen
 
@@ -154,7 +155,7 @@ func (f *LegacyGPFile) ReadTimedBlock(timestamp int64) ([]byte, error) {
 		}
 	}
 
-	return nil, errors.New("Timestamp " + strconv.Itoa(int(timestamp)) + " not found")
+	return nil, fmt.Errorf("timestamp %d not found", timestamp)
 }
 
 // GetBlocks returns the in-file location for all data blocks

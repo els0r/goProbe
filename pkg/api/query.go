@@ -12,11 +12,12 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
+// LogAndAbort logs an error and the aborts further processing
 func LogAndAbort(ctx context.Context, c *gin.Context, code int, err error) {
-	logging.FromContext(ctx).Error(err)
-	c.AbortWithError(code, err)
+	logging.FromContext(ctx).Error(c.AbortWithError(code, err))
 }
 
+// RunQuery executes the query and returns its result
 func RunQuery(caller, sourceData string, querier query.Runner, c *gin.Context) {
 	ctx := c.Request.Context()
 

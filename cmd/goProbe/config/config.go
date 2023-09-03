@@ -22,7 +22,7 @@ import (
 
 	"github.com/els0r/goProbe/pkg/defaults"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
-	json "github.com/json-iterator/go"
+	jsoniter "github.com/json-iterator/go"
 	"golang.org/x/time/rate"
 	"gopkg.in/yaml.v3"
 )
@@ -99,10 +99,10 @@ type RingBufferConfig struct {
 }
 
 const (
-	DefaultRingBufferBlockSize   int = 1 * 1024 * 1024 // 1 MB
-	DefaultRingBufferNumBlocks   int = 4
-	DefaultLocalBufferSizeLimit  int = 64 * 1024 * 1024 // 64 MB (globally, not per interface)
-	DefaultLocalBufferNumBuffers int = 1                // 1 Buffer should suffice
+	DefaultRingBufferBlockSize   int = 1 * 1024 * 1024  // DefaultRingBufferBlockSize : 1 MB
+	DefaultRingBufferNumBlocks   int = 4                // DefaultRingBufferNumBlocks : 4
+	DefaultLocalBufferSizeLimit  int = 64 * 1024 * 1024 // DefaultLocalBufferSizeLimit : 64 MB (globally, not per interface)
+	DefaultLocalBufferNumBuffers int = 1                // DefaultLocalBufferNumBuffers : 1 (should suffice)
 )
 
 // Ifaces stores the per-interface configuration
@@ -308,7 +308,11 @@ func ParseFile(path string) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer fd.Close()
+	defer func() {
+		if cerr := fd.Close(); cerr != nil && err == nil {
+			err = cerr
+		}
+	}()
 
 	return Parse(fd)
 }
@@ -330,7 +334,7 @@ func Parse(src io.Reader) (*Config, error) {
 		return nil, fmt.Errorf("failed to read bytes: %w", err)
 	}
 
-	if jsonErr := json.Unmarshal(b, config); jsonErr != nil {
+	if jsonErr := jsoniter.Unmarshal(b, config); jsonErr != nil {
 		yamlErr := yaml.Unmarshal(b, config)
 		if yamlErr != nil {
 			return nil, fmt.Errorf("%w: JSON: %w; YAML: %w", errorUnmarshalConfig, jsonErr, yamlErr)

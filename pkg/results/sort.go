@@ -52,18 +52,18 @@ func SortOrderFromString(s string) SortOrder {
 }
 
 // MarshalJSON implements the Marshaler interface for sort order
-func (s SortOrder) MarshalJSON() ([]byte, error) {
+func (s *SortOrder) MarshalJSON() ([]byte, error) {
 	return jsoniter.Marshal(s.String())
 }
 
 // UnmarshalJSON implements the Unmarshaler interface
-func (s SortOrder) UnmarshalJSON(b []byte) error {
+func (s *SortOrder) UnmarshalJSON(b []byte) error {
 	var str string
 	err := jsoniter.Unmarshal(b, &str)
 	if err != nil {
 		return err
 	}
-	s = SortOrderFromString(str)
+	*s = SortOrderFromString(str)
 	return nil
 }
 

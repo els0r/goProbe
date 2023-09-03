@@ -1,4 +1,5 @@
-//go:build !race
+//go:build !slimcap_nomock
+// +build !slimcap_nomock
 
 package e2etest
 
@@ -62,9 +63,10 @@ func runBenchmarkCaptureThroughput(t *testing.T, runtime time.Duration, randomiz
 		WithPermissions(goDB.DefaultPermissions)
 
 	captureManager := capture.NewManager(writeoutHandler, capture.WithSourceInitFn(setupSyntheticUnblockingSource(t, randomize, addReturn)))
-	captureManager.Update(ctx, config.Ifaces{
+	_, _, _, err = captureManager.Update(ctx, config.Ifaces{
 		"mock": defaultCaptureConfig,
 	})
+	require.Nil(t, err)
 
 	go func() {
 		time.Sleep(runtime)
@@ -88,8 +90,8 @@ func runBenchmarkCaptureThroughput(t *testing.T, runtime time.Duration, randomiz
 	cancel()
 }
 
-func setupSyntheticUnblockingSource(t testing.TB, randomize, addReturn bool) func(c *capture.Capture) (slimcap.SourceZeroCopy, error) {
-	return func(c *capture.Capture) (slimcap.SourceZeroCopy, error) {
+func setupSyntheticUnblockingSource(t testing.TB, randomize, addReturn bool) func(c *capture.Capture) (capture.Source, error) {
+	return func(c *capture.Capture) (capture.Source, error) {
 
 		mockSrc, err := afring.NewMockSourceNoDrain(c.Iface(),
 			afring.CaptureLength(link.CaptureLengthMinimalIPv6Transport),
@@ -158,8 +160,8 @@ func setupSyntheticUnblockingSource(t testing.TB, randomize, addReturn bool) fun
 			}
 		}
 
-		mockSrc.Run(time.Microsecond)
+		_, err = mockSrc.Run(time.Microsecond)
 
-		return mockSrc, nil
+		return mockSrc, err
 	}
 }

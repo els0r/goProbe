@@ -11,7 +11,11 @@
 
 package node
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/els0r/goProbe/pkg/types"
+)
 
 // Returns a desugared version of the receiver.
 func desugar(node Node) (Node, error) {
@@ -50,15 +54,15 @@ func desugarConditionNode(node conditionNode) (Node, error) {
 	// map aliases to proper attribute names
 	switch node.attribute {
 	case "src":
-		node.attribute = "sip"
+		node.attribute = types.SIPName
 	case "dst":
-		node.attribute = "dip"
+		node.attribute = types.DIPName
 	case "port":
-		node.attribute = "dport"
+		node.attribute = types.DportName
 	case "ipproto", "protocol":
-		node.attribute = "proto"
+		node.attribute = types.ProtoName
 	case "host":
-		return helper("host", "sip", "dip", node.comparator, node.value)
+		return helper("host", types.SIPName, types.DIPName, node.comparator, node.value)
 	case "net":
 		return helper("net", "snet", "dnet", node.comparator, node.value)
 	default:

@@ -11,6 +11,7 @@
 package node
 
 import (
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -81,7 +82,7 @@ func TestResolveInConditional(t *testing.T) {
 			t.Fatalf("Tokenizing %v unexpectly failed. Error:\n%v", test.conditional, err)
 		}
 		node, err := parseConditional(tokens)
-		if err != nil {
+		if err != nil && !errors.Is(err, errEmptyConditional) {
 			t.Fatalf("Parsing %v unexpectly failed. Error:\n%v", tokens, err)
 		}
 

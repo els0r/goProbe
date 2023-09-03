@@ -7,14 +7,6 @@ import (
 	"github.com/els0r/goProbe/pkg/types"
 )
 
-// CaptureMetadata represents metadata for one database block.
-// TODO: This will be replaced by global Capture Stats when merging #47
-// TODO: check with fako1024 if this can be removed already or if this is
-// post-v4-release
-type CaptureMetadata struct {
-	PacketsDropped uint64
-}
-
 // InterfaceMetadata describes the time range for which data is available, how many flows
 // were recorded and how much traffic was captured
 type InterfaceMetadata struct {
@@ -55,7 +47,7 @@ func (i *InterfaceMetadata) TableRow(detailed bool) []string {
 			formatting.Count(i.Counts.PacketsRcvd), formatting.Count(i.Counts.PacketsSent),
 			formatting.Size(i.Counts.BytesRcvd), formatting.Size(i.Counts.BytesSent),
 			formatting.Count(i.Traffic.NumV4Entries), formatting.Count(i.Traffic.NumV6Entries),
-			formatting.Count(uint64(i.Traffic.NumDrops)),
+			formatting.Count(i.Traffic.NumDrops),
 		)
 	} else {
 		str = append(str,

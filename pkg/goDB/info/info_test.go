@@ -27,7 +27,9 @@ func TestHostIDErrorHandling(t *testing.T) {
 func TestHostIDFallback(t *testing.T) {
 	testPath, err := os.MkdirTemp("/tmp", "hostid")
 	require.Nil(t, err)
-	defer os.RemoveAll(testPath)
+	defer func(t *testing.T) {
+		require.Nil(t, os.RemoveAll(testPath))
+	}(t)
 
 	id, err := fallbackHostID(testPath)
 	require.Nil(t, err)
@@ -55,8 +57,10 @@ func TestHostIDFallbackErrors(t *testing.T) {
 	t.Run("invalid_permissions", func(t *testing.T) {
 		testPath, err := os.MkdirTemp("/tmp", "hostid")
 		require.Nil(t, err)
-		defer os.RemoveAll(testPath)
-		os.Chmod(testPath, 0400)
+		defer func(t *testing.T) {
+			require.Nil(t, os.RemoveAll(testPath))
+		}(t)
+		require.Nil(t, os.Chmod(testPath, 0400))
 
 		id, err := fallbackHostID(testPath)
 		require.EqualError(t, err, fmt.Errorf("open %s: permission denied", filepath.Join(testPath, fallbackIDFileName)).Error())
@@ -67,8 +71,10 @@ func TestHostIDFallbackErrors(t *testing.T) {
 	t.Run("missing_write_permissions", func(t *testing.T) {
 		testPath, err := os.MkdirTemp("/tmp", "hostid")
 		require.Nil(t, err)
-		defer os.RemoveAll(testPath)
-		os.Chmod(testPath, 0500)
+		defer func(t *testing.T) {
+			require.Nil(t, os.RemoveAll(testPath))
+		}(t)
+		require.Nil(t, os.Chmod(testPath, 0500)) // #nosec G302
 
 		id, err := fallbackHostID(testPath)
 		require.EqualError(t, err, fmt.Errorf("failed to store new fallback host ID: open %s: permission denied", filepath.Join(testPath, fallbackIDFileName)).Error())
@@ -79,7 +85,9 @@ func TestHostIDFallbackErrors(t *testing.T) {
 	t.Run("not_a_dir", func(t *testing.T) {
 		testPath, err := os.CreateTemp("/tmp", "hostid")
 		require.Nil(t, err)
-		defer os.RemoveAll(testPath.Name())
+		defer func(t *testing.T) {
+			require.Nil(t, os.RemoveAll(testPath.Name()))
+		}(t)
 
 		id, err := fallbackHostID(testPath.Name())
 		require.EqualError(t, err, fmt.Errorf("path %s is not a directory", testPath.Name()).Error())

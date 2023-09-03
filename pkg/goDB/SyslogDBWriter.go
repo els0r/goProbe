@@ -38,7 +38,7 @@ func NewSyslogDBWriter() (*SyslogDBWriter, error) {
 // Write writes the aggregated flows to the syslog writer
 func (s *SyslogDBWriter) Write(flowmap *hashmap.AggFlowMap, iface string, timestamp int64) {
 	for i := flowmap.Iter(); i.Next(); {
-		s.logger.Info(
+		_ = s.logger.Info(
 			fmt.Sprintf("%d,%s,%s,%s",
 				timestamp,
 				iface,

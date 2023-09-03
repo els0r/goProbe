@@ -21,12 +21,15 @@
 package node
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/els0r/goProbe/pkg/goDB/conditions"
 	"github.com/els0r/goProbe/pkg/types"
 )
+
+const resNil = "<nil>"
 
 // ParseAndInstrument parses and instruments the given conditional string for evaluation.
 // This is the main external function related to conditionals.
@@ -37,7 +40,7 @@ func ParseAndInstrument(conditional string, dnsTimeout time.Duration) (Node, err
 	}
 
 	conditionalNode, err := parseConditional(tokens)
-	if err != nil {
+	if err != nil && !errors.Is(err, errEmptyConditional) {
 		return nil, err
 	}
 
@@ -121,7 +124,7 @@ type notNode struct {
 func (n notNode) String() string {
 	var s string
 	if n.node == nil {
-		s = "<nil>"
+		s = resNil
 	} else {
 		s = n.node.String()
 	}
@@ -147,12 +150,12 @@ type andNode struct {
 func (n andNode) String() string {
 	var sl, sr string
 	if n.left == nil {
-		sl = "<nil>"
+		sl = resNil
 	} else {
 		sl = n.left.String()
 	}
 	if n.right == nil {
-		sr = "<nil>"
+		sr = resNil
 	} else {
 		sr = n.right.String()
 	}
@@ -186,12 +189,12 @@ type orNode struct {
 func (n orNode) String() string {
 	var sl, sr string
 	if n.left == nil {
-		sl = "<nil>"
+		sl = resNil
 	} else {
 		sl = n.left.String()
 	}
 	if n.right == nil {
-		sr = "<nil>"
+		sr = resNil
 	} else {
 		sr = n.right.String()
 	}

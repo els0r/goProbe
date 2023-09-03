@@ -85,7 +85,7 @@ func TestPopulation(t *testing.T) {
 			testPacket := params.genDummyPacket(0)
 			refHash, refIsIPv4 := params.genEPHash()
 
-			epHash, isIPv4, _, errno := ParsePacket(testPacket.IPLayer(), testPacket.TotalLen())
+			epHash, isIPv4, _, errno := ParsePacket(testPacket.IPLayer())
 			require.Equal(t, capturetypes.ErrnoOK, errno, "population error")
 
 			require.Equal(t, refHash, epHash)
@@ -111,7 +111,7 @@ func BenchmarkPopulation(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				_, _, _, _ = ParsePacket(testPacket.IPLayer(), testPacket.TotalLen())
+				_, _, _, _ = ParsePacket(testPacket.IPLayer())
 			}
 		})
 	}

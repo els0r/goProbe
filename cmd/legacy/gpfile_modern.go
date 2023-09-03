@@ -4,13 +4,14 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
 	"github.com/els0r/goProbe/pkg/goDB/encoder"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 	"github.com/els0r/goProbe/pkg/goDB/storage"
-	"github.com/els0r/goProbe/pkg/goDB/storage/gpfile"
+	"github.com/fako1024/gotools/concurrency"
 )
 
 const (
@@ -68,7 +69,7 @@ type GPFile struct {
 	filename string
 
 	// file denotes the pointer to the data file
-	file            gpfile.ReadWriteSeekCloser
+	file            concurrency.ReadWriteSeekCloser
 	fileWriteBuffer *bufio.Writer
 
 	// header denotes the block header (list of blocks) contained in this file
@@ -91,7 +92,7 @@ type GPFile struct {
 	uncompData, blockData []byte
 
 	// Memory pool (optional)
-	memPool gpfile.MemPoolGCable
+	memPool concurrency.MemPoolGCable
 }
 
 // Option defines optional arguments to gpfile
@@ -108,7 +109,7 @@ func WithEncoder(e encoders.Type) Option {
 // upon first read access to minimize I/O load.
 // Seeking is handled by replacing the underlying file with a seekable
 // in-memory structure (c.f. readWriteSeekCloser interface)
-func WithReadAll(pool gpfile.MemPoolGCable) Option {
+func WithReadAll(pool concurrency.MemPoolGCable) Option {
 	return func(g *GPFile) {
 		g.memPool = pool
 	}
@@ -117,7 +118,7 @@ func WithReadAll(pool gpfile.MemPoolGCable) Option {
 // New returns a new GPFile object to read and write goProbe flow data
 func New(filename string, accessMode int, options ...Option) (*GPFile, error) {
 	g := &GPFile{
-		filename:           filename,
+		filename:           filepath.Clean(filename),
 		accessMode:         accessMode,
 		defaultEncoderType: defaultEncoderType,
 	}
@@ -172,7 +173,7 @@ func (g *GPFile) ReadBlock(timestamp int64) ([]byte, error) {
 
 	// If the data file is not yet available, open it
 	if g.file == nil {
-		if err := g.open(g.accessMode); err != nil {
+		if err := g.open(); err != nil {
 			return nil, err
 		}
 	}
@@ -250,7 +251,7 @@ func (g *GPFile) WriteBlock(timestamp int64, blockData []byte) error {
 
 	// If the data file is not yet available, open it
 	if g.file == nil {
-		if err := g.open(g.accessMode); err != nil {
+		if err := g.open(); err != nil {
 			return err
 		}
 	}
@@ -316,18 +317,18 @@ func (g *GPFile) DefaultEncoder() encoder.Encoder {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-func (g *GPFile) open(flags int) (err error) {
+func (g *GPFile) open() (err error) {
 	if g.file != nil {
 		return fmt.Errorf("file %s is already open", g.filename)
 	}
 
 	// Open file for append, create if not exists
-	g.file, err = os.OpenFile(g.filename, flags, defaultPermissions)
-	if flags == ModeWrite {
+	g.file, err = os.OpenFile(g.filename, g.accessMode, defaultPermissions)
+	if g.accessMode == ModeWrite {
 		g.fileWriteBuffer = bufio.NewWriter(g.file)
 	}
-	if flags == ModeRead && g.memPool != nil {
-		if g.file, err = gpfile.NewMemFile(g.file, g.memPool); err != nil {
+	if g.accessMode == ModeRead && g.memPool != nil {
+		if g.file, err = concurrency.NewMemFile(g.file, g.memPool); err != nil {
 			return err
 		}
 	}
@@ -339,7 +340,7 @@ func (g *GPFile) readHeader() error {
 
 	// Check if a header file exists for this file and open the file for buffered
 	// reading
-	gpfHeaderFile := g.filename + HeaderFileSuffix
+	gpfHeaderFile := filepath.Clean(g.filename + HeaderFileSuffix)
 	gpfHeader, err := os.OpenFile(gpfHeaderFile, os.O_RDONLY, defaultPermissions)
 	if err == nil {
 
@@ -405,7 +406,7 @@ func (g *GPFile) readHeader() error {
 func (g *GPFile) writeHeader() error {
 
 	// Open the header file for buffered writing
-	gpfHeaderFile := g.filename + HeaderFileSuffix
+	gpfHeaderFile := filepath.Clean(g.filename + HeaderFileSuffix)
 	gpfHeader, err := os.OpenFile(gpfHeaderFile, os.O_CREATE|os.O_WRONLY, defaultPermissions)
 	if err != nil {
 		return err

@@ -1,4 +1,4 @@
 package mockrunner
 
-type Runner struct {
-}
+// Runner denotes a mock (dummy) runner
+type Runner struct{}

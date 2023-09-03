@@ -1,7 +1,6 @@
 package results
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -12,9 +11,11 @@ import (
 	"time"
 
 	"github.com/els0r/goProbe/pkg/types"
+	jsoniter "github.com/json-iterator/go"
 )
 
 var (
+	// ErrorNoResults denotes that no results were returned from a query
 	ErrorNoResults = errors.New("query returned no results")
 )
 
@@ -52,11 +53,13 @@ type Summary struct {
 	Hits    Hits           `json:"hits"`
 }
 
+// Status denotes the overall status of the result
 type Status struct {
 	Code    types.Status `json:"code"`
 	Message string       `json:"message,omitempty"`
 }
 
+// New instantiates a new result
 func New() *Result {
 	return &Result{
 		Status: Status{
@@ -65,6 +68,7 @@ func New() *Result {
 	}
 }
 
+// Start prepares the beginning of the result
 func (r *Result) Start() {
 	r.Summary = Summary{
 		Timings: Timings{
@@ -74,6 +78,7 @@ func (r *Result) Start() {
 	r.HostsStatuses = make(HostsStatuses)
 }
 
+// End prepares the end of the result
 func (r *Result) End() {
 	r.Summary.Timings.QueryDuration = time.Since(r.Summary.Timings.QueryStart)
 	if len(r.Rows) == 0 {
@@ -85,10 +90,11 @@ func (r *Result) End() {
 	sort.Strings(r.Summary.Interfaces)
 }
 
-// HostsStatus captures the query status for every host queried
+// HostsStatuses captures the query status for every host queried
 type HostsStatuses map[string]Status
 
-func (hs HostsStatuses) Print(w io.Writer) {
+// Print adds the status of all hosts to the output / writer
+func (hs HostsStatuses) Print(w io.Writer) error {
 	var hosts []struct {
 		host string
 		Status
@@ -128,10 +134,11 @@ func (hs HostsStatuses) Print(w io.Writer) {
 	for i, host := range hosts {
 		fmt.Fprintf(tw, fmtStr, i+1, host.host, host.Code, host.Message)
 	}
-	tw.Flush()
+
+	return tw.Flush()
 }
 
-// Timinigs summarizes query runtimes
+// Timings summarizes query runtimes
 type Timings struct {
 	QueryStart         time.Time     `json:"query_start"`
 	QueryDuration      time.Duration `json:"query_duration_ns"`
@@ -215,7 +222,7 @@ func (l Labels) MarshalJSON() ([]byte, error) {
 	if !l.Timestamp.IsZero() {
 		aux.Timestamp = &l.Timestamp
 	}
-	return json.Marshal(aux)
+	return jsoniter.Marshal(aux)
 }
 
 // String prints all result labels
@@ -258,6 +265,7 @@ type ExtendedAttributes struct {
 	Attributes
 }
 
+// MarshalJSON marshals an attribute set into a JSON byte slice
 func (a Attributes) MarshalJSON() ([]byte, error) {
 	var aux = struct {
 		// TODO: this is expensive. Check how to get rid of re-assigning
@@ -276,7 +284,7 @@ func (a Attributes) MarshalJSON() ([]byte, error) {
 	if a.DstIP.IsValid() {
 		aux.DstIP = &a.DstIP
 	}
-	return json.Marshal(aux)
+	return jsoniter.Marshal(aux)
 }
 
 // String prints all result attributes

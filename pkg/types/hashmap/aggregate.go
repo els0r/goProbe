@@ -5,10 +5,10 @@ import "github.com/els0r/goProbe/pkg/types"
 // Type definitions for easy modification
 type (
 
-	// K defines the Key type of the map
+	// Key defines the Key type of the map
 	Key = []byte
 
-	// E defines the value / valent type of the map
+	// Val defines the value / valent type of the map
 	Val = types.Counters
 )
 
@@ -132,7 +132,6 @@ func (a AggFlowMap) Iter() *MetaIter {
 	}
 }
 
-// Iter provides a map Iter to allow traversal of both underlying maps (IPv4 and IPv6)
 // SetOrUpdate either creates a new entry based on the provided values or
 // updates any existing valent (if exists). This way may be very specific, but
 // it avoids intermediate allocation of a value type valent in case of an update

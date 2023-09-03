@@ -47,6 +47,6 @@ EXAMPLES
         "sip,dip"
 `
 
-func printExample(cmd *cobra.Command, args []string) {
+func printExample(_ *cobra.Command, _ []string) {
 	fmt.Println(examples)
 }
