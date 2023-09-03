@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/els0r/goProbe/pkg/api"
+	"github.com/els0r/goProbe/pkg/api/server"
+	"github.com/els0r/goProbe/pkg/goDB/info"
 	"github.com/els0r/goProbe/pkg/logging"
 	"github.com/els0r/goProbe/pkg/version"
 	"github.com/fako1024/httpc"
@@ -197,6 +199,11 @@ func (t *transport) RoundTrip(r *http.Request) (*http.Response, error) {
 
 // Modify activates retry behavior, timeout handling and authorization via the stored key
 func (c *DefaultClient) Modify(_ context.Context, req *httpc.Request) *httpc.Request {
+
+	req = req.Headers(httpc.Params{
+		server.RuntimeIDHeaderKey: info.RuntimeID(),
+	})
+
 	// retry any request that isn't 2xx
 	if c.retry {
 		req = req.RetryBackOff(c.retryIntervals).

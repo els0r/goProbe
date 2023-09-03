@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/els0r/goProbe/pkg/api"
+	"github.com/els0r/goProbe/pkg/goDB/info"
 	"github.com/els0r/goProbe/pkg/telemetry/metrics"
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus"
@@ -15,6 +16,10 @@ import (
 )
 
 const (
+
+	// RuntimeIDHeaderKey denotes the header name / key that identifies the server runtime ID
+	RuntimeIDHeaderKey = "X-GOPROBE-RUNTIME-ID"
+
 	maxMultipartMemory = 32 << 20 // 32 MiB
 )
 
@@ -124,6 +129,7 @@ func (server *DefaultServer) registerMiddlewares() {
 	server.router.Use(
 		api.TraceIDMiddleware(),
 		api.RequestLoggingMiddleware(),
+		api.RecursionDetectorMiddleware(RuntimeIDHeaderKey, info.RuntimeID()),
 	)
 
 	if server.metrics {

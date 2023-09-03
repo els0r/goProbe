@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"log/slog"
 	"net/http"
 	"time"
@@ -78,6 +79,19 @@ func RateLimitMiddleware(limiter *rate.Limiter) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if !limiter.Allow() {
 			c.AbortWithStatus(http.StatusTooManyRequests)
+			return
+		}
+		c.Next()
+	}
+}
+
+// RecursionDetectorMiddleware provides a means to avoid having a distributed querier query itself
+// into oblivion
+func RecursionDetectorMiddleware(headerKey, match string) gin.HandlerFunc {
+	ErrRecursionDetected := errors.New("API query recursion detected, cross-check host configuration")
+	return func(c *gin.Context) {
+		if c.Request.Header.Get(headerKey) == match {
+			logging.FromContext(c.Request.Context()).Error(c.AbortWithError(http.StatusBadRequest, ErrRecursionDetected))
 			return
 		}
 		c.Next()
