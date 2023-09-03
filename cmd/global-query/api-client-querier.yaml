@@ -1,8 +1,0 @@
-a:
-  addr: "localhost:6061"
-  key: "abc"
-  log: true
-b:
-  addr: "192.168.1.1:6061"
-  timeout: 15s
-  log: true
