@@ -1,7 +1,7 @@
 package capturetypes
 
 // ParsingErrno denotes a non-critical packet parsing error / failure
-type ParsingErrno int
+type ParsingErrno int8
 
 const (
 

@@ -40,10 +40,12 @@ const (
 	UDP    = 0x11 // UDP : 17
 	ESP    = 0x32 // ESP : 50
 	ICMPv6 = 0x3A // ICMPv6 : 58
+
+	EPHashSize = 37 // EPHashSize : The (static) length of an EPHash
 )
 
 // EPHash is a typedef that allows us to replace the type of hash
-type EPHash [37]byte
+type EPHash [EPHashSize]byte
 
 // Reverse calculates the reverse of an EPHash (i.e. source / destination switched)
 func (h EPHash) Reverse() (rev EPHash) {

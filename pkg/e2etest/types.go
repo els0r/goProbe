@@ -166,8 +166,9 @@ func (m mockIfaces) BuildResults(t *testing.T, testDir string, resGoQuery *resul
 	res.Query.Attributes = []string{types.SIPName, types.DIPName, types.DportName, types.ProtoName}
 	hostname, err := os.Hostname()
 	require.Nil(t, err)
+	hostID := info.GetHostID(testDir)
 	for i := 0; i < len(res.Rows); i++ {
-		res.Rows[i].Labels.HostID = info.GetHostID(testDir)
+		res.Rows[i].Labels.HostID = hostID
 		res.Rows[i].Labels.Hostname = hostname
 	}
 

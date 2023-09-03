@@ -174,9 +174,8 @@ func ParsePacket(ipLayer capture.IPLayer) (epHash capturetypes.EPHash, isIPv4 bo
 // Add a packet to the flow log. If the packet belongs to a flow
 // already present in the log, the flow will be updated. Otherwise,
 // a new flow will be created.
-func (f *FlowLog) Add(ipLayer capture.IPLayer, pktType capture.PacketType, pktTotalLen uint32) capturetypes.ParsingErrno {
+func (f *FlowLog) Add(epHash capturetypes.EPHash, pktType byte, pktSize uint32, isIPv4 bool, auxInfo byte, errno capturetypes.ParsingErrno) capturetypes.ParsingErrno {
 
-	epHash, isIPv4, auxInfo, errno := ParsePacket(ipLayer)
 	if errno > capturetypes.ErrnoOK {
 		if errno.ParsingFailed() {
 			return errno
@@ -186,13 +185,13 @@ func (f *FlowLog) Add(ipLayer capture.IPLayer, pktType capture.PacketType, pktTo
 
 	// update or assign the flow
 	if flowToUpdate, existsHash := f.flowMap[string(epHash[:])]; existsHash {
-		flowToUpdate.UpdateFlow(epHash, auxInfo, pktType, pktTotalLen)
+		flowToUpdate.UpdateFlow(epHash, auxInfo, pktType, pktSize)
 	} else {
 		epHashReverse := epHash.Reverse()
 		if flowToUpdate, existsReverseHash := f.flowMap[string(epHashReverse[:])]; existsReverseHash {
-			flowToUpdate.UpdateFlow(epHashReverse, auxInfo, pktType, pktTotalLen)
+			flowToUpdate.UpdateFlow(epHashReverse, auxInfo, pktType, pktSize)
 		} else {
-			f.flowMap[string(epHash[:])] = NewFlow(epHash, isIPv4, auxInfo, pktType, pktTotalLen)
+			f.flowMap[string(epHash[:])] = NewFlow(epHash, isIPv4, auxInfo, pktType, pktSize)
 		}
 	}
 
