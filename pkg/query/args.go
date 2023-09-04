@@ -213,13 +213,6 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 		return s, err
 	}
 
-	// check external calls
-	if a.External {
-		if a.In && a.Out {
-			a.Sum, a.In, a.Out = true, false, false
-		}
-	}
-
 	switch {
 	case a.Sum:
 		s.Direction = types.DirectionSum
