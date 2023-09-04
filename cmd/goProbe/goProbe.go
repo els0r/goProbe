@@ -26,8 +26,8 @@ import (
 	gpserver "github.com/els0r/goProbe/pkg/api/goprobe/server"
 	"github.com/els0r/goProbe/pkg/api/server"
 	"github.com/els0r/goProbe/pkg/capture"
-	"github.com/els0r/goProbe/pkg/logging"
 	"github.com/els0r/goProbe/pkg/version"
+	"github.com/els0r/telemetry/logging"
 
 	gpconf "github.com/els0r/goProbe/cmd/goProbe/config"
 )

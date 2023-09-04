@@ -20,7 +20,7 @@ import (
 	"os/exec"
 	"testing"
 
-	"github.com/els0r/goProbe/pkg/logging"
+	"github.com/els0r/telemetry/logging"
 )
 
 // Pre-defined Benchmarks

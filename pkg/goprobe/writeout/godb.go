@@ -10,7 +10,7 @@ import (
 	"github.com/els0r/goProbe/pkg/capture/capturetypes"
 	"github.com/els0r/goProbe/pkg/goDB"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
-	"github.com/els0r/goProbe/pkg/logging"
+	"github.com/els0r/telemetry/logging"
 )
 
 // GoDBHandler denotes a GoDB writeout handler
