@@ -31,7 +31,7 @@ jobs:
 
       - name: Build for AMD64
         run: |
-          GOOS=linux GOARCH=amd64 go build -a -tags jsoniter -o goProbe -pgo=auto ./cmd/goProbe
+          GOOS=linux GOARCH=amd64 go build -a -tags jsoniter,slimcap_nomock -o goProbe -pgo=auto ./cmd/goProbe
           GOOS=linux GOARCH=amd64 go build -a -tags jsoniter -o global-query -pgo=auto ./cmd/global-query
           GOOS=linux GOARCH=amd64 go build -a -o goQuery -pgo=auto ./cmd/goQuery
           GOOS=linux GOARCH=amd64 go build -a -o goConvert ./cmd/goConvert
@@ -107,7 +107,7 @@ jobs:
 
       - name: Build for AMD64
         run: |
-          GOOS=linux GOARCH=amd64 go build -a -tags jsoniter -o goProbe -pgo=auto ./cmd/goProbe
+          GOOS=linux GOARCH=amd64 go build -a -tags jsoniter,slimcap_nomock -o goProbe -pgo=auto ./cmd/goProbe
           GOOS=linux GOARCH=amd64 go build -a -tags jsoniter -o global-query -pgo=auto ./cmd/global-query
           GOOS=linux GOARCH=amd64 go build -a -o goQuery -pgo=auto ./cmd/goQuery
           GOOS=linux GOARCH=amd64 go build -a -o goConvert ./cmd/goConvert
@@ -167,7 +167,7 @@ jobs:
 
       - name: Build for AMD64
         run: |
-          GOOS=linux GOARCH=amd64 go build -buildvcs=false -a -tags jsoniter -o goProbe -pgo=auto ./cmd/goProbe
+          GOOS=linux GOARCH=amd64 go build -buildvcs=false -a -tags jsoniter,slimcap_nomock -o goProbe -pgo=auto ./cmd/goProbe
           GOOS=linux GOARCH=amd64 go build -buildvcs=false -a -tags jsoniter -o global-query -pgo=auto ./cmd/global-query
           GOOS=linux GOARCH=amd64 go build -buildvcs=false -a -o goQuery -pgo=auto ./cmd/goQuery
           GOOS=linux GOARCH=amd64 go build -buildvcs=false -a -o goConvert ./cmd/goConvert
