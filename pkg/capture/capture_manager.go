@@ -12,8 +12,8 @@ import (
 	"github.com/els0r/goProbe/pkg/goDB"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 	"github.com/els0r/goProbe/pkg/goprobe/writeout"
-	"github.com/els0r/goProbe/pkg/logging"
 	"github.com/els0r/goProbe/pkg/types/hashmap"
+	"github.com/els0r/telemetry/logging"
 )
 
 const allowedWriteoutDurationFraction = 0.1

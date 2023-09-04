@@ -7,7 +7,7 @@ import (
 	"runtime/pprof"
 
 	"github.com/els0r/goProbe/cmd/goQuery/pkg/conf"
-	"github.com/els0r/goProbe/pkg/logging"
+	"github.com/els0r/telemetry/logging"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )

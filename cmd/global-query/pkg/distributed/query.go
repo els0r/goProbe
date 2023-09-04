@@ -7,10 +7,10 @@ import (
 	"sync"
 
 	"github.com/els0r/goProbe/cmd/global-query/pkg/hosts"
-	"github.com/els0r/goProbe/pkg/logging"
 	"github.com/els0r/goProbe/pkg/query"
 	"github.com/els0r/goProbe/pkg/results"
 	"github.com/els0r/goProbe/pkg/types"
+	"github.com/els0r/telemetry/logging"
 )
 
 // QueryRunner denotes a query runner / executor, wrapping a Querier interface instance with

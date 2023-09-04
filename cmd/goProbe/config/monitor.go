@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/els0r/goProbe/pkg/logging"
+	"github.com/els0r/telemetry/logging"
 )
 
 const defaultReloadInterval = 5 * time.Minute

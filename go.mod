@@ -3,6 +3,7 @@ module github.com/els0r/goProbe
 go 1.21
 
 require (
+	github.com/els0r/telemetry/logging v0.0.0-20230904121842-8451f59b6057
 	github.com/fako1024/gotools/bitpack v0.0.0-20230821104146-b3b1387dec32
 	github.com/fako1024/gotools/concurrency v0.0.0-20230821104146-b3b1387dec32
 	github.com/fako1024/httpc v1.0.15

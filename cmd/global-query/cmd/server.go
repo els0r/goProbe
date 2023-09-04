@@ -11,7 +11,7 @@ import (
 	"github.com/els0r/goProbe/cmd/global-query/pkg/conf"
 	gqserver "github.com/els0r/goProbe/pkg/api/globalquery/server"
 	"github.com/els0r/goProbe/pkg/api/server"
-	"github.com/els0r/goProbe/pkg/logging"
+	"github.com/els0r/telemetry/logging"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
