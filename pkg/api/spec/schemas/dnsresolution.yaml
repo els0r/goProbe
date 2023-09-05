@@ -1,0 +1,14 @@
+type: object
+properties:
+  enabled:
+    type: boolean
+    description: Enable reverse DNS lookups
+    example: false
+  timeout:
+    type: string
+    description: Timeout for reverse DNS lookups
+    example: "2s"
+  max_rows:
+    type: integer
+    description: Maximum number of rows to resolve
+    example: 100

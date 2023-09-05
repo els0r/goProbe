@@ -1,0 +1,13 @@
+type: array
+items:
+  $ref: '#/Row'
+
+Row:
+  type: object
+  properties:
+    labels:
+      $ref: './labels.yaml'
+    attributes:
+      $ref: './attributes.yaml'
+    counters:
+      $ref: './counters.yaml'

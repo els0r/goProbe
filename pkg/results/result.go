@@ -31,8 +31,8 @@ type Result struct {
 
 // Query stores the kind of query that was run
 type Query struct {
-	Attributes []string `json:"attributes"`
-	Condition  string   `json:"condition,omitempty"`
+	Attributes []string `json:"attributes"`          // Attributes: the attributes that were queried. Example: [sip dip dport proto]
+	Condition  string   `json:"condition,omitempty"` // Condition: the condition that was provided. Example: port=80 && proto=TCP
 }
 
 // TimeRange describes the interval for which data is queried and presented
@@ -69,8 +69,8 @@ type Timings struct {
 // Hits stores how many flow records were returned in total and how many are
 // returned in Rows
 type Hits struct {
-	Displayed int `json:"displayed"` // Displayed: how many flow records were returned in Rows
-	Total     int `json:"total"`     // Total: how many flow records were returned in total
+	Displayed int `json:"displayed"` // Displayed: how manyflow records were returned in Rows that are displayed
+	Total     int `json:"total"`     // Total: how many flow records matching the condition were found in total
 }
 
 // Row is a human-readable, aggregatable representation of goDB's data

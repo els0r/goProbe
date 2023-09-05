@@ -1,0 +1,7 @@
+type: object
+example:
+  hostA:
+    code: ok
+    message: "Query succeeded"
+additionalProperties:
+  $ref: './status.yaml'

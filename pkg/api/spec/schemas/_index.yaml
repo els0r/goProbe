@@ -1,0 +1,30 @@
+# request data
+Args:
+  $ref: './args.yaml'
+DNSResolution:
+  $ref: './dnsresolution.yaml'
+
+# response data
+Result:
+  $ref: './result.yaml'
+Status:
+  $ref: './status.yaml'
+HostsStatuses:
+  $ref: './hoststatuses.yaml'
+Summary:
+  $ref: './summary.yaml'
+Query:
+  $ref: './query.yaml'
+Timings:
+  $ref: './timings.yaml'
+Hits:
+  $ref: './hits.yaml'
+Rows:
+  $ref: './rows.yaml'
+Counters:
+  $ref: './counters.yaml'
+Labels:
+  $ref: './labels.yaml'
+Attributes:
+  $ref: './attributes.yaml'
+

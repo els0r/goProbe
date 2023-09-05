@@ -1,0 +1,10 @@
+type: object
+properties:
+  displayed:
+    type: integer
+    example: 1
+    description: How many flow records were returned in Rows that are displayed
+  total:
+    type: integer
+    example: 1
+    description: How many flow records matching the condition were found in total

@@ -52,7 +52,7 @@ func RunQuery(caller, sourceData string, querier query.Runner, c *gin.Context) {
 
 	result, err := querier.Run(ctx, queryArgs)
 	if err != nil {
-		LogAndAbort(ctx, c, http.StatusBadRequest, fmt.Errorf("%s query failed: %w", sourceData, err))
+		LogAndAbort(ctx, c, http.StatusInternalServerError, fmt.Errorf("%s query failed: %w", sourceData, err))
 		return
 	}
 

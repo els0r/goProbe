@@ -1,0 +1,13 @@
+# Result
+type: object
+properties:
+  status:
+    $ref: './status.yaml'
+  hosts_statuses:
+    $ref: './hoststatuses.yaml'
+  summary:
+    $ref: './summary.yaml'
+  query:
+    $ref: './query.yaml'
+  rows:
+    $ref: './rows.yaml'

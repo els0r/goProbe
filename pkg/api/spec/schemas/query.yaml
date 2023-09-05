@@ -1,0 +1,16 @@
+type: object
+properties:
+  attributes:
+    type: array
+    items:
+      type: string
+      example:
+        - sip
+        - dip
+        - dport
+        - proto
+    description: The query attributes
+  condition:
+    type: string
+    example: "port=80 && proto=TCP"
+    description: The query condition

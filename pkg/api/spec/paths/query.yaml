@@ -1,0 +1,174 @@
+get:
+  summary: Perform a query
+  parameters:
+    - name: query
+      in: query
+      description: The query type
+      required: true
+      schema:
+        type: string
+        example: sip,dip,dport,proto
+    - name: ifaces
+      in: query
+      description: The interfaces to query
+      required: true
+      schema:
+        type: string
+        example: eth0,eth1
+    - name: host_query
+      in: query
+      description: The hosts for which data is queried (comma-separated list)
+      schema:
+        type: string
+        example: hostA,hostB,hostC
+    - name: hostname
+      in: query
+      description: The hostname for which data is queried
+      schema:
+        type: string
+        example: localhost
+    - name: host_id
+      in: query
+      description: The host id for which data is queried
+      schema:
+        type: integer
+        example: 12345
+    - name: condition
+      in: query
+      description: The condition to filter data by
+      schema:
+        type: string
+        example: port=80 && proto=TCP
+    - name: in
+      in: query
+      description: Only show incoming packets/bytes
+      schema:
+        type: boolean
+        example: false
+    - name: out
+      in: query
+      description: Only show outgoing packets/bytes
+      schema:
+        type: boolean
+        example: false
+    - name: sum
+      in: query
+      description: Show sum of incoming/outgoing packets/bytes
+      schema:
+        type: boolean
+        example: false
+    - name: first
+      in: query
+      description: The first timestamp to query
+      schema:
+        type: string
+        example: 2020-08-12T09:47:00+0200
+    - name: last
+      in: query
+      description: The last timestamp to query
+      schema:
+        type: string
+        example: -24h
+    - name: format
+      in: query
+      description: The output format
+      schema:
+        type: string
+        enum: [json, csv, table]
+        example: json
+    - name: sort_by
+      in: query
+      description: Column to sort by
+      schema:
+        type: string
+        enum: [packets, bytes]
+        example: bytes
+    - name: num_results
+      in: query
+      description: Number of results to return/print
+      schema:
+        type: integer
+        example: 25
+    - name: sort_ascending
+      in: query
+      description: Sort ascending instead of the default descending
+      schema:
+        type: boolean
+        example: false
+    - name: list
+      in: query
+      description: Only list interfaces and return
+      schema:
+        type: boolean
+        example: false
+    - name: version
+      in: query
+      description: Only print version and return
+      schema:
+        type: boolean
+        example: false
+    - name: dns_resolution.enabled
+      in: query
+      description: Enable reverse DNS lookups
+      schema:
+        type: boolean
+        example: false
+    - name: dns_resolution.timeout
+      in: query
+      description: Timeout for reverse DNS lookups
+      schema:
+        type: string
+        example: 2s
+    - name: dns_resolution.max_rows
+      in: query
+      description: Maximum number of rows to resolve
+      schema:
+        type: integer
+        example: 20
+    - name: max_mem_pct
+      in: query
+      description: Maximum percentage of available host memory to use for query processing
+      schema:
+        type: integer
+        example: 80
+    - name: low_mem
+      in: query
+      description: Use less memory for query processing
+      schema:
+        type: boolean
+        example: false
+    - name: caller
+      in: query
+      description: Stores who produced these args (caller)
+      schema:
+        type: string
+        example: "swagger-ui"
+    - name: live
+      in: query
+      description: Request live flow data (in addition to DB results)
+      schema:
+        type: boolean
+        example: true
+  responses:
+    '200':
+      $ref: '../responses/success.yaml'
+    '400':
+      $ref: '../responses/bad_request.yaml'
+    '500':
+      $ref: '../responses/internal_server_error.yaml'
+post:
+  summary: Perform a query
+  requestBody:
+    description: The query args
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: '../schemas/args.yaml'
+  responses:
+    '200':
+      $ref: '../responses/success.yaml'
+    '400':
+      $ref: '../responses/bad_request.yaml'
+    '500':
+      $ref: '../responses/internal_server_error.yaml'

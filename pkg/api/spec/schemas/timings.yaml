@@ -1,0 +1,14 @@
+type: object
+properties:
+  query_start:
+    type: string
+    format: date-time
+    description: The time when the query started
+  query_duration_ns:
+    type: integer
+    example: 12038900
+    description: The time it took to run the query in nanoseconds
+  resolution_duration:
+    type: integer
+    example: 32038900
+    description: The time it took to resolve all IPs in nanoseconds
