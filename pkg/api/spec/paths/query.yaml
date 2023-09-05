@@ -62,7 +62,7 @@ get:
       description: The first timestamp to query
       schema:
         type: string
-        example: 2020-08-12T09:47:00+0200
+        example: 2020-08-12T09:47:00+02:00
     - name: last
       in: query
       description: The last timestamp to query
@@ -148,7 +148,7 @@ get:
       description: Request live flow data (in addition to DB results)
       schema:
         type: boolean
-        example: true
+        example: false
   responses:
     '200':
       $ref: '../responses/success.yaml'

@@ -40,7 +40,7 @@ properties:
   first:
     type: string
     description: The first timestamp to query
-    example: "2020-08-12T09:47:00+0200"
+    example: "2020-08-12T09:47:00+02:00"
   last:
     type: string
     description: The last timestamp to query

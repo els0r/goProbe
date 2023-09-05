@@ -2,9 +2,10 @@
 *.deb
 *.test
 absolute
-cmd/gpctl/gpctl
+cmd/global-query/global-query
+cmd/goConvert/goConvert
 cmd/goProbe/goProbe
 cmd/goQuery/goQuery
-cmd/goConvert/goConvert
+cmd/gpctl/gpctl
 cmd/legacy/legacy
 .vscode/

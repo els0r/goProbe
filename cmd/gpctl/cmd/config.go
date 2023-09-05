@@ -13,7 +13,7 @@ import (
 	"github.com/els0r/goProbe/cmd/goProbe/config"
 	"github.com/els0r/goProbe/cmd/gpctl/pkg/conf"
 	"github.com/els0r/goProbe/pkg/api/goprobe/client"
-	"github.com/els0r/goProbe/pkg/types"
+	"github.com/els0r/goProbe/pkg/types/shellformat"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"github.com/xlab/tablewriter"
@@ -103,7 +103,7 @@ func configEntrypoint(ctx context.Context, cmd *cobra.Command, args []string) er
 
 	table := tablewriter.CreateTable()
 	table.UTF8Box()
-	table.AddTitle(types.FormatShell("Interface Configuration", types.Bold))
+	table.AddTitle(shellformat.FormatShell("Interface Configuration", shellformat.Bold))
 
 	table.AddRow("", "", "ring buffer", "ring buffer")
 	table.AddRow("iface", "promisc", "block size", "num blocks")
