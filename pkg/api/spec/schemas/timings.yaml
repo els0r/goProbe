@@ -1,4 +1,8 @@
 type: object
+description: Timings summarizes query runtimes
+required:
+  - query_start
+  - query_duration_ns
 properties:
   query_start:
     type: string

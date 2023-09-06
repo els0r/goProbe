@@ -19,12 +19,11 @@ Timings:
   $ref: './timings.yaml'
 Hits:
   $ref: './hits.yaml'
-Rows:
-  $ref: './rows.yaml'
+Row:
+  $ref: './row.yaml'
 Counters:
   $ref: './counters.yaml'
 Labels:
   $ref: './labels.yaml'
 Attributes:
   $ref: './attributes.yaml'
-

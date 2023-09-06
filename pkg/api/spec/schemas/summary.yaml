@@ -1,4 +1,11 @@
 type: object
+required:
+  - interfaces
+  - totals
+  - timings
+  - hits
+  - time_first
+  - time_last
 properties:
   interfaces:
     type: array

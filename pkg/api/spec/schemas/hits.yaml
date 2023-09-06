@@ -1,4 +1,8 @@
 type: object
+description: Hits stores how many flow records were returned in total and how many are returned in Rows
+required:
+  - displayed
+  - total
 properties:
   displayed:
     type: integer

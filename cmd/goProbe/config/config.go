@@ -67,12 +67,8 @@ type DBConfig struct {
 
 // CaptureConfig stores the capture / buffer related configuration for an individual interface
 type CaptureConfig struct {
-
-	// Promisc enables / disables promiscuous capture mode
-	Promisc bool `json:"promisc" yaml:"promisc"`
-
-	// RingBuffer denotes the kernel ring buffer configuration of this interface
-	RingBuffer *RingBufferConfig `json:"ring_buffer" yaml:"ring_buffer"`
+	Promisc    bool              `json:"promisc" yaml:"promisc"`         // Promisc: enables / disables promiscuous capture mode. Example: true
+	RingBuffer *RingBufferConfig `json:"ring_buffer" yaml:"ring_buffer"` // RingBuffer: denotes the kernel ring buffer configuration of this interface
 }
 
 // LocalBufferConfig stores the shared local in-memory buffer configuration
@@ -89,12 +85,13 @@ type LocalBufferConfig struct {
 
 // RingBufferConfig stores the kernel ring buffer related configuration for an individual interface
 type RingBufferConfig struct {
-
-	// BlockSize specifies the size of a block, which defines, how many packets
+	// BlockSize: specifies the size of a block, which defines, how many packets
 	// can be held within a block
+	// Example: 1048576
 	BlockSize int `json:"block_size" yaml:"block_size"`
 
-	// NumBlocks guides how many blocks are part of the ring buffer
+	// NumBlocks: guides how many blocks are part of the ring buffer
+	// Example: 4
 	NumBlocks int `json:"num_blocks" yaml:"num_blocks"`
 }
 

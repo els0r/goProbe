@@ -1,5 +1,5 @@
 hostA:
-  addr: "localhost:8145"
+  addr: "unix:/var/run/goprobe"
   timeout: 5s
   log: true
 hostB:

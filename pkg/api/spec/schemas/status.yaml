@@ -1,4 +1,7 @@
 type: object
+description: Status denotes the overall status of the result
+required:
+  - code
 properties:
   code:
     type: string

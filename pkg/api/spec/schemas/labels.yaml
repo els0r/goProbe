@@ -1,4 +1,5 @@
 type: object
+description: Labels hold labels by which the goDB database is partitioned
 properties:
   timestamp:
     type: string

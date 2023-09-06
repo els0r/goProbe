@@ -23,29 +23,16 @@ type InterfaceStats map[string]CaptureStats
 
 // CaptureStats stores the capture stores its statistics
 type CaptureStats struct {
+	StartedAt      time.Time `json:"started_at"`      // StartedAt: denotes the time when the capture was started. Example: "2021-01-01T00:00:00Z"
+	Received       uint64    `json:"received"`        // Received: denotes the number of packets received. Example: 69
+	ReceivedTotal  uint64    `json:"received_total"`  // ReceivedTotal: denotes the number of packets received since the capture was started. Example: 69000
+	Processed      uint64    `json:"processed"`       // Processed: denotes the number of packets processed by the capture. Example: 70
+	ProcessedTotal uint64    `json:"processed_total"` // ProcessedTotal denotes the number of packets processed since the capture was started. Example: 70000
+	Dropped        uint64    `json:"dropped"`         // Dropped: denotes the number of packets dropped. Example: 3
+	DroppedTotal   uint64    `json:"dropped_total"`   // DroppedTotal: denotes the number of packets dropped since the capture was started. Example: 20
 
-	// StartedAt denotes the time when the capture was started
-	StartedAt time.Time `json:"started_at"`
-
-	// Received denotes the number of packets received
-	Received uint64 `json:"received"`
-
-	// ReceivedTotal denotes the number of packets received since the capture was started
-	ReceivedTotal uint64 `json:"received_total"`
-
-	// Processed denotes the number of packets processed by the capture
-	Processed uint64 `json:"processed"`
-
-	// ProcessedTotal denotes the number of packets processed since the capture was started
-	ProcessedTotal uint64 `json:"processed_total"`
-
-	// Dropped denotes the number of packets dropped
-	Dropped uint64 `json:"dropped"`
-
-	// DroppedTotal denotes the number of packets dropped since the capture was started
-	DroppedTotal uint64 `json:"dropped_total"`
-
-	// ParsingErrors denotes all packet parsing errors / failures encountered
+	// ParsingErrors: denotes all packet parsing errors / failures encountered
+	// Example: [23, 0]
 	ParsingErrors ParsingErrTracker `json:"parsing_errors,omitempty"`
 }
 

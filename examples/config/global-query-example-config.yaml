@@ -9,4 +9,4 @@ querier:
   max_concurrent: 64
   config: ./examples/config/global-query-api-client-querier-example-config.yaml
 server:
-  addr: localhost:8145
+  addr: localhost:8146

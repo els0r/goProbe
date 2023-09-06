@@ -1,5 +1,7 @@
 get:
-  summary: Perform a query
+  summary: Perform a query against either a local goDB or via a global-query server using URL query parameters
+  tags:
+    - query
   parameters:
     - name: query
       in: query
@@ -157,7 +159,9 @@ get:
     '500':
       $ref: '../responses/internal_server_error.yaml'
 post:
-  summary: Perform a query
+  summary: Perform a query against either a local goDB or via a global-query server using a request body
+  tags:
+    - query
   requestBody:
     description: The query args
     required: true

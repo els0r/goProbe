@@ -1,5 +1,11 @@
 # Result
 type: object
+required:
+  - status
+  - hosts_statuses
+  - summary
+  - query
+  - rows
 properties:
   status:
     $ref: './status.yaml'
@@ -10,4 +16,7 @@ properties:
   query:
     $ref: './query.yaml'
   rows:
-    $ref: './rows.yaml'
+    type: array
+    items:
+      $ref: './row.yaml'
+

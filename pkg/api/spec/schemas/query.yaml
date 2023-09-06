@@ -1,4 +1,7 @@
 type: object
+description: Query stores the kind of query that was run
+required:
+  - attributes
 properties:
   attributes:
     type: array

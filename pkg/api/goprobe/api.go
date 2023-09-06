@@ -21,8 +21,8 @@ const (
 const QueryRoute = "/_query"
 
 type response struct {
-	StatusCode int    `json:"status_code"`
-	Error      string `json:"error,omitempty"`
+	StatusCode int    `json:"status_code"`     // StatusCode: stores the HTTP status code of the response. Example: 200
+	Error      string `json:"error,omitempty"` // Error: stores the error message if the request failed. Example: "interface not found"
 }
 
 // StatusRoute is the route to query the current status
@@ -31,12 +31,14 @@ const StatusRoute = "/status"
 // StatusResponse is the response to a status query
 type StatusResponse struct {
 	response
-	// LastWriteout denotes the time when the last writeout was performed
+	// LastWriteout: denotes the time when the last writeout was performed
+	// Example: "2021-01-01T00:05:00Z"
 	LastWriteout time.Time `json:"last_writeout"`
-	// StartedAt denotes the time when the capture manager was initialized and
+	// StartedAt: denotes the time when the capture manager was initialized and
 	// started capturing
+	// Example: "2021-01-01T00:00:00Z"
 	StartedAt time.Time `json:"started_at"`
-	// Statuses stores the statistics for each interface
+	// Statuses: stores the statistics for each interface
 	Statuses capturetypes.InterfaceStats `json:"statuses"`
 }
 
@@ -49,19 +51,15 @@ const ConfigReloadRoute = "/_reload"
 // ConfigResponse is the response to a config query
 type ConfigResponse struct {
 	response
-	// Ifaces stores the current configuration for each interface
-	Ifaces config.Ifaces `json:"ifaces"`
+	Ifaces config.Ifaces `json:"ifaces"` // Ifaces: stores the current configuration for each interface
 }
 
 // ConfigUpdateResponse is the response to a config update
 type ConfigUpdateResponse struct {
 	response
-	// Enabled stores the interfaces that were enabled
-	Enabled []string `json:"enabled"`
-	// Updated stores the interfaces that were updated
-	Updated []string `json:"updated"`
-	// Disabled stores the interfaces that were disabled
-	Disabled []string `json:"disabled"`
+	Enabled  []string `json:"enabled"`  // Enabled: stores the interfaces that were enabled. Example: ["eth0", "eth1"]
+	Updated  []string `json:"updated"`  // Updated: stores the interfaces that were updated. Example: ["eth2"]
+	Disabled []string `json:"disabled"` // Disabled: stores the interfaces that were disabled. Example: ["eth5"]
 }
 
 // ConfigUpdateRequest is the payload to update the configuration of all

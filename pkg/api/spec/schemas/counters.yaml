@@ -1,4 +1,10 @@
 type: object
+description: Counters stores the goProbe flow counters
+required:
+  - br
+  - bs
+  - pr
+  - ps
 properties:
   br:
     type: integer

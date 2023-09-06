@@ -1,5 +1,8 @@
 # Args
 type: object
+required:
+  - query
+  - ifaces
 properties:
   query:
     type: string

@@ -1,4 +1,5 @@
 type: object
+description: Attributes are traffic attributes by which the goDB can be aggregated
 properties:
   sip:
     type: string

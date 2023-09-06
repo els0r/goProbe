@@ -7,7 +7,7 @@ query:
   server:
     # addr defines under which address the global-query API server is reachable. For unix sockets,
     # the prefix unix: is required
-    addr: "http://global-query.example.com:8145"
+    addr: "http://global-query.example.com:8146"
   # timeout specifies the timeout for queries. The parameter is used for both query modes
   timeout: 30s
   # log defines the query log file to which queries are logged. Not their results, just the stages of query preparation,

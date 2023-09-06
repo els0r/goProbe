@@ -4,7 +4,6 @@ package capturetypes
 type ParsingErrno int
 
 const (
-
 	// ErrnoOK : No Error
 	ErrnoOK ParsingErrno = iota - 2
 
