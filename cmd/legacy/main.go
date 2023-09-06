@@ -40,7 +40,31 @@ var logger *logging.L
 
 func main() {
 
-	err := logging.Init(logging.LevelInfo, logging.EncodingLogfmt,
+	var (
+		inPath, outPath  string
+		profilePath      string
+		dryRun, debug    bool
+		nWorkers         int
+		compressionLevel int
+		dbPermissionsStr string
+		wg               sync.WaitGroup
+	)
+	flag.StringVar(&inPath, "i", "", "Path to (legacy) input goDB")
+	flag.StringVar(&outPath, "o", "", "Path to output goDB")
+	flag.StringVar(&profilePath, "profile", "", "Path to (optional) output CPU profile")
+	flag.BoolVar(&dryRun, "dry-run", true, "Perform a dry-run")
+	flag.StringVar(&dbPermissionsStr, "p", fmt.Sprintf("%o", goDB.DefaultPermissions), "Permissions to use when writing files to DB (UNIX octal file mode)")
+	flag.IntVar(&nWorkers, "n", runtime.NumCPU()/2, "Number of parallel conversion workers")
+	flag.IntVar(&compressionLevel, "l", 0, "Custom LZ4 compression level (uses internal default if <= 0)")
+	flag.BoolVar(&debug, "debug", false, "Enable debug / verbose mode")
+	flag.Parse()
+
+	logLevel := logging.LevelInfo
+	if debug {
+		logLevel = logging.LevelDebug
+	}
+	err := logging.Init(logLevel,
+		logging.EncodingLogfmt,
 		logging.WithVersion(version.Short()),
 	)
 	if err != nil {
@@ -49,27 +73,8 @@ func main() {
 	}
 	logger = logging.Logger()
 
-	var (
-		inPath, outPath  string
-		profilePath      string
-		dryRun           bool
-		nWorkers         int
-		compressionLevel int
-		dbPermissions    uint
-		wg               sync.WaitGroup
-	)
-	flag.StringVar(&inPath, "path", "", "Path to legacy goDB")
-	flag.StringVar(&outPath, "output", "", "Path to output goDB")
-	flag.StringVar(&profilePath, "profile", "", "Path to output CPU profile")
-	flag.BoolVar(&dryRun, "dry-run", true, "Perform a dry-run")
-	flag.UintVar(&dbPermissions, "permissions", 0, "Permissions to use when writing DB (Unix file mode)")
-	flag.IntVar(&nWorkers, "n", runtime.NumCPU()/2, "Number of parallel conversion workers")
-	flag.IntVar(&compressionLevel, "l", 0, "Custom compression level (uses internal default if <= 0)")
-
-	flag.Parse()
-
 	if inPath == "" || outPath == "" {
-		logger.Fatal("Paths to legacy / output goDB requried")
+		logger.Fatal("Paths to input & output goDB requried")
 	}
 
 	if profilePath != "" {
@@ -82,15 +87,16 @@ func main() {
 		}
 		defer pprof.StopCPUProfile()
 	}
+	dbPermissions, err := strconv.ParseUint(dbPermissionsStr, 8, 32)
+	if err != nil {
+		logger.Fatalf("failed to parse file permissions: %s", err)
+	}
 
 	c := converter{
 		dbDir:            outPath,
-		dbPermissions:    goDB.DefaultPermissions,
+		dbPermissions:    fs.FileMode(dbPermissions),
 		compressionLevel: compressionLevel,
 		pipe:             make(chan work, nWorkers*4),
-	}
-	if dbPermissions != 0 {
-		c.dbPermissions = fs.FileMode(dbPermissions)
 	}
 
 	for i := 0; i < nWorkers; i++ {
@@ -98,9 +104,9 @@ func main() {
 		go func() {
 			for w := range c.pipe {
 				if err := c.convertDir(w, dryRun); err != nil {
-					logger.Fatalf("Error converting legacy dir %s: %s", w.path, err)
+					logger.Fatalf("error converting legacy dir %s: %s", w.path, err)
 				}
-				logger.Infof("Converted legacy dir %s", w.path)
+				logger.Debugf("successfully converted legacy dir %s", w.path)
 			}
 			wg.Done()
 		}()

@@ -411,10 +411,10 @@ func (k Key) String() string {
 
 // Counters stores the goProbe flow counters (and, where required, some extensions)
 type Counters struct {
-	BytesRcvd   uint64 `json:"br,omitempty"`
-	BytesSent   uint64 `json:"bs,omitempty"`
-	PacketsRcvd uint64 `json:"pr,omitempty"`
-	PacketsSent uint64 `json:"ps,omitempty"`
+	BytesRcvd   uint64 `json:"br,omitempty"` // BytesRcvd: bytes received
+	BytesSent   uint64 `json:"bs,omitempty"` // BytesSent: bytes sent
+	PacketsRcvd uint64 `json:"pr,omitempty"` // PacketRcvd: packets received
+	PacketsSent uint64 `json:"ps,omitempty"` // PacketSent: packets sent
 }
 
 // String prints the flow counters

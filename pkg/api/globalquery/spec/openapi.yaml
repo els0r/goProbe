@@ -1,0 +1,17 @@
+openapi: 3.0.0
+info:
+  title: global-query Server API
+  description: |
+    The global-query Server API is a RESTful API for interacting with the global-query server service.
+    It allows to query data from a set of hosts which are running the goProbe service. The global-query
+    API is an extension of goQuery and allows to query and aggregate data from multiple hosts at once.
+  version: 1.0.0
+servers:
+  - url: http://localhost:8146
+paths:
+  /_query:
+    $ref: '../../spec/paths/query.yaml'
+components:
+  schemas:
+    $ref: '../../spec/schemas/_index.yaml'
+

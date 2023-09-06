@@ -21,18 +21,18 @@ var (
 
 // Result bundles the data rows returned and the query meta information
 type Result struct {
-	Status        Status        `json:"status"`
-	HostsStatuses HostsStatuses `json:"hosts_statuses"`
+	Status        Status        `json:"status"`         // Status: the overall status of the result
+	HostsStatuses HostsStatuses `json:"hosts_statuses"` // HostsStatuses: the status of all hosts queried
 
-	Summary Summary `json:"summary"`
-	Query   Query   `json:"query"`
-	Rows    Rows    `json:"rows"`
+	Summary Summary `json:"summary"` // Summary: the total traffic volume and packets observed over the queried range and the interfaces that were queried
+	Query   Query   `json:"query"`   // Query: the kind of query that was run
+	Rows    Rows    `json:"rows"`    // Rows: the data rows returned
 }
 
 // Query stores the kind of query that was run
 type Query struct {
-	Attributes []string `json:"attributes"`
-	Condition  string   `json:"condition,omitempty"`
+	Attributes []string `json:"attributes"`          // Attributes: the attributes that were queried. Example: [sip dip dport proto]
+	Condition  string   `json:"condition,omitempty"` // Condition: the condition that was provided. Example: port=80 && proto=TCP
 }
 
 // TimeRange describes the interval for which data is queried and presented
@@ -46,17 +46,59 @@ type TimeRange struct {
 // Summary stores the total traffic volume and packets observed over the
 // queried range and the interfaces that were queried
 type Summary struct {
-	Interfaces []string `json:"interfaces"`
+	Interfaces []string `json:"interfaces"` // Interfaces: the interfaces that were queried
 	TimeRange
-	Totals  types.Counters `json:"totals"`
-	Timings Timings        `json:"timings"`
-	Hits    Hits           `json:"hits"`
+	Totals  types.Counters `json:"totals"`  // Totals: the total traffic volume and packets observed over the queried range
+	Timings Timings        `json:"timings"` // Timings: query runtime fields
+	Hits    Hits           `json:"hits"`    // Hits: how many flow records were returned in total and how many are returned in Rows
 }
 
 // Status denotes the overall status of the result
 type Status struct {
-	Code    types.Status `json:"code"`
-	Message string       `json:"message,omitempty"`
+	Code    types.Status `json:"code"`              // Code: the status code
+	Message string       `json:"message,omitempty"` // Message: an optional message
+}
+
+// Timings summarizes query runtimes
+type Timings struct {
+	QueryStart         time.Time     `json:"query_start"`          // QueryStart: the time when the query started
+	QueryDuration      time.Duration `json:"query_duration_ns"`    // QueryDuration: the time it took to run the query in nanoseconds
+	ResolutionDuration time.Duration `json:"resolution,omitempty"` // ResolutionDuration: the time it took to resolve all IPs in nanoseconds
+}
+
+// Hits stores how many flow records were returned in total and how many are
+// returned in Rows
+type Hits struct {
+	Displayed int `json:"displayed"` // Displayed: how manyflow records were returned in Rows that are displayed
+	Total     int `json:"total"`     // Total: how many flow records matching the condition were found in total
+}
+
+// Row is a human-readable, aggregatable representation of goDB's data
+type Row struct {
+	// Labels are the partition Attributes
+	Labels Labels `json:"labels,omitempty"`
+
+	// Attributes which can be grouped by
+	Attributes Attributes `json:"attributes"`
+
+	// Counters for bytes/packets
+	Counters types.Counters `json:"counters"`
+}
+
+// Labels hold labels by which the goDB database is partitioned
+type Labels struct {
+	Timestamp time.Time `json:"timestamp,omitempty"` // Timestamp: the timestamp of the 5-minute interval storing the flow record
+	Iface     string    `json:"iface,omitempty"`     // Iface: the interface on which the flow was observed
+	Hostname  string    `json:"host,omitempty"`      // Hostname: the hostname of the host on which the flow was observed
+	HostID    string    `json:"host_id,omitempty"`   // HostID: the host id of the host on which the flow was observed
+}
+
+// Attributes are traffic attributes by which the goDB can be aggregated
+type Attributes struct {
+	SrcIP   netip.Addr `json:"sip,omitempty"`   // SrcIP: the source IP address
+	DstIP   netip.Addr `json:"dip,omitempty"`   // DstIP: the destination IP address
+	IPProto uint8      `json:"proto,omitempty"` // IPProto: the IP protocol number
+	DstPort uint16     `json:"dport,omitempty"` // DstPort: the destination port
 }
 
 // New instantiates a new result
@@ -138,35 +180,9 @@ func (hs HostsStatuses) Print(w io.Writer) error {
 	return tw.Flush()
 }
 
-// Timings summarizes query runtimes
-type Timings struct {
-	QueryStart         time.Time     `json:"query_start"`
-	QueryDuration      time.Duration `json:"query_duration_ns"`
-	ResolutionDuration time.Duration `json:"resolution,omitempty"`
-}
-
-// Hits stores how many flow records were returned in total and how many are
-// returned in Rows
-type Hits struct {
-	Displayed int `json:"displayed"`
-	Total     int `json:"total"`
-}
-
 // String prints the statistics
 func (h Hits) String() string {
 	return fmt.Sprintf("{total: %d, displayed: %d}", h.Total, h.Displayed)
-}
-
-// Row is a human-readable, aggregatable representation of goDB's data
-type Row struct {
-	// Partition Attributes
-	Labels Labels `json:"l,omitempty"`
-
-	// Attributes which can be grouped by
-	Attributes Attributes `json:"a"`
-
-	// Counters
-	Counters types.Counters `json:"c"`
 }
 
 // String prints a single result
@@ -185,22 +201,14 @@ func (r *Row) Less(r2 *Row) bool {
 // ExtendedRow is a human-readable, aggregatable representation of goProbe's active
 // flow data
 type ExtendedRow struct {
-	// Partition Attributes
+	// Labels are the partition Attributes
 	Labels Labels `json:"l,omitempty"`
 
-	// ExtendedAttributes which can be grouped by
+	// Attributes store ExtendedAttributes which can be grouped by
 	Attributes ExtendedAttributes `json:"a"`
 
-	// Counters
+	// Counters for bytes/packets
 	Counters types.Counters `json:"c"`
-}
-
-// Labels hold labels by which the goDB database is partitioned
-type Labels struct {
-	Timestamp time.Time `json:"timestamp,omitempty"`
-	Iface     string    `json:"iface,omitempty"`
-	Hostname  string    `json:"host,omitempty"`
-	HostID    string    `json:"host_id,omitempty"`
 }
 
 // MarshalJSON implements the json.Marshaler interface. It makes sure
@@ -250,18 +258,10 @@ func (l Labels) Less(l2 Labels) bool {
 	return l.Iface < l2.Iface
 }
 
-// Attributes are traffic attributes by which the goDB can be aggregated
-type Attributes struct {
-	SrcIP   netip.Addr `json:"sip,omitempty"`
-	DstIP   netip.Addr `json:"dip,omitempty"`
-	IPProto uint8      `json:"proto,omitempty"`
-	DstPort uint16     `json:"dport,omitempty"`
-}
-
 // ExtendedAttributes includes the source port. It is meant to be used if (and only if)
 // the source port is still available (such as in the flow log)
 type ExtendedAttributes struct {
-	SrcPort uint16 `json:"sport,omitempty"`
+	SrcPort uint16 `json:"sport,omitempty"` // SrcPort: the source port
 	Attributes
 }
 

@@ -15,6 +15,7 @@ import (
 	"github.com/els0r/goProbe/pkg/capture/capturetypes"
 	"github.com/els0r/goProbe/pkg/formatting"
 	"github.com/els0r/goProbe/pkg/types"
+	"github.com/els0r/goProbe/pkg/types/shellformat"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"github.com/xlab/tablewriter"
@@ -89,7 +90,7 @@ func statusEntrypoint(ctx context.Context, cmd *cobra.Command, args []string) er
 
 	table := tablewriter.CreateTable()
 	table.UTF8Box()
-	table.AddTitle(types.FormatShell("Interface Statuses", types.Bold))
+	table.AddTitle(shellformat.FormatShell("Interface Statuses", shellformat.Bold))
 
 	headerRow1 := []interface{}{"", "total", "", "total", "", "total", "", "active"}
 	headerRow2 := []interface{}{"iface",
@@ -123,7 +124,7 @@ func statusEntrypoint(ctx context.Context, cmd *cobra.Command, args []string) er
 
 		dropped := fmt.Sprint(formatting.Countable(ifaceStatus.Dropped))
 		if ifaceStatus.Dropped > 0 {
-			dropped = types.FormatShell(ifaceStatus.Dropped, types.Bold, types.Red)
+			dropped = shellformat.FormatShell(ifaceStatus.Dropped, shellformat.Bold, shellformat.Red)
 		}
 
 		ifaceRow := []interface{}{st.iface,

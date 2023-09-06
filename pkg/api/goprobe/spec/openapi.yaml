@@ -1,0 +1,26 @@
+openapi: 3.0.0
+info:
+  title: goProbe API
+  description: |
+    The goProbe API is a RESTful API for interacting with the goProbe service.
+    It allows to query data from the goDB database which goProbe writes to or interact with the daemon's
+    control plane used to fetch capture statistics and get or modify the running capture
+    configuration
+  version: 1.0.0
+servers:
+  - url: http://localhost:8145
+paths:
+  /_query:
+    $ref: '../../spec/paths/query.yaml'
+  /status:
+    $ref: './paths/status.yaml'
+  /config:
+    $ref: './paths/configs.yaml'
+  /config/{interface}:
+    $ref: './paths/config.yaml'
+  /config/_reload:
+    $ref: './paths/config_reload.yaml'
+components:
+  schemas:
+    $ref: './schemas/_index.yaml'
+

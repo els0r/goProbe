@@ -1,0 +1,31 @@
+type: object
+required:
+  - interfaces
+  - totals
+  - timings
+  - hits
+  - time_first
+  - time_last
+properties:
+  interfaces:
+    type: array
+    items:
+      type: string
+      example:
+        - eth0
+        - eth1
+    description: The interfaces that were queried
+  totals:
+    $ref: './counters.yaml'
+  timings:
+    $ref: './timings.yaml'
+  hits:
+    $ref: './hits.yaml'
+  time_first:
+    type: string
+    format: date-time
+    description: The start of the interval
+  time_last:
+    type: string
+    format: date-time
+    description: The end of the interval

@@ -1,0 +1,24 @@
+type: object
+description: Counters stores the goProbe flow counters
+required:
+  - br
+  - bs
+  - pr
+  - ps
+properties:
+  br:
+    type: integer
+    example: 21910
+    description: Bytes received
+  bs:
+    type: integer
+    example: 15625
+    description: Bytes sent
+  pr:
+    type: integer
+    example: 65
+    description: Packets received
+  ps:
+    type: integer
+    example: 90
+    description: Packets sent

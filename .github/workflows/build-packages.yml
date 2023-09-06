@@ -183,9 +183,30 @@ jobs:
           path: |
             ./goprobe_${{ env.RELEASE_VERSION }}_alpine_x86_64.tar.gz
 
+  build-openapi-specs:
+    runs-on: ubuntu-latest
+    container: node:20-alpine
+    steps:
+        - name: Install swagger-cli
+          run: |
+            npm install -g @apidevtools/swagger-cli
+
+        - name: Build single OpenAPI 3.0 spec file for all documented APIs
+          run: |
+            swagger-cli bundle --type yaml --outfile ./goprobe_${{ env.RELEASE_VERSION }}_openapi.yaml ./pkg/api/goprobe/spec/openapi.yaml
+            swagger-cli bundle --type yaml --outfile ./global-query_${{ env.RELEASE_VERSION }}_openapi.yaml ./pkg/api/globalquery/spec/openapi.yaml
+
+        - name: Store artifacts
+          uses: actions/upload-artifact@v3
+          with:
+            name: OpenAPI
+            path: |
+              ./goprobe_${{ env.RELEASE_VERSION }}_openapi.yaml
+              ./global-query_${{ env.RELEASE_VERSION }}_openapi.yaml
+
   release:
     runs-on: ubuntu-latest
-    needs: [build-deb, build-rpm, build-apk]
+    needs: [build-deb, build-rpm, build-apk, build-openapi-specs]
     steps:
 
       - uses: actions/download-artifact@v3
@@ -204,4 +225,5 @@ jobs:
             downloaded-artifacts/Fedora/goprobe*.rpm
             downloaded-artifacts/Fedora/goprobe*.tar.gz
             downloaded-artifacts/Alpine/goprobe*.tar.gz
+            downloaded-artifacts/OpenAPI/*_openapi.yaml
           generate_release_notes: true

@@ -1,0 +1,8 @@
+type: object
+properties:
+  promisc:
+    type: boolean
+    description: Enable or disable promiscuous capture mode.
+    example: true
+  ring_buffer:
+    $ref: './ringbufferconfig.yaml'

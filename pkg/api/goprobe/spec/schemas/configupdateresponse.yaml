@@ -1,0 +1,22 @@
+type: object
+allOf:
+  - $ref: './response.yaml'
+properties:
+  enabled:
+    type: array
+    items:
+      type: string
+    description: Interfaces that were enabled.
+    example: ["eth0", "eth1"]
+  updated:
+    type: array
+    items:
+      type: string
+    description: Interfaces that were updated.
+    example: ["eth2"]
+  disabled:
+    type: array
+    items:
+      type: string
+    description: Interfaces that were disabled.
+    example: ["eth5"]

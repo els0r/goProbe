@@ -32,9 +32,6 @@ func WithSortBy(s string) Option { return func(a *Args) { a.SortBy = s } }
 // WithNumResults sets how many rows are returned
 func WithNumResults(n int) Option { return func(a *Args) { a.NumResults = n } }
 
-// WithExternal returns differently formatted results to an external caller
-func WithExternal() Option { return func(a *Args) { a.External = true } }
-
 // WithSortAscending sorts rows ascending
 func WithSortAscending() Option { return func(a *Args) { a.SortAscending = true } }
 
