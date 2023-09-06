@@ -42,9 +42,23 @@ All other changes to the configuration _require a restart of goProbe_.
 
 ## API
 
-By default, goProbe spawns a command-and-control HTTP API server, to provide access to its internal state. For more information on the available endpoints, consult [the API package](../../pkg/api/goprobe/). The API is able to bind on UNIX sockets.
+By default, goProbe spawns a command-and-control HTTP API server, to provide access to its internal state as well as a query API to to query data from the goDB database to which it writes.
 
-The tool [gpctl](../gpctl/) was specifically designed to cover the more common API calls to inspect `goProbe`'s internal state.
+The API is able to bind on UNIX sockets.
+
+### Documentation
+
+The goProbe API is laid out in the [OpenAPI 3.0 Specification](../../pkg/api/goprobe/spec/openapi.yaml).
+
+**Note**: some tools only accept a single OpenAPI file. To merge the specification into one output file, use [`swagger-cli`](https://www.npmjs.com/package/swagger-cli):
+
+```sh
+swagger-cli bundle ../../pkg/api/goprobe/spec/openapi.yaml --outfile _build/openapi.yaml --type yaml
+```
+
+### Using `gpctl`
+
+The tool [gpctl](../gpctl/) was specifically designed to cover the more common control API calls to inspect `goProbe`'s internal state.
 
 Example:
 
@@ -55,3 +69,5 @@ gpctl --server.addr unix:/var/run/goprobe status eth0 eth1
 ### Client
 
 There is a [client](../../pkg/api/goprobe/client/) package available that allows to make calls to the API programmatically and retrieve data structures used by `goProbe`.
+
+Both `gpctl` and `global-query` use it internally.

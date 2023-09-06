@@ -45,5 +45,10 @@ The parameters which need to be provided are the JSON-serialized [`query.Args`](
 
 ## API Documentation
 
-The API documentation is laid out in the [OpenAPI Specification](../../pkg/api/openapi.yaml).
+The global-query API is laid out in the [OpenAPI 3.0 Specification](../../pkg/api/globalquery/spec/openapi.yaml).
 
+**Note**: some tools only accept a single OpenAPI file. To merge the specification into one output file, use [`swagger-cli`](https://www.npmjs.com/package/swagger-cli):
+
+```sh
+swagger-cli bundle ../../pkg/api/globalquery/spec/openapi.yaml --outfile _build/openapi.yaml --type yaml
+```
