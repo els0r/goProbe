@@ -63,7 +63,7 @@ type DBWorkManager struct {
 	tFirstCovered, tLastCovered int64
 
 	nWorkloads          uint64
-	nWorkloadsProcessed uint64
+	nWorkloadsProcessed atomic.Uint64
 	memPool             concurrency.MemPoolGCable
 }
 
@@ -475,7 +475,7 @@ func (w *DBWorkManager) grabAndProcessWorkload(ctx context.Context, wg *sync.Wai
 			select {
 			case <-ctx.Done():
 				// query was cancelled, exit
-				logger.Infof("Query cancelled (workload %d / %d)...", atomic.LoadUint64(&w.nWorkloadsProcessed), w.nWorkloads)
+				logger.Infof("Query cancelled (workload %d / %d)...", w.nWorkloadsProcessed.Load(), w.nWorkloads)
 				return
 			case workload, chanOpen = <-workloadChan:
 				if chanOpen {
@@ -492,7 +492,7 @@ func (w *DBWorkManager) grabAndProcessWorkload(ctx context.Context, wg *sync.Wai
 					}
 
 					// Workload is counted, but we only add it to the final result if we got any entries
-					atomic.AddUint64(&w.nWorkloadsProcessed, 1)
+					w.nWorkloadsProcessed.Add(1)
 					if resultMap.Len() > 0 {
 						mapChan <- resultMap
 					}
