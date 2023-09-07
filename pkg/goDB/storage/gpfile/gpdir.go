@@ -246,6 +246,11 @@ func (d *GPDir) WriteBlocks(timestamp int64, blockTraffic TrafficMetadata, count
 	return nil
 }
 
+// SetMemPool sets a memory pool (used to access the underlying GPFiles in full-read mode)
+func (d *GPDir) SetMemPool(pool concurrency.MemPoolGCable) {
+	d.options = append(d.options, WithReadAll(pool))
+}
+
 // TimeRange returns the first and last timestamp covered by this GPDir
 func (d *GPDir) TimeRange() (first int64, last int64) {
 	return d.BlockMetadata[0].Blocks()[0].Timestamp,
