@@ -40,7 +40,7 @@ const (
 // BlockHeader denotes a list of blocks pertaining to a storage backend
 type BlockHeader struct {
 	Blocks        map[int64]storage.Block `json:"b,omitempty"`
-	CurrentOffset int64                   `json:"p,omitempty"`
+	CurrentOffset uint64                  `json:"p,omitempty"`
 	Version       int                     `json:"v"`
 }
 
@@ -180,7 +180,7 @@ func (g *GPFile) ReadBlock(timestamp int64) ([]byte, error) {
 
 	// if the file is read continuously, do not seek
 	var (
-		seekPos = block.Offset
+		seekPos = int64(block.Offset)
 		err     error
 	)
 	if seekPos != g.lastSeekPos {
@@ -191,7 +191,7 @@ func (g *GPFile) ReadBlock(timestamp int64) ([]byte, error) {
 
 	// Perform decompression of data and store in output slice
 	var nRead int
-	if cap(g.uncompData) < block.RawLen {
+	if uint32(cap(g.uncompData)) < block.RawLen {
 		g.uncompData = make([]byte, 0, 2*block.RawLen)
 	}
 	g.uncompData = g.uncompData[:block.RawLen]
@@ -206,7 +206,7 @@ func (g *GPFile) ReadBlock(timestamp int64) ([]byte, error) {
 			g.defaultEncoder = decoder
 		}
 
-		if cap(g.blockData) < block.Len {
+		if uint32(cap(g.blockData)) < block.Len {
 			g.blockData = make([]byte, 0, 2*block.Len)
 		}
 		g.blockData = g.blockData[:block.Len]
@@ -220,7 +220,7 @@ func (g *GPFile) ReadBlock(timestamp int64) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if nRead != block.RawLen {
+	if uint32(nRead) != block.RawLen {
 		return nil, fmt.Errorf("unexpected amount of bytes after decompression, want %d, have %d", block.RawLen, nRead)
 	}
 	g.lastSeekPos += int64(block.Len)
@@ -280,11 +280,11 @@ func (g *GPFile) WriteBlock(timestamp int64, blockData []byte) error {
 	// Update and write header data
 	g.header.Blocks[timestamp] = storage.Block{
 		Offset:      g.header.CurrentOffset,
-		Len:         nWritten,
-		RawLen:      len(blockData),
+		Len:         uint32(nWritten),
+		RawLen:      uint32(len(blockData)),
 		EncoderType: encType,
 	}
-	g.header.CurrentOffset += int64(nWritten)
+	g.header.CurrentOffset += uint64(nWritten)
 
 	return g.writeHeader()
 }
@@ -353,7 +353,7 @@ func (g *GPFile) readHeader() error {
 		// Read the global header information and all individual blocks
 		var (
 			ts          int64
-			curOffset   int
+			curOffset   uint64
 			block       storage.Block
 			encoderType encoders.Type
 		)
@@ -375,8 +375,8 @@ func (g *GPFile) readHeader() error {
 				}
 			}
 
-			block.Offset = int64(curOffset)
-			curOffset += block.Len
+			block.Offset = curOffset
+			curOffset += uint64(block.Len)
 			g.header.Blocks[ts] = block
 		}
 
@@ -421,7 +421,7 @@ func (g *GPFile) writeHeader() error {
 	buffer := bufio.NewWriter(gpfHeader)
 
 	// Write the global header information and all individual blocks
-	var curOffset int
+	var curOffset uint64
 	if _, err := fmt.Fprintf(buffer, "v%d,%d,%d\n", g.header.Version, g.header.CurrentOffset, g.defaultEncoderType); err != nil {
 		return err
 	}
@@ -435,7 +435,7 @@ func (g *GPFile) writeHeader() error {
 				return err
 			}
 		}
-		curOffset += block.Len
+		curOffset += uint64(block.Len)
 	}
 
 	// Flush the buffer

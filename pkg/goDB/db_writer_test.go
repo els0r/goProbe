@@ -25,7 +25,7 @@ func TestPanicDuringWrite(t *testing.T) {
 	timestamp := time.Now().Unix()
 	dayTimestamp := gpfile.DirTimestamp(timestamp)
 	dayUnix := time.Unix(dayTimestamp, 0)
-	dirPath := filepath.Join(filepath.Join(tempDir, "test"), strconv.Itoa(dayUnix.Year()), fmt.Sprintf("%02d", dayUnix.Month()), strconv.Itoa(int(dayTimestamp)))
+	dirPath := filepath.Join(filepath.Join(tempDir, "test"), strconv.Itoa(dayUnix.Year()), fmt.Sprintf("%02d", dayUnix.Month()), strconv.FormatInt(dayTimestamp, 10))
 
 	w := NewDBWriter(tempDir, "test", encoders.EncoderTypeNull).Permissions(0600)
 
