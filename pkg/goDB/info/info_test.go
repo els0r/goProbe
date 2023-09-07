@@ -55,6 +55,10 @@ func TestHostIDFallbackErrors(t *testing.T) {
 	})
 
 	t.Run("invalid_permissions", func(t *testing.T) {
+		if os.Geteuid() == 0 {
+			t.Skip("test cannot be run as superuser")
+		}
+
 		testPath, err := os.MkdirTemp("/tmp", "hostid")
 		require.Nil(t, err)
 		defer func(t *testing.T) {
@@ -69,6 +73,10 @@ func TestHostIDFallbackErrors(t *testing.T) {
 	})
 
 	t.Run("missing_write_permissions", func(t *testing.T) {
+		if os.Geteuid() == 0 {
+			t.Skip("test cannot be run as superuser")
+		}
+
 		testPath, err := os.MkdirTemp("/tmp", "hostid")
 		require.Nil(t, err)
 		defer func(t *testing.T) {
