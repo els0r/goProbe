@@ -110,7 +110,7 @@ including the "time" field.
 `,
 	)
 
-	flags.IntVarP(&cmdLineParams.NumResults, conf.ResultsLimit, "n", query.DefaultNumResults,
+	flags.Uint64VarP(&cmdLineParams.NumResults, conf.ResultsLimit, "n", query.DefaultNumResults,
 		`Maximum number of final entries to show. Defaults to 95% of the overall
 data volume / number of packets (depending on the '-s' parameter).
 Ignored for queries including the "time" field.

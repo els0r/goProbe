@@ -135,7 +135,7 @@ func benchQuery(b *testing.B, buf *bytes.Buffer, flushFunc func(), iface, queryS
 		// run query
 		_, err := NewQueryRunner(TestDB).Run(context.Background(), args)
 		if err != nil {
-			b.Fatalf("error during execute: ` + "%%s" + `", err)
+			b.Fatalf("error during execute: ` + "%s" + `", err)
 		}
 
 		buf.Reset()
@@ -217,7 +217,7 @@ type TestTuple struct {
 	ID        int
 	Iface     string
 	Query     string
-	N         int
+	N         uint64
 	Format    string
 	Condition string
 }
@@ -335,7 +335,7 @@ var queries = [...]string{
 	"iface",
 }
 
-var numResults = [...]int{
+var numResults = [...]uint64{
 	1,
 	10,
 	100,
