@@ -77,7 +77,7 @@ type Args struct {
 	// formatting
 	Format        string `json:"format,omitempty" yaml:"format,omitempty" form:"format,omitempty"`                         // Format: the output format. Enum: [json, csv, table]. Example: json
 	SortBy        string `json:"sort_by,omitempty" yaml:"sort_by,omitempty" form:"sort_by,omitempty"`                      // SortBy: column to sort by. Enum: [packets, bytes]. Example: bytes
-	NumResults    int    `json:"num_results,omitempty" yaml:"num_results,omitempty" form:"num_results,omitempty"`          // NumResults: number of results to return/print. Example: 25
+	NumResults    uint64 `json:"num_results,omitempty" yaml:"num_results,omitempty" form:"num_results,omitempty"`          // NumResults: number of results to return/print. Example: 25
 	SortAscending bool   `json:"sort_ascending,omitempty" yaml:"sort_ascending,omitempty" form:"sort_ascending,omitempty"` // SortAscending: sort ascending instead of the default descending. Example: false
 
 	// do-and-exit arguments

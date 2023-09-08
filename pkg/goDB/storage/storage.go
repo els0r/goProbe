@@ -6,9 +6,9 @@ import (
 
 // Block denotes a block of goprobe data
 type Block struct {
-	Offset      int64
-	Len         int
-	RawLen      int
+	Offset      uint64
+	Len         uint32
+	RawLen      uint32
 	EncoderType encoders.Type
 }
 
@@ -20,7 +20,7 @@ func (b Block) IsEmpty() bool {
 // BlockHeader denotes a list of blocks pertaining to a storage backend
 type BlockHeader struct {
 	BlockList     []BlockAtTime
-	CurrentOffset int64
+	CurrentOffset uint64
 
 	blocks map[int64]int // Hidden from user / serialization (on-demand creation)
 }

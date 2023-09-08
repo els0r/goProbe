@@ -30,7 +30,7 @@ func WithFormat(f string) Option { return func(a *Args) { a.Format = f } }
 func WithSortBy(s string) Option { return func(a *Args) { a.SortBy = s } }
 
 // WithNumResults sets how many rows are returned
-func WithNumResults(n int) Option { return func(a *Args) { a.NumResults = n } }
+func WithNumResults(n uint64) Option { return func(a *Args) { a.NumResults = n } }
 
 // WithSortAscending sorts rows ascending
 func WithSortAscending() Option { return func(a *Args) { a.SortAscending = true } }

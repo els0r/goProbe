@@ -63,8 +63,7 @@ type DBWorkManager struct {
 	tFirstCovered, tLastCovered int64
 
 	nWorkloads          uint64
-	nWorkloadsProcessed uint64
-	memPool             concurrency.MemPoolGCable
+	nWorkloadsProcessed atomic.Uint64
 }
 
 // NewDBWorkManager sets up a new work manager for executing queries
@@ -101,21 +100,13 @@ func (w *DBWorkManager) CreateWorkerJobs(tfirst int64, tlast int64) (nonempty bo
 	defer close(w.workloadChan)
 
 	// loop over directory list in order to create the timestamp pairs
-	var (
-		gpFileOptions []gpfile.Option
-	)
-	if !w.query.lowMem {
-		w.memPool = concurrency.NewMemPool(w.numProcessingUnits * len(w.query.columnIndices))
-		gpFileOptions = append(gpFileOptions, gpfile.WithReadAll(w.memPool))
-	}
-
 	// make sure to start with zero workloads as the number of assigned
 	// workloads depends on how many directories have to be read
 	var curDir *gpfile.GPDir
 	workloadBulk := make([]*gpfile.GPDir, 0, WorkBulkSize)
 
 	walkFunc := func(numDirs int, dayTimestamp int64) error {
-		curDir = gpfile.NewDir(w.dbIfaceDir, dayTimestamp, gpfile.ModeRead, gpFileOptions...)
+		curDir = gpfile.NewDir(w.dbIfaceDir, dayTimestamp, gpfile.ModeRead)
 
 		// For the first and last item, check out the GPDir metadata for the actual first and
 		// last block timestamp to cover (and adapt variables accordingly)
@@ -263,8 +254,9 @@ func (w *DBWorkManager) ReadMetadata(tfirst int64, tlast int64) (*InterfaceMetad
 	// loop over directory list in order to create the timestamp pairs
 	var gpFileOptions []gpfile.Option
 	if !query.lowMem {
-		w.memPool = concurrency.NewMemPool(w.numProcessingUnits * len(query.columnIndices))
-		gpFileOptions = append(gpFileOptions, gpfile.WithReadAll(w.memPool))
+		memPool := concurrency.NewMemPool(len(query.columnIndices))
+		gpFileOptions = append(gpFileOptions, gpfile.WithReadAll(memPool))
+		defer memPool.Clear()
 	}
 
 	// make sure to start with zero workloads as the number of assigned
@@ -464,7 +456,15 @@ func (w *DBWorkManager) grabAndProcessWorkload(ctx context.Context, wg *sync.Wai
 			logger.Error(err)
 			mapChan <- hashmap.NilAggFlowMapWithMetadata
 		}
+
+		var memPool concurrency.MemPoolGCable
+		if !w.query.lowMem {
+			memPool = concurrency.NewMemPool(len(w.query.columnIndices))
+		}
 		defer func() {
+			if memPool != nil {
+				memPool.Clear()
+			}
 			if cerr := enc.Close(); cerr != nil && err == nil {
 				err = cerr
 			}
@@ -475,12 +475,16 @@ func (w *DBWorkManager) grabAndProcessWorkload(ctx context.Context, wg *sync.Wai
 			select {
 			case <-ctx.Done():
 				// query was cancelled, exit
-				logger.Infof("Query cancelled (workload %d / %d)...", atomic.LoadUint64(&w.nWorkloadsProcessed), w.nWorkloads)
+				logger.Infof("Query cancelled (workload %d / %d)...", w.nWorkloadsProcessed.Load(), w.nWorkloads)
 				return
 			case workload, chanOpen = <-workloadChan:
 				if chanOpen {
 					resultMap := hashmap.NewAggFlowMapWithMetadata()
 					for _, workDir := range workload.workDirs {
+
+						if memPool != nil {
+							workDir.SetMemPool(memPool)
+						}
 
 						// if there is an error during one of the read jobs, throw a syslog message and terminate
 						err := w.readBlocksAndEvaluate(workDir, enc, &resultMap)
@@ -492,7 +496,7 @@ func (w *DBWorkManager) grabAndProcessWorkload(ctx context.Context, wg *sync.Wai
 					}
 
 					// Workload is counted, but we only add it to the final result if we got any entries
-					atomic.AddUint64(&w.nWorkloadsProcessed, 1)
+					w.nWorkloadsProcessed.Add(1)
 					if resultMap.Len() > 0 {
 						mapChan <- resultMap
 					}
@@ -719,8 +723,4 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workDir *gpfile.GPDir, enc encoder
 }
 
 // Close releases all resources claimed by the DBWorkManager
-func (w *DBWorkManager) Close() {
-	if w.memPool != nil {
-		w.memPool.Clear()
-	}
-}
+func (w *DBWorkManager) Close() {}

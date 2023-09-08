@@ -141,7 +141,7 @@ func NewDir(basePath string, timestamp int64, accessMode int, options ...Option)
 	dayTimestamp := DirTimestamp(timestamp)
 	dayUnix := time.Unix(dayTimestamp, 0)
 
-	obj.dirPath = filepath.Join(basePath, strconv.Itoa(dayUnix.Year()), fmt.Sprintf("%02d", dayUnix.Month()), strconv.Itoa(int(dayTimestamp)))
+	obj.dirPath = filepath.Join(basePath, strconv.Itoa(dayUnix.Year()), fmt.Sprintf("%02d", dayUnix.Month()), strconv.FormatInt(dayTimestamp, 10))
 	obj.metaPath = filepath.Join(obj.dirPath, metadataFileName)
 	return &obj
 }
@@ -246,6 +246,11 @@ func (d *GPDir) WriteBlocks(timestamp int64, blockTraffic TrafficMetadata, count
 	return nil
 }
 
+// SetMemPool sets a memory pool (used to access the underlying GPFiles in full-read mode)
+func (d *GPDir) SetMemPool(pool concurrency.MemPoolGCable) {
+	d.options = append(d.options, WithReadAll(pool))
+}
+
 // TimeRange returns the first and last timestamp covered by this GPDir
 func (d *GPDir) TimeRange() (first int64, last int64) {
 	return d.BlockMetadata[0].Blocks()[0].Timestamp,
@@ -286,18 +291,18 @@ func (d *GPDir) Unmarshal(r concurrency.ReadWriteSeekCloser) error {
 
 	// Get block information
 	for i := 0; i < int(types.ColIdxCount); i++ {
-		d.BlockMetadata[i].CurrentOffset = int64(binary.BigEndian.Uint64(data[pos : pos+8]))
+		d.BlockMetadata[i].CurrentOffset = binary.BigEndian.Uint64(data[pos : pos+8])
 		d.BlockMetadata[i].BlockList = make([]storage.BlockAtTime, nBlocks)
 		pos += 8
-		curOffset := 0
+		curOffset := uint64(0)
 		for j := 0; j < nBlocks; j++ {
-			d.BlockMetadata[i].BlockList[j].Offset = int64(curOffset)
-			d.BlockMetadata[i].BlockList[j].Len = int(binary.BigEndian.Uint32(data[pos : pos+4]))
-			d.BlockMetadata[i].BlockList[j].RawLen = int(binary.BigEndian.Uint32(data[pos+4 : pos+8]))
+			d.BlockMetadata[i].BlockList[j].Offset = curOffset
+			d.BlockMetadata[i].BlockList[j].Len = binary.BigEndian.Uint32(data[pos : pos+4])
+			d.BlockMetadata[i].BlockList[j].RawLen = binary.BigEndian.Uint32(data[pos+4 : pos+8])
 			d.BlockMetadata[i].BlockList[j].EncoderType = encoders.Type(data[pos+8])
 			pos += 9
 
-			curOffset += d.BlockMetadata[i].BlockList[j].Len
+			curOffset += uint64(d.BlockMetadata[i].BlockList[j].Len)
 		}
 	}
 
@@ -364,7 +369,7 @@ func (d *GPDir) Marshal(w concurrency.ReadWriteSeekCloser) error {
 
 		// Store block information
 		for i := 0; i < int(types.ColIdxCount); i++ {
-			binary.BigEndian.PutUint64(data[pos:pos+8], uint64(d.BlockMetadata[i].CurrentOffset))
+			binary.BigEndian.PutUint64(data[pos:pos+8], d.BlockMetadata[i].CurrentOffset)
 			pos += 8
 			for _, block := range d.BlockMetadata[i].BlockList {
 
@@ -373,8 +378,8 @@ func (d *GPDir) Marshal(w concurrency.ReadWriteSeekCloser) error {
 					return ErrExceedsEncodingSize
 				}
 
-				binary.BigEndian.PutUint32(data[pos:pos+4], uint32(block.Len))
-				binary.BigEndian.PutUint32(data[pos+4:pos+8], uint32(block.RawLen))
+				binary.BigEndian.PutUint32(data[pos:pos+4], block.Len)
+				binary.BigEndian.PutUint32(data[pos+4:pos+8], block.RawLen)
 				data[pos+8] = byte(block.EncoderType)
 				pos += 9
 			}

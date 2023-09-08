@@ -31,7 +31,7 @@ type Statement struct {
 
 	// formatting
 	Format        string            `json:"format"`
-	NumResults    int               `json:"limit"`
+	NumResults    uint64            `json:"limit"`
 	SortBy        results.SortOrder `json:"sort_by"`
 	SortAscending bool              `json:"sort_ascending,omitempty"`
 	Output        io.Writer         `json:"-"`

@@ -155,7 +155,7 @@ func (g *GPFile) ReadBlockAtIndex(idx int) ([]byte, error) {
 
 	// if the file is read continuously, do not seek
 	var (
-		seekPos = block.Offset
+		seekPos = int64(block.Offset)
 		err     error
 	)
 	if seekPos != g.lastSeekPos {
@@ -166,7 +166,7 @@ func (g *GPFile) ReadBlockAtIndex(idx int) ([]byte, error) {
 
 	// Perform decompression of data and store in output slice
 	var nRead int
-	if cap(g.uncompData) < block.RawLen {
+	if uint32(cap(g.uncompData)) < block.RawLen {
 		g.uncompData = make([]byte, 0, 2*block.RawLen)
 	}
 	g.uncompData = g.uncompData[:block.RawLen]
@@ -181,7 +181,7 @@ func (g *GPFile) ReadBlockAtIndex(idx int) ([]byte, error) {
 			g.defaultEncoder = decoder
 		}
 
-		if cap(g.blockData) < block.Len {
+		if uint32(cap(g.blockData)) < block.Len {
 			g.blockData = make([]byte, 0, 2*block.Len)
 		}
 		g.blockData = g.blockData[:block.Len]
@@ -195,7 +195,7 @@ func (g *GPFile) ReadBlockAtIndex(idx int) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if nRead != block.RawLen {
+	if uint32(nRead) != block.RawLen {
 		return nil, fmt.Errorf("unexpected amount of bytes after decompression, want %d, have %d", block.RawLen, nRead)
 	}
 	g.lastSeekPos += int64(block.Len)
@@ -256,11 +256,11 @@ func (g *GPFile) writeBlock(timestamp int64, blockData []byte) error {
 	// Update and write header data
 	g.header.AddBlock(timestamp, storage.Block{
 		Offset:      g.header.CurrentOffset,
-		Len:         nWritten,
-		RawLen:      len(blockData),
+		Len:         uint32(nWritten),
+		RawLen:      uint32(len(blockData)),
 		EncoderType: encType,
 	})
-	g.header.CurrentOffset += int64(nWritten)
+	g.header.CurrentOffset += uint64(nWritten)
 
 	return nil
 }
@@ -316,7 +316,7 @@ func (g *GPFile) open() (err error) {
 
 		// Ensure that the file is loaded at the position of the last known successful write
 		// The bufio.Writer will honor that position, even after a Reset()
-		if _, err = g.file.Seek(g.header.CurrentOffset, 0); err != nil {
+		if _, err = g.file.Seek(int64(g.header.CurrentOffset), 0); err != nil {
 			return fmt.Errorf("seek to %d failed: %w", g.header.CurrentOffset, err)
 		}
 		g.fileWriteBuffer = bufio.NewWriter(g.file)

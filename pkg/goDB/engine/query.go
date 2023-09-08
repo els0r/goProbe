@@ -289,7 +289,7 @@ func (qr *QueryRunner) RunStatement(ctx context.Context, stmt *query.Statement) 
 	// stop timing everything related to the query and store the hits
 	result.Summary.Hits.Total = len(rs)
 
-	if stmt.NumResults < len(rs) {
+	if stmt.NumResults < uint64(len(rs)) {
 		rs = rs[:stmt.NumResults]
 	}
 	result.Summary.Hits.Displayed = len(rs)

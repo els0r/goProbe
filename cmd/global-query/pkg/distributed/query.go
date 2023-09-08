@@ -87,7 +87,7 @@ func (q *QueryRunner) Run(ctx context.Context, args *query.Args) (*results.Resul
 	finalResult.End()
 
 	// truncate results based on the limit
-	if queryArgs.NumResults < len(finalResult.Rows) {
+	if queryArgs.NumResults < uint64(len(finalResult.Rows)) {
 		finalResult.Rows = finalResult.Rows[:queryArgs.NumResults]
 	}
 	finalResult.Summary.Hits.Displayed = len(finalResult.Rows)
