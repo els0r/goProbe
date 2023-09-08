@@ -57,10 +57,10 @@ type Args struct {
 	Query  string `json:"query" yaml:"query" form:"query"`    // Query: the query type. Example: sip,dip,dport,proto
 	Ifaces string `json:"ifaces" yaml:"ifaces" form:"ifaces"` // Ifaces: the interfaces to query. Example: eth0,eth1
 
-	HostQuery string `json:"host_query,omitempty" yaml:"host_query,omitempty" form:"host_query,omitempty"` // HostsQuery: the hosts for which data is queried (comma-separated list). Example: hostA,hostB,hostC
+	QueryHosts string `json:"query_hosts,omitempty" yaml:"query_hosts,omitempty" form:"query_hosts,omitempty"` // QueryHosts: the hosts for which data is queried (comma-separated list). Example: hostA,hostB,hostC
 
-	Hostname string `json:"hostname,omitempty" yaml:"hostname,omitempty" form:"hostname,omitempty"` // Hostname: the hostname for which data is queried. Example: localhost
-	HostID   uint   `json:"host_id,omitempty" yaml:"host_id,omitempty" form:"host_id,omitempty"`    // HostID: the host id for which data is queried. Example: 123456
+	Hostname string `json:"hostname,omitempty" yaml:"hostname,omitempty" form:"hostname,omitempty"` // Hostname: the hostname from which data is queried. Example: localhost
+	HostID   uint   `json:"host_id,omitempty" yaml:"host_id,omitempty" form:"host_id,omitempty"`    // HostID: the host id from which data is queried. Example: 123456
 
 	// data filtering
 	Condition string `json:"condition,omitempty" yaml:"condition,omitempty" form:"condition,omitempty"` // Condition: the condition to filter data by. Example: port=80 && proto=TCP

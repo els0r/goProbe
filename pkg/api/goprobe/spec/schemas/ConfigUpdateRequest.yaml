@@ -1,6 +1,6 @@
 type: object
 additionalProperties:
-  $ref: './captureconfig.yaml'
+  $ref: './CaptureConfig.yaml'
 example:
   eth0:
     promisc: true

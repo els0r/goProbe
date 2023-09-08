@@ -16,11 +16,11 @@ properties:
         - eth1
     description: The interfaces that were queried
   totals:
-    $ref: './counters.yaml'
+    $ref: './Counters.yaml'
   timings:
-    $ref: './timings.yaml'
+    $ref: './Timings.yaml'
   hits:
-    $ref: './hits.yaml'
+    $ref: './Hits.yaml'
   time_first:
     type: string
     format: date-time

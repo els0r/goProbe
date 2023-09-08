@@ -5,4 +5,4 @@ properties:
     description: Enable or disable promiscuous capture mode.
     example: true
   ring_buffer:
-    $ref: './ringbufferconfig.yaml'
+    $ref: './RingBufferConfig.yaml'

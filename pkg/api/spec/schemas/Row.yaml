@@ -5,8 +5,8 @@
     - counters
   properties:
     labels:
-      $ref: './labels.yaml'
+      $ref: './Labels.yaml'
     attributes:
-      $ref: './attributes.yaml'
+      $ref: './Attributes.yaml'
     counters:
-      $ref: './counters.yaml'
+      $ref: './Counters.yaml'

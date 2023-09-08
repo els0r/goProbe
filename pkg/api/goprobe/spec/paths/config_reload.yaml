@@ -8,4 +8,4 @@ post:
       content:
         application/json:
           schema:
-            $ref: '../schemas/configupdateresponse.yaml'
+            $ref: '../schemas/ConfigUpdateResponse.yaml'

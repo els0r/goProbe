@@ -146,7 +146,7 @@ a high load on the DNS resolver and network!
 and I/O load)
 `,
 	)
-	flags.StringVarP(&cmdLineParams.HostQuery, conf.QueryHostsResolution, "q", "", "Hosts resolution query\n")
+	flags.StringVarP(&cmdLineParams.QueryHosts, conf.QueryHostsResolution, "q", "", "Hosts resolution query\n")
 
 	// persistent flags to be also passed to children commands
 	pflags.String(conf.ProfilingOutputDir, "", "Enable and set directory to store CPU and memory profiles")
@@ -296,7 +296,7 @@ func entrypoint(cmd *cobra.Command, args []string) (err error) {
 	// run query against query server if it is specified, otherwise, take the local DB
 	var querier query.Runner
 	if viper.GetString(conf.QueryServerAddr) != "" {
-		if queryArgs.HostQuery == "" {
+		if queryArgs.QueryHosts == "" {
 			err := fmt.Errorf("list of target hosts is empty")
 			fmt.Fprintf(os.Stderr, "Distributed query preparation failed: %v\n", err)
 			return err

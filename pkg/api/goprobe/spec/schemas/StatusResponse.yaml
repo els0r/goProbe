@@ -16,4 +16,4 @@ properties:
     type: object
     description: Statistics for each interface
     additionalProperties:
-      $ref: './interfacestats.yaml'
+      $ref: './InterfaceStats.yaml'

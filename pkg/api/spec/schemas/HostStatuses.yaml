@@ -4,4 +4,4 @@ example:
     code: ok
     message: "Query succeeded"
 additionalProperties:
-  $ref: './status.yaml'
+  $ref: './Status.yaml'
