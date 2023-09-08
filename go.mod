@@ -7,7 +7,7 @@ require (
 	github.com/fako1024/gotools/bitpack v0.0.0-20230821104146-b3b1387dec32
 	github.com/fako1024/gotools/concurrency v0.0.0-20230821104146-b3b1387dec32
 	github.com/fako1024/httpc v1.0.15
-	github.com/fako1024/slimcap v0.0.0-20230905070554-d513fb4a846b
+	github.com/fako1024/slimcap v1.0.0
 	github.com/gin-contrib/pprof v1.4.0
 	github.com/gin-gonic/gin v1.9.1
 	github.com/json-iterator/go v1.1.12
