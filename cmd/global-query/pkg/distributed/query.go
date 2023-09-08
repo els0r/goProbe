@@ -51,7 +51,7 @@ func (q *QueryRunner) Run(ctx context.Context, args *query.Args) (*results.Resul
 	queryArgs := *args
 
 	// a distributed query, by definition, requires a list of hosts to query
-	if queryArgs.HostQuery == "" {
+	if queryArgs.QueryHosts == "" {
 		return nil, fmt.Errorf("couldn't prepare query: list of target hosts is empty")
 	}
 
@@ -61,7 +61,7 @@ func (q *QueryRunner) Run(ctx context.Context, args *query.Args) (*results.Resul
 		return nil, fmt.Errorf("failed to prepare query statement: %w", err)
 	}
 
-	hostList, err := q.resolver.Resolve(ctx, queryArgs.HostQuery)
+	hostList, err := q.resolver.Resolve(ctx, queryArgs.QueryHosts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve host list: %w", err)
 	}
