@@ -98,7 +98,7 @@ func TestCompressionDecompressionCustomLevel(t *testing.T) {
 	var nBytes = int64(len(encodingCorpus))
 
 	for _, encType := range testEncoders {
-		for level := 0; level <= 9; level++ {
+		for level := 0; level <= 12; level++ {
 			t.Run(fmt.Sprintf("%s_%d", encType, level), func(t *testing.T) {
 				enc, err := New(encType)
 				if err != nil {
@@ -157,9 +157,10 @@ func BenchmarkEncodersCompress(b *testing.B) {
 			b.SetBytes(nBytes)
 			b.ResetTimer()
 			buf := bytes.NewBuffer(nil)
+			out := make([]byte, nBytes)
 
 			for i := 0; i < b.N; i++ {
-				_, _ = enc.Compress(encodingCorpus, nil, buf)
+				_, _ = enc.Compress(encodingCorpus, out, buf)
 				_ = buf
 				buf.Reset()
 			}
@@ -193,12 +194,13 @@ func BenchmarkEncodersDecompress(b *testing.B) {
 
 			out := make([]byte, nBytes)
 			in := make([]byte, nWritten)
+			reader := bytes.NewReader(buf.Bytes())
 			for i := 0; i < b.N; i++ {
-				_, _ = enc.Decompress(in, out, buf)
-
+				_, _ = enc.Decompress(in, out, reader)
 				_ = in
 				_ = out
-				buf.Reset()
+
+				_, _ = reader.Seek(0, 0)
 			}
 		})
 	}
@@ -278,11 +280,13 @@ func BenchmarkLevelsDecompress(b *testing.B) {
 
 				out := make([]byte, nBytes)
 				in := make([]byte, nWritten)
+				reader := bytes.NewReader(buf.Bytes())
 				for i := 0; i < b.N; i++ {
-					_, _ = enc.Decompress(in, out, bytes.NewBuffer(buf.Bytes()))
-
+					_, _ = enc.Decompress(in, out, reader)
 					_ = in
 					_ = out
+
+					_, _ = reader.Seek(0, 0)
 				}
 			})
 		}
