@@ -12,17 +12,17 @@ properties:
     type: string
     description: The interfaces to query
     example: "eth0,eth1"
-  host_query:
+  query_hosts:
     type: string
     description: The hosts for which data is queried (comma-separated list)
     example: "hostA,hostB,hostC"
   hostname:
     type: string
-    description: The hostname for which data is queried
+    description: The hostname from which data is queried
     example: "hostA"
   host_id:
     type: integer
-    description: The host ID for which data is queried
+    description: The host ID from which data is queried
     example: 123456
   condition:
     type: string
