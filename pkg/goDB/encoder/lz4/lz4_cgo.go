@@ -71,11 +71,9 @@ func (e *Encoder) Compress(data, buf []byte, dst io.Writer) (n int, err error) {
 
 // Decompress runs LZ4 decompression on "in" read from "src" and writes it to "out"
 func (e *Encoder) Decompress(in, out []byte, src io.Reader) (int, error) {
-	var (
-		nBytesConsumed int
-	)
+	var nBytesConsumed int
 
-	// read compressed source data
+	// Read compressed source data
 	nBytesConsumed, err := src.Read(in)
 	if err != nil {
 		return 0, err
@@ -90,7 +88,7 @@ func (e *Encoder) Decompress(in, out []byte, src io.Reader) (int, error) {
 		outPtr = unsafe.Pointer(&out[0])
 	}
 
-	// decompress data
+	// Decompress data
 	decompLen := int(C.LZ4_decompress_safe(
 		(*C.char)(unsafe.Pointer(&in[0])),
 		(*C.char)(outPtr),
