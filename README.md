@@ -124,6 +124,8 @@ It has undergone an almost complete re-write with version 4 in 2023.
 
 Please use the [issue tracker](https://github.com/els0r/goProbe/issues) for bugs and feature requests (or any other matter).
 
+Make sure to branch off the `main` branch with your feature branch.
+
 ## License
 
 See the [LICENSE](./LICENSE) file for usage conditions.
