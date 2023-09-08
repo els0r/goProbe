@@ -78,13 +78,13 @@ type Encoder struct {
 func (e *Encoder) Close() error {
 	if e.dCtx != nil {
 		if fErr := int(C.ZSTD_freeDCtx(e.dCtx)); fErr < 0 {
-			errName := C.GoString(C.ZSTD_getErrorName(C.ulong(fErr)))
+			errName := C.GoString(C.ZSTD_getErrorName(C.size_t(fErr)))
 			return fmt.Errorf("zstd: decompression context release failed: %s", errName)
 		}
 	}
 	if e.cCtx != nil {
 		if fErr := int(C.ZSTD_freeCCtx(e.cCtx)); fErr < 0 {
-			errName := C.GoString(C.ZSTD_getErrorName(C.ulong(fErr)))
+			errName := C.GoString(C.ZSTD_getErrorName(C.size_t(fErr)))
 			return fmt.Errorf("zstd: compression context release failed: %s", errName)
 		}
 	}
@@ -109,7 +109,7 @@ func (e *Encoder) Compress(data, buf []byte, dst io.Writer) (n int, err error) {
 			return n, fmt.Errorf("zstd: compression context creation failed")
 		}
 		if errCtx := int(C.zstdInitCCtx(e.cCtx, C.int(e.level))); errCtx < 0 {
-			errName := C.GoString(C.ZSTD_getErrorName(C.ulong(errCtx)))
+			errName := C.GoString(C.ZSTD_getErrorName(C.size_t(errCtx)))
 			return n, fmt.Errorf("zstd: compression context init failed: %s", errName)
 		}
 	}
@@ -124,11 +124,11 @@ func (e *Encoder) Compress(data, buf []byte, dst io.Writer) (n int, err error) {
 	compLen := int(C.zstdCompress(
 		C.uintptr_t(uintptr(unsafe.Pointer(e.cCtx))),
 		(*C.char)(dataPtr),
-		C.ulong(len(data)),
+		C.size_t(len(data)),
 		(*C.char)(unsafe.Pointer(&buf[0])),
-		C.ulong(dstCapacity)))
+		C.size_t(dstCapacity)))
 	if compLen < 0 {
-		errName := C.GoString(C.ZSTD_getErrorName(C.ulong(compLen)))
+		errName := C.GoString(C.ZSTD_getErrorName(C.size_t(compLen)))
 		return n, fmt.Errorf("zstd: compression failed: %s (%d)", errName, compLen)
 	}
 
@@ -181,7 +181,7 @@ func (e *Encoder) Decompress(in, out []byte, src io.Reader) (int, error) {
 		(*C.char)(outPtr),
 		C.size_t(len(out))))
 	if decompLen < 0 {
-		errName := C.GoString(C.ZSTD_getErrorName(C.ulong(decompLen)))
+		errName := C.GoString(C.ZSTD_getErrorName(C.size_t(decompLen)))
 		return 0, fmt.Errorf("zstd: decompression failed: %s (%d)", errName, decompLen)
 	}
 
