@@ -17,4 +17,4 @@ get:
       content:
         application/json:
           schema:
-            $ref: '../schemas/configresponse.yaml'
+            $ref: '../schemas/ConfigResponse.yaml'

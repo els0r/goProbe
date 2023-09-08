@@ -8,15 +8,15 @@ required:
   - rows
 properties:
   status:
-    $ref: './status.yaml'
+    $ref: './Status.yaml'
   hosts_statuses:
-    $ref: './hoststatuses.yaml'
+    $ref: './HostStatuses.yaml'
   summary:
-    $ref: './summary.yaml'
+    $ref: './Summary.yaml'
   query:
-    $ref: './query.yaml'
+    $ref: './Query.yaml'
   rows:
     type: array
     items:
-      $ref: './row.yaml'
+      $ref: './Row.yaml'
 

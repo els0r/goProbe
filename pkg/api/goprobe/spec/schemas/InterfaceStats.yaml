@@ -30,4 +30,4 @@ properties:
         description: Number of packets dropped since the capture was started.
         example: 20
     parsing_errors:
-        $ref: './parsingerrtracker.yaml'
+        $ref: './ParsingErrTracker.yaml'

@@ -2,4 +2,4 @@ description: Successful query
 content:
   application/json:
     schema:
-      $ref: '../schemas/result.yaml'
+      $ref: '../schemas/Result.yaml'

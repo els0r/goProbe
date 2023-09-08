@@ -9,3 +9,4 @@ cmd/goQuery/goQuery
 cmd/gpctl/gpctl
 cmd/legacy/legacy
 .vscode/
+_build/

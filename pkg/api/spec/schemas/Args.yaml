@@ -80,7 +80,7 @@ properties:
     description: Only print version and return
     example: false
   dns_resolution:
-    $ref: './dnsresolution.yaml'
+    $ref: './DnsResolution.yaml'
   max_mem_pct:
     type: integer
     description: Maximum percentage of available host memory to use for query processing

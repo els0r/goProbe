@@ -168,7 +168,7 @@ post:
     content:
       application/json:
         schema:
-          $ref: '../schemas/args.yaml'
+          $ref: '../schemas/Args.yaml'
   responses:
     '200':
       $ref: '../responses/success.yaml'

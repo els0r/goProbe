@@ -17,7 +17,7 @@ get:
       content:
         application/json:
           schema:
-            $ref: '../schemas/configresponse.yaml'
+            $ref: '../schemas/ConfigResponse.yaml'
     '400':
       description: Invalid query parameters
       content:
@@ -37,14 +37,14 @@ put:
     content:
       application/json:
         schema:
-          $ref: '../schemas/configupdaterequest.yaml'
+          $ref: '../schemas/ConfigUpdateRequest.yaml'
   responses:
     '200':
       description: OK
       content:
         application/json:
           schema:
-            $ref: '../schemas/configupdateresponse.yaml'
+            $ref: '../schemas/ConfigUpdateResponse.yaml'
     '400':
       description: Invalid interface configuration(s)
       content:

@@ -1,31 +1,29 @@
 # request data
 Args:
-  $ref: '../../../spec/schemas/args.yaml'
+  $ref: '../../../spec/schemas/Args.yaml'
 DNSResolution:
-  $ref: '../../../spec/schemas/dnsresolution.yaml'
+  $ref: '../../../spec/schemas/DnsResolution.yaml'
 
 # response data
 Result:
-  $ref: '../../../spec/schemas/result.yaml'
+  $ref: '../../../spec/schemas/Result.yaml'
 Status:
-  $ref: '../../../spec/schemas/status.yaml'
+  $ref: '../../../spec/schemas/Status.yaml'
 HostsStatuses:
-  $ref: '../../../spec/schemas/hoststatuses.yaml'
+  $ref: '../../../spec/schemas/HostStatuses.yaml'
 Summary:
-  $ref: '../../../spec/schemas/summary.yaml'
+  $ref: '../../../spec/schemas/Summary.yaml'
 Query:
-  $ref: '../../../spec/schemas/query.yaml'
+  $ref: '../../../spec/schemas/Query.yaml'
 Timings:
-  $ref: '../../../spec/schemas/timings.yaml'
+  $ref: '../../../spec/schemas/Timings.yaml'
 Hits:
-  $ref: '../../../spec/schemas/hits.yaml'
-Rows:
-  $ref: '../../../spec/schemas/rows.yaml'
+  $ref: '../../../spec/schemas/Hits.yaml'
 Row:
-  $ref: '../../../spec/schemas/row.yaml'
+  $ref: '../../../spec/schemas/Row.yaml'
 Counters:
-  $ref: '../../../spec/schemas/counters.yaml'
+  $ref: '../../../spec/schemas/Counters.yaml'
 Labels:
-  $ref: '../../../spec/schemas/labels.yaml'
+  $ref: '../../../spec/schemas/Labels.yaml'
 Attributes:
-  $ref: '../../../spec/schemas/attributes.yaml'
+  $ref: '../../../spec/schemas/Attributes.yaml'
