@@ -1,0 +1,11 @@
+post:
+  summary: Reload interface configurations
+  tags:
+    - control
+  responses:
+    '200':
+      description: OK
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/ConfigUpdateResponse.yaml'

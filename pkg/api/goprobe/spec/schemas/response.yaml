@@ -1,0 +1,10 @@
+type: object
+properties:
+  status_code:
+    type: integer
+    description: HTTP status code of the response.
+    example: 200
+  error:
+    type: string
+    description: Error message if the request failed.
+    example: ""

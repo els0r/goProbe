@@ -1,0 +1,6 @@
+description: Bad Request
+content:
+  text/plain:
+    schema:
+      type: string
+      example: "Bad Request: invalid query: invalid attribute: 'foo'"

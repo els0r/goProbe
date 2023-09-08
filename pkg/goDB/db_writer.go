@@ -12,168 +12,161 @@ package goDB
 
 import (
 	"fmt"
-	"os"
+	"io/fs"
 	"path/filepath"
-	"strconv"
-	"time"
 
-	"github.com/els0r/goProbe/pkg/goDB/bigendian"
+	"github.com/els0r/goProbe/pkg/capture/capturetypes"
+	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
+	"github.com/els0r/goProbe/pkg/goDB/storage/gpfile"
+	"github.com/els0r/goProbe/pkg/types"
+	"github.com/els0r/goProbe/pkg/types/hashmap"
+	"github.com/fako1024/gotools/bitpack"
 )
 
-const (
-	// Used for compression applied by GPFile.
-	COMPRESSION_LEVEL = 512
+// DefaultPermissions denotes the default permissions used during writeout
+const DefaultPermissions = fs.FileMode(0644)
 
-	METADATA_FILE_NAME = "meta.json"
-)
-
-// DayTimestamp returns timestamp rounded down to the nearest day
-func DayTimestamp(timestamp int64) int64 {
-	return (timestamp / EPOCH_DAY) * EPOCH_DAY
-}
-
+// DBWriter writes goProbe flows to goDB database files
 type DBWriter struct {
 	dbpath string
 	iface  string
 
-	dayTimestamp int64
-
-	metadata *Metadata
+	encoderType  encoders.Type
+	encoderLevel int
+	permissions  fs.FileMode
 }
 
-func NewDBWriter(dbpath string, iface string) (w *DBWriter) {
+// NewDBWriter initializes a new DBWriter
+func NewDBWriter(dbpath string, iface string, encoderType encoders.Type) (w *DBWriter) {
 	return &DBWriter{
-		dbpath,
-		iface,
-
-		0,
-
-		new(Metadata),
+		dbpath:      dbpath,
+		iface:       iface,
+		encoderType: encoderType,
+		permissions: DefaultPermissions,
 	}
 }
 
-func (w *DBWriter) dailyDir(timestamp int64) (path string) {
-	dailyDir := strconv.FormatInt(DayTimestamp(timestamp), 10)
-	path = filepath.Join(w.dbpath, w.iface, dailyDir)
-	return
+// Permissions overrides the default permissions for files / directories in the DB
+func (w *DBWriter) Permissions(permissions fs.FileMode) *DBWriter {
+	w.permissions = permissions
+	return w
 }
 
-func (w *DBWriter) writeMetadata(timestamp int64, meta BlockMetadata) error {
-	if w.dayTimestamp != DayTimestamp(timestamp) {
-		w.metadata = nil
-		w.dayTimestamp = DayTimestamp(timestamp)
-	}
-
-	path := filepath.Join(w.dailyDir(timestamp), METADATA_FILE_NAME)
-
-	if w.metadata == nil {
-		w.metadata = TryReadMetadata(path)
-	}
-
-	w.metadata.Blocks = append(w.metadata.Blocks, meta)
-
-	return WriteMetadata(path, w.metadata)
+// EncoderLevel overrides the default encoder / compressor level for files / directories in the DB
+func (w *DBWriter) EncoderLevel(level int) *DBWriter {
+	w.encoderLevel = level
+	return w
 }
 
-func (w *DBWriter) writeBlock(timestamp int64, column string, data []byte) error {
-	path := filepath.Join(w.dailyDir(timestamp), column+".gpf")
-	gpfile, err := NewGPFile(path)
-	if err != nil {
-		return err
-	}
-	defer gpfile.Close()
-
-	if err := gpfile.WriteTimedBlock(timestamp, data, COMPRESSION_LEVEL); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (w *DBWriter) Write(flowmap AggFlowMap, meta BlockMetadata, timestamp int64) (InterfaceSummaryUpdate, error) {
+// Write takes an aggregated flow map and its metadata and writes it to disk for a given timestamp
+func (w *DBWriter) Write(flowmap *hashmap.AggFlowMap, captureStats capturetypes.CaptureStats, timestamp int64) error {
 	var (
-		dbdata [COLIDX_COUNT][]byte
-		update InterfaceSummaryUpdate
+		data   [types.ColIdxCount][]byte
+		update gpfile.Stats
 		err    error
 	)
 
-	if err = os.MkdirAll(w.dailyDir(timestamp), 0755); err != nil {
-		err = fmt.Errorf("Could not create daily directory: %s", err.Error())
-		return update, err
+	dir := gpfile.NewDir(filepath.Join(w.dbpath, w.iface), timestamp, gpfile.ModeWrite, gpfile.WithPermissions(w.permissions), gpfile.WithEncoderTypeLevel(w.encoderType, w.encoderLevel))
+	if err = dir.Open(); err != nil {
+		return fmt.Errorf("failed to create / open daily directory: %w", err)
 	}
 
-	dbdata, update = dbData(w.iface, timestamp, flowmap)
+	data, update = dbData(flowmap)
+	if err := dir.WriteBlocks(timestamp, gpfile.TrafficMetadata{
+		NumV4Entries: update.Traffic.NumV4Entries,
+		NumV6Entries: update.Traffic.NumV6Entries,
+		NumDrops:     captureStats.Dropped,
+	}, update.Counts, data); err != nil {
+		return err
+	}
 
-	for i := columnIndex(0); i < COLIDX_COUNT; i++ {
-		if err = w.writeBlock(timestamp, columnFileNames[i], dbdata[i]); err != nil {
-			return update, err
+	return dir.Close()
+}
+
+// BulkWorkload denotes a set of workloads / writes to perform during WriteBulk()
+type BulkWorkload struct {
+	FlowMap      *hashmap.AggFlowMap
+	CaptureStats capturetypes.CaptureStats
+	Timestamp    int64
+}
+
+// WriteBulk takes multiple aggregated flow maps and their metadata and writes it to disk for a given timestamp
+func (w *DBWriter) WriteBulk(workloads []BulkWorkload, dirTimestamp int64) (err error) {
+	var (
+		data   [types.ColIdxCount][]byte
+		update gpfile.Stats
+	)
+
+	dir := gpfile.NewDir(filepath.Join(w.dbpath, w.iface), dirTimestamp, gpfile.ModeWrite, gpfile.WithPermissions(w.permissions), gpfile.WithEncoderTypeLevel(w.encoderType, w.encoderLevel))
+	if err = dir.Open(); err != nil {
+		return fmt.Errorf("failed to create / open daily directory: %w", err)
+	}
+
+	for _, workload := range workloads {
+		data, update = dbData(workload.FlowMap)
+		if err := dir.WriteBlocks(workload.Timestamp, gpfile.TrafficMetadata{
+			NumV4Entries: update.Traffic.NumV4Entries,
+			NumV6Entries: update.Traffic.NumV6Entries,
+			NumDrops:     workload.CaptureStats.Dropped,
+		}, update.Counts, data); err != nil {
+			return err
 		}
 	}
 
-	meta.FlowCount = update.FlowCount
-	meta.Traffic = update.Traffic
-
-	if err = w.writeMetadata(timestamp, meta); err != nil {
-		return update, err
-	}
-
-	return update, err
+	return dir.Close()
 }
 
-func dbData(iface string, timestamp int64, aggFlowMap AggFlowMap) ([COLIDX_COUNT][]byte, InterfaceSummaryUpdate) {
-	var dbData [COLIDX_COUNT][]byte
-	summUpdate := new(InterfaceSummaryUpdate)
+func dbData(aggFlowMap *hashmap.AggFlowMap) ([types.ColIdxCount][]byte, gpfile.Stats) {
+	var dbData [types.ColIdxCount][]byte
+	var summUpdate gpfile.Stats
 
-	for i := columnIndex(0); i < COLIDX_COUNT; i++ {
-		// size: initial timestamp + values + final timestamp
-		size := 8 + columnSizeofs[i]*len(aggFlowMap) + 8
-		dbData[i] = make([]byte, 0, size)
+	v4List, v6List := aggFlowMap.Flatten()
+	v4List = v4List.Sort()
+	v6List = v6List.Sort()
+	for i := types.ColumnIndex(0); i < types.ColIdxAttributeCount; i++ {
+		columnSizeof := types.ColumnSizeofs[i]
+		if columnSizeof == types.IPSizeOf {
+			dbData[i] = make([]byte, 0, 4*len(v4List)+16*len(v6List))
+		} else {
+			dbData[i] = make([]byte, 0, types.ColumnSizeofs[i]*(len(v4List)+len(v6List)))
+		}
 	}
 
-	summUpdate.Timestamp = time.Unix(timestamp, 0)
-	summUpdate.Interface = iface
-
-	timestampBytes := make([]byte, 8)
-	bigendian.PutInt64(timestampBytes, timestamp)
-
-	for i := columnIndex(0); i < COLIDX_COUNT; i++ {
-		dbData[i] = append(dbData[i], timestampBytes...)
-	}
-
-	counterBytes := make([]byte, 8)
-
-	// loop through the flow map to extract the relevant
+	// loop through the v4 & v6 flow maps to extract the relevant
 	// values into database blocks.
-	for K, V := range aggFlowMap {
+	bytesRcvd, bytesSent, pktsRcvd, pktsSent :=
+		make([]uint64, 0, len(v4List)+len(v6List)),
+		make([]uint64, 0, len(v4List)+len(v6List)),
+		make([]uint64, 0, len(v4List)+len(v6List)),
+		make([]uint64, 0, len(v4List)+len(v6List))
+	for _, list := range []hashmap.List{v4List, v6List} {
+		for _, flow := range list {
 
-		summUpdate.FlowCount++
-		summUpdate.Traffic += V.NBytesRcvd
-		summUpdate.Traffic += V.NBytesSent
+			// global counters
+			summUpdate.Counts = summUpdate.Counts.Add(flow.Val)
 
-		// counters
-		bigendian.PutUint64(counterBytes, V.NBytesRcvd)
-		dbData[BYTESRCVD_COLIDX] = append(dbData[BYTESRCVD_COLIDX], counterBytes...)
+			// counters
+			bytesRcvd = append(bytesRcvd, flow.BytesRcvd)
+			bytesSent = append(bytesSent, flow.BytesSent)
+			pktsRcvd = append(pktsRcvd, flow.PacketsRcvd)
+			pktsSent = append(pktsSent, flow.PacketsSent)
 
-		bigendian.PutUint64(counterBytes, V.NBytesSent)
-		dbData[BYTESSENT_COLIDX] = append(dbData[BYTESSENT_COLIDX], counterBytes...)
-
-		bigendian.PutUint64(counterBytes, V.NPktsRcvd)
-		dbData[PKTSRCVD_COLIDX] = append(dbData[PKTSRCVD_COLIDX], counterBytes...)
-
-		bigendian.PutUint64(counterBytes, V.NPktsSent)
-		dbData[PKTSSENT_COLIDX] = append(dbData[PKTSSENT_COLIDX], counterBytes...)
-
-		// attributes
-		dbData[DIP_COLIDX] = append(dbData[DIP_COLIDX], K.Dip[:]...)
-		dbData[SIP_COLIDX] = append(dbData[SIP_COLIDX], K.Sip[:]...)
-		dbData[DPORT_COLIDX] = append(dbData[DPORT_COLIDX], K.Dport[:]...)
-		dbData[PROTO_COLIDX] = append(dbData[PROTO_COLIDX], K.Protocol)
+			// attributes
+			dbData[types.DportColIdx] = append(dbData[types.DportColIdx], flow.GetDport()...)
+			dbData[types.ProtoColIdx] = append(dbData[types.ProtoColIdx], flow.GetProto())
+			dbData[types.SIPColIdx] = append(dbData[types.SIPColIdx], flow.GetSIP()...)
+			dbData[types.DIPColIdx] = append(dbData[types.DIPColIdx], flow.GetDIP()...)
+		}
 	}
 
-	// push postamble to the arrays
-	for i := columnIndex(0); i < COLIDX_COUNT; i++ {
-		dbData[i] = append(dbData[i], timestampBytes...)
-	}
+	// Perform bit packing on the counter columns
+	dbData[types.BytesRcvdColIdx] = bitpack.Pack(bytesRcvd)
+	dbData[types.BytesSentColIdx] = bitpack.Pack(bytesSent)
+	dbData[types.PacketsRcvdColIdx] = bitpack.Pack(pktsRcvd)
+	dbData[types.PacketsSentColIdx] = bitpack.Pack(pktsSent)
 
-	return dbData, *summUpdate
+	summUpdate.Traffic.NumV4Entries = uint64(len(v4List))
+	summUpdate.Traffic.NumV6Entries = uint64(len(v6List))
+
+	return dbData, summUpdate
 }

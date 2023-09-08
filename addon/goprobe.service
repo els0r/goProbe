@@ -1,19 +1,14 @@
 [Unit]
-Description=goProbe Network Traffic Monitor
-After=syslog.target network.target
+Description=Network Traffic Monitoring
+After=network-online.target
 
 [Service]
 Type=simple
-Environment=LD_LIBRARY_PATH=PREFIX/goProbe/lib
-PIDFile=/var/run/goprobe.pid
-ExecStartPre=/bin/rm -f /var/run/goprobe.pid
-ExecStartPre=/bin/rm -f PREFIX/goProbe/db/control.sock
-ExecStart=PREFIX/goProbe/bin/goProbe -config /opt/ntm/goProbe/etc/goprobe.conf &
-ExecReload=PREFIX/goProbe/shared/goprobe.targets reload
-ExecStop=/usr/bin/pkill -15 goProbe
-ExecStopPost=/bin/rm -f /var/run/goprobe.pid
-ExecStopPost=/bin/rm -f /opt/ntm/goProbe/db/control.sock
+ExecStart=/usr/local/bin/goProbe -config /etc/goprobe.conf
 Restart=on-failure
+RestartSec=10
+TimeoutStopSec=30
 
 [Install]
 WantedBy=multi-user.target
+Alias=goprobe.service

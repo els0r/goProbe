@@ -56,3 +56,14 @@ UNRELEASED fako1024,els0r
     - start fetching fako's gopacket via go get
     - get rid of fetching golang, effectively making a go installation a pre-requisite
     - remove all mentions of libpcap from the repository
+    - improve packaging and add .deb Makefile target
+    - Add explicit systemd timeout for stop target to ensure that a stalling goprobe is killed
+    - Fix a bug occurring with ASM implementation of bigendian conversion starting from go1.15
+    - Add support for configurable compression algorithms
+    - Revamp of GPFile format, providing a more flexible storage backend solution (BREAKING CHANGE)
+    - Use optimized jsoniter implementation in favor of encode/json everywhere
+    - Add custom serialization for GPFile headers
+    - Add ZTSD encoder and enhance testing for encoding package
+    - Improve performance of GPFile write functionality by using buffering
+    - Update LZ4 to newest version (fixing potential crashes when trying to read invalid data)
+    - Improve Debian package build pipeline

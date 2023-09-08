@@ -1,0 +1,238 @@
+name: build-packages
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  build-deb:
+    runs-on: ubuntu-latest
+    steps:
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: 'stable'
+        id: go
+
+      - name: Set environment
+        run: |
+          echo "RELEASE_VERSION=${GITHUB_REF#refs/*/v}" >> $GITHUB_ENV
+          echo "SEM_VER=${GITHUB_REF#refs/*/v}" >> $GITHUB_ENV
+          echo "COMMIT_SHA=${GITHUB_SHA}" >> $GITHUB_ENV
+
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v3
+
+      - name: Generate version file in pkg/version using COMMIT_SHA and SEM_VER
+        run: |
+          cd ./pkg/version && go generate
+
+      - name: Build for AMD64
+        run: |
+          GOOS=linux GOARCH=amd64 go build -a -tags jsoniter,slimcap_nomock -o goProbe -pgo=auto ./cmd/goProbe
+          GOOS=linux GOARCH=amd64 go build -a -tags jsoniter -o global-query -pgo=auto ./cmd/global-query
+          GOOS=linux GOARCH=amd64 go build -a -o goQuery -pgo=auto ./cmd/goQuery
+          GOOS=linux GOARCH=amd64 go build -a -o goConvert ./cmd/goConvert
+
+      - name: Deploy artifacts
+        run: |
+          mkdir -p .debpkg/usr/local/bin
+          mkdir -p .debpkg/etc/systemd/system
+
+          # Binaries / Tarball
+          cp goProbe .debpkg/usr/local/bin/goProbe
+          cp global-query .debpkg/usr/local/bin/global-query
+          cp goQuery .debpkg/usr/local/bin/goQuery
+          cp goConvert .debpkg/usr/local/bin/goConvert
+          tar czf ./goprobe_${{ env.RELEASE_VERSION }}_debian_amd64.tar.gz goProbe global-query goQuery goConvert
+
+          # Config
+          cp addon/goprobe.conf.example .debpkg/etc/goprobe.conf.example
+          cp addon/goprobe.service .debpkg/etc/systemd/system/goprobe.service
+
+          # pre/post/rm scripts
+          mkdir -p .debpkg/DEBIAN
+          echo -e "systemctl daemon-reload" > .debpkg/DEBIAN/postinst
+          chmod +x .debpkg/DEBIAN/postinst
+          echo -e "systemctl daemon-reload" > .debpkg/DEBIAN/postrm
+          chmod +x .debpkg/DEBIAN/postrm
+          echo -e "mkdir -p /usr/local/goprobe" > .debpkg/DEBIAN/preinst
+          chmod +x .debpkg/DEBIAN/preinst
+      - uses: jiro4989/build-deb-action@v2
+        with:
+          package: goprobe
+          package_root: .debpkg
+          maintainer: fako1024
+          version: ${{ github.ref }}
+          arch: 'amd64'
+          depends: 'liblz4-1, libzstd1'
+          desc: 'goProbe Network Traffic Monitoring'
+
+      - name: Store artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: Debian
+          path: |
+            ./goprobe_${{ env.RELEASE_VERSION }}_amd64.deb
+            ./goprobe_${{ env.RELEASE_VERSION }}_debian_amd64.tar.gz
+
+  build-rpm:
+    runs-on: ubuntu-latest
+    container: fedora:37
+    steps:
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: 'stable'
+        id: go
+
+      - name: Set environment
+        run: |
+          echo "RELEASE_VERSION=${GITHUB_REF#refs/*/v}" >> $GITHUB_ENV
+          echo "SEM_VER=${GITHUB_REF#refs/*/v}" >> $GITHUB_ENV
+          echo "COMMIT_SHA=${GITHUB_SHA}" >> $GITHUB_ENV
+
+      - name: Install OS dependencies
+        run: dnf -y install gcc libzstd-devel lz4-devel
+
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v3
+
+      - name: Generate version file in pkg/version using COMMIT_SHA and SEM_VER
+        run: |
+          cd ./pkg/version && go generate
+
+      - name: Build for AMD64
+        run: |
+          GOOS=linux GOARCH=amd64 go build -a -tags jsoniter,slimcap_nomock -o goProbe -pgo=auto ./cmd/goProbe
+          GOOS=linux GOARCH=amd64 go build -a -tags jsoniter -o global-query -pgo=auto ./cmd/global-query
+          GOOS=linux GOARCH=amd64 go build -a -o goQuery -pgo=auto ./cmd/goQuery
+          GOOS=linux GOARCH=amd64 go build -a -o goConvert ./cmd/goConvert
+
+      - name: Deploy artifacts
+        run: |
+          mkdir -p .rpmpkg/usr/local/bin
+          mkdir -p .rpmpkg/etc/systemd/system
+
+          # Binaries / Tarball
+          cp goProbe .rpmpkg/usr/local/bin/goProbe
+          cp global-query .rpmpkg/usr/local/bin/global-query
+          cp goQuery .rpmpkg/usr/local/bin/goQuery
+          cp goConvert .rpmpkg/usr/local/bin/goConvert
+          tar czf ./goprobe_${{ env.RELEASE_VERSION }}_fedora_x86_64.tar.gz goProbe global-query goQuery goConvert
+
+          # Config
+          cp addon/goprobe.conf.example .rpmpkg/etc/goprobe.conf.example
+          cp addon/goprobe.service .rpmpkg/etc/systemd/system/goprobe.service
+      - uses: jiro4989/build-rpm-action@v2
+        with:
+          package: goprobe
+          package_root: .rpmpkg
+          maintainer: fako1024
+          version: ${{ github.ref }}
+          arch: 'x86_64'
+          desc: 'goProbe Network Traffic Monitoring'
+
+      - name: Store artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: Fedora
+          path: |
+            ./goprobe-${{ env.RELEASE_VERSION }}*x86_64.rpm
+            ./goprobe_${{ env.RELEASE_VERSION }}_fedora_x86_64.tar.gz
+
+  build-apk:
+    runs-on: ubuntu-latest
+    container: golang:alpine
+    steps:
+
+      - name: Set environment
+        run: |
+          echo "RELEASE_VERSION=${GITHUB_REF#refs/*/v}" >> $GITHUB_ENV
+          echo "SEM_VER=${GITHUB_REF#refs/*/v}" >> $GITHUB_ENV
+          echo "COMMIT_SHA=${GITHUB_SHA}" >> $GITHUB_ENV
+
+      - name: Install OS dependencies
+        run: apk add cmake make gcc libtool git bash musl-dev zstd-dev lz4-dev
+
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v3
+
+      - name: Generate version file in pkg/version using COMMIT_SHA and SEM_VER
+        run: |
+          cd ./pkg/version && go generate
+
+      - name: Build for AMD64
+        run: |
+          GOOS=linux GOARCH=amd64 go build -buildvcs=false -a -tags jsoniter,slimcap_nomock -o goProbe -pgo=auto ./cmd/goProbe
+          GOOS=linux GOARCH=amd64 go build -buildvcs=false -a -tags jsoniter -o global-query -pgo=auto ./cmd/global-query
+          GOOS=linux GOARCH=amd64 go build -buildvcs=false -a -o goQuery -pgo=auto ./cmd/goQuery
+          GOOS=linux GOARCH=amd64 go build -buildvcs=false -a -o goConvert ./cmd/goConvert
+
+      - name: Deploy artifacts
+        run: |
+          tar czf ./goprobe_${{ env.RELEASE_VERSION }}_alpine_x86_64.tar.gz goProbe global-query goQuery goConvert
+
+      - name: Store artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: Alpine
+          path: |
+            ./goprobe_${{ env.RELEASE_VERSION }}_alpine_x86_64.tar.gz
+
+  build-openapi-specs:
+    runs-on: ubuntu-latest
+    container: node:20-alpine
+    steps:
+        - name: Set environment
+          run: |
+            echo "RELEASE_VERSION=${GITHUB_REF#refs/*/v}" >> $GITHUB_ENV
+            echo "SEM_VER=${GITHUB_REF#refs/*/v}" >> $GITHUB_ENV
+            echo "COMMIT_SHA=${GITHUB_SHA}" >> $GITHUB_ENV
+
+        - name: Check out code into the Go module directory
+          uses: actions/checkout@v3
+
+        - name: Install redocly
+          run: |
+            npm install -g @redocly/cli
+
+        - name: Build single OpenAPI 3.0 spec file for all documented APIs
+          run: |
+            redocly bundle --output ./goprobe_${{ env.RELEASE_VERSION }}_openapi.yaml ./pkg/api/goprobe/spec/openapi.yaml
+            redocly bundle --output ./global-query_${{ env.RELEASE_VERSION }}_openapi.yaml ./pkg/api/globalquery/spec/openapi.yaml
+
+        - name: Store artifacts
+          uses: actions/upload-artifact@v3
+          with:
+            name: OpenAPI
+            path: |
+              ./goprobe_${{ env.RELEASE_VERSION }}_openapi.yaml
+              ./global-query_${{ env.RELEASE_VERSION }}_openapi.yaml
+
+  release:
+    runs-on: ubuntu-latest
+    needs: [build-deb, build-rpm, build-apk, build-openapi-specs]
+    steps:
+
+      - uses: actions/download-artifact@v3
+        with:
+          path: downloaded-artifacts
+
+      - name: List artifacts
+        run: find downloaded-artifacts
+
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            downloaded-artifacts/Debian/goprobe*.deb
+            downloaded-artifacts/Debian/goprobe*.tar.gz
+            downloaded-artifacts/Fedora/goprobe*.rpm
+            downloaded-artifacts/Fedora/goprobe*.tar.gz
+            downloaded-artifacts/Alpine/goprobe*.tar.gz
+            downloaded-artifacts/OpenAPI/*_openapi.yaml
+          generate_release_notes: true

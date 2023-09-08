@@ -1,64 +1,58 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"os/exec"
+	"sort"
 	"testing"
 
 	"github.com/els0r/goProbe/pkg/goDB"
+	"github.com/els0r/goProbe/pkg/types"
 
 	"bufio"
 	"bytes"
 	"fmt"
-	"io/ioutil"
 	"reflect"
 	"strings"
 )
 
 const (
-	SIP_DIP_SCHEMA             = "time,iface,sip,dip,packets received,packets sent,%,data vol. received,data vol. sent,%"
-	SIP_DIP_DPORT_PROTO_SCHEMA = "time,iface,sip,dip,dport,proto,packets received,packets sent,%,data vol. received,data vol. sent,%"
-	RAW_SCHEMA                 = "time,iface,sip,dip,dport,proto,packets received,packets sent,%,data vol. received,data vol. sent,%"
+	sipDipSchema      = "time,iface,sip,dip,packets received,packets sent,%,data vol. received,data vol. sent,%"
+	sipDipProtoSchema = "time,iface,sip,dip,dport,proto,packets received,packets sent,%,data vol. received,data vol. sent,%"
+	rawSchema         = "time,iface,sip,dip,dport,proto,packets received,packets sent,%,data vol. received,data vol. sent,%"
 
-	DBPATH = "./csvtestdb"
+	dbPath = "./csvtestdb"
 )
 
 var parserTests = []struct {
-	schema string
-	input  string
-	outKey goDB.ExtraKey
-	outVal goDB.Val
+	schema   string
+	input    string
+	outKey   types.ExtendedKey
+	outVal   types.Counters
+	outIface string
 }{
-	{SIP_DIP_SCHEMA,
+	{sipDipSchema,
 		"1460362502,eth2,213.156.236.211,213.156.236.255,2,0,0.00,525,0,0.00",
-		goDB.ExtraKey{
-			int64(1460362502),
-			"eth2",
-			goDB.Key{Sip: [16]byte{213, 156, 236, 211}, Dip: [16]byte{213, 156, 236, 255}},
-		},
-		goDB.Val{NBytesRcvd: uint64(525), NBytesSent: uint64(0), NPktsRcvd: uint64(2), NPktsSent: uint64(0)},
+		types.NewV4KeyStatic([4]byte{213, 156, 236, 211}, [4]byte{213, 156, 236, 255}, []byte{0, 0}, 0).Extend(int64(1460362502)),
+		types.Counters{BytesRcvd: uint64(525), BytesSent: uint64(0), PacketsRcvd: uint64(2), PacketsSent: uint64(0)},
+		"eth2",
 	},
-	{SIP_DIP_DPORT_PROTO_SCHEMA,
+	{sipDipProtoSchema,
 		"1460362502,eth2,213.156.236.211,213.156.236.255,8080,TCP,2,0,0.00,525,0,0.00",
-		goDB.ExtraKey{
-			int64(1460362502),
-			"eth2",
-			goDB.Key{Sip: [16]byte{213, 156, 236, 211}, Dip: [16]byte{213, 156, 236, 255}, Dport: [2]byte{0x1f, 0x90}, Protocol: byte(6)},
-		},
-		goDB.Val{NBytesRcvd: uint64(525), NBytesSent: uint64(0), NPktsRcvd: uint64(2), NPktsSent: uint64(0)},
+		types.NewV4KeyStatic([4]byte{213, 156, 236, 211}, [4]byte{213, 156, 236, 255}, []byte{0x1f, 0x90}, 6).Extend(int64(1460362502)),
+		types.Counters{BytesRcvd: uint64(525), BytesSent: uint64(0), PacketsRcvd: uint64(2), PacketsSent: uint64(0)},
+		"eth2",
 	},
-	{RAW_SCHEMA,
+	{rawSchema,
 		"1460362502,eth2,213.156.236.211,213.156.236.255,8080,TCP,2,0,0.00,525,0,0.00",
-		goDB.ExtraKey{
-			int64(1460362502),
-			"eth2",
-			goDB.Key{Sip: [16]byte{213, 156, 236, 211}, Dip: [16]byte{213, 156, 236, 255}, Dport: [2]byte{0x1f, 0x90}, Protocol: byte(6)},
-		},
-		goDB.Val{NBytesRcvd: uint64(525), NBytesSent: uint64(0), NPktsRcvd: uint64(2), NPktsSent: uint64(0)},
+		types.NewV4KeyStatic([4]byte{213, 156, 236, 211}, [4]byte{213, 156, 236, 255}, []byte{0x1f, 0x90}, 6).Extend(int64(1460362502)),
+		types.Counters{BytesRcvd: uint64(525), BytesSent: uint64(0), PacketsRcvd: uint64(2), PacketsSent: uint64(0)},
+		"eth2",
 	},
 }
 
-var inputCSV string = `time,iface,sip,dip,dport,proto,packets received,packets sent,%,data vol. received,data vol. sent,%
+var inputCSV = `time,iface,sip,dip,dport,proto,packets received,packets sent,%,data vol. received,data vol. sent,%
 1464051037,t4_12759,213.156.234.4,224.0.0.5,0,OSPFIGP,21,0,0.78,1760,0,0.33
 1464051037,eth0,169.254.204.142,169.254.255.255,137,UDP3,0,0.11,276,0,0.05
 1464051037,eth0,169.254.169.121,169.254.255.255,138,UDP1,0,0.04,243,0,0.05
@@ -165,33 +159,41 @@ Sent data volume (bytes),154985
 Sorting and flow direction,first packet time
 Interface,any`
 
-const MAGIC_ENV_VAR = "GOTEST_argumentsMain"
+const magicEnvVar = "GOTEST_argumentsMain"
 
 func TestMain(m *testing.M) {
 	var err error
 
 	// remove any current test databases
-	if err = os.RemoveAll(DBPATH); err != nil {
-		fmt.Printf("Failed to remove old databases: %s", err.Error())
+	if err = os.RemoveAll(dbPath); err != nil {
+		fmt.Printf("Failed to remove old databases: %s\n", err.Error())
 		os.Exit(1)
 	}
 
-	os.Exit(m.Run())
+	// run tests
+	ecode := m.Run()
+
+	// remove any current test databases
+	if err = os.RemoveAll(dbPath); err != nil {
+		fmt.Printf("Failed to remove old databases: %s\n", err.Error())
+	}
+
+	os.Exit(ecode)
 }
 
 func callMain(arg ...string) *exec.Cmd {
-	cmd := exec.Command(os.Args[0], "-test.run=TestCallMain")
-	cmd.Env = append(os.Environ(), fmt.Sprintf("%s=%s", MAGIC_ENV_VAR, arg))
+	cmd := exec.Command(os.Args[0], "-test.run=TestCallMain") // #nosec G204
+	cmd.Env = append(os.Environ(), fmt.Sprintf("%s=%s", magicEnvVar, arg))
 	return cmd
 }
 
 func TestConversion(t *testing.T) {
 	// write the testing string to a file
-	if err := ioutil.WriteFile("./data.csv", []byte(inputCSV), 0755); err != nil {
+	if err := os.WriteFile("./data.csv", []byte(inputCSV), 0600); err != nil {
 		t.Fatalf("Failed to set up test data: %s", err.Error())
 	}
 
-	output, err := callMain("-in", "data.csv", "-out", DBPATH).CombinedOutput()
+	output, err := callMain("-in", "data.csv", "-out", dbPath).CombinedOutput()
 	if err != nil {
 		t.Fatalf("Error running conversion: Error %s\n, Output:%s\n", err.Error(), output)
 	}
@@ -207,7 +209,7 @@ func TestConversion(t *testing.T) {
 	//    }
 	//
 	//    // run goquery with arguments to produce above CSV file
-	//    goqueryOutput, err := exec.Command("goquery", "-d", DBPATH, "-i", "any", "-e", "csv", "raw").CombinedOutput()
+	//    goqueryOutput, err := exec.Command("goquery", "-d", dbPath, "-i", "any", "-e", "csv", "raw").CombinedOutput()
 	//    if err != nil {
 	//        t.Fatalf("Error during goquery call: %s", err.Error())
 	//    }
@@ -246,19 +248,21 @@ func compareLinesWithInput(convertedOutput []byte) (string, bool) {
 }
 
 func TestCallMain(t *testing.T) {
-	if args := os.Getenv(MAGIC_ENV_VAR); args != "" {
-		os.Args = []string{os.Args[0], "-in", "data.csv", "-out", DBPATH}
+	if args := os.Getenv(magicEnvVar); args != "" {
+		os.Args = []string{os.Args[0], "-in", "data.csv", "-out", dbPath}
 		main()
 		return
 	}
 }
 
-func TestParsers(t *testing.T) {
+func testParsers(t *testing.T) {
 	var (
-		err    error
-		rowKey goDB.ExtraKey
-		rowVal goDB.Val
+		err      error
+		rowKeyV4 = types.NewEmptyV4Key().ExtendEmpty()
+		rowKeyV6 = types.NewEmptyV6Key().ExtendEmpty()
+		rowVal   types.Counters
 	)
+	rowKey := &rowKeyV4
 
 	t.Parallel()
 	for _, tt := range parserTests {
@@ -267,11 +271,31 @@ func TestParsers(t *testing.T) {
 			t.Fatalf("Unable to read schema: %s", err.Error())
 		}
 
+		// Ensure that IP parsers are executed first  and interface parsers last (if present)
+		// to ensure correct parsing
+		sort.Slice(conv.KeyParsers, func(i, j int) bool {
+			if _, isIfaceParser := conv.KeyParsers[j].parser.(*IfaceStringParser); isIfaceParser {
+				return true
+			}
+
+			_, isSIPParser := conv.KeyParsers[i].parser.(*goDB.SIPStringParser)
+			_, isDIPParser := conv.KeyParsers[i].parser.(*goDB.DIPStringParser)
+			return isSIPParser || isDIPParser
+		})
+
 		fields := strings.Split(tt.input, ",")
-		for ind, parser := range conv.KeyParsers {
-			if err = parser.ParseKey(fields[ind], &rowKey); err != nil {
+		for _, parser := range conv.KeyParsers {
+			if err = parser.parser.ParseKey(fields[parser.ind], rowKey); err != nil {
+				if errors.Is(err, goDB.ErrIPVersionMismatch) {
+					rowKey = &rowKeyV6
+					if err = parser.parser.ParseKey(fields[parser.ind], rowKey); err != nil {
+						t.Fatalf("%s", err.Error())
+					}
+					continue
+				}
 				t.Fatalf("%s", err.Error())
 			}
+			rowKey = &rowKeyV4
 		}
 		for ind, parser := range conv.ValParsers {
 			if err := parser.ParseVal(fields[ind], &rowVal); err != nil {
@@ -279,12 +303,18 @@ func TestParsers(t *testing.T) {
 			}
 		}
 
+		var iface string
+		*rowKey, iface = extractIface(*rowKey)
+
 		// check equality of keys and values
-		if !reflect.DeepEqual(rowKey, tt.outKey) {
-			t.Fatalf("Key: got: %s; expect: %s", fmt.Sprint(rowKey), fmt.Sprint(tt.outKey))
+		if !bytes.Equal(*rowKey, tt.outKey) {
+			t.Fatalf("Key (%s): got: %s; expect: %s", tt.input, fmt.Sprint(rowKey), fmt.Sprint(tt.outKey))
 		}
 		if !reflect.DeepEqual(rowVal, tt.outVal) {
-			t.Fatalf("Val: got: %s; expect: %s", fmt.Sprint(rowVal), fmt.Sprint(tt.outVal))
+			t.Fatalf("Val (%s): got: %s; expect: %s", tt.input, fmt.Sprint(rowVal), fmt.Sprint(tt.outVal))
+		}
+		if iface != tt.outIface {
+			t.Fatalf("Key (%s): got: `%x`; expect: `%x`", tt.input, iface, tt.outIface)
 		}
 	}
 }

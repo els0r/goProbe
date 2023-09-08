@@ -1,0 +1,56 @@
+get:
+  summary: Get interface configurations
+  operationId: getConfigurationsByIfaces
+  tags:
+    - control
+  parameters:
+    - name: ifaces
+      in: query
+      description: The interfaces to query
+      required: false
+      schema:
+        type: string
+        example: eth0,eth1
+  responses:
+    '200':
+      description: OK
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/ConfigResponse.yaml'
+    '400':
+      description: Invalid query parameters
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/response.yaml'
+          example:
+            code: 400
+            error: "Invalid parameters"
+put:
+  summary: Update interface configurations
+  tags:
+    - control
+  requestBody:
+    description: The interface configurations
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: '../schemas/ConfigUpdateRequest.yaml'
+  responses:
+    '200':
+      description: OK
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/ConfigUpdateResponse.yaml'
+    '400':
+      description: Invalid interface configuration(s)
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/response.yaml'
+          example:
+            code: 400
+            error: "RingBuffer: NumBlocks must be a strictly positive number"

@@ -1,0 +1,29 @@
+# request data
+Args:
+  $ref: '../../../spec/schemas/Args.yaml'
+DNSResolution:
+  $ref: '../../../spec/schemas/DnsResolution.yaml'
+
+# response data
+Result:
+  $ref: '../../../spec/schemas/Result.yaml'
+Status:
+  $ref: '../../../spec/schemas/Status.yaml'
+HostsStatuses:
+  $ref: '../../../spec/schemas/HostStatuses.yaml'
+Summary:
+  $ref: '../../../spec/schemas/Summary.yaml'
+Query:
+  $ref: '../../../spec/schemas/Query.yaml'
+Timings:
+  $ref: '../../../spec/schemas/Timings.yaml'
+Hits:
+  $ref: '../../../spec/schemas/Hits.yaml'
+Row:
+  $ref: '../../../spec/schemas/Row.yaml'
+Counters:
+  $ref: '../../../spec/schemas/Counters.yaml'
+Labels:
+  $ref: '../../../spec/schemas/Labels.yaml'
+Attributes:
+  $ref: '../../../spec/schemas/Attributes.yaml'

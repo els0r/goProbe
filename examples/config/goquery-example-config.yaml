@@ -1,0 +1,25 @@
+# db configures where goquery can find the flow database. It enables querying the local DB
+db:
+  # path of the goDB database written by goprobe and read by goquery
+  path: /usr/local/goprobe/db
+query:
+  # server enables querying the global-query API
+  server:
+    # addr defines under which address the global-query API server is reachable. For unix sockets,
+    # the prefix unix: is required
+    addr: "http://global-query.example.com:8146"
+  # timeout specifies the timeout for queries. The parameter is used for both query modes
+  timeout: 30s
+  # log defines the query log file to which queries are logged. Not their results, just the stages of query preparation,
+  # execution, and completion. The output of the query results is written to stdout
+  #
+  # It is also not be confused with the logging configuration, which will guide how internal errors/warning/debug statements
+  # are presented to the caller
+  #
+  # query logging is disabled if the path is empty, meaning that queries are not logged by default
+  log: /var/log/goquery.log
+# logging guides the logging of internal errors/warning/debug statements
+logging:
+  # level defines the log level. It can be one of: debug, info, warn, error, fatal, panic. By default, goquery will log warnings
+  # and errors to stderr. All other log levels are logged to stdout. It is recommended to only increase the log level for debugging
+  level: warn

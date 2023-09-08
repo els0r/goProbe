@@ -1,320 +1,544 @@
-/////////////////////////////////////////////////////////////////////////////////
-//
-// capture_manager.go
-//
-// Written by Lorenz Breidenbach lob@open.ch,
-//            Lennart Elsen lel@open.ch, December 2015
-// Copyright (c) 2015 Open Systems AG, Switzerland
-// All Rights Reserved.
-//
-/////////////////////////////////////////////////////////////////////////////////
-
 package capture
 
 import (
+	"context"
 	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 
+	"github.com/els0r/goProbe/cmd/goProbe/config"
+	"github.com/els0r/goProbe/pkg/capture/capturetypes"
 	"github.com/els0r/goProbe/pkg/goDB"
+	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
+	"github.com/els0r/goProbe/pkg/goprobe/writeout"
+	"github.com/els0r/goProbe/pkg/types/hashmap"
+	"github.com/els0r/telemetry/logging"
 )
 
-// TaggedAggFlowMap represents an aggregated
-// flow map tagged with CaptureStats and an
-// an interface name.
-//
-// Used by CaptureManager to return the results of
-// RotateAll() and Update().
-type TaggedAggFlowMap struct {
-	Map   goDB.AggFlowMap
-	Stats CaptureStats
-	Iface string
-}
+const allowedWriteoutDurationFraction = 0.1
 
-// CaptureManager manages a set of Capture instances.
+// Manager manages a set of Capture instances.
 // Each interface can be associated with up to one Capture.
-type CaptureManager struct {
-	sync.Mutex
-	captures map[string]*Capture
+type Manager struct {
+	sync.RWMutex
+
+	writeoutHandler writeout.Handler
+	captures        *captures
+	sourceInitFn    sourceInitFn
+
+	lastAppliedConfig config.Ifaces
+
+	lastRotation time.Time
+	startedAt    time.Time
+
+	skipWriteoutSchedule bool
 }
 
-// NewCaptureManager creates a new CaptureManager and
-// returns a pointer to it.
-func NewCaptureManager() *CaptureManager {
-	return &CaptureManager{
-		captures: make(map[string]*Capture),
+// InitManager initializes a CaptureManager and the underlying writeout logic
+// Used as primary entrypoint for the goProbe binary and E2E tests
+func InitManager(ctx context.Context, config *config.Config, opts ...ManagerOption) (*Manager, error) {
+
+	// Setup database compression and permissions
+	encoderType, err := encoders.GetTypeByString(config.DB.EncoderType)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get encoder type from %s: %w", config.DB.EncoderType, err)
 	}
-}
-
-func (cm *CaptureManager) ifaceNames() []string {
-	ifaces := make([]string, 0, len(cm.captures))
-
-	cm.Lock()
-	for iface, _ := range cm.captures {
-		ifaces = append(ifaces, iface)
+	dbPermissions := goDB.DefaultPermissions
+	if config.DB.Permissions != 0 {
+		dbPermissions = config.DB.Permissions
 	}
-	cm.Unlock()
 
-	return ifaces
+	// If a local buffer config exists, set the values accordingly (before initializing the manager)
+	if config.LocalBuffers != nil {
+		setLocalBuffers(config.LocalBuffers.NumBuffers, config.LocalBuffers.SizeLimit)
+	}
+
+	// Initialize the DB writeout handler
+	writeoutHandler := writeout.NewGoDBHandler(config.DB.Path, encoderType).
+		WithSyslogWriting(config.SyslogFlows).
+		WithPermissions(dbPermissions)
+
+	// Initialize the CaptureManager
+	captureManager := NewManager(writeoutHandler, opts...)
+
+	// Update (i.e. start) all capture routines (implicitly by reloading all configurations) and schedule
+	// DB writeouts
+	_, _, _, err = captureManager.Update(ctx, config.Interfaces)
+	if err != nil {
+		return nil, err
+	}
+
+	// this is the first time the capture manager is started and is important to report program runtime
+	captureManager.startedAt = time.Now()
+
+	if !captureManager.skipWriteoutSchedule {
+		captureManager.ScheduleWriteouts(ctx, time.Duration(goDB.DBWriteInterval)*time.Second)
+	}
+
+	return captureManager, nil
 }
 
-func (cm *CaptureManager) enable(ifaces map[string]CaptureConfig) {
-	var rg RunGroup
+// NewManager creates a new CaptureManager
+func NewManager(writeoutHandler writeout.Handler, opts ...ManagerOption) *Manager {
+	captureManager := &Manager{
+		captures:        newCaptures(),
+		writeoutHandler: writeoutHandler,
+		sourceInitFn:    defaultSourceInitFn,
+	}
+	for _, opt := range opts {
+		opt(captureManager)
+	}
+	return captureManager
+}
 
-	for iface, config := range ifaces {
-		if cm.captureExists(iface) {
-			capture, config := cm.getCapture(iface), config
-			rg.Run(func() {
-				capture.Update(config)
-			})
-		} else {
-			capture := NewCapture(iface, config)
-			cm.setCapture(iface, capture)
+// LastRotation returns the timestamp of the last DB writeout / rotation
+func (cm *Manager) LastRotation() (t time.Time) {
+	cm.RLock()
+	t = cm.lastRotation
+	cm.RUnlock()
 
-			SysLog.Info(fmt.Sprintf("Added interface '%s' to capture list.", iface))
+	return
+}
 
-			rg.Run(func() {
-				capture.Enable()
-			})
+// StartedAt returns the timestamp when the capture manager was initialized
+func (cm *Manager) StartedAt() (t time.Time) {
+	cm.RLock()
+	t = cm.startedAt
+	cm.RUnlock()
+
+	return
+}
+
+// GetTimestamps is a combination of LastRotation() and StartedAt(). It exists to save a lock
+// in case both timestamps are requested
+func (cm *Manager) GetTimestamps() (startedAt, lastRotation time.Time) {
+	cm.RLock()
+	startedAt = cm.startedAt
+	lastRotation = cm.lastRotation
+	cm.RUnlock()
+
+	return
+}
+
+// ScheduleWriteouts creates a new goroutine that executes a DB writeout in defined time
+// intervals
+func (cm *Manager) ScheduleWriteouts(ctx context.Context, interval time.Duration) {
+	go func() {
+		logger := logging.FromContext(ctx)
+
+		// wait until the next 5 minute interval of the hour is reached before starting the ticker
+		tNow := time.Now()
+
+		sleepUntil := tNow.Truncate(interval).Add(interval).Sub(tNow)
+		logger.Infof("waiting for %s to start capture rotation", sleepUntil.Round(time.Second))
+
+		timer := time.NewTimer(sleepUntil)
+		select {
+		case <-timer.C:
+			break
+		case <-ctx.Done():
+			return
 		}
-	}
 
-	rg.Wait()
+		ticker := time.NewTicker(interval)
+
+		// immediately write out after the initial sleep has completed
+		t := time.Now()
+		for {
+			select {
+			case <-ctx.Done():
+				logger.Info("stopping rotation handler")
+				ticker.Stop()
+				return
+			default:
+				t0 := time.Now()
+				cm.performWriteout(ctx, t)
+				if elapsed := float64(time.Since(t0)); elapsed > allowedWriteoutDurationFraction*float64(interval) {
+					logger.Warnf("writeouts took longer than %.1f%% of the writeout interval (%.1f%%)",
+						100*allowedWriteoutDurationFraction,
+						100.*elapsed/float64(interval))
+				}
+
+				// wait for the the next ticker to complete
+				t = <-ticker.C
+			}
+		}
+	}()
 }
 
-// EnableAll attempts to enable all managed Capture instances.
-//
-// Returns once all instances have been enabled.
-// Note that each attempt may fail, for example if the interface
-// that a Capture is supposed to monitor ceases to exist. Use
-// StateAll() to find out wheter the Capture instances encountered
-// an error.
-func (cm *CaptureManager) EnableAll() {
-	t0 := time.Now()
+// ManagerOption denotes a functional option for any CaptureManager
+type ManagerOption func(cm *Manager)
 
-	var rg RunGroup
-
-	for _, capture := range cm.capturesCopy() {
-		capture := capture
-		rg.Run(func() {
-			capture.Enable()
-		})
+// WithSourceInitFn sets a custom function used to initialize a new capture
+func WithSourceInitFn(fn sourceInitFn) ManagerOption {
+	return func(cm *Manager) {
+		cm.sourceInitFn = fn
 	}
-
-	rg.Wait()
-
-	SysLog.Debug(fmt.Sprintf("Completed interface capture check in %s", time.Now().Sub(t0)))
 }
 
-func (cm *CaptureManager) disable(ifaces []string) {
-	var rg RunGroup
+// WithSkipWriteoutSchedule disables scheduled writeouts
+func WithSkipWriteoutSchedule(skip bool) ManagerOption {
+	return func(cm *Manager) {
+		cm.skipWriteoutSchedule = skip
+	}
+}
+
+// Config returns the runtime config of the capture manager for all (or a set of) interfaces
+func (cm *Manager) Config(ifaces ...string) (ifaceConfigs config.Ifaces) {
+	cm.RLock()
+	defer cm.RUnlock()
+
+	// Build list of interfaces to process (either from all interfaces or from explicit list)
+	if ifaces = cm.captures.Ifaces(ifaces...); len(ifaces) == 0 {
+		return
+	}
+
+	ifaceConfigs = make(config.Ifaces)
 
 	for _, iface := range ifaces {
-		iface := iface
-		rg.Run(func() {
-			cm.getCapture(iface).Disable()
-		})
-	}
-	rg.Wait()
-}
-
-func (cm *CaptureManager) getCapture(iface string) *Capture {
-	cm.Lock()
-	c := cm.captures[iface]
-	cm.Unlock()
-
-	return c
-}
-
-func (cm *CaptureManager) setCapture(iface string, capture *Capture) {
-	cm.Lock()
-	cm.captures[iface] = capture
-	cm.Unlock()
-}
-
-func (cm *CaptureManager) delCapture(iface string) {
-	cm.Lock()
-	delete(cm.captures, iface)
-	cm.Unlock()
-}
-
-func (cm *CaptureManager) captureExists(iface string) bool {
-	cm.Lock()
-	_, exists := cm.captures[iface]
-	cm.Unlock()
-
-	return exists
-}
-
-func (cm *CaptureManager) capturesCopy() map[string]*Capture {
-	copyMap := make(map[string]*Capture)
-
-	cm.Lock()
-	for iface, capture := range cm.captures {
-		copyMap[iface] = capture
-	}
-	cm.Unlock()
-
-	return copyMap
-}
-
-// DisableAll disables all managed Capture instances.
-//
-// Returns once all instances have been disabled.
-// The instances are not deleted, so you may later enable them again;
-// for example, by calling EnableAll().
-func (cm *CaptureManager) DisableAll() {
-	t0 := time.Now()
-
-	cm.disable(cm.ifaceNames())
-
-	SysLog.Info(fmt.Sprintf("Disabled all captures in %s", time.Now().Sub(t0)))
-}
-
-// Update attempts to enable all Capture instances given by
-// ifaces. If an instance doesn't exist, it will be created.
-// If an instance has encountered an error or an instance's configuration
-// differs from the one specified in ifaces, it will be re-enabled.
-// Finally, if the CaptureManager manages an instance for an iface that does
-// not occur in ifaces, the following actions are performed on the instance:
-// (1) the instance will be disabled,
-// (2) the instance will be rotated,
-// (3) the resulting flow data will be sent over returnChan,
-// (tagged with the interface name and stats),
-// (4) the instance will be closed,
-// and (5) the instance will be completely removed from the CaptureManager.
-//
-// Returns once all the above actions have been completed.
-func (cm *CaptureManager) Update(ifaces map[string]CaptureConfig, returnChan chan TaggedAggFlowMap) {
-	t0 := time.Now()
-
-	ifaceSet := make(map[string]struct{})
-	for iface := range ifaces {
-		ifaceSet[iface] = struct{}{}
-	}
-
-	// Contains the names of all interfaces we are shutting down and deleting.
-	var disableIfaces []string
-
-	cm.Lock()
-	for iface, _ := range cm.captures {
-		if _, exists := ifaceSet[iface]; !exists {
-			disableIfaces = append(disableIfaces, iface)
+		cfg, exists := cm.lastAppliedConfig[iface]
+		if exists {
+			ifaceConfigs[iface] = cfg
 		}
 	}
-	cm.Unlock()
-
-	var rg RunGroup
-	// disableIfaces and ifaces are disjunct, so we can run these in parallel.
-	rg.Run(func() {
-		cm.disable(disableIfaces)
-	})
-	rg.Run(func() {
-		cm.enable(ifaces)
-	})
-	rg.Wait()
-
-	for _, iface := range disableIfaces {
-		iface, capture := iface, cm.getCapture(iface)
-		rg.Run(func() {
-			aggFlowMap, stats := capture.Rotate()
-			returnChan <- TaggedAggFlowMap{
-				aggFlowMap,
-				stats,
-				iface,
-			}
-
-			capture.Close()
-		})
-
-		cm.delCapture(iface)
-		SysLog.Info(fmt.Sprintf("Deleted interface '%s' from capture list.", iface))
-	}
-	rg.Wait()
-
-	SysLog.Debug(fmt.Sprintf("Updated interface list in %s", time.Now().Sub(t0)))
+	return
 }
 
-// StatusAll() returns the statuses of all managed Capture instances.
-func (cm *CaptureManager) StatusAll() map[string]CaptureStatus {
-	statusmapMutex := sync.Mutex{}
-	statusmap := make(map[string]CaptureStatus)
+// Status fetches the current capture stats from all (or a set of) interfaces
+func (cm *Manager) Status(ctx context.Context, ifaces ...string) (statusmap capturetypes.InterfaceStats) {
 
-	var rg RunGroup
-	for iface, capture := range cm.capturesCopy() {
-		iface, capture := iface, capture
+	logger, t0 := logging.FromContext(ctx), time.Now()
+
+	statusmap = make(capturetypes.InterfaceStats)
+
+	// Build list of interfaces to process (either from all interfaces or from explicit list)
+	// If none are provided / are available, return empty map
+	if ifaces = cm.captures.Ifaces(ifaces...); len(ifaces) == 0 {
+		return
+	}
+
+	var (
+		statusmapMutex = sync.Mutex{}
+		rg             RunGroup
+	)
+	for _, iface := range ifaces {
+		mc, exists := cm.captures.Get(iface)
+		if !exists {
+			continue
+		}
 		rg.Run(func() {
-			status := capture.Status()
+
+			runCtx := withIfaceContext(ctx, mc.iface)
+
+			// Lock the running capture and extract the status
+			mc.lock()
+
+			// Since the capture is locked we can safely extract the (capture) status
+			// from the individual interfaces (and unlock no matter what)
+			status, err := mc.status()
+			mc.unlock()
+
+			if err != nil {
+				logging.FromContext(runCtx).Errorf("failed to get capture stats: %v", err)
+				return
+			}
+
 			statusmapMutex.Lock()
-			statusmap[iface] = status
+			statusmap[mc.iface] = *status
 			statusmapMutex.Unlock()
 		})
 	}
 	rg.Wait()
 
-	return statusmap
+	logger.With(
+		"elapsed", time.Since(t0).Round(time.Millisecond).String(),
+		"ifaces", ifaces,
+	).Debug("retrieved interface status")
+
+	return
 }
 
-// ErrorsAll() returns the error maps of all managed Capture instances.
-func (cm *CaptureManager) ErrorsAll() map[string]errorMap {
-	errmapMutex := sync.Mutex{}
-	errormap := make(map[string]errorMap)
-
-	var rg RunGroup
-	for iface, capture := range cm.capturesCopy() {
-		iface, capture := iface, capture
-		rg.Run(func() {
-			errs := capture.Errors()
-			errmapMutex.Lock()
-			errormap[iface] = errs
-			errmapMutex.Unlock()
-		})
+// Update the configuration for all (or a set of) interfaces
+func (cm *Manager) Update(ctx context.Context, ifaces config.Ifaces) (enabled, updated, disabled []string, err error) {
+	// Validate the config before doing anything else
+	err = ifaces.Validate()
+	if err != nil {
+		return
 	}
-	rg.Wait()
 
-	return errormap
-}
+	logger, t0 := logging.FromContext(ctx), time.Now()
 
-// RotateAll() returns the state of all managed Capture instances.
-//
-// The resulting TaggedAggFlowMaps will be sent over returnChan and
-// be tagged with the given timestamp.
-func (cm *CaptureManager) RotateAll(returnChan chan TaggedAggFlowMap) {
-	t0 := time.Now()
-
-	var rg RunGroup
-
-	for iface, capture := range cm.capturesCopy() {
-		iface, capture := iface, capture
-		rg.Run(func() {
-			aggFlowMap, stats := capture.Rotate()
-			returnChan <- TaggedAggFlowMap{
-				aggFlowMap,
-				stats,
-				iface,
-			}
-		})
-	}
-	rg.Wait()
-
-	SysLog.Debug(fmt.Sprintf("Completed rotation of all captures in %s", time.Now().Sub(t0)))
-}
-
-// CloseAll() closes and deletes all Capture instances managed by the
-// CaptureManager
-func (cm *CaptureManager) CloseAll() {
-	var rg RunGroup
-
-	for _, capture := range cm.capturesCopy() {
-		capture := capture
-		rg.Run(func() {
-			capture.Close()
-		})
-	}
+	// Build set of interfaces to enable / disable
+	var (
+		ifaceSet                                  = make(map[string]struct{})
+		enableIfaces, updateIfaces, disableIfaces []string
+	)
 
 	cm.Lock()
-	cm.captures = make(map[string]*Capture)
+	for iface, cfg := range ifaces {
+		ifaceSet[iface] = struct{}{}
+		if _, exists := cm.captures.Get(iface); !exists {
+			enableIfaces = append(enableIfaces, iface)
+		} else {
+			updatedCfg := cfg
+			runtimeCfg := cm.lastAppliedConfig[iface]
+
+			// take care of parameter updates to an interface that exists already
+			if !updatedCfg.Equals(runtimeCfg) {
+				updateIfaces = append(updateIfaces, iface)
+			}
+		}
+	}
 	cm.Unlock()
 
+	for iface := range cm.captures.Map {
+		if _, exists := ifaceSet[iface]; !exists {
+			disableIfaces = append(disableIfaces, iface)
+		}
+	}
+
+	var disable = append(disableIfaces, updateIfaces...)
+	var enable = append(enableIfaces, updateIfaces...)
+
+	cm.update(ctx, ifaces, enable, disable)
+
+	logger.With(
+		"elapsed", time.Since(t0).Round(time.Millisecond).String(),
+		slog.Group("ifaces",
+			"added", enableIfaces,
+			"updated", updateIfaces,
+			"removed", disableIfaces,
+		),
+	).Debug("updated interface configuration")
+
+	return enableIfaces, updateIfaces, disableIfaces, nil
+
+}
+
+func (cm *Manager) update(ctx context.Context, ifaces config.Ifaces, enable, disable []string) {
+
+	// execute a final writeout of all disabled interfaces in the list
+	if len(disable) > 0 {
+		cm.performWriteout(ctx, time.Now().Add(time.Second), disable...)
+	}
+
+	// To avoid any interference the update() logic is protected as a whole
+	// This also allows us to interface with the captures without copying (creating potential races)
+	cm.Lock()
+	defer cm.Unlock()
+
+	// store the configuration so that changes can be communicated
+	cm.lastAppliedConfig = ifaces
+
+	// Disable any interfaces present in the negative list
+	var rg RunGroup
+	for _, iface := range disable {
+		mc, exists := cm.captures.Get(iface)
+		if !exists {
+			continue
+		}
+		rg.Run(func() {
+
+			runCtx := withIfaceContext(ctx, mc.iface)
+
+			logger := logging.FromContext(runCtx)
+			logger.Info("closing capture / stopping packet processing")
+			if err := mc.close(); err != nil {
+				logger.Errorf("failed to close capture: %s", err)
+			}
+
+			cm.captures.Delete(mc.iface)
+		})
+	}
 	rg.Wait()
+
+	// Enable any interfaces present in the positive list
+	for _, iface := range enable {
+		iface := iface
+
+		rg.Run(func() {
+
+			runCtx := withIfaceContext(ctx, iface)
+			logger := logging.FromContext(runCtx)
+
+			logger.Info("initializing capture / running packet processing")
+
+			newCap := newCapture(iface, ifaces[iface]).SetSourceInitFn(cm.sourceInitFn)
+			if err := newCap.run(); err != nil {
+				logger.Errorf("failed to start capture: %s", err)
+				return
+			}
+
+			// Start up processing and error handling / logging in the
+			// background
+			go cm.logErrors(runCtx, iface,
+				newCap.process())
+
+			cm.captures.Set(iface, newCap)
+		})
+	}
+	rg.Wait()
+}
+
+// GetFlowMaps extracts a copy of all active flows and sends them on the provided channel (compatible with normal query
+// processing). This way, live data can be added to a query result
+func (cm *Manager) GetFlowMaps(ctx context.Context, filterFn goDB.FilterFn, writeoutChan chan<- hashmap.AggFlowMapWithMetadata, ifaces ...string) {
+
+	logger, t0 := logging.FromContext(ctx), time.Now()
+
+	// Build list of interfaces to process (either from all interfaces or from explicit list)
+	// If none are provided / are available, return empty map
+	if ifaces = cm.captures.Ifaces(ifaces...); len(ifaces) == 0 {
+		return
+	}
+
+	for _, iface := range ifaces {
+		mc, exists := cm.captures.Get(iface)
+		if exists {
+
+			runCtx := withIfaceContext(ctx, mc.iface)
+
+			// Lock the running capture and perform the rotation
+			mc.lock()
+			flowMap := mc.flowMap(runCtx)
+			mc.unlock()
+
+			if flowMap != nil {
+				if filterFn != nil {
+					flowMap = filterFn(flowMap)
+				}
+				writeoutChan <- hashmap.AggFlowMapWithMetadata{
+					AggFlowMap: flowMap,
+					Interface:  iface,
+				}
+			}
+		}
+	}
+
+	// log fetch duration
+	logger.With(
+		"elapsed", time.Since(t0).Round(time.Microsecond).String(),
+		"ifaces", ifaces,
+	).Debug("fetched flow maps")
+}
+
+// Close stops / closes all (or a set of) interfaces
+func (cm *Manager) Close(ctx context.Context, ifaces ...string) {
+
+	logger, t0 := logging.FromContext(ctx), time.Now()
+
+	// Build list of interfaces to process (either from all interfaces or from explicit list)
+	if ifaces = cm.captures.Ifaces(ifaces...); len(ifaces) == 0 {
+		return
+	}
+
+	// Close all interfaces in the list using update() with the respective list of
+	// interfaces to remove
+	cm.update(ctx, nil, nil, ifaces)
+
+	logger.With(
+		"elapsed", time.Since(t0).Round(time.Millisecond).String(),
+		"ifaces", ifaces,
+	).Debug("closed interfaces")
+}
+
+func withIfaceContext(ctx context.Context, iface string) context.Context {
+	return logging.WithFields(ctx, slog.String("iface", iface))
+}
+
+func (cm *Manager) rotate(ctx context.Context, writeoutChan chan<- capturetypes.TaggedAggFlowMap, ifaces ...string) {
+
+	logger, t0 := logging.FromContext(ctx), time.Now()
+
+	// Build list of interfaces to process (either from all interfaces or from explicit list)
+	// If none are provided / are available, return empty map
+	if ifaces = cm.captures.Ifaces(ifaces...); len(ifaces) == 0 {
+		return
+	}
+
+	// Iteratively rotate all interfaces. Since the rotation results are put on the writeoutChan for
+	// writeout by the DBWriter (which is sequential and certainly slower than the actual in-memory rotation)
+	// there is no significant benefit from running the rotations in parallel, thus allowing us to minimize
+	// congestion _and_ use a single shared local memory buffer
+	for _, iface := range ifaces {
+		if mc, exists := cm.captures.Get(iface); exists {
+
+			runCtx := withIfaceContext(ctx, mc.iface)
+			logger, lockStart := logging.FromContext(runCtx), time.Now()
+
+			// Lock the running capture in order to safely perform rotation tasks
+			mc.lock()
+
+			// Extract capture stats in a separate goroutine to minimize rotation duration
+			statsRes := mc.fetchStatusInBackground(runCtx)
+
+			// Perform the rotation
+			rotateResult := mc.rotate(runCtx)
+
+			stats := <-statsRes
+			mc.unlock()
+			logger.With("elapsed", time.Since(lockStart).Round(time.Microsecond).String()).Debug("interface locked")
+
+			writeoutChan <- capturetypes.TaggedAggFlowMap{
+				Map:   rotateResult,
+				Stats: *stats,
+				Iface: mc.iface,
+			}
+		}
+	}
+
+	// observe rotation duration
+	t1 := time.Since(t0)
+	rotationDuration.Observe(float64(t1) / float64(time.Second))
+	interfacesCapturing.Set(float64(len(ifaces)))
+
+	logger.With(
+		"elapsed", t1.Round(time.Microsecond).String(),
+		"ifaces", ifaces,
+	).Debug("rotated interfaces")
+}
+
+func (cm *Manager) logErrors(ctx context.Context, iface string, errsChan <-chan error) {
+	logger := logging.FromContext(ctx)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case err, ok := <-errsChan:
+			if !ok {
+
+				// Ensure there is no conflict with calls to update() that might already be
+				// taking down this interface
+				cm.Lock()
+				defer cm.Unlock()
+
+				// If the error channel was closed prematurely, we have to assume there was
+				// a critical processing error and tear down the interface
+				if mc, exists := cm.captures.Get(iface); exists {
+					logger.Info("closing capture / stopping packet processing")
+					if err := mc.close(); err != nil {
+						logger.Errorf("failed to close capture: %s", err)
+					}
+					cm.captures.Delete(mc.iface)
+				}
+				return
+			}
+			logger.Error(err)
+		}
+	}
+}
+
+func (cm *Manager) performWriteout(ctx context.Context, timestamp time.Time, ifaces ...string) {
+	writeoutChan := make(chan capturetypes.TaggedAggFlowMap, writeout.WriteoutsChanDepth)
+	doneChan := cm.writeoutHandler.HandleWriteout(ctx, timestamp, writeoutChan)
+
+	cm.rotate(ctx, writeoutChan, ifaces...)
+	close(writeoutChan)
+
+	<-doneChan
+
+	cm.Lock()
+	cm.lastRotation = timestamp
+	cm.Unlock()
 }

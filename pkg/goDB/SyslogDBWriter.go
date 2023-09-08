@@ -15,30 +15,35 @@ package goDB
 import (
 	"fmt"
 	"log/syslog"
+
+	"github.com/els0r/goProbe/pkg/types/hashmap"
 )
 
+// SyslogDBWriter can write goProbe's flow map to a syslog destination
 type SyslogDBWriter struct {
 	logger *syslog.Writer
 }
 
+// NewSyslogDBWriter establishes a syslog connection and returns the flow writer
 func NewSyslogDBWriter() (*SyslogDBWriter, error) {
 	s := &SyslogDBWriter{}
 
 	var err error
-	if s.logger, err = syslog.Dial("unix", SOCKET_PATH, syslog.LOG_NOTICE, "ntm"); err != nil {
+	if s.logger, err = syslog.Dial("unix", socketPath, syslog.LOG_NOTICE, "ntm"); err != nil {
 		return nil, err
 	}
 	return s, nil
 }
 
-func (s *SyslogDBWriter) Write(flowmap AggFlowMap, iface string, timestamp int64) {
-	for flowKey, flowVal := range flowmap {
-		s.logger.Info(
+// Write writes the aggregated flows to the syslog writer
+func (s *SyslogDBWriter) Write(flowmap *hashmap.AggFlowMap, iface string, timestamp int64) {
+	for i := flowmap.Iter(); i.Next(); {
+		_ = s.logger.Info(
 			fmt.Sprintf("%d,%s,%s,%s",
 				timestamp,
 				iface,
-				flowKey.String(),
-				flowVal.String(),
+				i.Key(),
+				i.Val().String(),
 			),
 		)
 	}

@@ -1,0 +1,19 @@
+type: object
+description: Attributes are traffic attributes by which the goDB can be aggregated
+properties:
+  sip:
+    type: string
+    example: 192.168.1.1
+    description: The source IP address
+  dip:
+    type: string
+    example: 8.8.8.8
+    description: The destination IP address
+  proto:
+    type: integer
+    example: 6
+    description: The IP protocol number
+  dport:
+    type: integer
+    example: 80
+    description: The destination port

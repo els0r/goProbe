@@ -1,56 +1,66 @@
-/////////////////////////////////////////////////////////////////////////////////
-//
-// version.go
-//
-// Provides a single place to store/retrieve all version information
-//
-// Written by Lorenz Breidenbach lob@open.ch, February 2016
-// Copyright (c) 2016 Open Systems AG, Switzerland
-// All Rights Reserved.
-//
-/////////////////////////////////////////////////////////////////////////////////
-
+// Package version is used by the release process to add an
+// informative version string to some commands.
 package version
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"runtime"
+	"time"
 )
 
-// these variables are set during build by the command
-// go build -ldflags "-X pkg/version.version=3.14 ..."
+//go:generate go run make_version.go
+
+// These strings will be overwritten by an init function in
+// created by make_version.go during the release process.
 var (
-	version   = "unknown"
-	commit    = "unknown"
-	builddate = "unknown"
+	BuildTime = time.Time{}
+	GitSHA    = ""
+	SemVer    = ""
 )
 
-// Returns the version number of goProbe/goQuery, e.g. "2.1"
+const (
+	devel = "devel"
+)
+
+// Version returns a newline-terminated string describing the current
+// version of the build.
 func Version() string {
-	return version
-}
+	progName := filepath.Base(os.Args[0])
 
-// Returns the git commit sha1 of goProbe/goQuery. If the build
-// was from a dirty tree, the hash will be prepended with a "!".
-func Commit() string {
-	return commit
-}
+	if GitSHA == "" {
+		return progName + " " + devel + "\n"
+	}
 
-// Returns the date and time when goProbe/goQuery were built.
-func BuildDate() string {
-	return builddate
-}
+	semver := SemVer
+	if semver == "" {
+		semver = devel
+	}
 
-// Returns ready-for-printing output for the -version target
-// containing the build kind, version number, commit hash, build date and
-// go version.
-func VersionText() string {
-	return fmt.Sprintf(
-		"%s version %s (commit id: %s, built on: %s) using go %s",
-		BUILD_KIND,
-		version,
-		commit,
-		builddate,
+	str := fmt.Sprintf(`%s - %s:
+    Build time:     %s
+    Git hash:       %s
+    Go versions:    %s
+`,
+		progName, semver,
+		BuildTime.In(time.UTC).Format(time.Stamp+" 2006 UTC"),
+		GitSHA,
 		runtime.Version(),
 	)
+	return str
+}
+
+// Short returns a shortened GitSHA string that is equivalent to
+// git rev-parse --short. If SemVer has been provided, it will be
+// prepended
+func Short() string {
+	if GitSHA == "" {
+		return devel
+	}
+	short := GitSHA[0:8]
+	if SemVer != "" {
+		short = SemVer + "-" + short
+	}
+	return short
 }

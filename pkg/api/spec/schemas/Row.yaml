@@ -1,0 +1,12 @@
+  type: object
+  description: Row is a human-readable, aggregatable representation of goDB's data
+  required:
+    - attributes
+    - counters
+  properties:
+    labels:
+      $ref: './Labels.yaml'
+    attributes:
+      $ref: './Attributes.yaml'
+    counters:
+      $ref: './Counters.yaml'

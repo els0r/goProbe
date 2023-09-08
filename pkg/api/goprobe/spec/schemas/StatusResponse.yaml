@@ -1,0 +1,19 @@
+type: object
+allOf:
+  - $ref: './response.yaml'
+properties:
+  last_writeout:
+    type: string
+    format: date-time
+    description: Time of the last writeout.
+    example: "2021-01-01T00:05:00Z"
+  started_at:
+    type: string
+    format: date-time
+    description: Time when the capture manager was initialized and started capturing.
+    example: "2021-01-01T00:00:00Z"
+  statuses:
+    type: object
+    description: Statistics for each interface
+    additionalProperties:
+      $ref: './InterfaceStats.yaml'

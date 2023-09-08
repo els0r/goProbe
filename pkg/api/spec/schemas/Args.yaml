@@ -1,0 +1,99 @@
+# Args
+type: object
+required:
+  - query
+  - ifaces
+properties:
+  query:
+    type: string
+    description: The query type
+    example: "sip,dip,dport,proto"
+  ifaces:
+    type: string
+    description: The interfaces to query
+    example: "eth0,eth1"
+  query_hosts:
+    type: string
+    description: The hosts for which data is queried (comma-separated list)
+    example: "hostA,hostB,hostC"
+  hostname:
+    type: string
+    description: The hostname from which data is queried
+    example: "hostA"
+  host_id:
+    type: integer
+    description: The host ID from which data is queried
+    example: 123456
+  condition:
+    type: string
+    description: The condition to filter data by
+    example: "port=80 && proto=TCP"
+  in:
+    type: boolean
+    description: Only show incoming packets/bytes
+    example: false
+  out:
+    type: boolean
+    description: Only show outgoing packets/bytes
+    example: false
+  sum:
+    type: boolean
+    description: Show sum of incoming/outgoing packets/bytes
+    example: false
+  first:
+    type: string
+    description: The first timestamp to query
+    example: "2020-08-12T09:47:00+02:00"
+  last:
+    type: string
+    description: The last timestamp to query
+    example: "-24h"
+  format:
+    type: string
+    description: The output format (json, csv, table)
+    enum:
+      - json
+      - csv
+      - table
+    example: "json"
+  sort_by:
+    type: string
+    description: Column to sort by (packets or bytes)
+    enum:
+      - packets
+      - bytes
+    example: "bytes"
+  num_results:
+    type: integer
+    description: Number of results to return/print
+    example: 25
+  sort_ascending:
+    type: boolean
+    description: Sort ascending instead of the default descending
+    example: false
+  list:
+    type: boolean
+    description: Only list interfaces and return
+    example: false
+  version:
+    type: boolean
+    description: Only print version and return
+    example: false
+  dns_resolution:
+    $ref: './DnsResolution.yaml'
+  max_mem_pct:
+    type: integer
+    description: Maximum percentage of available host memory to use for query processing
+    example: 80
+  low_mem:
+    type: boolean
+    description: Use less memory for query processing
+    example: false
+  caller:
+    type: string
+    description: Caller stores who produced these args (caller)
+    example: "swagger-ui"
+  live:
+    type: boolean
+    description: Live can be used to request live flow data (in addition to DB results)
+    example: false

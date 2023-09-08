@@ -1,76 +1,62 @@
-/////////////////////////////////////////////////////////////////////////////////
-//
-// metadata.go
-//
-// Written by Lorenz Breidenbach lob@open.ch, January 2016
-// Copyright (c) 2016 Open Systems AG, Switzerland
-// All Rights Reserved.
-//
-/////////////////////////////////////////////////////////////////////////////////
-
 package goDB
 
 import (
-	"encoding/json"
-	"os"
+	"github.com/els0r/goProbe/pkg/formatting"
+	"github.com/els0r/goProbe/pkg/goDB/storage/gpfile"
+	"github.com/els0r/goProbe/pkg/results"
+	"github.com/els0r/goProbe/pkg/types"
 )
 
-// Represents metadata for one database block.
-type BlockMetadata struct {
-	Timestamp            int64 `json:"timestamp"`
-	PcapPacketsReceived  int   `json:"pcap_packets_received"`
-	PcapPacketsDropped   int   `json:"pcap_packets_dropped"`
-	PcapPacketsIfDropped int   `json:"pcap_packets_if_dropped"`
-	PacketsLogged        int   `json:"packets_logged"`
+// InterfaceMetadata describes the time range for which data is available, how many flows
+// were recorded and how much traffic was captured
+type InterfaceMetadata struct {
+	Iface string `json:"iface"`
+	results.TimeRange
 
-	// As in Summary
-	FlowCount uint64 `json:"flowcount"`
-	Traffic   uint64 `json:"traffic"`
+	gpfile.Stats
 }
 
-// Metadata for a collection of database blocks.
-// By convention all blocks belong the same day.
-type Metadata struct {
-	Blocks []BlockMetadata `json:"blocks"`
-}
+// TableHeader constructs the table header for pretty printing metadata
+func (i *InterfaceMetadata) TableHeader(detailed bool) (headerRows [][]string) {
+	r1 := []string{"iface"}
+	fromTo := []string{"from", "to"}
 
-func NewMetadata() *Metadata {
-	return &Metadata{}
-}
+	if detailed {
+		r0 := []string{"", "packets", "packets", "bytes", "bytes", "# of", "# of", "", "", ""}
+		r1 = append(r1, "in", "out", "in", "out", "IPv4 flows", "IPv6 flows", "drops")
 
-// Reads the given metadata file.
-func ReadMetadata(path string) (*Metadata, error) {
-	var result Metadata
-
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-
-	if err := json.NewDecoder(f).Decode(&result); err != nil {
-		return nil, err
+		headerRows = append(headerRows, r0)
+	} else {
+		r1 = append(r1, "packets", "traffic", "flows")
 	}
 
-	return &result, nil
+	r1 = append(r1, fromTo...)
+
+	headerRows = append(headerRows, r1)
+	return headerRows
 }
 
-// Tries to read the given metadata file.
-// If an error occurs, a fresh Metadata struct is returned.
-func TryReadMetadata(path string) *Metadata {
-	meta, err := ReadMetadata(path)
-	if err != nil {
-		return NewMetadata()
-	}
-	return meta
-}
+// TableRow puts all attributes of the metadata into a row that can be used for table printing.
+// If detailed is false, the counts and metadata is summarized to their sum (e.g. IPv4 + IPv6 flows = NumFlows).
+// Drops are only printed in detail mode
+func (i *InterfaceMetadata) TableRow(detailed bool) []string {
+	str := []string{i.Iface}
+	fromTo := []string{i.First.Format(types.DefaultTimeOutputFormat), i.Last.Format(types.DefaultTimeOutputFormat)}
+	if detailed {
+		str = append(str,
+			formatting.Count(i.Counts.PacketsRcvd), formatting.Count(i.Counts.PacketsSent),
+			formatting.Size(i.Counts.BytesRcvd), formatting.Size(i.Counts.BytesSent),
+			formatting.Count(i.Traffic.NumV4Entries), formatting.Count(i.Traffic.NumV6Entries),
+			formatting.Count(i.Traffic.NumDrops),
+		)
+	} else {
+		str = append(str,
+			formatting.Count(i.Counts.PacketsRcvd+i.Counts.PacketsSent),
+			formatting.Size(i.Counts.BytesRcvd+i.Counts.BytesSent),
+			formatting.Count(i.Traffic.NumFlows()),
+		)
 
-func WriteMetadata(path string, meta *Metadata) error {
-	f, err := os.Create(path)
-	if err != nil {
-		return err
 	}
-	defer f.Close()
-
-	return json.NewEncoder(f).Encode(meta)
+	str = append(str, fromTo...)
+	return str
 }

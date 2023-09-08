@@ -2,67 +2,123 @@
 //
 // DBConvert.go
 //
-// Binary to read in database data from csv files and push it to the goDB writer
-// which creates a .gpf columnar database from the data at a specified location.
-//
 // Written by Lennart Elsen lel@open.ch, July 2014
 // Copyright (c) 2014 Open Systems AG, Switzerland
 // All Rights Reserved.
 //
 /////////////////////////////////////////////////////////////////////////////////
+
+// Binary to read in database data from csv files and push it to the goDB writer
+// which creates a .gpf columnar database from the data at a specified location.
 package main
 
 import (
 	"bufio"
+	"bytes"
+	"encoding/binary"
+	"errors"
+	"io"
+	"io/fs"
 	"os"
-	"os/exec"
 	"runtime"
 	"runtime/debug"
-	"strconv"
+	"sort"
 	"strings"
 	"sync"
-	"time"
 
+	// for metrics export to metricsbeat
+	_ "expvar"
+
+	"github.com/els0r/goProbe/pkg/capture/capturetypes"
 	"github.com/els0r/goProbe/pkg/goDB"
+	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
+	"github.com/els0r/goProbe/pkg/types"
+	"github.com/els0r/goProbe/pkg/types/hashmap"
+	"github.com/els0r/goProbe/pkg/version"
+	"github.com/els0r/telemetry/logging"
 
 	"flag"
 	"fmt"
 )
 
+// Config stores the flags provided to the converter
 type Config struct {
-	FilePath string
-	SavePath string
-	Iface    string
-	Schema   string
-	NumLines int
+	FilePath      string
+	SavePath      string
+	Iface         string
+	Schema        string
+	NumLines      int
+	EncoderType   int
+	DBPermissions uint
 }
 
 // parameter governing the number of seconds that are covered by a block
 const (
-	DB_WRITE_INTERVAL  int64 = 300
-	CSV_DEFAULT_SCHEMA       = "time,iface,sip,dip,dport,proto,packets received,packets sent,%,data vol. received,data vol. sent,%"
+	csvDefaultSchema = "time,iface,sip,dip,dport,proto,packets received,packets sent,%,data vol. received,data vol. sent,%"
 )
 
 type writeJob struct {
 	iface  string
 	tstamp int64
-	data   goDB.AggFlowMap
+	data   *hashmap.AggFlowMap
 }
 
+type keyIndParserItem struct {
+	ind    int
+	parser goDB.StringKeyParser
+}
+
+// IfaceStringParser parses iface strings
+type IfaceStringParser struct{}
+
+// ParseKey writes an element to the Iface key
+func (i *IfaceStringParser) ParseKey(element string, key *types.ExtendedKey) error {
+
+	// Not very pretty: We basically just append the string and its length to the end
+	ifaceBytes := []byte(element)
+	newKey := make([]byte, len(*key)+len(ifaceBytes)+4)
+	pos := copy(newKey, *key)
+	copy(newKey[pos:], ifaceBytes)
+	binary.BigEndian.PutUint32(newKey[len(newKey)-4:], uint32(len(element)))
+
+	*key = newKey
+
+	return nil
+}
+
+func extractIface(key []byte) ([]byte, string) {
+
+	strLen := int(binary.BigEndian.Uint32(key[len(key)-4:]))
+	ifaceName := string(key[len(key)-(strLen+4) : len(key)-4])
+	remainingKey := key[:len(key)-(strLen+4)]
+
+	return remainingKey, ifaceName
+}
+
+func newStringKeyParser(field string) goDB.StringKeyParser {
+	if field == "iface" {
+		return &IfaceStringParser{}
+	}
+	return goDB.NewStringKeyParser(field)
+}
+
+// CSVConverter can read CSV files containing goProbe flow information
 type CSVConverter struct {
 	// map field index to how it should be parsed
-	KeyParsers map[int]goDB.StringKeyParser
+	KeyParsers []keyIndParserItem
 	ValParsers map[int]goDB.StringValParser
 }
 
+// NewCSVConverter initializes a CSVConverter with the Key- and Value parsers for goProbe flows
 func NewCSVConverter() *CSVConverter {
 	return &CSVConverter{
-		make(map[int]goDB.StringKeyParser),
-		make(map[int]goDB.StringValParser),
+		KeyParsers: make([]keyIndParserItem, 0),
+		ValParsers: make(map[int]goDB.StringValParser),
 	}
 }
 
 func (c *CSVConverter) readSchema(schema string) error {
+	logger := logging.Logger()
 
 	fields := strings.Split(schema, ",")
 
@@ -73,7 +129,7 @@ func (c *CSVConverter) readSchema(schema string) error {
 
 	// first try to extract all attributes which need to be parsed
 	for ind, field := range fields {
-		parser := goDB.NewStringKeyParser(field)
+		parser := newStringKeyParser(field)
 
 		// check if a NOP parser was created. If so, try to create
 		// a value parser from the field
@@ -87,10 +143,21 @@ func (c *CSVConverter) readSchema(schema string) error {
 				canParse = append(canParse, field)
 			}
 		} else {
-			c.KeyParsers[ind] = parser
+			c.KeyParsers = append(c.KeyParsers, keyIndParserItem{ind, parser})
 			canParse = append(canParse, field)
 		}
 	}
+
+	// Ensure that IP parsers are executed first and interface parsers last (if present)
+	// to ensure correct parsing
+	sort.Slice(c.KeyParsers, func(i, j int) bool {
+		if _, isIfaceParser := c.KeyParsers[j].parser.(*IfaceStringParser); isIfaceParser {
+			return true
+		}
+		_, isSIPParser := c.KeyParsers[i].parser.(*goDB.SIPStringParser)
+		_, isDIPParser := c.KeyParsers[i].parser.(*goDB.DIPStringParser)
+		return isSIPParser || isDIPParser
+	})
 
 	// if only NOP parsers were created, it means that the
 	// schema is fully unreadable
@@ -99,14 +166,13 @@ func (c *CSVConverter) readSchema(schema string) error {
 	}
 
 	// print parseable/unparseable fields:
-	//    fmt.Println("SCHEMA:\n Can parse:\n\t", canParse, "\n Will not parse:\n\t", cantParse)
-	_, _ = canParse, cantParse
+	logger.Debugf("SCHEMA: can parse: %s. Will not parse: %s", canParse, cantParse)
 	return nil
 }
 
 func (c *CSVConverter) parsesIface() bool {
 	for _, p := range c.KeyParsers {
-		if _, ok := p.(*goDB.IfaceStringParser); ok {
+		if _, ok := p.parser.(*IfaceStringParser); ok {
 			return true
 		}
 	}
@@ -118,13 +184,14 @@ func parseCommandLineArgs(cfg *Config) {
 	flag.StringVar(&cfg.SavePath, "out", "", "Folder to which the .gpf files should be written")
 	flag.StringVar(&cfg.Schema, "schema", "", "Structure of CSV file (e.g. \"sip,dip,dport,time\"")
 	flag.StringVar(&cfg.Iface, "iface", "", "Interface from which CSV data was created")
-	flag.IntVar(&cfg.NumLines, "n", 111222333444, "Number of rows to read from the CSV file")
+	flag.IntVar(&cfg.NumLines, "n", 1000, "Number of rows to read from the CSV file")
+	flag.IntVar(&cfg.EncoderType, "encoder", 0, "Encoder type to use for compression")
+	flag.UintVar(&cfg.DBPermissions, "permissions", 0, "Permissions to use when writing DB (Unix file mode)")
 	flag.Parse()
 }
 
 func printUsage(msg string) {
 	fmt.Println(msg + ".\nUsage: ./goConvert -in <input file path> -out <output folder> [-n <number of lines to read> -schema <schema string> -iface <interface>]")
-	return
 }
 
 func main() {
@@ -139,42 +206,41 @@ func main() {
 		os.Exit(1)
 	}
 
-	// get number of lines to read in the specified file
-	cmd := exec.Command("wc", "-l", config.FilePath)
-	out, cmderr := cmd.Output()
-	if cmderr != nil {
-		fmt.Println("Could not obtain line count on file", config.FilePath)
+	// get logger
+	err := logging.Init(logging.LevelDebug, logging.EncodingLogfmt,
+		logging.WithVersion(version.Short()),
+	)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to spawn logger: %s\n", err)
 		os.Exit(1)
 	}
-
-	nlString := strings.Split(string(out), " ")
-	nlInFile, _ := strconv.ParseInt(nlString[0], 10, 32)
-	if int(nlInFile) < config.NumLines && nlInFile > 0 {
-		config.NumLines = int(nlInFile)
-	}
-
-	fmt.Printf("Converting %d rows in file %s\n", config.NumLines, config.FilePath)
-
-	// init goprobe log
-	goDB.InitDBLog()
+	logger := logging.Logger()
 
 	// open file
-	var (
-		file *os.File
-		err  error
-	)
-
+	var file *os.File
 	if file, err = os.Open(config.FilePath); err != nil {
-		fmt.Println("File open error: " + err.Error())
-		os.Exit(1)
+		logger.Fatalf("file open error: %s", err)
+	}
+
+	// get number of lines to read in the specified file
+	nlInFile, err := lineCounter(file)
+	if err != nil {
+		logger.Fatalf("could not obtain line count on file %s", config.FilePath)
+	}
+	if nlInFile < config.NumLines && nlInFile > 0 {
+		config.NumLines = nlInFile
+	}
+
+	logger.Infof("Converting %d rows in file %s", config.NumLines, config.FilePath)
+	if _, err = file.Seek(0, 0); err != nil {
+		logger.Fatalf("failed to seek to beginning of file %s after determining line count: %s", config.FilePath, err)
 	}
 
 	// create a CSV converter
 	var csvconv = NewCSVConverter()
 	if config.Schema != "" {
 		if err = csvconv.readSchema(config.Schema); err != nil {
-			fmt.Printf("Failed to read schema: %s\n", err.Error())
-			os.Exit(1)
+			logger.Fatalf("failed to read schema: %s", err)
 		}
 	}
 
@@ -192,69 +258,59 @@ func main() {
 		// interface
 		//
 		// interface -> timestamp -> AggFlowMap
-		flowMaps   = make(map[string]map[int64]goDB.AggFlowMap)
-		rowKey     = goDB.ExtraKey{}
-		rowSummary goDB.InterfaceSummaryUpdate
+		rowKeyV4 = types.NewEmptyV4Key().ExtendEmpty()
+		rowKeyV6 = types.NewEmptyV6Key().ExtendEmpty()
+		flowMaps = make(map[string]map[int64]*hashmap.AggFlowMap)
 	)
-
-	// try to read a summary file from the output folder. It may exist if data was previously written
-	// to the directory already.
-	summary := goDB.NewDBSummary()
-	summary, err = goDB.ReadDBSummary(config.SavePath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			summary = goDB.NewDBSummary()
-		} else {
-			fmt.Printf("Summary file for DB exists but cannot be read: %s\n", err.Error())
-			os.Exit(1)
-		}
-	}
 
 	// channel for passing flow maps to writer
 	writeChan := make(chan writeJob, 1024)
 
+	dbPermissions := goDB.DefaultPermissions
+	if config.DBPermissions != 0 {
+		dbPermissions = fs.FileMode(config.DBPermissions)
+	}
+
 	// writer routine accepting flow maps to write out
 	var wg sync.WaitGroup
+	wg.Add(1)
 	go func(writeChan chan writeJob) {
-		wg.Add(1)
+		defer wg.Done()
 		for fm := range writeChan {
 			if _, ok := mapWriters[fm.iface]; !ok {
-				mapWriters[fm.iface] = goDB.NewDBWriter(config.SavePath, fm.iface)
+				mapWriters[fm.iface] = goDB.NewDBWriter(config.SavePath, fm.iface, encoders.Type(config.EncoderType)).Permissions(dbPermissions)
 			}
 
-			// create an empty metadata block for this timestamp. Of course this
-			// isn't accurate, but we cannot recover the info from pcap anyhow at
-			// that moment
-			bm := goDB.BlockMetadata{Timestamp: fm.tstamp}
-			//        fmt.Println(fm.iface+": Writing:", fm.data)
-			if _, err = mapWriters[fm.iface].Write(fm.data, bm, fm.tstamp); err != nil {
-				fmt.Printf("Failed to write block at %d: %s\n", fm.tstamp, err.Error())
+			if err = mapWriters[fm.iface].Write(fm.data, capturetypes.CaptureStats{}, fm.tstamp); err != nil {
+				fmt.Printf("Failed to write block at %d: %s\n", fm.tstamp, err)
 				// TODO: bail here?
 				os.Exit(1)
 			}
 		}
-		wg.Done()
 	}(writeChan)
 
 	fmt.Print("Progress:   0% |")
 	for scanner.Scan() {
-
 		// create the parsers for the converter based on the title line provided in the CSV file
 		if linesRead == 1 {
 			if config.Schema == "" {
 				if err = csvconv.readSchema(scanner.Text()); err != nil {
-					fmt.Printf("Failed to read schema: %s. Schema title line needed in CSV\n", err.Error())
-					os.Exit(1)
+					logger.Fatalf("Failed to read schema: %s. Schema title line needed in CSV\n", err)
 				}
 
 				// assign interface to row key if it was specified
 				if !csvconv.parsesIface() {
 					if config.Iface == "" {
-						fmt.Printf("Interface has not been specified by either data or -iface parameter. Aborting")
-						os.Exit(1)
+						logger.Fatalf("Interface has not been specified by either data or -iface parameter. Aborting")
 					}
 
-					rowKey.Iface = config.Iface
+					p := &IfaceStringParser{}
+					if err := p.ParseKey(config.Iface, &rowKeyV4); err != nil {
+						logger.Fatalf("Failed to parse interface from config: %s\n", err)
+					}
+					if err := p.ParseKey(config.Iface, &rowKeyV6); err != nil {
+						logger.Fatalf("Failed to parse interface from config: %s\n", err)
+					}
 				}
 
 				linesRead++
@@ -310,16 +366,25 @@ func main() {
 		prevPerc = percDone
 
 		// fully parse the current line and load it into key and value objects
-		var rowVal = goDB.Val{}
+		rowKey := &rowKeyV4
+		rowVal := types.Counters{}
 		fields := strings.Split(scanner.Text(), ",")
 		if len(fields) < len(csvconv.KeyParsers)+len(csvconv.ValParsers) {
 			fmt.Printf("Skipping incomplete data row: %s\n", scanner.Text())
 			continue
 		}
-		for ind, parser := range csvconv.KeyParsers {
-			if err := parser.ParseKey(fields[ind], &rowKey); err != nil {
+		for _, parser := range csvconv.KeyParsers {
+			if err := parser.parser.ParseKey(fields[parser.ind], rowKey); err != nil {
+				if errors.Is(err, goDB.ErrIPVersionMismatch) {
+					rowKey = &rowKeyV6
+					if err := parser.parser.ParseKey(fields[parser.ind], rowKey); err != nil {
+						fmt.Println(err)
+					}
+					continue
+				}
 				fmt.Println(err)
 			}
+			rowKey = &rowKeyV4
 		}
 		for ind, parser := range csvconv.ValParsers {
 			if err := parser.ParseVal(fields[ind], &rowVal); err != nil {
@@ -329,29 +394,23 @@ func main() {
 
 		// check if a new submap has to be created (e.g. if there's new data
 		// from another interface
-		if _, exists := flowMaps[rowKey.Iface]; !exists {
-			flowMaps[rowKey.Iface] = make(map[int64]goDB.AggFlowMap)
+		var iface string
+		*rowKey, iface = extractIface(*rowKey)
+
+		ts, _ := rowKey.AttrTime()
+		if _, exists := flowMaps[iface]; !exists {
+			flowMaps[iface] = make(map[int64]*hashmap.AggFlowMap)
 		}
-		if _, exists := flowMaps[rowKey.Iface][rowKey.Time]; !exists {
-			flowMaps[rowKey.Iface][rowKey.Time] = make(goDB.AggFlowMap)
+		if _, exists := flowMaps[iface][ts]; !exists {
+			flowMaps[iface][ts] = hashmap.NewAggFlowMap()
 		}
 
 		// insert the key-value pair into the correct flow map
-		flowMaps[rowKey.Iface][rowKey.Time][goDB.Key{
-			Sip:      rowKey.Sip,
-			Dip:      rowKey.Dip,
-			Dport:    rowKey.Dport,
-			Protocol: rowKey.Protocol,
-		}] = &rowVal
-
-		// fill the summary update for this flow record and update the summary
-		rowSummary.Interface = rowKey.Iface
-		rowSummary.FlowCount = 1
-		rowSummary.Traffic = rowVal.NBytesRcvd + rowVal.NBytesSent
-		rowSummary.Timestamp = time.Unix(rowKey.Time, 0)
-
-		summary.Update(rowSummary)
-
+		if rowKey.IsIPv4() {
+			flowMaps[iface][ts].PrimaryMap.Set(rowKey.Key(), rowVal)
+		} else {
+			flowMaps[iface][ts].SecondaryMap.Set(rowKey.Key(), rowVal)
+		}
 		linesRead++
 	}
 
@@ -370,31 +429,37 @@ func main() {
 	close(writeChan)
 	wg.Wait()
 
-	// summary file update: this assumes that the summary was not modified during conversion
-	// of the CSV database. If a goProbe process were to write to the summary in the meantime,
-	// those changes would be overwritten.
-	err = goDB.ModifyDBSummary(config.SavePath, 10*time.Second,
-		func(summ *goDB.DBSummary) (*goDB.DBSummary, error) {
-			return summary, nil
-		},
-	)
-	if err != nil {
-		fmt.Printf("Failed to update summary: %s\n", err.Error())
-		os.Exit(1)
-	}
-
 	// return if the data write failed or exited
 	fmt.Print("| 100%")
 	fmt.Println("\nExiting")
 	os.Exit(0)
 }
 
-func incompleteFlowMap(m map[int64]goDB.AggFlowMap) int64 {
+func incompleteFlowMap(m map[int64]*hashmap.AggFlowMap) int64 {
 	var recent int64
-	for k, _ := range m {
+	for k := range m {
 		if k > recent {
 			recent = k
 		}
 	}
 	return recent
+}
+
+func lineCounter(r io.Reader) (int, error) {
+	buf := make([]byte, 32*1024)
+	count := 0
+	lineSep := []byte{'\n'}
+
+	for {
+		c, err := r.Read(buf)
+		count += bytes.Count(buf[:c], lineSep)
+
+		switch {
+		case err == io.EOF:
+			return count, nil
+
+		case err != nil:
+			return count, err
+		}
+	}
 }

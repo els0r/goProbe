@@ -1,0 +1,22 @@
+# Result
+type: object
+required:
+  - status
+  - hosts_statuses
+  - summary
+  - query
+  - rows
+properties:
+  status:
+    $ref: './Status.yaml'
+  hosts_statuses:
+    $ref: './HostStatuses.yaml'
+  summary:
+    $ref: './Summary.yaml'
+  query:
+    $ref: './Query.yaml'
+  rows:
+    type: array
+    items:
+      $ref: './Row.yaml'
+

@@ -13,7 +13,9 @@ package main
 import (
 	"strings"
 
-	"github.com/els0r/goProbe/pkg/goDB"
+	"github.com/els0r/goProbe/pkg/goDB/conditions"
+	"github.com/els0r/goProbe/pkg/goDB/protocols"
+	"github.com/els0r/goProbe/pkg/types"
 )
 
 func openParens(tokens []string) int {
@@ -33,9 +35,8 @@ func nextAll(prevprev, prev string, openParens int) []suggestion {
 	s := func(sugg string, accept bool) suggestion {
 		if accept {
 			return suggestion{sugg, sugg, accept}
-		} else {
-			return suggestion{sugg, sugg + " ...  ", accept}
 		}
+		return suggestion{sugg, sugg + " ...  ", accept}
 	}
 
 	switch prev {
@@ -43,37 +44,39 @@ func nextAll(prevprev, prev string, openParens int) []suggestion {
 		return []suggestion{
 			s("!", false),
 			s("(", false),
-			s("dip", false),
-			s("sip", false),
+			s(types.DIPName, false),
+			s(types.SIPName, false),
 			s("dnet", false),
 			s("snet", false),
 			s("dst", false),
 			s("src", false),
 			s("host", false),
 			s("net", false),
-			s("dport", false),
-			s("proto", false),
+			s(types.DportName, false),
+			s("port", false),
+			s(types.ProtoName, false),
 		}
 	case "!":
 		return []suggestion{
 			s("(", false),
-			s("dip", false),
-			s("sip", false),
+			s(types.DIPName, false),
+			s(types.SIPName, false),
 			s("dnet", false),
 			s("snet", false),
 			s("dst", false),
 			s("src", false),
 			s("host", false),
 			s("net", false),
-			s("dport", false),
-			s("proto", false),
+			s(types.DportName, false),
+			s("port", false),
+			s(types.ProtoName, false),
 		}
-	case "dip", "sip", "dnet", "snet", "dst", "src", "host", "net":
+	case types.DIPName, types.SIPName, "dnet", "snet", "dst", "src", "host", "net":
 		return []suggestion{
 			s("=", false),
 			s("!=", false),
 		}
-	case "dport", "proto":
+	case types.DportName, "port", types.ProtoName:
 		return []suggestion{
 			s("=", false),
 			s("!=", false),
@@ -84,9 +87,9 @@ func nextAll(prevprev, prev string, openParens int) []suggestion {
 		}
 	case "=", "!=", "<", ">", "<=", ">=":
 		switch prevprev {
-		case "proto":
+		case types.ProtoName:
 			var result []suggestion
-			for name := range goDB.IPProtocolIDs {
+			for name := range protocols.IPProtocolIDs {
 				result = append(result, suggestion{name, name + " ...", openParens == 0})
 			}
 			return result
@@ -100,11 +103,10 @@ func nextAll(prevprev, prev string, openParens int) []suggestion {
 				s("&", false),
 				s("|", false),
 			}
-		} else {
-			return []suggestion{
-				s("&", false),
-				s("|", false),
-			}
+		}
+		return []suggestion{
+			s("&", false),
+			s("|", false),
 		}
 	default:
 		switch prevprev {
@@ -115,11 +117,10 @@ func nextAll(prevprev, prev string, openParens int) []suggestion {
 					s("&", false),
 					s("|", false),
 				}
-			} else {
-				return []suggestion{
-					s("&", false),
-					s("|", false),
-				}
+			}
+			return []suggestion{
+				s("&", false),
+				s("|", false),
 			}
 		default:
 			return nil
@@ -129,21 +130,16 @@ func nextAll(prevprev, prev string, openParens int) []suggestion {
 
 func conditional(args []string) []string {
 	tokenize := func(conditional string) []string {
-		san, err := goDB.SanitizeUserInput(conditional)
+		san, err := conditions.SanitizeUserInput(conditional)
 		if err != nil {
 			return nil
 		}
-		//fmt.Fprintf(os.Stderr, "%#v\n", san)
-		tokens, err := goDB.TokenizeConditional(san)
+		tokens, err := conditions.Tokenize(san)
 		if err != nil {
 			return nil
 		}
-		//fmt.Fprintf(os.Stderr, "%#v\n", tokens)
 
-		var startedNewToken bool
-		startedNewToken = len(tokens) == 0 || strings.LastIndex(conditional, tokens[len(tokens)-1])+len(tokens[len(tokens)-1]) < len(conditional)
-
-		if startedNewToken {
+		if startedNewToken := len(tokens) == 0 || strings.LastIndex(conditional, tokens[len(tokens)-1])+len(tokens[len(tokens)-1]) < len(conditional); startedNewToken {
 			tokens = append(tokens, "")
 		}
 
@@ -163,9 +159,8 @@ func conditional(args []string) []string {
 		}
 		if len(suggs) == 0 {
 			return unknownSuggestions{}
-		} else {
-			return knownSuggestions{suggs}
 		}
+		return knownSuggestions{suggs}
 	}
 
 	unknown := func(s string) []string {

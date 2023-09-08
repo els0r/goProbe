@@ -1,0 +1,14 @@
+type: object
+additionalProperties:
+  $ref: './CaptureConfig.yaml'
+example:
+  eth0:
+    promisc: true
+    ring_buffer:
+      num_blocks: 4
+      block_size: 1048576
+  tun0:
+    promisc: false
+    ring_buffer:
+      num_blocks: 4
+      block_size: 524288

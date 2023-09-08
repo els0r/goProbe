@@ -1,0 +1,12 @@
+logging:
+  level: debug
+  encoding: logfmt
+hosts:
+  resolver:
+    type: string
+querier:
+  type: api
+  max_concurrent: 64
+  config: ./examples/config/global-query-api-client-querier-example-config.yaml
+server:
+  addr: localhost:8146

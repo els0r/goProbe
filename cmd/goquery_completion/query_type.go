@@ -10,7 +10,11 @@
 
 package main
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/els0r/goProbe/pkg/types"
+)
 
 func queryType(args []string) []string {
 	tokenize := func(qt string) []string {
@@ -23,12 +27,12 @@ func queryType(args []string) []string {
 
 	unusedAttribs := func(attribs []string) []string {
 		attribUnused := map[string]bool{
-			"time":  true,
-			"iface": true,
-			"sip":   true,
-			"dip":   true,
-			"dport": true,
-			"proto": true,
+			"time":          true,
+			"iface":         true,
+			types.SIPName:   true,
+			types.DIPName:   true,
+			types.DportName: true,
+			types.ProtoName: true,
 		}
 
 		for _, attrib := range attribs {
@@ -36,9 +40,9 @@ func queryType(args []string) []string {
 			case "talk_conv", "talk_src", "talk_dst", "apps_port", "agg_talk_port", "raw":
 				return nil
 			case "src":
-				attrib = "sip"
+				attrib = types.SIPName
 			case "dst":
-				attrib = "dip"
+				attrib = types.DIPName
 			}
 			attribUnused[attrib] = false
 		}
