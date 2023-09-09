@@ -1,0 +1,14 @@
+[Unit]
+Description=Network Traffic Monitoring
+After=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/goProbe -config /etc/goprobe.conf
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target
+Alias=goprobe.service
