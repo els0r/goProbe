@@ -11,6 +11,8 @@ require (
 	github.com/gin-contrib/pprof v1.4.0
 	github.com/gin-gonic/gin v1.9.1
 	github.com/json-iterator/go v1.1.12
+	github.com/klauspost/compress v1.16.7
+	github.com/pierrec/lz4/v4 v4.1.18
 	github.com/prometheus/client_golang v1.16.0
 	github.com/spf13/cobra v1.7.0
 	github.com/spf13/viper v1.16.0
