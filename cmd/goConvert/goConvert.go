@@ -185,7 +185,7 @@ func parseCommandLineArgs(cfg *Config) {
 	flag.StringVar(&cfg.Schema, "schema", "", "Structure of CSV file (e.g. \"sip,dip,dport,time\"")
 	flag.StringVar(&cfg.Iface, "iface", "", "Interface from which CSV data was created")
 	flag.IntVar(&cfg.NumLines, "n", 1000, "Number of rows to read from the CSV file")
-	flag.IntVar(&cfg.EncoderType, "encoder", 0, "Encoder type to use for compression")
+	flag.IntVar(&cfg.EncoderType, "encoder", int(encoders.EncoderTypeLZ4), "Encoder type to use for compression")
 	flag.UintVar(&cfg.DBPermissions, "permissions", 0, "Permissions to use when writing DB (Unix file mode)")
 	flag.Parse()
 }

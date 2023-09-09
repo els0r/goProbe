@@ -1,5 +1,5 @@
-//go:build darwin || linux
-// +build darwin linux
+//go:build cgo
+// +build cgo
 
 package lz4cust
 
