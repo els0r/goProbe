@@ -1,3 +1,4 @@
+//go:build darwin
 // +build darwin
 
 package protocols
@@ -147,11 +148,6 @@ var IPProtocols = map[int]string{
 	255: "UNKNOWN",
 }
 
-// GetIPProto returns the string representation of an IP protocol value
-func GetIPProto(id int) string {
-	return IPProtocols[id]
-}
-
 // IPProtocolIDs maps protocol names to their numeric value
 var IPProtocolIDs = map[string]int{
 	"hopopt":          0, // added to fit consistency tests
@@ -295,10 +291,4 @@ var IPProtocolIDs = map[string]int{
 	"pfsync":          240,
 	"divert":          258,
 	"unknown":         255,
-}
-
-// GetIPProtoID returns the numeric IP protocol value for a given string
-func GetIPProtoID(name string) (uint64, bool) {
-	ret, ok := IPProtocolIDs[name]
-	return uint64(ret), ok
 }

@@ -26,7 +26,7 @@ To start capturing, run
 ./goProbe -config goprobe.yaml
 ```
 
-The tool is meant to run as a service/daemon by means of init scripts or systems such as `systemctl`. The [addon](../../addon/) folder provides such integrations.
+The tool is meant to run as a service/daemon by means of init scripts or systems such as `systemctl`. Examples for such intergrations can be found inside the [examples/config](../../examples/config) folder.
 
 ## Configuration
 
