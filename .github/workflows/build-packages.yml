@@ -49,8 +49,8 @@ jobs:
           tar czf ./goprobe_${{ env.RELEASE_VERSION }}_debian_amd64.tar.gz goProbe global-query goQuery goConvert
 
           # Config
-          cp addon/goprobe.conf.example .debpkg/etc/goprobe.conf.example
-          cp addon/goprobe.service .debpkg/etc/systemd/system/goprobe.service
+          cp examples/config/goprobe-example-config.yaml .debpkg/etc/goprobe.conf.example
+          cp examples/config/goprobe-example.service .debpkg/etc/systemd/system/goprobe.service
 
           # pre/post/rm scripts
           mkdir -p .debpkg/DEBIAN
@@ -125,8 +125,8 @@ jobs:
           tar czf ./goprobe_${{ env.RELEASE_VERSION }}_fedora_x86_64.tar.gz goProbe global-query goQuery goConvert
 
           # Config
-          cp addon/goprobe.conf.example .rpmpkg/etc/goprobe.conf.example
-          cp addon/goprobe.service .rpmpkg/etc/systemd/system/goprobe.service
+          cp examples/config/goprobe-example-config.yaml .rpmpkg/etc/goprobe.conf.example
+          cp examples/config/goprobe-example.service .rpmpkg/etc/systemd/system/goprobe.service
       - uses: jiro4989/build-rpm-action@v2
         with:
           package: goprobe
