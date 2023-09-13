@@ -1,5 +1,5 @@
-//go:build cgo
-// +build cgo
+//go:build cgo && !goprobe_noliblz4
+// +build cgo,!goprobe_noliblz4
 
 package lz4
 

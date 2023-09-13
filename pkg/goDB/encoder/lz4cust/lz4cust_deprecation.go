@@ -1,5 +1,5 @@
-//go:build !cgo
-// +build !cgo
+//go:build !cgo || goprobe_nolz4cust
+// +build !cgo goprobe_nolz4cust
 
 package lz4cust
 
