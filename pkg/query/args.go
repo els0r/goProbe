@@ -252,7 +252,7 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 	s.MaxMemPct = a.MaxMemPct
 
 	// check limits flag
-	if !(0 < a.NumResults) {
+	if a.NumResults <= 0 {
 		return s, errors.New("the printed row limit must be greater than 0")
 	}
 	s.NumResults = a.NumResults

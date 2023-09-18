@@ -72,7 +72,7 @@ func (q *QueryRunner) Run(ctx context.Context, args *query.Args) (*results.Resul
 	// query pipeline setup
 	// sets up a fan-out, fan-in query processing pipeline
 	numRunners := len(hostList)
-	if q.maxConcurrent > 0 {
+	if q.maxConcurrent > 0 && q.maxConcurrent < numRunners {
 		numRunners = q.maxConcurrent
 	}
 
