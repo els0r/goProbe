@@ -93,6 +93,10 @@ func NewDefault(serviceName, addr string, opts ...Option) *DefaultServer {
 		serviceName: strings.ToLower(serviceName),
 	}
 
+	// Set Gin release / debug mode according to debug flag (must happen _before_ call to gin.New())
+	if !s.debug {
+		gin.SetMode(gin.ReleaseMode)
+	}
 	router := gin.New()
 	router.MaxMultipartMemory = maxMultipartMemory
 
@@ -104,10 +108,6 @@ func NewDefault(serviceName, addr string, opts ...Option) *DefaultServer {
 	s.router = router
 	for _, opt := range opts {
 		opt(s)
-	}
-
-	if !s.debug {
-		gin.SetMode(gin.ReleaseMode)
 	}
 
 	s.registerMiddlewares()
