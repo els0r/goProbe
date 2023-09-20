@@ -67,8 +67,8 @@ func aggregate(mapChan <-chan hashmap.AggFlowMapWithMetadata, ifaces []string, i
 
 			finalMap := finalMaps[item.Interface]
 
-			// Merge the item into the final map for this interface, then update the aggregation counter
-			finalMap.Merge(item, &totals)
+			// Merge the item into the final map for this interface
+			finalMap.Merge(item)
 			nAgg[item.Interface] = nAgg[item.Interface] + 1
 
 			// Cleanup the now unused item / map

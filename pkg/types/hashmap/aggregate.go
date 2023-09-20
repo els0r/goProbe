@@ -153,18 +153,16 @@ func (a AggFlowMap) SetOrUpdate(key Key, isIPv4 bool, eA, eB, eC, eD uint64) {
 	}
 }
 
-// Merge allows to incorporate the content of a map b into an existing map a (providing
-// additional in-place counter updates).
-func (a AggFlowMap) Merge(b AggFlowMap, totals *Val) {
-	a.PrimaryMap.Merge(b.PrimaryMap, totals)
-	a.SecondaryMap.Merge(b.SecondaryMap, totals)
+// Merge allows to incorporate the content of a map b into an existing map a
+func (a AggFlowMap) Merge(b AggFlowMap) {
+	a.PrimaryMap.Merge(b.PrimaryMap)
+	a.SecondaryMap.Merge(b.SecondaryMap)
 }
 
-// Merge allows to incorporate the content of a map b into an existing map a (providing
-// additional in-place counter updates).
-func (a AggFlowMapWithMetadata) Merge(b AggFlowMapWithMetadata, totals *Val) {
-	a.PrimaryMap.Merge(b.PrimaryMap, totals)
-	a.SecondaryMap.Merge(b.SecondaryMap, totals)
+// Merge allows to incorporate the content of a map b into an existing map a
+func (a AggFlowMapWithMetadata) Merge(b AggFlowMapWithMetadata) {
+	a.PrimaryMap.Merge(b.PrimaryMap)
+	a.SecondaryMap.Merge(b.SecondaryMap)
 }
 
 // Clear frees as many resources as possible by making them eligible for GC

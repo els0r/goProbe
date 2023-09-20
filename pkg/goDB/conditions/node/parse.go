@@ -318,7 +318,7 @@ func (p *parser) condition() (result Node) {
 // Corresponds to grammar rule "attribute"
 func (p *parser) attribute() (result string) {
 	attributes := []string{
-		types.DIPName, types.SIPName, "dnet", "snet", types.DportName, types.ProtoName, // non-sugar
+		types.DIPName, types.SIPName, "dnet", "snet", types.DportName, types.ProtoName, FilterKeywordDirection, // non-sugar
 		"dst", "src", "host", "net", "port", "protocol", "ipproto", // sugar
 	}
 	for _, attrib := range attributes {

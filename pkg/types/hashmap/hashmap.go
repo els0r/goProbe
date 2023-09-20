@@ -283,7 +283,7 @@ done:
 // Merge allows to incorporate the content of a map m2 into an existing map m (providing
 // additional in-place counter updates). It re-uses / duplicates code from the iterator
 // part to minimize function call overhead and allocations
-func (m *Map) Merge(m2 *Map, totals *Val) {
+func (m *Map) Merge(m2 *Map) {
 
 	if m2.Len() == 0 {
 		return
@@ -362,9 +362,6 @@ next:
 
 		val := it.val
 		m.SetOrUpdate(it.key, val.BytesRcvd, val.BytesSent, val.PacketsRcvd, val.PacketsSent)
-		if totals != nil {
-			*totals = totals.Add(val)
-		}
 
 		goto start
 	}

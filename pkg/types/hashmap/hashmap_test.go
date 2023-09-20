@@ -207,16 +207,15 @@ func TestMerge(t *testing.T) {
 
 	var (
 		mergeMap = New()
-		totals   Val
 	)
 
-	mergeMap.Merge(testMap, &totals)
+	mergeMap.Merge(testMap)
 
 	require.Equal(t, testMap.Len(), mergeMap.Len())
 	require.Equal(t, 100000, testMap.Len())
 	require.Equal(t, 60000, testMap2.Len())
 
-	mergeMap.Merge(testMap2, &totals)
+	mergeMap.Merge(testMap2)
 
 	require.Equal(t, 110000, mergeMap.Len())
 	require.Equal(t, 100000, testMap.Len())

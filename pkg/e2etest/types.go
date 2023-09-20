@@ -5,6 +5,7 @@ package e2etest
 
 import (
 	"context"
+	"github.com/els0r/goProbe/pkg/goDB/conditions/node"
 	"io/fs"
 	"os"
 	"sync"
@@ -116,7 +117,7 @@ func (m mockIfaces) NErr() (res uint64) {
 	return
 }
 
-func (m mockIfaces) BuildResults(t *testing.T, testDir string, resGoQuery *results.Result) (results.Result, []goDB.InterfaceMetadata) {
+func (m mockIfaces) BuildResults(t *testing.T, testDir string, valFilterNode *node.ValFilterNode, resGoQuery *results.Result) (results.Result, []goDB.InterfaceMetadata) {
 
 	res := results.Result{
 		Status: results.Status{
@@ -148,9 +149,10 @@ func (m mockIfaces) BuildResults(t *testing.T, testDir string, resGoQuery *resul
 				},
 				Counters: v,
 			}
-
-			res.Rows = append(res.Rows, row)
-			res.Summary.Totals = res.Summary.Totals.Add(v)
+			if valFilterNode == nil || valFilterNode.ValFilter(row.Counters) {
+				res.Rows = append(res.Rows, row)
+				res.Summary.Totals = res.Summary.Totals.Add(v)
+			}
 			ifaceMetadata[i].Counts = ifaceMetadata[i].Counts.Add(v)
 			if row.Attributes.SrcIP.Is4() && row.Attributes.DstIP.Is4() {
 				ifaceMetadata[i].Traffic.NumV4Entries++

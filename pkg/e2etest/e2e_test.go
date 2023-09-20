@@ -9,6 +9,7 @@ import (
 	"embed"
 	"flag"
 	"fmt"
+	"github.com/els0r/goProbe/pkg/goDB/conditions/node"
 	"io"
 	"io/fs"
 	"os"
@@ -60,6 +61,14 @@ var defaultCaptureConfig = config.CaptureConfig{
 }
 
 var externalPCAPPath string
+
+var valFilters = []*node.ValFilterNode{
+	nil,
+	{ValFilter: types.Counters.IsOnlyInbound},
+	{ValFilter: types.Counters.IsOnlyOutbound},
+	{ValFilter: types.Counters.IsUnidirectional},
+	{ValFilter: types.Counters.IsBidirectional},
+}
 
 func TestStartStop(t *testing.T) {
 	for i := 0; i < 1000; i++ {
@@ -130,8 +139,10 @@ func testStartStop(t *testing.T) {
 func TestE2EBasic(t *testing.T) {
 	pcapData, err := pcaps.ReadFile(filepath.Join(testDataPath, defaultPcapTestFile))
 	require.Nil(t, err)
+	for _, varFilterNode := range valFilters {
+		testE2E(t, varFilterNode, pcapData)
 
-	testE2E(t, pcapData)
+	}
 }
 
 func TestE2EMultipleIfaces(t *testing.T) {
@@ -141,16 +152,15 @@ func TestE2EMultipleIfaces(t *testing.T) {
 	for _, n := range []int{
 		2, 3, 5, 10, 21, 100,
 	} {
-		t.Run(fmt.Sprintf("%02d interfaces", n), func(t *testing.T) {
 
-			// Use identical data several times
-			ifaceData := make([][]byte, n)
-			for i := 0; i < len(ifaceData); i++ {
-				ifaceData[i] = pcapData
-			}
-
-			testE2E(t, ifaceData...)
-		})
+		// Use identical data several times
+		ifaceData := make([][]byte, n)
+		for i := 0; i < len(ifaceData); i++ {
+			ifaceData[i] = pcapData
+		}
+		for _, varFilterNode := range valFilters {
+			testE2E(t, varFilterNode, ifaceData...)
+		}
 	}
 }
 
@@ -164,8 +174,9 @@ func TestE2EExtended(t *testing.T) {
 		t.Run(path, func(t *testing.T) {
 			pcapData, err := pcaps.ReadFile(path)
 			require.Nil(t, err)
-
-			testE2E(t, pcapData)
+			for _, varFilterNode := range valFilters {
+				testE2E(t, varFilterNode, pcapData)
+			}
 		})
 	}
 }
@@ -188,7 +199,9 @@ func TestE2EExtendedPermuted(t *testing.T) {
 		}
 
 		t.Run(testMsg, func(t *testing.T) {
-			testE2E(t, ifaceData...)
+			for _, valFilterNode := range valFilters {
+				testE2E(t, valFilterNode, ifaceData...)
+			}
 		})
 	})
 }
@@ -213,8 +226,9 @@ func TestE2EExternal(t *testing.T) {
 			fmt.Println("Running E2E test on", path)
 			pcapData, err := os.ReadFile(filepath.Clean(path))
 			require.Nil(t, err)
-
-			testE2E(t, pcapData)
+			for _, valFilterNode := range valFilters {
+				testE2E(t, valFilterNode, pcapData)
+			}
 
 			return nil
 		}))
@@ -223,12 +237,13 @@ func TestE2EExternal(t *testing.T) {
 		fmt.Println("Running E2E test on", externalPCAPPath)
 		pcapData, err := os.ReadFile(filepath.Clean(externalPCAPPath))
 		require.Nil(t, err)
-
-		testE2E(t, pcapData)
+		for _, valFilterNode := range valFilters {
+			testE2E(t, valFilterNode, pcapData)
+		}
 	}
 }
 
-func testE2E(t *testing.T, datasets ...[]byte) {
+func testE2E(t *testing.T, valFilterNode *node.ValFilterNode, datasets ...[]byte) {
 
 	// Setup a temporary directory for the test DB
 	tempDir, err := os.MkdirTemp(os.TempDir(), "goprobe_e2e")
@@ -261,7 +276,7 @@ func testE2E(t *testing.T, datasets ...[]byte) {
 
 	// Run GoQuery and build reference results from tracking
 	resGoQuery := new(results.Result)
-	runGoQuery(t, resGoQuery, []string{
+	queryArgs := []string{
 		"-i", strings.Join(mockIfaces.Names(), ","),
 		"-e", "json",
 		"-l", time.Now().Add(time.Hour).Format(time.ANSIC),
@@ -269,12 +284,39 @@ func testE2E(t *testing.T, datasets ...[]byte) {
 		"-n", strconv.Itoa(100000),
 		"-s", "packets",
 		"sip,dip,dport,proto",
-	})
-	resReference, listReference := mockIfaces.BuildResults(t, tempDir, resGoQuery)
+	}
+	dir := ""
+	if valFilterNode != nil {
+		filter := reflect.ValueOf(valFilterNode.ValFilter).Pointer()
+		switch filter {
+		case reflect.ValueOf(types.Counters.IsOnlyInbound).Pointer():
+			dir = "in"
+		case reflect.ValueOf(types.Counters.IsOnlyOutbound).Pointer():
+			dir = "out"
+		case reflect.ValueOf(types.Counters.IsUnidirectional).Pointer():
+			dir = "uni"
+		case reflect.ValueOf(types.Counters.IsBidirectional).Pointer():
+			dir = "bi"
+		}
+	}
+	tmp := make([]string, len(queryArgs)+2)
+	copy(tmp, queryArgs[:2])
+	tmp[2] = "-c"
+	tmp[3] = ""
+	if dir != "" {
+		tmp[3] = fmt.Sprintf("dir = %s", dir)
+	}
+
+	copy(tmp[4:], queryArgs[2:])
+	queryArgs = tmp
+	runGoQuery(t, resGoQuery, queryArgs)
+	resReference, listReference := mockIfaces.BuildResults(t, tempDir, valFilterNode, resGoQuery)
 
 	// Counter consistency checks
-	require.Equalf(t, mockIfaces.NProcessed(), resGoQuery.Summary.Totals.PacketsRcvd, "expected: %d, actual %d", mockIfaces.NProcessed(), resGoQuery.Summary.Totals.PacketsRcvd)
-	require.Equalf(t, mockIfaces.NProcessed(), mockIfaces.NRead()-mockIfaces.NErr(), "expected: %d, actual %d - %d", mockIfaces.NProcessed(), mockIfaces.NRead(), mockIfaces.NErr())
+	if valFilterNode == nil {
+		require.Equalf(t, mockIfaces.NProcessed(), resGoQuery.Summary.Totals.PacketsRcvd, "expected: %d, actual %d", mockIfaces.NProcessed(), resGoQuery.Summary.Totals.PacketsRcvd)
+		require.Equalf(t, mockIfaces.NProcessed(), mockIfaces.NRead()-mockIfaces.NErr(), "expected: %d, actual %d - %d", mockIfaces.NProcessed(), mockIfaces.NRead(), mockIfaces.NErr())
+	}
 
 	// List target consistency check (do not fail yet to show details in the next check)
 	if !reflect.DeepEqual(listReference, resGoQueryList) {
@@ -305,12 +347,14 @@ func testE2E(t *testing.T, datasets ...[]byte) {
 
 	// Since testify creates very unreadable output when comparing the struct directly we build a stringified
 	// version of the result rows and compare that
-	refRows := make([]string, len(resReference.Rows))
-	for i := 0; i < len(refRows); i++ {
-		refRows[i] = fmt.Sprintf("%s (%s): %s %s",
-			resReference.Rows[i].Labels.Hostname, resReference.Rows[i].Labels.HostID,
-			resReference.Rows[i].Attributes,
-			resReference.Rows[i].Counters)
+	refRows := make([]string, 0)
+	for i := 0; i < len(resReference.Rows); i++ {
+		if valFilterNode == nil || valFilterNode.ValFilter(resReference.Rows[i].Counters) {
+			refRows = append(refRows, fmt.Sprintf("%s (%s): %s %s",
+				resReference.Rows[i].Labels.Hostname, resReference.Rows[i].Labels.HostID,
+				resReference.Rows[i].Attributes,
+				resReference.Rows[i].Counters))
+		}
 	}
 	resRows := make([]string, len(resGoQuery.Rows))
 	for i := 0; i < len(resRows); i++ {
@@ -384,7 +428,6 @@ func runGoQuery(t *testing.T, res interface{}, args []string) {
 
 	command := cmd.GetRootCmd()
 	command.SetArgs(args)
-
 	require.Nil(t, command.Execute())
 	require.Nil(t, wr.Close())
 	<-copyDone
