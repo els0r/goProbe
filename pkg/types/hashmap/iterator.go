@@ -107,33 +107,52 @@ next:
 	goto next
 }
 
-// MetaIter denotes a wrapper around an IPv4 + IPv6 hashmap construct, allowing easy
+// MetaIter denotes a wrapper around an primary & secondary hashmap construct, allowing easy
 // access to a global iterator running through both sub-maps
 type MetaIter struct {
-	*Iter
+	*Iter               // primary iterator
+	secondaryIter *Iter // secondary iterator
 
-	v6Iter *Iter // secondary iterator
+	filter ValFilter
+}
+
+// MetaIterOption denotes a functional option to a MetaIter
+type MetaIterOption func(it *MetaIter)
+
+// WithFilter sets a filter for the MetaIter
+func WithFilter(filter ValFilter) MetaIterOption {
+	return func(it *MetaIter) {
+		it.filter = filter
+	}
 }
 
 // Next updates the iterator to the next element (returning false if none exists)
-func (i *MetaIter) Next() bool {
+func (i *MetaIter) Next() (ok bool) {
+
+next:
 
 	// Attempt to advance the current iterator
-	iter := i.Iter.Next()
-	if iter {
-		return iter
-	}
+	ok = i.Iter.Next()
 
-	// If there was no next element, skip to the v6 iterator (if exists)
-	if i.v6Iter != nil {
+	// If there was no next element, skip to the secondary iterator (if exists)
+	if !ok {
 
-		// Nil the v6 iterator (to prevent repeated access) and return
+		// No more items left on either iterator, bail
+		if i.secondaryIter == nil {
+			return false
+		}
+
+		// Nil the secondary iterator (to prevent repeated access) and return
 		// whatever the iterator provides
-		i.Iter = i.v6Iter
-		i.v6Iter = nil
-		return i.Iter.Next()
+		i.Iter = i.secondaryIter
+		i.secondaryIter = nil
+		goto next
 	}
 
-	// No more items left on either iterator
-	return false
+	// If a filter was defined, evaluate it and re-advance iterator (if required)
+	if i.filter != nil && !i.filter(i.val) {
+		goto next
+	}
+
+	return
 }

@@ -21,6 +21,10 @@ type KeyVal struct {
 // KeyVals denotes a list / slice of key / value pairs
 type KeyVals []KeyVal
 
+// ValFilter denotes a generic value filter (returning true if a certain filter
+// condition is met)
+type ValFilter func(Val) bool
+
 // New instantiates a new Map (a size hint can be provided)
 func New(n ...int) *Map {
 	if len(n) == 0 || n[0] == 0 {
@@ -125,11 +129,17 @@ func (a AggFlowMap) Len() int {
 }
 
 // Iter provides a map Iter to allow traversal of both underlying maps (IPv4 and IPv6)
-func (a AggFlowMap) Iter() *MetaIter {
-	return &MetaIter{
-		Iter:   a.PrimaryMap.Iter(),
-		v6Iter: a.SecondaryMap.Iter(),
+func (a AggFlowMap) Iter(opts ...MetaIterOption) *MetaIter {
+	iter := &MetaIter{
+		Iter:          a.PrimaryMap.Iter(),
+		secondaryIter: a.SecondaryMap.Iter(),
 	}
+
+	// Set functional options, if any
+	for _, opt := range opts {
+		opt(iter)
+	}
+	return iter
 }
 
 // SetOrUpdate either creates a new entry based on the provided values or
