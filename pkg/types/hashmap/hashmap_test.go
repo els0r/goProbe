@@ -96,6 +96,58 @@ func TestHashMapIteratorConsistency(t *testing.T) {
 	}
 }
 
+func TestHashMapMetaIteratorConsistency(t *testing.T) {
+	testMap := NewAggFlowMap()
+	for i := 0; i < 1000; i++ {
+		temp := make([]byte, 8)
+		binary.BigEndian.PutUint64(temp, uint64(i))
+		testMap.PrimaryMap.Set(temp, types.Counters{BytesRcvd: uint64(i), BytesSent: 0, PacketsRcvd: 0, PacketsSent: 0})
+		testMap.SecondaryMap.Set(temp, types.Counters{BytesRcvd: uint64(i), BytesSent: 0, PacketsRcvd: 0, PacketsSent: 0})
+
+		var count int
+		for it := testMap.Iter(); it.Next(); {
+			count++
+		}
+		require.Equal(t, 2*i+2, testMap.Len())
+		require.Equal(t, testMap.Len(), count)
+	}
+}
+
+func TestHashMapMetaIteratorFilter(t *testing.T) {
+	testMap := NewAggFlowMap()
+	for i := 0; i < 1000; i++ {
+		temp := make([]byte, 8)
+		binary.BigEndian.PutUint64(temp, uint64(i))
+		testMap.PrimaryMap.Set(temp, types.Counters{BytesRcvd: uint64(i%2) + 1, BytesSent: uint64((i+1)%2) + 1, PacketsRcvd: uint64(i%2) + 1, PacketsSent: uint64((i+1)%2) + 1})
+		testMap.SecondaryMap.Set(temp, types.Counters{BytesRcvd: uint64(i%2) + 1, BytesSent: uint64((i+1)%2) + 1, PacketsRcvd: uint64(i%2) + 1, PacketsSent: uint64((i+1)%2) + 1})
+	}
+	for i := 1000; i < 2000; i++ {
+		temp := make([]byte, 8)
+		binary.BigEndian.PutUint64(temp, uint64(i))
+		testMap.PrimaryMap.Set(temp, types.Counters{BytesRcvd: uint64(i % 2), BytesSent: uint64((i + 1) % 2), PacketsRcvd: uint64(i % 2), PacketsSent: uint64((i + 1) % 2)})
+		testMap.SecondaryMap.Set(temp, types.Counters{BytesRcvd: uint64(i % 2), BytesSent: uint64((i + 1) % 2), PacketsRcvd: uint64(i % 2), PacketsSent: uint64((i + 1) % 2)})
+	}
+
+	type filterTest struct {
+		filter        ValFilter
+		expectedCount int
+	}
+
+	for _, cs := range []filterTest{
+		{types.Counters.IsBidirectional, 2000},
+		{types.Counters.IsUnidirectional, 2000},
+		{types.Counters.IsOnlyInbound, 1000},
+		{types.Counters.IsOnlyOutbound, 1000},
+	} {
+		var count int
+		for it := testMap.Iter(WithFilter(cs.filter)); it.Next(); {
+			count++
+		}
+
+		require.Equal(t, cs.expectedCount, count)
+	}
+}
+
 func TestAggFlowMapFlatten(t *testing.T) {
 	testMap := NewAggFlowMap()
 	for i := 0; i < 1000; i++ {
@@ -253,6 +305,57 @@ func BenchmarkHashMapIterator(b *testing.B) {
 			_ = it.Val()
 		}
 	}
+}
+
+func BenchmarkHashMapMetaIterator(b *testing.B) {
+
+	testMap := NewAggFlowMap()
+	for i := 0; i < 50000; i++ {
+		temp := make([]byte, 8)
+		binary.BigEndian.PutUint64(temp, uint64(i))
+		testMap.PrimaryMap.Set(temp, types.Counters{BytesRcvd: uint64(i), BytesSent: 0, PacketsRcvd: 0, PacketsSent: 0})
+		testMap.SecondaryMap.Set(temp, types.Counters{BytesRcvd: uint64(i), BytesSent: 0, PacketsRcvd: 0, PacketsSent: 0})
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		for it := testMap.Iter(); it.Next(); {
+			_ = it.Key()
+			_ = it.Val()
+		}
+	}
+}
+
+func BenchmarkHashMapMetaIteratorWithFilter(b *testing.B) {
+
+	testMap := NewAggFlowMap()
+	for i := 0; i < 50000; i++ {
+		temp := make([]byte, 8)
+		binary.BigEndian.PutUint64(temp, uint64(i))
+		testMap.PrimaryMap.Set(temp, types.Counters{BytesRcvd: uint64(i), BytesSent: 0, PacketsRcvd: uint64(i), PacketsSent: 0})
+		testMap.SecondaryMap.Set(temp, types.Counters{BytesRcvd: uint64(i), BytesSent: 0, PacketsRcvd: uint64(i), PacketsSent: 0})
+	}
+
+	b.Run("miss", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			for it := testMap.Iter(WithFilter(types.Counters.IsBidirectional)); it.Next(); {
+				_ = it.Key()
+				_ = it.Val()
+			}
+		}
+	})
+
+	b.Run("hit", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			for it := testMap.Iter(WithFilter(types.Counters.IsUnidirectional)); it.Next(); {
+				_ = it.Key()
+				_ = it.Val()
+			}
+		}
+	})
 }
 
 func BenchmarkNativeMapAccesses(b *testing.B) {

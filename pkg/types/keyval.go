@@ -454,3 +454,23 @@ func (c Counters) Sub(c2 Counters) Counters {
 	c.PacketsSent -= c2.PacketsSent
 	return c
 }
+
+// IsOnlyInbound returns if a set of counters represents traffic that is only inbound
+func (c Counters) IsOnlyInbound() bool {
+	return c.PacketsRcvd > 0 && c.PacketsSent == 0
+}
+
+// IsOnlyOutbound returns if a set of counters represents traffic that is only outbound
+func (c Counters) IsOnlyOutbound() bool {
+	return c.PacketsSent > 0 && c.PacketsRcvd == 0
+}
+
+// IsBidirectional returns if a set of counters represents bidrectional traffic
+func (c Counters) IsBidirectional() bool {
+	return c.PacketsRcvd > 0 && c.PacketsSent > 0
+}
+
+// IsUnidirectional returns if a set of counters represents unidirectional traffic
+func (c Counters) IsUnidirectional() bool {
+	return c.IsOnlyInbound() || c.IsOnlyOutbound()
+}
