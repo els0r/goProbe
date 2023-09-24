@@ -10,6 +10,7 @@ import (
 
 	"log/slog"
 
+	"github.com/els0r/goProbe/cmd/global-query/pkg/distributed"
 	"github.com/els0r/goProbe/cmd/global-query/pkg/hosts"
 	"github.com/els0r/goProbe/pkg/api/goprobe/client"
 	"github.com/els0r/goProbe/pkg/query"
@@ -75,7 +76,7 @@ func (a *APIClientQuerier) createQueryWorkload(_ context.Context, host string, a
 
 		// inject an error runner so that the workload creation error is transported into the final
 		// result
-		qw.Runner = &errorRunner{err: err}
+		qw.Runner = distributed.NewErrorRunner(err)
 	} else {
 		qw.Runner = client.NewFromConfig(cfg)
 	}

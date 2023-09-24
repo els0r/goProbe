@@ -12,6 +12,9 @@ import (
 	"github.com/els0r/telemetry/logging"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+
+	// for plugins
+	_ "github.com/els0r/goProbe/cmd/global-query/pkg/distributed/contrib"
 )
 
 var cfgFile string

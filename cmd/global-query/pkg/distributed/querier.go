@@ -8,14 +8,6 @@ import (
 	"github.com/els0r/goProbe/pkg/results"
 )
 
-// QuerierType denotes the type of the querier instance
-type QuerierType string
-
-const (
-	// APIClientQuerierType provides the name for the goProbe API-based querier
-	APIClientQuerierType QuerierType = "api"
-)
-
 // Querier provides a general interface for all query executors
 type Querier interface {
 	// Query runs the distributed query on the provided hosts and returns a channel from
@@ -32,11 +24,17 @@ type QuerierAnyable interface {
 	AllHosts() (hosts.Hosts, error)
 }
 
-// errorRunner is used to propagate an error all the way to the aggregation routine
-type errorRunner struct {
+// ErrorRunner is used to propagate an error all the way to the aggregation routine
+type ErrorRunner struct {
 	err error
 }
 
-func (e *errorRunner) Run(_ context.Context, _ *query.Args) (*results.Result, error) {
+// NewErrorRunner creates a new error runner
+func NewErrorRunner(err error) *ErrorRunner {
+	return &ErrorRunner{err: err}
+}
+
+// Run doesn't execute anything but returns the error that was passed to the constructor
+func (e *ErrorRunner) Run(_ context.Context, _ *query.Args) (*results.Result, error) {
 	return nil, e.err
 }
