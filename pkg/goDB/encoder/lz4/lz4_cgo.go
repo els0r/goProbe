@@ -13,7 +13,6 @@ package lz4
 */
 import "C"
 import (
-	"errors"
 	"fmt"
 	"io"
 	"unsafe"
@@ -51,12 +50,12 @@ func (e *Encoder) Compress(data, buf []byte, dst io.Writer) (n int, err error) {
 		C.int(e.level)),
 	)
 	if compLen <= 0 {
-		return n, fmt.Errorf("lz4: compression failed: (errno %d)", compLen)
+		return n, fmt.Errorf("compression failed: (errno %d)", compLen)
 	}
 
 	// Perform sanity check whether the computed worst case has been exceeded in C call
 	if len(buf) < compLen {
-		return n, errors.New("lz4: buffer size mismatch for compressed data")
+		return n, ErrBufferSizeMismatch
 	}
 
 	// If provided, write output to the writer
@@ -79,7 +78,7 @@ func (e *Encoder) Decompress(in, out []byte, src io.Reader) (int, error) {
 		return 0, err
 	}
 	if nBytesConsumed != len(in) {
-		return 0, errors.New("lz4: incorrect number of bytes read from data source")
+		return 0, ErrIncorrectNumBytesRead
 	}
 
 	// Handle special case of empty output data
@@ -95,7 +94,7 @@ func (e *Encoder) Decompress(in, out []byte, src io.Reader) (int, error) {
 		C.int(len(in)),
 		C.int(len(out))))
 	if decompLen < 0 {
-		return 0, fmt.Errorf("lz4: decompression failed: (errno %d)", decompLen)
+		return 0, fmt.Errorf("decompression failed: (errno %d)", decompLen)
 	}
 
 	return decompLen, nil

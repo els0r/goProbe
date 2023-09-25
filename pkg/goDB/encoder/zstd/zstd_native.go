@@ -4,7 +4,6 @@
 package zstd
 
 import (
-	"errors"
 	"fmt"
 	"io"
 
@@ -31,7 +30,7 @@ func (e *Encoder) Close() error {
 	}
 	if e.encoder != nil {
 		if err := e.encoder.Close(); err != nil {
-			return fmt.Errorf("zstd: compressor release failed: %w", err)
+			return fmt.Errorf("compressor release failed: %w", err)
 		}
 	}
 	return nil
@@ -47,7 +46,7 @@ func (e *Encoder) Compress(data, buf []byte, dst io.Writer) (n int, err error) {
 			zstd.WithEncoderCRC(false),
 			zstd.WithEncoderConcurrency(1),
 		); err != nil {
-			return n, fmt.Errorf("zstd: compression context init failed: %w", err)
+			return n, fmt.Errorf("compression context init failed: %w", err)
 		}
 	}
 
@@ -74,7 +73,7 @@ func (e *Encoder) Decompress(in, out []byte, src io.Reader) (int, error) {
 		return 0, err
 	}
 	if nBytesConsumed != len(in) {
-		return 0, errors.New("zstd: incorrect number of bytes read from data source")
+		return 0, ErrIncorrectNumBytesRead
 	}
 
 	// If no decompression context exists, create one
@@ -83,7 +82,7 @@ func (e *Encoder) Decompress(in, out []byte, src io.Reader) (int, error) {
 			zstd.IgnoreChecksum(true),
 			zstd.WithDecoderConcurrency(1),
 		); err != nil {
-			return 0, fmt.Errorf("zstd: decompression context init failed: %w", err)
+			return 0, fmt.Errorf("decompression context init failed: %w", err)
 		}
 	}
 
@@ -92,7 +91,7 @@ func (e *Encoder) Decompress(in, out []byte, src io.Reader) (int, error) {
 	decData, err := e.decoder.DecodeAll(in, out)
 	decompLen := len(decData)
 	if err != nil {
-		return 0, fmt.Errorf("zstd: decompression failed: %w (%d)", err, decompLen)
+		return 0, fmt.Errorf("decompression failed: %w", err)
 	}
 
 	return decompLen, nil

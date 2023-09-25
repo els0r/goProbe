@@ -55,7 +55,6 @@ size_t zstdDecompress(uintptr_t dctx, const char *src, const size_t srcSize, cha
 */
 import "C"
 import (
-	"errors"
 	"fmt"
 	"io"
 	"unsafe"
@@ -75,20 +74,18 @@ type Encoder struct {
 }
 
 // Close will close the encoder and release potentially allocated resources
-func (e *Encoder) Close() error {
+func (e *Encoder) Close() (err error) {
 	if e.dCtx != nil {
-		if fErr := int(C.ZSTD_freeDCtx(e.dCtx)); fErr < 0 {
-			errName := C.GoString(C.ZSTD_getErrorName(C.size_t(fErr)))
-			return fmt.Errorf("zstd: decompression context release failed: %s", errName)
+		if errCtx := int(C.ZSTD_freeDCtx(e.dCtx)); errCtx < 0 {
+			err = errnoF("decompression context release failed: %s", errCtx)
 		}
 	}
 	if e.cCtx != nil {
-		if fErr := int(C.ZSTD_freeCCtx(e.cCtx)); fErr < 0 {
-			errName := C.GoString(C.ZSTD_getErrorName(C.size_t(fErr)))
-			return fmt.Errorf("zstd: compression context release failed: %s", errName)
+		if errCtx := int(C.ZSTD_freeCCtx(e.cCtx)); errCtx < 0 {
+			err = errnoF("compression context release failed: %s", errCtx)
 		}
 	}
-	return nil
+	return
 }
 
 // Compress compresses the input data and writes it to dst
@@ -106,11 +103,10 @@ func (e *Encoder) Compress(data, buf []byte, dst io.Writer) (n int, err error) {
 	// If no compression context exists, create one
 	if e.cCtx == nil {
 		if e.cCtx = C.ZSTD_createCCtx(); e.cCtx == nil {
-			return n, fmt.Errorf("zstd: compression context creation failed")
+			return n, ErrContextCreationFailed
 		}
 		if errCtx := int(C.zstdInitCCtx(e.cCtx, C.int(e.level))); errCtx < 0 {
-			errName := C.GoString(C.ZSTD_getErrorName(C.size_t(errCtx)))
-			return n, fmt.Errorf("zstd: compression context init failed: %s", errName)
+			return n, errnoF("compression context init failed: %s", errCtx)
 		}
 	}
 
@@ -128,13 +124,12 @@ func (e *Encoder) Compress(data, buf []byte, dst io.Writer) (n int, err error) {
 		(*C.char)(unsafe.Pointer(&buf[0])),
 		C.size_t(dstCapacity)))
 	if compLen < 0 {
-		errName := C.GoString(C.ZSTD_getErrorName(C.size_t(compLen)))
-		return n, fmt.Errorf("zstd: compression failed: %s (%d)", errName, compLen)
+		return n, errnoF("compression failed: %s", compLen)
 	}
 
 	// Perform sanity check whether the computed worst case has been exceeded in C call
 	if len(buf) < compLen {
-		return n, errors.New("zstd: buffer size mismatch for compressed data")
+		return n, ErrBufferSizeMismatch
 	}
 
 	// If provided, write output to the writer
@@ -157,13 +152,13 @@ func (e *Encoder) Decompress(in, out []byte, src io.Reader) (int, error) {
 		return 0, err
 	}
 	if nBytesConsumed != len(in) {
-		return 0, errors.New("zstd: incorrect number of bytes read from data source")
+		return 0, ErrIncorrectNumBytesRead
 	}
 
 	// If no decompression context exists, create one
 	if e.dCtx == nil {
 		if e.dCtx = C.ZSTD_createDCtx(); e.dCtx == nil {
-			return 0, fmt.Errorf("zstd: decompression context creation failed")
+			return 0, ErrContextCreationFailed
 		}
 	}
 
@@ -181,9 +176,12 @@ func (e *Encoder) Decompress(in, out []byte, src io.Reader) (int, error) {
 		(*C.char)(outPtr),
 		C.size_t(len(out))))
 	if decompLen < 0 {
-		errName := C.GoString(C.ZSTD_getErrorName(C.size_t(decompLen)))
-		return 0, fmt.Errorf("zstd: decompression failed: %s (%d)", errName, decompLen)
+		return 0, errnoF("decompression failed: %s", decompLen)
 	}
 
 	return decompLen, nil
+}
+
+func errnoF(format string, errno int) error {
+	return fmt.Errorf(format, C.GoString(C.ZSTD_getErrorName(C.size_t(errno))))
 }

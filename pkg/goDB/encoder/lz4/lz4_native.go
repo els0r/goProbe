@@ -4,7 +4,6 @@
 package lz4
 
 import (
-	"errors"
 	"fmt"
 	"io"
 
@@ -29,12 +28,12 @@ func (e *Encoder) Compress(data, buf []byte, dst io.Writer) (n int, err error) {
 	// Compress data
 	compLen, err := lz4.CompressBlockHC(data, buf, lz4.CompressionLevel(e.level), nil, nil)
 	if err != nil {
-		return n, fmt.Errorf("lz4: compression failed: %s (%d)", err, compLen)
+		return n, fmt.Errorf("compression failed: %w", err)
 	}
 
 	// Perform sanity check whether the computed worst case has been exceeded
 	if len(buf) < compLen {
-		return n, errors.New("lz4: buffer size mismatch for compressed data")
+		return n, ErrBufferSizeMismatch
 	}
 
 	// If provided, write output to the writer
@@ -57,13 +56,13 @@ func (e *Encoder) Decompress(in, out []byte, src io.Reader) (int, error) {
 		return 0, err
 	}
 	if nBytesConsumed != len(in) {
-		return 0, errors.New("lz4: incorrect number of bytes read from data source")
+		return 0, ErrIncorrectNumBytesRead
 	}
 
 	// Decompress data
 	decompLen, err := lz4.UncompressBlock(in, out)
 	if err != nil {
-		return 0, fmt.Errorf("lz4: decompression failed: %s (%d)", err, decompLen)
+		return 0, fmt.Errorf("decompression failed: %w", err)
 	}
 
 	return decompLen, nil
