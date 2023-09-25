@@ -26,6 +26,9 @@ jobs:
     - name: Build for AMD64
       run: GOOS=linux GOARCH=amd64 go build -tags jsoniter -v -a ./...
 
+    - name: Build for AMD64 (No-GCO Mode)
+      run: GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -tags jsoniter -v -a ./...
+
     - name: Build for AMD64 (Production Mode)
       run: GOOS=linux GOARCH=amd64 go build -tags jsoniter,slimcap_nomock -v -a ./...
 
@@ -33,6 +36,10 @@ jobs:
       run: |
         go test -tags jsoniter -v ./... -covermode=atomic -coverprofile=coverage.out
         go tool cover -func=coverage.out -o=coverage.out
+
+    - name: Test (No-CGO Mode)
+      run: |
+        CGO_ENABLED=0 go test -tags jsoniter -v ./...
 
     - name: Test (Production Mode)
       run: |

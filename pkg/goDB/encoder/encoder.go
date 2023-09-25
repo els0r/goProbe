@@ -39,8 +39,7 @@ func New(t encoders.Type) (Encoder, error) {
 	case encoders.EncoderTypeLZ4:
 		return lz4.New(), nil
 	case encoders.EncoderTypeLZ4Custom:
-		// TODO: turn this into an error with deprecation notice in future releases
-		return lz4cust.New(), nil
+		return lz4cust.New(), lz4cust.ErrDeprecated
 	case encoders.EncoderTypeZSTD:
 		return zstd.New(), nil
 	default:

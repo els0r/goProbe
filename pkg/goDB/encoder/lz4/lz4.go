@@ -2,12 +2,24 @@
 package lz4
 
 import (
+	"errors"
+
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 )
 
 const (
 	MaxCompressionLevel     = 12 // MaxCompressionLevel denotes the maximum useful compression level
 	defaultCompressionLevel = 6
+)
+
+var (
+
+	// ErrBufferSizeMismatch denotes that the allocated buffer is insufficient in size
+	ErrBufferSizeMismatch = errors.New("buffer size mismatch for compressed data")
+
+	// ErrIncorrectNumBytesRead denotes that the number of bytes read during decompression
+	// does not match the expected size
+	ErrIncorrectNumBytesRead = errors.New("incorrect number of bytes read from data source during decompression")
 )
 
 // Encoder compresses data with the LZ4 algorithm (omitting certain bounds-checks for performance reasons)

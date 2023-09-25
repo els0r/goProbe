@@ -76,7 +76,20 @@ Supported compression algorithms are:
 * [zstd](https://github.com/facebook/zstd)
 * None (not recommended)
 
-Check [encoder.go](./pkg/goDB/encoder/encoder.go) for the enumeration of supported compression algorithms and the definition fo the `Encoder` interface. Compression features are available by linking against system-level libraries (`liblz4` and `libzstd`, respectively), so those must be available at runtime (and consequently their development libraries are required if the project is build from source).
+Check [encoder.go](./pkg/goDB/encoder/encoder.go) for the enumeration of supported compression algorithms and the definition fo the `Encoder` interface. Compression features are available by linking against system-level libraries (`liblz4` and `libzstd`, respectively, so if `CGO` is used (default) those must be available at runtime and consequently their development libraries are required if the project is build from source).
+
+Alternatively, native Go implementations can be used if `CGO` is unavailable or by disabling individual or all C library dependencies (in favor of their respective native implementations) by means of the following build overrides:
+
+| Build override                     | Effect                                            |
+|------------------------------------|---------------------------------------------------|
+| `CGO_ENABLED=0 go build <...>`     | Use native compression (no external dependencies) |
+| `go build -tags=goprobe_noliblz4`  | Use native compression for LZ4                    |
+| `go build -tags=goprobe_nolibzstd` | Use native compression for ZSTD                   |
+
+All of the above can be combined arbitrarily.
+
+> [!WARNING]
+> Depending on OS / architecture using native compression can incur a significant performance penalty (in particular for write operations). While allowing for greater portability / ease of use it is not recommended in heavy load / throughput production environments.
 
 ### Bash autocompletion
 

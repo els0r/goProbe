@@ -2,12 +2,27 @@
 package zstd
 
 import (
+	"errors"
+
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 )
 
 const (
 	MaxCompressionLevel     = 19 // MaxCompressionLevel denotes the maximum useful compression level
 	defaultCompressionLevel = 6
+)
+
+var (
+
+	// ErrBufferSizeMismatch denotes that the allocated buffer is insufficient in size
+	ErrBufferSizeMismatch = errors.New("buffer size mismatch for compressed data")
+
+	// ErrIncorrectNumBytesRead denotes that the number of bytes read during decompression
+	// does not match the expected size
+	ErrIncorrectNumBytesRead = errors.New("incorrect number of bytes read from data source during decompression")
+
+	// ErrContextCreationFailed denotes that instantiation of a ZSTD (de)compression context failed
+	ErrContextCreationFailed = errors.New("context creation failed")
 )
 
 // Option sets additional parameters on the Encoder
@@ -26,7 +41,7 @@ func New(opts ...Option) *Encoder {
 	return l
 }
 
-// WithCompressionLevel allows the level to be set to something other than the default 512
+// WithCompressionLevel allows the level to be set to something other than the default (6)
 func WithCompressionLevel(level int) Option {
 	return func(e *Encoder) {
 		e.SetLevel(level)
