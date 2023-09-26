@@ -19,6 +19,17 @@ var (
 	ErrorNoResults = errors.New("query returned no results")
 )
 
+// DistributedResult stores the result from a distributed query tagged with the Hostname where
+// it came from as well as a potential error encountered when _attempting_ to fetch the result
+type DistributedResult struct {
+	// Hostname from which the result originated
+	Hostname string `json:"hostname"`
+	// Result data
+	Result *Result `json:"result,omitempty"`
+	// Error encountered when fetching result
+	Error error `json:"error,omitempty"`
+}
+
 // Result bundles the data rows returned and the query meta information
 type Result struct {
 	Status        Status        `json:"status"`         // Status: the overall status of the result
