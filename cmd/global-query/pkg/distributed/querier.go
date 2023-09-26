@@ -22,7 +22,7 @@ type Querier interface {
 	// which the results can be read. It is the responsibility of the implementing type
 	// to close the channel.
 	// This may become a requirement through the interface definitions in future versions
-	Query(ctx context.Context, hosts hosts.Hosts, args *query.Args) <-chan *results.DistributedResult
+	Query(ctx context.Context, hosts hosts.Hosts, args *query.Args) <-chan *results.Result
 }
 
 // QuerierAnyable extends a "common" Querier with the support to retrieve a list of all hosts / targets

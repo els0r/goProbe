@@ -116,8 +116,8 @@ func (a *APIClientQuerier) AllHosts() (hostList hosts.Hosts, err error) {
 
 // Query takes query workloads from the internal workloads channel, runs them, and returns a channel from which
 // the results can be read
-func (a *APIClientQuerier) Query(ctx context.Context, hosts hosts.Hosts, args *query.Args) <-chan *results.DistributedResult {
-	out := make(chan *results.DistributedResult, a.maxConcurrent)
+func (a *APIClientQuerier) Query(ctx context.Context, hosts hosts.Hosts, args *query.Args) <-chan *results.Result {
+	out := make(chan *results.Result, a.maxConcurrent)
 
 	workloads := a.prepareQueries(ctx, hosts, args)
 
@@ -147,16 +147,14 @@ func (a *APIClientQuerier) Query(ctx context.Context, hosts hosts.Hosts, args *q
 
 					ctx := logging.WithFields(ctx, slog.String("host", wl.Host))
 
-					res, err := wl.Runner.Run(ctx, wl.Args)
+					qr, err := wl.Runner.Run(ctx, wl.Args)
 					if err != nil {
+						qr = results.New()
+						qr.SetErr(err)
+
 						err = fmt.Errorf("failed to run query: %w", err)
 					}
-
-					qr := &results.DistributedResult{
-						Hostname: wl.Host,
-						Result:   res,
-						Error:    err,
-					}
+					qr.Hostname = wl.Host
 
 					out <- qr
 				}

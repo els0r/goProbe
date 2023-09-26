@@ -60,7 +60,6 @@ func (q *QueryRunner) Run(ctx context.Context, args *query.Args) (*results.Resul
 
 	logger.Info("reading query results from querier")
 
-
 	finalResult := aggregateResults(ctx, stmt,
 		q.querier.Query(ctx, hostList, &queryArgs),
 	)
@@ -75,7 +74,6 @@ func (q *QueryRunner) Run(ctx context.Context, args *query.Args) (*results.Resul
 
 	return finalResult, nil
 }
-
 
 func (q *QueryRunner) prepareHostList(ctx context.Context, queryHosts string) (hostList hosts.Hosts, err error) {
 
@@ -102,7 +100,7 @@ func (q *QueryRunner) prepareHostList(ctx context.Context, queryHosts string) (h
 
 // aggregateResults takes finished query workloads from the workloads channel, aggregates the result by merging the rows and summaries,
 // and returns the final result. The `tracker` variable provides information about potential Run failures for individual hosts
-func aggregateResults(ctx context.Context, stmt *query.Statement, queryResults <-chan *results.DistributedResult) (finalResult *results.Result) {
+func aggregateResults(ctx context.Context, stmt *query.Statement, queryResults <-chan *results.Result) (finalResult *results.Result) {
 	// aggregation
 	finalResult = results.New()
 	finalResult.Start()
@@ -130,28 +128,28 @@ func aggregateResults(ctx context.Context, stmt *query.Statement, queryResults <
 				return
 			}
 			logger := logger.With("hostname", qr.Hostname)
-			if qr.Error != nil {
+			if qr.Err() != nil {
 				// unwrap the error if it's possible
-				var msg string
-
-				uerr := errors.Unwrap(qr.Error)
-				if uerr != nil {
-					msg = uerr.Error()
-				} else {
-					msg = qr.Error.Error()
+				uerr := errors.Unwrap(qr.Err())
+				if uerr == nil {
+					uerr = qr.Err()
 				}
 
-				finalResult.HostsStatuses[qr.Hostname] = results.Status{
-					Code:    types.StatusError,
-					Message: msg,
-				}
-				logger.Error(qr.Error)
+				finalResult.HostsStatuses.SetErr(qr.Hostname, uerr)
+
+				logger.Error(qr.Err)
 				continue
 			}
 
-			res := qr.Result
+			res := qr
+
 			for host, status := range res.HostsStatuses {
 				finalResult.HostsStatuses[host] = status
+			}
+
+			// for the final result, the hostname is only set if the result was from a single host
+			if len(finalResult.HostsStatuses) > 0 {
+				res.Hostname = ""
 			}
 
 			// merges the traffic data
