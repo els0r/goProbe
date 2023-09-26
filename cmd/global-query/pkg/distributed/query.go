@@ -137,7 +137,7 @@ func aggregateResults(ctx context.Context, stmt *query.Statement, queryResults <
 
 				finalResult.HostsStatuses.SetErr(qr.Hostname, uerr)
 
-				logger.Error(qr.Err)
+				logger.Error(qr.Err())
 				continue
 			}
 
