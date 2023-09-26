@@ -99,6 +99,14 @@ const (
 	KeyWidthIPv6 = sipDipIPv6Width + nonIPKeysWidth
 )
 
+// AnySelector denotes any / all (interfaces, hosts, ...)
+const AnySelector = "any"
+
+// IsAnySelector returns if the provided selector is "ANY" (case insensitive)
+func IsAnySelector(input string) bool {
+	return strings.EqualFold(input, AnySelector)
+}
+
 // RawIPToAddr converts an ip byte slice to an actual netip.Addr
 func RawIPToAddr(ip []byte) netip.Addr {
 	zeros := numZeros(ip)

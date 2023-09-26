@@ -50,15 +50,16 @@ func (q *QueryRunner) Run(ctx context.Context, args *query.Args) (*results.Resul
 		return nil, fmt.Errorf("failed to prepare query statement: %w", err)
 	}
 
-	hostList, err := q.resolver.Resolve(ctx, queryArgs.QueryHosts)
+	hostList, err := q.prepareHostList(ctx, args.QueryHosts)
 	if err != nil {
-		return nil, fmt.Errorf("failed to resolve host list: %w", err)
+		return nil, err // prepareHostList() returns formatted error
 	}
 
 	// log the query
 	logger := logging.Logger().With("hosts", hostList)
 
 	logger.Info("reading query results from querier")
+
 
 	finalResult := aggregateResults(ctx, stmt,
 		q.querier.Query(ctx, hostList, &queryArgs),
@@ -73,6 +74,30 @@ func (q *QueryRunner) Run(ctx context.Context, args *query.Args) (*results.Resul
 	finalResult.Summary.Hits.Displayed = len(finalResult.Rows)
 
 	return finalResult, nil
+}
+
+
+func (q *QueryRunner) prepareHostList(ctx context.Context, queryHosts string) (hostList hosts.Hosts, err error) {
+
+	// Handle ANY (all hosts) case
+	if types.IsAnySelector(queryHosts) {
+		if querierAnyable, ok := q.querier.(QuerierAnyable); ok {
+			if hostList, err = querierAnyable.AllHosts(); err != nil {
+				err = fmt.Errorf("failed to extract list of all hosts: %w", err)
+			}
+		} else {
+			err = errors.New("querier type does not support querying all hosts")
+		}
+
+		return
+	}
+
+	// Default handling via resolver
+	if hostList, err = q.resolver.Resolve(ctx, queryHosts); err != nil {
+		err = fmt.Errorf("failed to resolve host list: %w", err)
+	}
+
+	return
 }
 
 // aggregateResults takes finished query workloads from the workloads channel, aggregates the result by merging the rows and summaries,

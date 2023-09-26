@@ -25,6 +25,23 @@ type Querier interface {
 	Query(ctx context.Context, hosts hosts.Hosts, args *query.Args) <-chan *results.DistributedResult
 }
 
+// QuerierAnyable extends a "common" Querier with the support to retrieve a list of all hosts / targets
+// available to the Querier
+type QuerierAnyable interface {
+	// AllHosts returns a list of all hosts / targets available to the Querier
+	AllHosts() (hosts.Hosts, error)
+}
+
+// AllHosts returns a list of all hosts / targets available to the querier
+func (a *APIClientQuerier) AllHosts() (hostList hosts.Hosts, err error) {
+	hostList = make([]string, 0, len(a.apiEndpoints))
+	for host := range a.apiEndpoints {
+		hostList = append(hostList, host)
+	}
+
+	return
+}
+
 // errorRunner is used to propagate an error all the way to the aggregation routine
 type errorRunner struct {
 	err error

@@ -194,7 +194,7 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 
 	// insert iface attribute here in case multiple interfaces where specified and the
 	// interface column was not added as an attribute
-	if (len(s.Ifaces) > 1 || strings.Contains(a.Ifaces, "any")) &&
+	if (len(s.Ifaces) > 1 || strings.Contains(a.Ifaces, types.AnySelector)) &&
 		!strings.Contains(a.Query, "iface") {
 		selector.Iface = true
 	}
@@ -252,7 +252,7 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 	s.MaxMemPct = a.MaxMemPct
 
 	// check limits flag
-	if !(0 < a.NumResults) {
+	if a.NumResults <= 0 {
 		return s, errors.New("the printed row limit must be greater than 0")
 	}
 	s.NumResults = a.NumResults
