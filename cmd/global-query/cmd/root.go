@@ -126,7 +126,13 @@ func initQuerier() (distributed.Querier, error) {
 	querierType := viper.GetString(conf.QuerierType)
 	switch querierType {
 	case string(distributed.APIClientQuerierType):
-		return distributed.NewAPIClientQuerier(viper.GetString(conf.QuerierConfig))
+		querier, err := distributed.NewAPIClientQuerier(
+			viper.GetString(conf.QuerierConfig),
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to instantiate API client querier: %w", err)
+		}
+		return querier.SetMaxConcurrent(viper.GetInt(conf.QuerierMaxConcurrent)), nil
 	default:
 		err := fmt.Errorf("querier type %q not supported", querierType)
 		return nil, err

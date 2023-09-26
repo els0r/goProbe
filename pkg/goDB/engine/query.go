@@ -109,6 +109,7 @@ func (qr *QueryRunner) RunStatement(ctx context.Context, stmt *query.Statement) 
 		return nil, fmt.Errorf("failed to get system hostname: %w", err)
 	}
 	hostID := info.GetHostID(qr.dbPath)
+	result.Hostname = hostname
 
 	// assign the hostname to the list of hosts handled in this query. Here, the only one
 	defer func() {

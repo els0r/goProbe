@@ -21,12 +21,40 @@ var (
 
 // Result bundles the data rows returned and the query meta information
 type Result struct {
+	Hostname string `json:"hostname,omitempty"` // Hostname: from which the result originated
+
 	Status        Status        `json:"status"`         // Status: the overall status of the result
 	HostsStatuses HostsStatuses `json:"hosts_statuses"` // HostsStatuses: the status of all hosts queried
 
 	Summary Summary `json:"summary"` // Summary: the total traffic volume and packets observed over the queried range and the interfaces that were queried
 	Query   Query   `json:"query"`   // Query: the kind of query that was run
 	Rows    Rows    `json:"rows"`    // Rows: the data rows returned
+
+	// err is the error encountered when fetching result
+	err error `json:"-"`
+}
+
+// SetErr will set the error in the status and add it to the hosts statuses
+func (hs HostsStatuses) SetErr(host string, err error) {
+	if hs == nil {
+		return
+	}
+	hs[host] = Status{
+		Code:    types.StatusError,
+		Message: err.Error(),
+	}
+}
+
+// SetErr will set the error in the result and add it to the hosts statuses
+// for the current hostname
+func (r *Result) SetErr(err error) {
+	r.err = err
+	r.HostsStatuses.SetErr(r.Hostname, err)
+}
+
+// Err returns the error in case the result carries one
+func (r *Result) Err() error {
+	return r.err
 }
 
 // Query stores the kind of query that was run
@@ -107,6 +135,7 @@ func New() *Result {
 		Status: Status{
 			Code: types.StatusOK,
 		},
+		HostsStatuses: make(HostsStatuses),
 	}
 }
 
