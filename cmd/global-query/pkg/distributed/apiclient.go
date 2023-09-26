@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
 
 	"log/slog"
@@ -24,9 +25,8 @@ type APIClientQuerier struct {
 	maxConcurrent int
 }
 
-const (
-	defaultMaxConcurrent = 8
-)
+// one CPU can handle more than one client call at a time
+var defaultMaxConcurrent = 2 * runtime.NumCPU()
 
 // NewAPIClientQuerier instantiates a new goProbe API-based querier. It uses the goprobe/client
 // under the hood to run queries
