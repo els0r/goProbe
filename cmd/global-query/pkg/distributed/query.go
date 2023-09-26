@@ -61,9 +61,9 @@ func (q *QueryRunner) Run(ctx context.Context, args *query.Args) (*results.Resul
 		return nil, fmt.Errorf("failed to prepare query statement: %w", err)
 	}
 
-	hostList, err := q.resolver.Resolve(ctx, queryArgs.QueryHosts)
+	hostList, err := q.prepareHostList(ctx, args.QueryHosts)
 	if err != nil {
-		return nil, fmt.Errorf("failed to resolve host list: %w", err)
+		return nil, err // prepareHostList() returns formatted error
 	}
 
 	// log the query
@@ -72,7 +72,7 @@ func (q *QueryRunner) Run(ctx context.Context, args *query.Args) (*results.Resul
 	// query pipeline setup
 	// sets up a fan-out, fan-in query processing pipeline
 	numRunners := len(hostList)
-	if q.maxConcurrent > 0 {
+	if q.maxConcurrent > 0 && q.maxConcurrent < numRunners {
 		numRunners = q.maxConcurrent
 	}
 
@@ -93,6 +93,29 @@ func (q *QueryRunner) Run(ctx context.Context, args *query.Args) (*results.Resul
 	finalResult.Summary.Hits.Displayed = len(finalResult.Rows)
 
 	return finalResult, nil
+}
+
+func (q *QueryRunner) prepareHostList(ctx context.Context, queryHosts string) (hostList hosts.Hosts, err error) {
+
+	// Handle ANY (all hosts) case
+	if types.IsAnySelector(queryHosts) {
+		if querierAnyable, ok := q.querier.(QuerierAnyable); ok {
+			if hostList, err = querierAnyable.AllHosts(); err != nil {
+				err = fmt.Errorf("failed to extract list of all hosts: %w", err)
+			}
+		} else {
+			err = errors.New("querier type does not support querying all hosts")
+		}
+
+		return
+	}
+
+	// Default handling via resolver
+	if hostList, err = q.resolver.Resolve(ctx, queryHosts); err != nil {
+		err = fmt.Errorf("failed to resolve host list: %w", err)
+	}
+
+	return
 }
 
 // prepareQueries creates query workloads for all hosts in the host list and returns the channel it sends the

@@ -26,8 +26,8 @@ func (c *Client) Query(ctx context.Context, args *query.Args) (*results.Result, 
 	}
 
 	// we need more results before truncating
-	if args.NumResults < query.DefaultNumResults {
-		args.NumResults = query.DefaultNumResults
+	if queryArgs.NumResults < query.DefaultNumResults {
+		queryArgs.NumResults = query.DefaultNumResults
 	}
 
 	var res = new(results.Result)

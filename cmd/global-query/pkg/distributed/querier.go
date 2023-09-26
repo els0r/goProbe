@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/els0r/goProbe/cmd/global-query/pkg/hosts"
 	"github.com/els0r/goProbe/pkg/api/goprobe/client"
 	"github.com/els0r/goProbe/pkg/query"
 	"github.com/els0r/goProbe/pkg/results"
@@ -26,6 +27,14 @@ type Querier interface {
 
 	// CreateQueryWorkload prepares and executes the workload required to perform the query
 	CreateQueryWorkload(ctx context.Context, host string, args *query.Args) (*QueryWorkload, error)
+}
+
+// QuerierAnyable extends a "common" Querier with the support to retrieve a list of all hosts / targets
+// available to the Querier
+type QuerierAnyable interface {
+
+	// AllHosts returns a list of all hosts / targets available to the Querier
+	AllHosts() (hosts.Hosts, error)
 }
 
 // APIClientQuerier implements an API-based querier, fulfilling the Querier interface
@@ -76,6 +85,16 @@ func (a *APIClientQuerier) CreateQueryWorkload(_ context.Context, host string, a
 	}
 
 	return qw, nil
+}
+
+// AllHosts returns a list of all hosts / targets available to the querier
+func (a *APIClientQuerier) AllHosts() (hostList hosts.Hosts, err error) {
+	hostList = make([]string, 0, len(a.apiEndpoints))
+	for host := range a.apiEndpoints {
+		hostList = append(hostList, host)
+	}
+
+	return
 }
 
 // errorRunner is used to propagate an error all the way to the aggregation routine

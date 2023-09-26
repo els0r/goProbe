@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/els0r/goProbe/pkg/goDB/info"
+	"github.com/els0r/goProbe/pkg/types"
 	"github.com/els0r/goProbe/pkg/util"
 )
 
@@ -61,11 +62,11 @@ func ifaces(args []string) []string {
 
 		var suggs []suggestion
 
-		if len(ifaces) == 1 && strings.HasPrefix("any", strings.ToLower(last(ifaces))) {
+		if len(ifaces) == 1 && strings.HasPrefix(types.AnySelector, strings.ToLower(last(ifaces))) {
 			suggs = append(suggs, suggestion{"ANY", "ANY (query all interfaces)", true})
 		} else {
 			for _, iface := range ifaces {
-				if strings.ToLower(iface) == "any" {
+				if types.IsAnySelector(iface) {
 					return knownSuggestions{[]suggestion{}}
 				}
 			}
