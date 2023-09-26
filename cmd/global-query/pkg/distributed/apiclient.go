@@ -104,7 +104,17 @@ func (a *APIClientQuerier) prepareQueries(ctx context.Context, hostList hosts.Ho
 	return workloads
 }
 
-// runQueries takes query workloads from the workloads channel, runs them, and returns a channel from which
+// AllHosts returns a list of all hosts / targets available to the querier
+func (a *APIClientQuerier) AllHosts() (hostList hosts.Hosts, err error) {
+	hostList = make([]string, 0, len(a.apiEndpoints))
+	for host := range a.apiEndpoints {
+		hostList = append(hostList, host)
+	}
+
+	return
+}
+
+// Query takes query workloads from the internal workloads channel, runs them, and returns a channel from which
 // the results can be read
 func (a *APIClientQuerier) Query(ctx context.Context, hosts hosts.Hosts, args *query.Args) <-chan *results.DistributedResult {
 	out := make(chan *results.DistributedResult, a.maxConcurrent)
