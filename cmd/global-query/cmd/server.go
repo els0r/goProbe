@@ -55,7 +55,7 @@ func serverEntrypoint(cmd *cobra.Command, args []string) error {
 	qlogger.Debug("getting available plugins")
 
 	// get the querier
-	querier, err := initQuerier()
+	querier, err := initQuerier(ctx)
 	if err != nil {
 		qlogger.Errorf("failed to set up queriers: %v", err)
 		return err

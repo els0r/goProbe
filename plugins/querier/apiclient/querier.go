@@ -33,9 +33,9 @@ func init() {
 
 // APIClientQuerier implements an API-based querier, fulfilling the Querier interface
 type APIClientQuerier struct {
-	apiEndpoints map[string]*client.Config
+	apiEndpoints map[string]*client.Config `json:"endpoints" yaml:"endpoints"`
 
-	maxConcurrent int
+	maxConcurrent int `json:"max_concurrent" yaml:"max_concurrent"`
 }
 
 // one CPU can handle more than one client call at a time
