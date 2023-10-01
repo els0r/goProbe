@@ -1,4 +1,4 @@
-package distributed
+package apiclient
 
 import (
 	"context"
@@ -27,7 +27,7 @@ const (
 
 func init() {
 	plugins.RegisterQuerier(Name, func(_ context.Context, cfgPath string) (distributed.Querier, error) {
-		return NewAPIClientQuerier(cfgPath)
+		return New(cfgPath)
 	})
 }
 
@@ -41,9 +41,9 @@ type APIClientQuerier struct {
 // one CPU can handle more than one client call at a time
 var defaultMaxConcurrent = 2 * runtime.NumCPU()
 
-// NewAPIClientQuerier instantiates a new goProbe API-based querier. It uses the goprobe/client
+// New instantiates a new goProbe API-based querier. It uses the goprobe/client
 // under the hood to run queries
-func NewAPIClientQuerier(cfgPath string) (*APIClientQuerier, error) {
+func New(cfgPath string) (*APIClientQuerier, error) {
 	a := &APIClientQuerier{
 		apiEndpoints:  make(map[string]*client.Config),
 		maxConcurrent: defaultMaxConcurrent,

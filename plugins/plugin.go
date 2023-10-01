@@ -3,6 +3,7 @@ package plugins
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"sort"
 	"sync"
 
@@ -10,7 +11,7 @@ import (
 )
 
 func init() {
-	getPluginInitializer()
+	GetInitializer()
 }
 
 type pluginType string
@@ -19,9 +20,16 @@ const (
 	querierPlugin pluginType = "querier"
 )
 
-type pluginInitializer struct {
+// Initializer is a singleton that holds all registered plugins
+type Initializer struct {
 	sync.RWMutex
 	queriers map[string]QuerierInitializer
+}
+
+func (i *Initializer) LogValue() slog.Value {
+	return slog.GroupValue(
+		slog.Any("queriers", i.getQueriers()),
+	)
 }
 
 // QuerierInitializer is a function that initializes a querier instance. The cfgPath parameter
@@ -32,30 +40,45 @@ type QuerierInitializer func(ctx context.Context, cfgPath string) (distributed.Q
 // This function is meant to be used by querier plugins to register themselves.
 // RegisterQuerier will panic if a querier with the same name has already been registered
 func RegisterQuerier(name string, initFn QuerierInitializer) {
-	getPluginInitializer().registerQuerier(name, initFn)
+	GetInitializer().registerQuerier(name, initFn)
 }
 
 // GetAvailablePlugins returns a list of all registered querier plugins
 func GetAvailableQuerierPlugins() []string {
+	return GetInitializer().getQueriers()
+}
+
+func (i *Initializer) getQueriers() []string {
 	plugins := make([]string, 0)
-	for k := range getPluginInitializer().queriers {
+
+	i.RLock()
+	for k := range i.queriers {
 		plugins = append(plugins, k)
 	}
+	i.RUnlock()
+
 	sort.StringSlice(plugins).Sort()
 	return plugins
+}
+
+// GetAvailable Plugins returns a list of all registered plugins by plugin type
+func GetAvailablePlugins() map[string][]string {
+	return map[string][]string{
+		string(querierPlugin): GetAvailableQuerierPlugins(),
+	}
 }
 
 // InitQuerier will initialize a querier plugin with the given name and configuration path.
 // If the plugin never registered itself, an error will be returned
 func InitQuerier(ctx context.Context, name, cfgPath string) (distributed.Querier, error) {
-	initFn, exists := getPluginInitializer().getQuerier(name)
+	initFn, exists := GetInitializer().getQuerier(name)
 	if !exists {
 		return nil, fmt.Errorf("querier plugin %q not registered", name)
 	}
 	return initFn(ctx, cfgPath)
 }
 
-func (p *pluginInitializer) getQuerier(name string) (QuerierInitializer, bool) {
+func (p *Initializer) getQuerier(name string) (QuerierInitializer, bool) {
 	p.RLock()
 	initFn, exists := p.queriers[name]
 	p.RUnlock()
@@ -63,7 +86,7 @@ func (p *pluginInitializer) getQuerier(name string) (QuerierInitializer, bool) {
 	return initFn, exists
 }
 
-func (p *pluginInitializer) registerQuerier(name string, initFn QuerierInitializer) {
+func (p *Initializer) registerQuerier(name string, initFn QuerierInitializer) {
 	p.Lock()
 	_, exists := p.queriers[name]
 	if exists {
@@ -73,12 +96,14 @@ func (p *pluginInitializer) registerQuerier(name string, initFn QuerierInitializ
 	p.Unlock()
 }
 
-var singleton *pluginInitializer
+var singleton *Initializer
 var once sync.Once
 
-func getPluginInitializer() *pluginInitializer {
+// GetInitializer returns the singleton Initializer instance. It is safe to call this function
+// concurrently. Repeated calls will return the same instance
+func GetInitializer() *Initializer {
 	once.Do(func() {
-		singleton = &pluginInitializer{
+		singleton = &Initializer{
 			queriers: make(map[string]QuerierInitializer),
 		}
 	})

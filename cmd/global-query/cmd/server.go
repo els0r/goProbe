@@ -9,9 +9,9 @@ import (
 	"syscall"
 
 	"github.com/els0r/goProbe/cmd/global-query/pkg/conf"
-	"github.com/els0r/goProbe/cmd/global-query/pkg/distributed"
 	gqserver "github.com/els0r/goProbe/pkg/api/globalquery/server"
 	"github.com/els0r/goProbe/pkg/api/server"
+	"github.com/els0r/goProbe/plugins"
 	"github.com/els0r/telemetry/logging"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -51,11 +51,11 @@ func serverEntrypoint(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	qlogger := logger.With("plugins", distributed.GetAvailableQuerierPlugins())
+	qlogger := logger.With("plugins", plugins.GetInitializer())
 	qlogger.Debug("getting available plugins")
 
-	// get the workload provider
-	querier, err := initQuerier(ctx)
+	// get the querier
+	querier, err := initQuerier()
 	if err != nil {
 		qlogger.Errorf("failed to set up queriers: %v", err)
 		return err
