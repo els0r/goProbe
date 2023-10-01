@@ -15,9 +15,21 @@ import (
 	"github.com/els0r/goProbe/pkg/api/goprobe/client"
 	"github.com/els0r/goProbe/pkg/query"
 	"github.com/els0r/goProbe/pkg/results"
+	"github.com/els0r/goProbe/plugins"
 	"github.com/els0r/telemetry/logging"
 	"gopkg.in/yaml.v3"
 )
+
+const (
+	// Name is the name of the API Client Querier plugin
+	Name = "api"
+)
+
+func init() {
+	plugins.RegisterQuerier(Name, func(_ context.Context, cfgPath string) (distributed.Querier, error) {
+		return NewAPIClientQuerier(cfgPath)
+	})
+}
 
 // APIClientQuerier implements an API-based querier, fulfilling the Querier interface
 type APIClientQuerier struct {
