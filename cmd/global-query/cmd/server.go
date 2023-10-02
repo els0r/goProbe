@@ -15,6 +15,8 @@ import (
 	"github.com/els0r/telemetry/logging"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+
+	_ "github.com/els0r/goProbe/plugins/contrib" // Include third-party plugins (if enabled, see README)
 )
 
 // serverCmd represents the server command
