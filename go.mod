@@ -2,8 +2,11 @@ module github.com/els0r/goProbe
 
 go 1.21
 
+replace github.com/els0r/goProbe/plugins/contrib => ./plugins/contrib
+
 require (
-	github.com/els0r/telemetry/logging v0.0.0-20230904121842-8451f59b6057
+	github.com/els0r/goProbe/plugins/contrib v0.0.0-00010101000000-000000000000
+	github.com/els0r/telemetry/logging v0.0.0-20230905085019-03d1cd3d4b3d
 	github.com/fako1024/gotools/bitpack v0.0.0-20230821104146-b3b1387dec32
 	github.com/fako1024/gotools/concurrency v0.0.0-20230821104146-b3b1387dec32
 	github.com/fako1024/httpc v1.0.15

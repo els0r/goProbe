@@ -1,4 +1,4 @@
-package distributed
+package apiclient
 
 import (
 	"context"
@@ -10,27 +10,40 @@ import (
 
 	"log/slog"
 
+	"github.com/els0r/goProbe/cmd/global-query/pkg/distributed"
 	"github.com/els0r/goProbe/cmd/global-query/pkg/hosts"
 	"github.com/els0r/goProbe/pkg/api/goprobe/client"
 	"github.com/els0r/goProbe/pkg/query"
 	"github.com/els0r/goProbe/pkg/results"
+	"github.com/els0r/goProbe/plugins"
 	"github.com/els0r/telemetry/logging"
 	"gopkg.in/yaml.v3"
 )
 
+const (
+	// Name is the name of the API Client Querier plugin
+	Name = "api"
+)
+
+func init() {
+	plugins.RegisterQuerier(Name, func(_ context.Context, cfgPath string) (distributed.Querier, error) {
+		return New(cfgPath)
+	})
+}
+
 // APIClientQuerier implements an API-based querier, fulfilling the Querier interface
 type APIClientQuerier struct {
-	apiEndpoints map[string]*client.Config
+	apiEndpoints map[string]*client.Config `json:"endpoints" yaml:"endpoints"`
 
-	maxConcurrent int
+	maxConcurrent int `json:"max_concurrent" yaml:"max_concurrent"`
 }
 
 // one CPU can handle more than one client call at a time
 var defaultMaxConcurrent = 2 * runtime.NumCPU()
 
-// NewAPIClientQuerier instantiates a new goProbe API-based querier. It uses the goprobe/client
+// New instantiates a new goProbe API-based querier. It uses the goprobe/client
 // under the hood to run queries
-func NewAPIClientQuerier(cfgPath string) (*APIClientQuerier, error) {
+func New(cfgPath string) (*APIClientQuerier, error) {
 	a := &APIClientQuerier{
 		apiEndpoints:  make(map[string]*client.Config),
 		maxConcurrent: defaultMaxConcurrent,
@@ -75,7 +88,7 @@ func (a *APIClientQuerier) createQueryWorkload(_ context.Context, host string, a
 
 		// inject an error runner so that the workload creation error is transported into the final
 		// result
-		qw.Runner = &errorRunner{err: err}
+		qw.Runner = distributed.NewErrorRunner(err)
 	} else {
 		qw.Runner = client.NewFromConfig(cfg)
 	}

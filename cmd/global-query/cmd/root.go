@@ -5,7 +5,6 @@ import (
 	"os"
 
 	"github.com/els0r/goProbe/cmd/global-query/pkg/conf"
-	"github.com/els0r/goProbe/cmd/global-query/pkg/distributed"
 	"github.com/els0r/goProbe/cmd/global-query/pkg/hosts"
 	"github.com/els0r/goProbe/pkg/query"
 	"github.com/els0r/goProbe/pkg/version"
@@ -118,23 +117,6 @@ func initHostListResolver() (hosts.Resolver, error) {
 		return hosts.NewStringResolver(true), nil
 	default:
 		err := fmt.Errorf("hosts resolver type %q not supported", resolverType)
-		return nil, err
-	}
-}
-
-func initQuerier() (distributed.Querier, error) {
-	querierType := viper.GetString(conf.QuerierType)
-	switch querierType {
-	case string(distributed.APIClientQuerierType):
-		querier, err := distributed.NewAPIClientQuerier(
-			viper.GetString(conf.QuerierConfig),
-		)
-		if err != nil {
-			return nil, fmt.Errorf("failed to instantiate API client querier: %w", err)
-		}
-		return querier.SetMaxConcurrent(viper.GetInt(conf.QuerierMaxConcurrent)), nil
-	default:
-		err := fmt.Errorf("querier type %q not supported", querierType)
 		return nil, err
 	}
 }
