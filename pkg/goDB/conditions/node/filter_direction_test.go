@@ -13,7 +13,7 @@ var isDirectionConditionTest = []struct {
 	node        conditionNode
 	expectedErr error
 }{
-	{node: conditionNode{attribute: "dir", comparator: "=", value: "in"}, expectedErr: errMultipleDirectionFilterConditions},
+	{node: conditionNode{attribute: "dir", comparator: "=", value: "in"}, expectedErr: errMisplacedDirectionFilterCondition},
 	{node: conditionNode{attribute: "sip", comparator: "=", value: "127.0.0.1"}, expectedErr: nil},
 }
 
@@ -86,10 +86,19 @@ var splitOffDirectionFilterTest = []struct {
 	{node: conditionNode{attribute: "sip", comparator: "=", value: "127.0.0.1"},
 		expectedCondition: conditionNode{attribute: "sip", comparator: "=", value: "127.0.0.1"},
 		expectedFilter:    nil, expectedErr: nil},
+	// disjunctive condition with traffic filter => invalid
+	{node: orNode{left: conditionNode{attribute: "sip", comparator: "=", value: "127.0.0.1"}, right: conditionNode{attribute: "dir", comparator: "=", value: "in"}},
+		expectedCondition: nil,
+		expectedFilter:    nil, expectedErr: errMisplacedDirectionFilterCondition},
 	// conjunctive condition without any traffic filter => valid
 	{node: andNode{left: conditionNode{attribute: "sip", comparator: "=", value: "127.0.0.1"}, right: conditionNode{attribute: "sip", comparator: "=", value: "127.0.0.1"}},
 		expectedCondition: andNode{left: conditionNode{attribute: "sip", comparator: "=", value: "127.0.0.1"}, right: conditionNode{attribute: "sip", comparator: "=", value: "127.0.0.1"}},
 		expectedFilter:    nil, expectedErr: nil},
+	// conjunctive condition with misplaced traffic filter => invalid
+	{node: andNode{left: conditionNode{attribute: "sip", comparator: "=", value: "127.0.0.1"},
+		right: orNode{left: conditionNode{attribute: "sip", comparator: "=", value: "127.0.0.1"}, right: conditionNode{attribute: "dir", comparator: "=", value: "in"}}},
+		expectedCondition: nil,
+		expectedFilter:    nil, expectedErr: errMisplacedDirectionFilterCondition},
 }
 
 func TestSplitOffDirectionFilter(t *testing.T) {

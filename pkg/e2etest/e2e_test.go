@@ -306,7 +306,6 @@ func testE2E(t *testing.T, valFilterNode *node.ValFilterNode, datasets ...[]byte
 	if dir != "" {
 		tmp[3] = fmt.Sprintf("dir = %s", dir)
 	}
-
 	copy(tmp[4:], queryArgs[2:])
 	queryArgs = tmp
 	runGoQuery(t, resGoQuery, queryArgs)

@@ -25,6 +25,11 @@ const (
 // filters
 var errMultipleDirectionFilterConditions = errors.New("multiple direction filters specified")
 
+// errMisplacedDirectionFilterCondition indicates that
+// the specified condition contains a misplaced traffic direction
+// filter
+var errMisplacedDirectionFilterCondition = errors.New("misplaced direction filter")
+
 var unsupportedDirectionFilterComparatorStr = "unsupported direction filter comparator: %s"
 var unsupportedDirectionFilterStr = "unsupported direction filter: %s (use one of 'in', 'out', 'uni', 'bi')"
 
@@ -36,7 +41,7 @@ var unsupportedDirectionFilterStr = "unsupported direction filter: %s (use one o
 // top level represents a conjunction (AND).
 func isDirectionCondition(node conditionNode) (Node, error) {
 	if node.attribute == FilterKeywordDirection {
-		return nil, errMultipleDirectionFilterConditions
+		return nil, errMisplacedDirectionFilterCondition
 	}
 	return node, nil
 }
@@ -109,6 +114,10 @@ func splitOffDirectionFilter(node Node) (Node, ValFilterNode, error) {
 		// none of the two child nodes represent direction conditions
 		// => nothing to split off
 		if filters[0] == nil && filters[1] == nil {
+			_, err := node.transform(isDirectionCondition)
+			if err != nil {
+				return nil, valFilterNode, err
+			}
 			return node, valFilterNode, nil
 		}
 		// both of the two child nodes represent direction conditions
@@ -128,7 +137,7 @@ func splitOffDirectionFilter(node Node) (Node, ValFilterNode, error) {
 		n := nodes[i]
 		_, err := n.transform(isDirectionCondition)
 		if err != nil {
-			return nil, valFilterNode, err
+			return nil, valFilterNode, errMultipleDirectionFilterConditions
 		}
 		valFilterNode.FilterType = FilterKeywordDirection
 		valFilterNode.conditionNode = nodes[1-i].(conditionNode)
@@ -136,6 +145,13 @@ func splitOffDirectionFilter(node Node) (Node, ValFilterNode, error) {
 		valFilterNode.ValFilter = filters[1-i]
 		return n, valFilterNode, nil
 	default:
+		if node == nil {
+			return node, valFilterNode, nil
+		}
+		_, err := node.transform(isDirectionCondition)
+		if err != nil {
+			return nil, valFilterNode, err
+		}
 		return node, valFilterNode, nil
 	}
 }
