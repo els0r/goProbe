@@ -35,9 +35,14 @@ func main() {
 	}
 }
 
+type proto struct {
+	name string
+	id   int
+}
+
 // readProtocols loads contents of /etc/protocols into protocols map
 // for quick access.
-func readProtocols() (protoList []string, err error) {
+func readProtocols() (protoList []proto, err error) {
 	file, err := os.Open(protocolsFile)
 	if err != nil {
 		return nil, err
@@ -51,7 +56,7 @@ func readProtocols() (protoList []string, err error) {
 	// auxiliary to filter out duplicates
 	var seen = make(map[string]struct{})
 
-	protoList = make([]string, 256)
+	protoList = make([]proto, 256)
 	fileScanner := bufio.NewScanner(file)
 	for fileScanner.Scan() {
 
@@ -70,19 +75,30 @@ func readProtocols() (protoList []string, err error) {
 			continue
 		}
 
-		_, exists := seen[fields[2]]
+		// discard any id that's greater than 255. It would be invalid during the
+		// cast to uint8 anyways
+		if protoID > 255 {
+			continue
+		}
+
+		p := proto{
+			name: fields[2],
+			id:   int(protoID),
+		}
+
+		_, exists := seen[p.name]
 		if !exists {
-			protoList[protoID] = fields[2]
-			seen[fields[2]] = struct{}{}
+			protoList = append(protoList, p)
+			seen[p.name] = struct{}{}
 		}
 	}
 
-	protoList[255] = "UNKNOWN"
+	protoList = append(protoList, proto{name: "UNKNOWN", id: 255})
 
 	return
 }
 
-func generateOutput(protoList []string) error {
+func generateOutput(protoList []proto) error {
 
 	buffer := bytes.NewBuffer(nil)
 
@@ -97,9 +113,14 @@ func generateOutput(protoList []string) error {
 // IPProtocols stores the IP protocol mappings to friendly name
 var IPProtocols = map[int]string{`)
 
-	for protoID, protoName := range protoList {
-		if protoName != "" {
-			fmt.Fprintf(buffer, "\t%d:\t\t\"%s\",\n", protoID, protoName)
+	// sort by id
+	sort.SliceStable(protoList, func(i, j int) bool {
+		return protoList[i].id < protoList[j].id
+	})
+
+	for _, proto := range protoList {
+		if proto.name != "" {
+			fmt.Fprintf(buffer, "\t%d:\t\t\"%s\",\n", proto.id, proto.name)
 		}
 	}
 
@@ -110,27 +131,13 @@ var IPProtocolIDs = map[string]int{`)
 
 	// sort by name now
 	sort.SliceStable(protoList, func(i, j int) bool {
-		return protoList[i] < protoList[j]
+		return protoList[i].name < protoList[j].name
 	})
 
-	type proto struct {
-		name string
-		id   int
-	}
-
-	var protos = make([]proto, 0, len(protoList))
-	for protoID, protoName := range protoList {
-		if protoName != "" {
-			protos = append(protos, proto{name: strings.ToLower(protoName), id: protoID})
+	for _, proto := range protoList {
+		if proto.name != "" {
+			fmt.Fprintf(buffer, "\t\"%s\":\t\t%d,\n", strings.ToLower(proto.name), proto.id)
 		}
-	}
-
-	sort.SliceStable(protos, func(i, j int) bool {
-		return protos[i].name < protos[j].name
-	})
-
-	for _, proto := range protos {
-		fmt.Fprintf(buffer, "\t\"%s\":\t\t%d,\n", proto.name, proto.id)
 	}
 
 	fmt.Fprintln(buffer, `}`)
