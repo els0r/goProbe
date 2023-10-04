@@ -131,7 +131,7 @@ var IPProtocolIDs = map[string]int{`)
 
 	// sort by name now
 	sort.SliceStable(protoList, func(i, j int) bool {
-		return protoList[i].name < protoList[j].name
+		return strings.ToLower(protoList[i].name) < strings.ToLower(protoList[j].name)
 	})
 
 	for _, proto := range protoList {
