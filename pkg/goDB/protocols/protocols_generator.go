@@ -12,6 +12,7 @@ import (
 	"go/format"
 	"os"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -47,6 +48,9 @@ func readProtocols() (protoList []string, err error) {
 		}
 	}()
 
+	// auxiliary to filter out duplicates
+	var seen = make(map[string]struct{})
+
 	protoList = make([]string, 256)
 	fileScanner := bufio.NewScanner(file)
 	for fileScanner.Scan() {
@@ -66,7 +70,11 @@ func readProtocols() (protoList []string, err error) {
 			continue
 		}
 
-		protoList[protoID] = fields[2]
+		_, exists := seen[fields[2]]
+		if !exists {
+			protoList[protoID] = fields[2]
+			seen[fields[2]] = struct{}{}
+		}
 	}
 
 	protoList[255] = "UNKNOWN"
@@ -100,10 +108,29 @@ var IPProtocols = map[int]string{`)
 // IPProtocolIDs is the reverse mapping from friendly name to protocol number
 var IPProtocolIDs = map[string]int{`)
 
+	// sort by name now
+	sort.SliceStable(protoList, func(i, j int) bool {
+		return protoList[i] < protoList[j]
+	})
+
+	type proto struct {
+		name string
+		id   int
+	}
+
+	var protos = make([]proto, 0, len(protoList))
 	for protoID, protoName := range protoList {
 		if protoName != "" {
-			fmt.Fprintf(buffer, "\t\"%s\":\t\t%d,\n", strings.ToLower(protoName), protoID)
+			protos = append(protos, proto{name: strings.ToLower(protoName), id: protoID})
 		}
+	}
+
+	sort.SliceStable(protos, func(i, j int) bool {
+		return protos[i].name < protos[j].name
+	})
+
+	for _, proto := range protos {
+		fmt.Fprintf(buffer, "\t\"%s\":\t\t%d,\n", proto.name, proto.id)
 	}
 
 	fmt.Fprintln(buffer, `}`)
