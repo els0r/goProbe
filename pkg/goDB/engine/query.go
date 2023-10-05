@@ -236,10 +236,8 @@ func (qr *QueryRunner) RunStatement(ctx context.Context, stmt *query.Statement) 
 	}
 	var totals hashmap.Val
 	for iface, aggMap := range agg.aggregatedMaps {
-		var i *hashmap.MetaIter
-		if metaIterOption == nil {
-			i = aggMap.Iter()
-		} else {
+		var i = aggMap.Iter()
+		if metaIterOption != nil {
 			i = aggMap.Iter(metaIterOption)
 		}
 		for i.Next() {
