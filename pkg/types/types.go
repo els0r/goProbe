@@ -99,6 +99,13 @@ const (
 	KeyWidthIPv6 = sipDipIPv6Width + nonIPKeysWidth
 )
 
+// Filter-specific keywords
+const (
+	FilterKeywordDirection        = "dir"
+	FilterKeywordDirectionSugared = "direction"
+	FilterKeywordNone             = "none"
+)
+
 // AnySelector denotes any / all (interfaces, hosts, ...)
 const AnySelector = "any"
 

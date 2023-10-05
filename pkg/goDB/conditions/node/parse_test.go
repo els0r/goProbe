@@ -42,6 +42,15 @@ var parseConditionalTests = []struct {
 	{[]string{"sip", "=", "192.168.1.1", "|", "sip", "=", "192.168.1.2", "|", "sip", "=", "192.168.1.3", "|", "sip", "=", "192.168.1.4"},
 		"(sip = 192.168.1.1 | (sip = 192.168.1.2 | (sip = 192.168.1.3 | sip = 192.168.1.4)))",
 		true},
+	{[]string{"dir", "=", "in"},
+		"dir = in",
+		true},
+	{[]string{"direction", "=", "in"},
+		"direction = in",
+		true},
+	{[]string{"directio", "=", "in"},
+		"direction = in",
+		false},
 }
 
 func TestParseConditional(t *testing.T) {

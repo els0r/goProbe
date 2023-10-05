@@ -114,13 +114,13 @@ var queryConditionalStringTests = []struct {
 	expected        string
 }{
 	{nil, nil, ""},
-	{nil, &ValFilterNode{FilterType: FilterKeywordNone}, ""},
+	{nil, &ValFilterNode{FilterType: types.FilterKeywordNone}, ""},
 	{conditionNode{attribute: "sip", comparator: "=", value: "127.0.0.1"}, nil, "sip = 127.0.0.1"},
 	{conditionNode{attribute: "sip", comparator: "=", value: "127.0.0.1"},
-		&ValFilterNode{conditionNode: conditionNode{attribute: FilterKeywordDirection, comparator: "=", value: "in"}, FilterType: FilterKeywordDirection, ValFilter: types.Counters.IsOnlyInbound, LeftNode: true},
+		&ValFilterNode{conditionNode: conditionNode{attribute: types.FilterKeywordDirection, comparator: "=", value: "in"}, FilterType: types.FilterKeywordDirection, ValFilter: types.Counters.IsOnlyInbound, LeftNode: true},
 		"(dir = in & sip = 127.0.0.1)"},
 	{conditionNode{attribute: "sip", comparator: "=", value: "127.0.0.1"},
-		&ValFilterNode{conditionNode: conditionNode{attribute: FilterKeywordDirection, comparator: "=", value: "in"}, FilterType: FilterKeywordDirection, ValFilter: types.Counters.IsOnlyInbound, LeftNode: false},
+		&ValFilterNode{conditionNode: conditionNode{attribute: types.FilterKeywordDirection, comparator: "=", value: "in"}, FilterType: types.FilterKeywordDirection, ValFilter: types.Counters.IsOnlyInbound, LeftNode: false},
 		"(sip = 127.0.0.1 & dir = in)"},
 }
 

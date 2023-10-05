@@ -242,7 +242,7 @@ type ValFilterNode struct {
 // "Conditions" output field based on the query conditions and the query filter
 func QueryConditionalString(conditionalNode Node, filterNode Node) string {
 	valFilterNode, ok := filterNode.(*ValFilterNode)
-	if !ok || valFilterNode.FilterType == FilterKeywordNone {
+	if !ok || valFilterNode.FilterType == types.FilterKeywordNone {
 		if conditionalNode == nil {
 			return ""
 		}

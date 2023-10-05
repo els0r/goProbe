@@ -7,31 +7,34 @@ import (
 	"github.com/els0r/goProbe/pkg/types/hashmap"
 )
 
-const FilterKeywordDirection = "dir"
-const FilterKeywordNone = "none"
-
 // FilterTypeDirection denotes filters wrt. directionality of traffic
 type FilterTypeDirection string
 
 const (
-	FilterTypeDirectionIn  FilterTypeDirection = "in"
-	FilterTypeDirectionOut                     = "out"
-	FilterTypeDirectionUni                     = "uni"
-	FilterTypeDirectionBi                      = "bi"
+	filterTypeDirectionIn         FilterTypeDirection = "in"
+	filterTypeDirectionInSugared                      = "inbound"
+	filterTypeDirectionOut                            = "out"
+	filterTypeDirectionOutSugared                     = "outbound"
+	filterTypeDirectionUni                            = "uni"
+	filterTypeDirectionUniSugared                     = "unidirectional"
+	filterTypeDirectionBi                             = "bi"
+	filterTypeDirectionBiSugared                      = "bidirectional"
 )
 
-// errMultipleDirectionFilterConditions indicates that
-// the specified condition contains too many traffic direction
-// filters
-var errMultipleDirectionFilterConditions = errors.New("multiple direction filters specified")
+var (
+	// errMultipleDirectionFilterConditions indicates that
+	// the specified condition contains too many traffic direction
+	// filters
+	errMultipleDirectionFilterConditions = errors.New("multiple direction filters specified")
 
-// errMisplacedDirectionFilterCondition indicates that
-// the specified condition contains a misplaced traffic direction
-// filter
-var errMisplacedDirectionFilterCondition = errors.New("misplaced direction filter")
+	// errMisplacedDirectionFilterCondition indicates that
+	// the specified condition contains a misplaced traffic direction
+	// filter
+	errMisplacedDirectionFilterCondition = errors.New("misplaced direction filter")
 
-var unsupportedDirectionFilterComparatorStr = "unsupported direction filter comparator: %s"
-var unsupportedDirectionFilterStr = "unsupported direction filter: %s (use one of 'in', 'out', 'uni', 'bi')"
+	unsupportedDirectionFilterComparatorStr = "unsupported direction filter comparator: %s"
+	unsupportedDirectionFilterStr           = "unsupported direction filter: %s (use one of 'in', 'out', 'uni', 'bi')"
+)
 
 // isDirectionCondition returns an error if node represents a
 // direction filter condition, and the node itself otherwise.
@@ -40,7 +43,7 @@ var unsupportedDirectionFilterStr = "unsupported direction filter: %s (use one o
 // top level of the node or the second level in case the
 // top level represents a conjunction (AND).
 func isDirectionCondition(node conditionNode) (Node, error) {
-	if node.attribute == FilterKeywordDirection {
+	if node.attribute == types.FilterKeywordDirection {
 		return nil, errMisplacedDirectionFilterCondition
 	}
 	return node, nil
@@ -53,7 +56,7 @@ func isDirectionCondition(node conditionNode) (Node, error) {
 func extractDirectionFilter(node Node) (hashmap.ValFilter, error) {
 	switch node := node.(type) {
 	case conditionNode:
-		if node.attribute != FilterKeywordDirection {
+		if node.attribute != types.FilterKeywordDirection && node.attribute != types.FilterKeywordDirectionSugared {
 			return nil, nil
 		}
 		if node.comparator != "=" {
@@ -61,13 +64,13 @@ func extractDirectionFilter(node Node) (hashmap.ValFilter, error) {
 		}
 		var filter hashmap.ValFilter
 		switch FilterTypeDirection(node.value) {
-		case FilterTypeDirectionIn:
+		case filterTypeDirectionIn, filterTypeDirectionInSugared:
 			filter = types.Counters.IsOnlyInbound
-		case FilterTypeDirectionOut:
+		case filterTypeDirectionOut, filterTypeDirectionOutSugared:
 			filter = types.Counters.IsOnlyOutbound
-		case FilterTypeDirectionUni:
+		case filterTypeDirectionUni, filterTypeDirectionUniSugared:
 			filter = types.Counters.IsUnidirectional
-		case FilterTypeDirectionBi:
+		case filterTypeDirectionBi, filterTypeDirectionBiSugared:
 			filter = types.Counters.IsBidirectional
 		default:
 			return nil, fmt.Errorf(unsupportedDirectionFilterStr, node.value)
@@ -85,7 +88,7 @@ func extractDirectionFilter(node Node) (hashmap.ValFilter, error) {
 // If there is no direction filter included in node, it returns the node
 // and a ValFilterNode with FilterType FilterKeywordNone.
 func splitOffDirectionFilter(node Node) (Node, ValFilterNode, error) {
-	valFilterNode := ValFilterNode{FilterType: FilterKeywordNone}
+	valFilterNode := ValFilterNode{FilterType: types.FilterKeywordNone}
 	switch node := node.(type) {
 	case conditionNode:
 		filter, err := extractDirectionFilter(node)
@@ -95,7 +98,7 @@ func splitOffDirectionFilter(node Node) (Node, ValFilterNode, error) {
 		if filter == nil {
 			return node, valFilterNode, nil
 		}
-		valFilterNode.FilterType = FilterKeywordDirection
+		valFilterNode.FilterType = types.FilterKeywordDirection
 		valFilterNode.conditionNode = node
 		valFilterNode.LeftNode = false
 		valFilterNode.ValFilter = filter
@@ -139,7 +142,7 @@ func splitOffDirectionFilter(node Node) (Node, ValFilterNode, error) {
 		if err != nil {
 			return nil, valFilterNode, errMultipleDirectionFilterConditions
 		}
-		valFilterNode.FilterType = FilterKeywordDirection
+		valFilterNode.FilterType = types.FilterKeywordDirection
 		valFilterNode.conditionNode = nodes[1-i].(conditionNode)
 		valFilterNode.LeftNode = i == 1
 		valFilterNode.ValFilter = filters[1-i]

@@ -218,13 +218,13 @@ ATTRIBUTES:
 
   Traffic Direction:
 
-    dir        Direction filter to match against aggregated results
+    direction (or dir)   Direction filter to match against aggregated results
 
     USAGE:
-      dir = in:  incoming but no outgoing packets
-      dir = out: outgoing but no incoming packets
-      dir = uni: either only incoming or only outgoing packets
-      dir = bi:  both incoming and outgoing packets
+      dir = {in|inbound}:         incoming but no outgoing packets
+      dir = {out|outbound}:       outgoing but no incoming packets
+      dir = {uni|unidirectional}: either only incoming or only outgoing packets
+      dir = {bi|bidirectional}:   both incoming and outgoing packets
 
     NOTE:
       dir may only appear as (1) a top-level condition,
@@ -233,7 +233,7 @@ ATTRIBUTES:
     EXAMPLE:
       dir = uni
       dir = in & sip = 192.168.1.34
-      dport = 22 & dir = out
+      (dport = 22 & sip = 192.168.1.34) & dir = out
 
 COMPARATIVE OPERATORS:
 

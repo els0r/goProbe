@@ -64,14 +64,25 @@ var splitOffDirectionFilterTest = []struct {
 	// only traffic filtering condition
 	{node: conditionNode{attribute: "dir", comparator: "=", value: "in"}, expectedCondition: nil,
 		expectedFilter: types.Counters.IsOnlyInbound, expectedErr: errEmptyConditional},
+	{node: conditionNode{attribute: "direction", comparator: "=", value: "inbound"}, expectedCondition: nil,
+		expectedFilter: types.Counters.IsOnlyInbound, expectedErr: errEmptyConditional},
 	// valid filter within first term of top-level conjunction
 	{node: andNode{left: conditionNode{attribute: "dir", comparator: "=", value: "out"}, right: conditionNode{attribute: "sip", comparator: "=", value: "127.0.0.1"}},
+		expectedCondition: conditionNode{attribute: "sip", comparator: "=", value: "127.0.0.1"},
+		expectedFilter:    types.Counters.IsOnlyOutbound, expectedErr: nil},
+	{node: andNode{left: conditionNode{attribute: "direction", comparator: "=", value: "outbound"}, right: conditionNode{attribute: "sip", comparator: "=", value: "127.0.0.1"}},
 		expectedCondition: conditionNode{attribute: "sip", comparator: "=", value: "127.0.0.1"},
 		expectedFilter:    types.Counters.IsOnlyOutbound, expectedErr: nil},
 	// valid filter within second term of top-level conjunction
 	{node: andNode{left: conditionNode{attribute: "sip", comparator: "=", value: "127.0.0.1"}, right: conditionNode{attribute: "dir", comparator: "=", value: "uni"}},
 		expectedCondition: conditionNode{attribute: "sip", comparator: "=", value: "127.0.0.1"},
 		expectedFilter:    types.Counters.IsUnidirectional, expectedErr: nil},
+	{node: andNode{left: conditionNode{attribute: "sip", comparator: "=", value: "127.0.0.1"}, right: conditionNode{attribute: "dir", comparator: "=", value: "unidirectional"}},
+		expectedCondition: conditionNode{attribute: "sip", comparator: "=", value: "127.0.0.1"},
+		expectedFilter:    types.Counters.IsUnidirectional, expectedErr: nil},
+	{node: andNode{left: conditionNode{attribute: "sip", comparator: "=", value: "127.0.0.1"}, right: conditionNode{attribute: "dir", comparator: "=", value: "bidirectional"}},
+		expectedCondition: conditionNode{attribute: "sip", comparator: "=", value: "127.0.0.1"},
+		expectedFilter:    types.Counters.IsBidirectional, expectedErr: nil},
 	// invalid filter (2 traffic filters provided)
 	{node: andNode{left: conditionNode{attribute: "dir", comparator: "=", value: "uni"},
 		right: conditionNode{attribute: "dir", comparator: "=", value: "bi"}},
