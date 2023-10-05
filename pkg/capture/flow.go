@@ -36,11 +36,17 @@ const (
 // FlowLog stores flows. It is NOT threadsafe.
 type FlowLog struct {
 	flowMap map[string]*Flow
+
+	// for summaries. Will only be updated on aggregation to
+	// not duplicate the computation inside the flow update
+	totals types.Counters
 }
 
 // NewFlowLog creates a new flow log for storing flows.
 func NewFlowLog() *FlowLog {
-	return &FlowLog{make(map[string]*Flow)}
+	return &FlowLog{
+		flowMap: make(map[string]*Flow),
+	}
 }
 
 // MarshalJSON implements the jsoniter.Marshaler interface
@@ -215,6 +221,9 @@ func (f *FlowLog) Aggregate() (agg *hashmap.AggFlowMap) {
 
 	agg = hashmap.NewAggFlowMap()
 
+	// for recomputing the most up to date running sum of bytes and packets
+	f.totals.Reset()
+
 	// Reusable key conversion buffers
 	keyBufV4, keyBufV6 := types.NewEmptyV4Key(), types.NewEmptyV6Key()
 	for _, v := range f.flowMap {
@@ -230,6 +239,12 @@ func (f *FlowLog) Aggregate() (agg *hashmap.AggFlowMap) {
 				keyBufV6.PutAllV6(v.epHash[0:16], v.epHash[16:32], v.epHash[32:34], v.epHash[36])
 				agg.SetOrUpdate(keyBufV6, v.isIPv4, v.bytesRcvd, v.bytesSent, v.packetsRcvd, v.packetsSent)
 			}
+
+			// update totals
+			f.totals.BytesRcvd += v.bytesRcvd
+			f.totals.BytesSent += v.bytesSent
+			f.totals.PacketsRcvd += v.packetsRcvd
+			f.totals.PacketsSent += v.packetsSent
 		}
 	}
 
@@ -240,6 +255,9 @@ func (f *FlowLog) transferAndAggregate() (agg *hashmap.AggFlowMap) {
 
 	// Initialize aggregate flow map / result
 	agg = hashmap.NewAggFlowMap()
+
+	// for recomputing the most up to date running sum of bytes and packets
+	f.totals.Reset()
 
 	// Create reusable key conversion buffers
 	keyBufV4, keyBufV6 := types.NewEmptyV4Key(), types.NewEmptyV6Key()
@@ -271,6 +289,12 @@ func (f *FlowLog) transferAndAggregate() (agg *hashmap.AggFlowMap) {
 		} else {
 			delete(f.flowMap, k)
 		}
+
+		// update totals
+		f.totals.BytesRcvd += v.bytesRcvd
+		f.totals.BytesSent += v.bytesSent
+		f.totals.PacketsRcvd += v.packetsRcvd
+		f.totals.PacketsSent += v.packetsSent
 	}
 
 	return

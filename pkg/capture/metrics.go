@@ -10,24 +10,54 @@ const (
 	captureManagerSubsystem = "capture_manager"
 )
 
-var packetsProcessed = prometheus.NewCounter(prometheus.CounterOpts{
+var packetsProcessed = prometheus.NewCounterVec(prometheus.CounterOpts{
 	Namespace: config.ServiceName,
 	Subsystem: captureSubsystem,
 	Name:      "packets_processed_total",
-	Help:      "Number of packets processed, aggregated over all interfaces",
-})
-var packetsDropped = prometheus.NewCounter(prometheus.CounterOpts{
+	Help:      "Number of packets processed",
+},
+	[]string{"iface"},
+)
+var bytesReceived = prometheus.NewCounterVec(prometheus.CounterOpts{
+	Namespace: config.ServiceName,
+	Subsystem: captureSubsystem,
+	Name:      "bytes_received_total",
+	Help:      "Number of bytes received",
+},
+	[]string{"iface"},
+)
+var bytesSent = prometheus.NewCounterVec(prometheus.CounterOpts{
+	Namespace: config.ServiceName,
+	Subsystem: captureSubsystem,
+	Name:      "bytes_received_total",
+	Help:      "Number of bytes send",
+},
+	[]string{"iface"},
+)
+var numFlows = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+	Namespace: config.ServiceName,
+	Subsystem: captureSubsystem,
+	Name:      "flows_total",
+	Help:      "Number of flows present in the flow map",
+},
+	[]string{"iface"},
+)
+var packetsDropped = prometheus.NewCounterVec(prometheus.CounterOpts{
 	Namespace: config.ServiceName,
 	Subsystem: captureSubsystem,
 	Name:      "packets_dropped_total",
-	Help:      "Number of packets dropped, aggregated over all interfaces",
-})
-var captureErrors = prometheus.NewCounter(prometheus.CounterOpts{
+	Help:      "Number of packets dropped",
+},
+	[]string{"iface"},
+)
+var captureErrors = prometheus.NewCounterVec(prometheus.CounterOpts{
 	Namespace: config.ServiceName,
 	Subsystem: captureSubsystem,
 	Name:      "errors_total",
-	Help:      "Number of errors encountered during packet capture, aggregated over all interfaces",
-})
+	Help:      "Number of errors encountered during packet capture",
+},
+	[]string{"iface"},
+)
 
 var interfacesCapturing = prometheus.NewGauge(prometheus.GaugeOpts{
 	Namespace: config.ServiceName,
@@ -49,6 +79,8 @@ func init() {
 	prometheus.MustRegister(
 		packetsProcessed,
 		packetsDropped,
+		bytesReceived,
+		bytesSent,
 		captureErrors,
 		interfacesCapturing,
 		rotationDuration,
