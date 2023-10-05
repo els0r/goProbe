@@ -14,8 +14,9 @@ package node
 import (
 	"errors"
 	"fmt"
-	"github.com/els0r/goProbe/pkg/types"
 	"testing"
+
+	"github.com/els0r/goProbe/pkg/types"
 )
 
 var negationNormalFormTests = []struct {

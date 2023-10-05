@@ -5,7 +5,6 @@ package e2etest
 
 import (
 	"context"
-	"github.com/els0r/goProbe/pkg/goDB/conditions/node"
 	"io/fs"
 	"os"
 	"sync"
@@ -16,6 +15,7 @@ import (
 	"github.com/els0r/goProbe/pkg/capture"
 	"github.com/els0r/goProbe/pkg/capture/capturetypes"
 	"github.com/els0r/goProbe/pkg/goDB"
+	"github.com/els0r/goProbe/pkg/goDB/conditions/node"
 	"github.com/els0r/goProbe/pkg/goDB/info"
 	"github.com/els0r/goProbe/pkg/results"
 	"github.com/els0r/goProbe/pkg/types"

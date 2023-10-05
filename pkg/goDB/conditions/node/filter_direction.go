@@ -3,6 +3,7 @@ package node
 import (
 	"errors"
 	"fmt"
+
 	"github.com/els0r/goProbe/pkg/types"
 	"github.com/els0r/goProbe/pkg/types/hashmap"
 )
@@ -51,7 +52,7 @@ func extractDirectionFilter(node Node) (hashmap.ValFilter, error) {
 			return nil, fmt.Errorf(unsupportedDirectionFilterComparatorStr, node.comparator)
 		}
 		var filter hashmap.ValFilter
-		switch types.FilterTypeDirection(node.value) {
+		switch node.value {
 		case types.FilterTypeDirectionIn, types.FilterTypeDirectionInSugared:
 			filter = types.Counters.IsOnlyInbound
 		case types.FilterTypeDirectionOut, types.FilterTypeDirectionOutSugared:
