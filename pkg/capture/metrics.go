@@ -38,7 +38,7 @@ var numFlows = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 	Namespace: config.ServiceName,
 	Subsystem: captureSubsystem,
 	Name:      "flows_total",
-	Help:      "Number of flows present in the flow map",
+	Help:      "Number of flows tracked in the flow map",
 },
 	[]string{"iface"},
 )
@@ -81,6 +81,7 @@ func init() {
 		packetsDropped,
 		bytesReceived,
 		bytesSent,
+		numFlows,
 		captureErrors,
 		interfacesCapturing,
 		rotationDuration,
