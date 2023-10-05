@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -75,7 +76,6 @@ func Execute() {
 // globally accessible variable for other packages
 var (
 	cmdLineParams = &query.Args{}
-	argsLocation  string // for stored queries
 )
 
 func init() {
@@ -247,14 +247,23 @@ func entrypoint(cmd *cobra.Command, args []string) (err error) {
 
 	// check if arguments should be loaded from disk. The cmdLineParams are taken as
 	// the base for this to allow modification of single parameters
-	if viper.GetString(conf.StoredQuery) != "" {
-		argumentsJSON, err := os.ReadFile(filepath.Clean(argsLocation))
-		if err != nil {
-			return fmt.Errorf("failed to read query args from %s: %w", argsLocation, err)
+	argsLocation := viper.GetString(conf.StoredQuery)
+	if argsLocation != "" {
+		var argsReader io.Reader
+
+		if argsLocation == "-" {
+			argsReader = os.Stdin
+		} else {
+			f, err := os.Open(filepath.Clean(argsLocation))
+			if err != nil {
+				return fmt.Errorf("failed to open query args from %s: %w", argsLocation, err)
+			}
+			argsReader = f
 		}
+
 		// unmarshal arguments into the command line parameters
-		if err = jsoniter.Unmarshal(argumentsJSON, &queryArgs); err != nil {
-			return fmt.Errorf("failed to unmarshal JSON query args %s: %w", string(argumentsJSON), err)
+		if err = jsoniter.NewDecoder(argsReader).Decode(&queryArgs); err != nil {
+			return fmt.Errorf("failed to unmarshal JSON query args: %w", err)
 		}
 	} else {
 		// check that query type or other subcommands were provided
