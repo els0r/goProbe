@@ -17,7 +17,7 @@ interfaces:
   eth0:
     # promisc runs capturing in promiscuous mode in order to also capture
     # VLAN traffic
-    promisc: true
+    promisc: false
     # ring_buffer configures the ring buffer that the kernel has available
     # to populate with packet metadata. The sizing of the ring_buffer has
     # a direct effect on goprobe's base memory consumption
@@ -44,7 +44,7 @@ interfaces:
 api:
   # addr defines what the API server binds to. This may also be a unix
   # socket.
-  addr: "unix:/var/run/goprobe"
+  addr: 0.0.0.0:8145
   # profiling is enabled by default. It will only be run if one of the
   # /debug/pprof endpoints is accessed and otherwise will not have an impact
   # on performance.
@@ -56,9 +56,9 @@ api:
 # logging sets the logging parameters for goprobe
 logging:
   # level info is set not to spam the logs with writeout information for interfaces
-  level: info
+  level: debug
   # encoding logfmt is chosen over json for readability reasons
   encoding: logfmt
   # destination describes the file goprobe logs to. If left empty, goprobe will log
   # to stdout by default
-  destination: /var/logs/goprobe.log
+  destination: stdout

@@ -102,7 +102,8 @@ func ParsePacket(ipLayer capture.IPLayer) (epHash capturetypes.EPHash, isIPv4 bo
 		copy(epHash[0:4], ipLayer[12:16])
 		copy(epHash[16:20], ipLayer[16:20])
 
-		if protocol == capturetypes.TCP || protocol == capturetypes.UDP {
+		switch protocol {
+		case capturetypes.TCP, capturetypes.UDP:
 
 			dport := ipLayer[ipv4.HeaderLen+2 : ipv4.HeaderLen+4]
 			sport := ipLayer[ipv4.HeaderLen : ipv4.HeaderLen+2]
@@ -125,10 +126,9 @@ func ParsePacket(ipLayer capture.IPLayer) (epHash capturetypes.EPHash, isIPv4 bo
 				}
 				auxInfo = ipLayer[ipv4.HeaderLen+13] // store TCP flags
 			}
-		} else if protocol == capturetypes.ICMP {
+		case capturetypes.ICMP:
 			auxInfo = ipLayer[ipv4.HeaderLen] // store ICMP type
 		}
-
 	} else if ipLayerType == ipLayerTypeV6 {
 
 		_ = ipLayer[ipv6.HeaderLen] // bounds check hint to compiler
@@ -139,7 +139,8 @@ func ParsePacket(ipLayer capture.IPLayer) (epHash capturetypes.EPHash, isIPv4 bo
 		copy(epHash[0:16], ipLayer[8:24])
 		copy(epHash[16:32], ipLayer[24:40])
 
-		if protocol == capturetypes.TCP || protocol == capturetypes.UDP {
+		switch protocol {
+		case capturetypes.TCP, capturetypes.UDP:
 
 			dport := ipLayer[ipv6.HeaderLen+2 : ipv6.HeaderLen+4]
 			sport := ipLayer[ipv6.HeaderLen : ipv6.HeaderLen+2]
@@ -162,10 +163,9 @@ func ParsePacket(ipLayer capture.IPLayer) (epHash capturetypes.EPHash, isIPv4 bo
 				}
 				auxInfo = ipLayer[ipv6.HeaderLen+13] // store TCP flags
 			}
-		} else if protocol == capturetypes.ICMPv6 {
+		case capturetypes.ICMPv6:
 			auxInfo = ipLayer[ipv6.HeaderLen] // store ICMP type
 		}
-
 	} else {
 		errno = capturetypes.ErrnoInvalidIPHeader
 		return
