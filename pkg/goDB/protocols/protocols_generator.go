@@ -53,9 +53,6 @@ func readProtocols() (protoList []proto, err error) {
 		}
 	}()
 
-	// auxiliary to filter out duplicates
-	var seen = make(map[string]struct{})
-
 	protoList = make([]proto, 256)
 	fileScanner := bufio.NewScanner(file)
 	for fileScanner.Scan() {
@@ -75,22 +72,18 @@ func readProtocols() (protoList []proto, err error) {
 			continue
 		}
 
-		// discard any id that's greater than 255. It would be invalid during the
-		// cast to uint8 anyways
-		if protoID > 255 {
+		// discard any id that's greater than 252
+		// /etc/protocols has reserved experimental protocols for 253 and 254
+		//
+		// use          253 Use          # for experimentation and testing                  [RFC3692]
+		// use          254 Use          # for experimentation and testing                  [RFC3692]
+		if protoID > 252 {
 			continue
 		}
 
-		p := proto{
-			name: fields[2],
-			id:   int(protoID),
-		}
-
-		_, exists := seen[p.name]
-		if !exists {
-			protoList = append(protoList, p)
-			seen[p.name] = struct{}{}
-		}
+		protoList = append(protoList,
+			proto{name: fields[2], id: int(protoID)},
+		)
 	}
 
 	protoList = append(protoList, proto{name: "UNKNOWN", id: 255})
