@@ -10,7 +10,7 @@ const (
 	captureManagerSubsystem = "capture_manager"
 )
 
-var packetsProcessed = prometheus.NewCounterVec(prometheus.CounterOpts{
+var promPacketsProcessed = prometheus.NewCounterVec(prometheus.CounterOpts{
 	Namespace: config.ServiceName,
 	Subsystem: captureSubsystem,
 	Name:      "packets_processed_total",
@@ -18,7 +18,7 @@ var packetsProcessed = prometheus.NewCounterVec(prometheus.CounterOpts{
 },
 	[]string{"iface"},
 )
-var bytesReceived = prometheus.NewCounterVec(prometheus.CounterOpts{
+var promBytesReceived = prometheus.NewCounterVec(prometheus.CounterOpts{
 	Namespace: config.ServiceName,
 	Subsystem: captureSubsystem,
 	Name:      "bytes_received_total",
@@ -26,15 +26,15 @@ var bytesReceived = prometheus.NewCounterVec(prometheus.CounterOpts{
 },
 	[]string{"iface"},
 )
-var bytesSent = prometheus.NewCounterVec(prometheus.CounterOpts{
+var promBytesSent = prometheus.NewCounterVec(prometheus.CounterOpts{
 	Namespace: config.ServiceName,
 	Subsystem: captureSubsystem,
-	Name:      "bytes_received_total",
-	Help:      "Number of bytes send",
+	Name:      "bytes_sent_total",
+	Help:      "Number of bytes sent",
 },
 	[]string{"iface"},
 )
-var numFlows = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+var promNumFlows = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 	Namespace: config.ServiceName,
 	Subsystem: captureSubsystem,
 	Name:      "flows_total",
@@ -42,7 +42,7 @@ var numFlows = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 },
 	[]string{"iface"},
 )
-var packetsDropped = prometheus.NewCounterVec(prometheus.CounterOpts{
+var promPacketsDropped = prometheus.NewCounterVec(prometheus.CounterOpts{
 	Namespace: config.ServiceName,
 	Subsystem: captureSubsystem,
 	Name:      "packets_dropped_total",
@@ -50,7 +50,7 @@ var packetsDropped = prometheus.NewCounterVec(prometheus.CounterOpts{
 },
 	[]string{"iface"},
 )
-var captureErrors = prometheus.NewCounterVec(prometheus.CounterOpts{
+var promCaptureErrors = prometheus.NewCounterVec(prometheus.CounterOpts{
 	Namespace: config.ServiceName,
 	Subsystem: captureSubsystem,
 	Name:      "errors_total",
@@ -59,14 +59,15 @@ var captureErrors = prometheus.NewCounterVec(prometheus.CounterOpts{
 	[]string{"iface"},
 )
 
-var interfacesCapturing = prometheus.NewGauge(prometheus.GaugeOpts{
+var promInterfacesCapturing = prometheus.NewGauge(prometheus.GaugeOpts{
 	Namespace: config.ServiceName,
 	Subsystem: captureManagerSubsystem,
 	Name:      "interfaces_capturing_total",
 	Help:      "Number of interfaces that are actively capturing traffic",
 })
 
-var rotationDuration = prometheus.NewHistogram(prometheus.HistogramOpts{
+// not exposing the interface due to the high-cardinality nature of the histogram
+var promRotationDuration = prometheus.NewHistogram(prometheus.HistogramOpts{
 	Namespace: config.ServiceName,
 	Subsystem: captureManagerSubsystem,
 	Name:      "rotation_duration_seconds",
@@ -77,13 +78,13 @@ var rotationDuration = prometheus.NewHistogram(prometheus.HistogramOpts{
 
 func init() {
 	prometheus.MustRegister(
-		packetsProcessed,
-		packetsDropped,
-		bytesReceived,
-		bytesSent,
-		numFlows,
-		captureErrors,
-		interfacesCapturing,
-		rotationDuration,
+		promPacketsProcessed,
+		promPacketsDropped,
+		promBytesReceived,
+		promBytesSent,
+		promNumFlows,
+		promCaptureErrors,
+		promInterfacesCapturing,
+		promRotationDuration,
 	)
 }

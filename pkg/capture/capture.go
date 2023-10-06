@@ -186,9 +186,9 @@ func (c *Capture) rotate(ctx context.Context) (agg *hashmap.AggFlowMap) {
 	logger := logging.FromContext(ctx)
 
 	// write how many flows are currently in the map
-	numFlows.WithLabelValues(c.iface).Set(float64(c.flowLog.Len()))
-
-	if c.flowLog.Len() == 0 {
+	nFlows := c.flowLog.Len()
+	promNumFlows.WithLabelValues(c.iface).Set(float64(nFlows))
+	if nFlows == 0 {
 		logger.Debug("there are currently no flow records available")
 		return
 	}
@@ -196,8 +196,8 @@ func (c *Capture) rotate(ctx context.Context) (agg *hashmap.AggFlowMap) {
 
 	// write volume metrics to prometheus. This needs to happen after aggregation
 	// to make sure that the totals are correct
-	bytesReceived.WithLabelValues(c.iface).Add(float64(c.flowLog.totals.BytesRcvd))
-	bytesSent.WithLabelValues(c.iface).Add(float64(c.flowLog.totals.BytesSent))
+	promtBytesReceived.WithLabelValues(c.iface).Add(float64(c.flowLog.totals.BytesRcvd))
+	promtBytesSent.WithLabelValues(c.iface).Add(float64(c.flowLog.totals.BytesSent))
 
 	return
 }
@@ -368,9 +368,9 @@ func (c *Capture) status() (*capturetypes.CaptureStats, error) {
 	// main packet processing loop. If this counter moves slowly (as in gets
 	// gets an update only every 5 minutes) it's not an issue to understand
 	// processed data volumes across longer time frames
-	packetsProcessed.WithLabelValues(c.iface).Add(float64(c.stats.Processed))
-	packetsDropped.WithLabelValues(c.iface).Add(float64(stats.PacketsDropped))
-	captureErrors.WithLabelValues(c.iface).Add(float64(c.stats.ParsingErrors.Sum()))
+	promPacketsProcessed.WithLabelValues(c.iface).Add(float64(c.stats.Processed))
+	promPacketsDropped.WithLabelValues(c.iface).Add(float64(stats.PacketsDropped))
+	promCaptureErrors.WithLabelValues(c.iface).Add(float64(c.stats.ParsingErrors.Sum()))
 
 	res := capturetypes.CaptureStats{
 		StartedAt:      c.startedAt,
