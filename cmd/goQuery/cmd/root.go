@@ -251,9 +251,8 @@ func entrypoint(cmd *cobra.Command, args []string) (err error) {
 	if argsLocation != "" {
 		var argsReader io.Reader
 
-		if argsLocation == "-" {
-			argsReader = os.Stdin
-		} else {
+		argsReader = os.Stdin
+		if argsLocation != "-" {
 			f, err := os.Open(filepath.Clean(argsLocation))
 			if err != nil {
 				return fmt.Errorf("failed to open query args from %s: %w", argsLocation, err)
