@@ -196,8 +196,8 @@ func (c *Capture) rotate(ctx context.Context) (agg *hashmap.AggFlowMap) {
 
 	// write volume metrics to prometheus. This needs to happen after aggregation
 	// to make sure that the totals are correct
-	promtBytesReceived.WithLabelValues(c.iface).Add(float64(c.flowLog.totals.BytesRcvd))
-	promtBytesSent.WithLabelValues(c.iface).Add(float64(c.flowLog.totals.BytesSent))
+	promBytesReceived.WithLabelValues(c.iface).Add(float64(c.flowLog.totals.BytesRcvd))
+	promBytesSent.WithLabelValues(c.iface).Add(float64(c.flowLog.totals.BytesSent))
 
 	return
 }
