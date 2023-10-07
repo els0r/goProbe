@@ -224,7 +224,7 @@ ATTRIBUTES:
       dir = {in|inbound}:         incoming but no outgoing packets
       dir = {out|outbound}:       outgoing but no incoming packets
       dir = {uni|unidirectional}: either only incoming or only outgoing packets
-      dir = {bi|bidirectional}:   both incoming and outgoing packets
+      dir = {bi|bidirectional}:   both incoming and outgoing packets (no unidir. traffic)
 
     NOTE:
       dir may only appear as (1) a top-level condition,

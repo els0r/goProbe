@@ -7,20 +7,6 @@ import (
 	"github.com/els0r/goProbe/pkg/types/hashmap"
 )
 
-// FilterTypeDirection denotes filters wrt. directionality of traffic
-type FilterTypeDirection string
-
-const (
-	filterTypeDirectionIn         FilterTypeDirection = "in"
-	filterTypeDirectionInSugared                      = "inbound"
-	filterTypeDirectionOut                            = "out"
-	filterTypeDirectionOutSugared                     = "outbound"
-	filterTypeDirectionUni                            = "uni"
-	filterTypeDirectionUniSugared                     = "unidirectional"
-	filterTypeDirectionBi                             = "bi"
-	filterTypeDirectionBiSugared                      = "bidirectional"
-)
-
 var (
 	// errMultipleDirectionFilterConditions indicates that
 	// the specified condition contains too many traffic direction
@@ -63,14 +49,14 @@ func extractDirectionFilter(node Node) (hashmap.ValFilter, error) {
 			return nil, fmt.Errorf(unsupportedDirectionFilterComparatorStr, node.comparator)
 		}
 		var filter hashmap.ValFilter
-		switch FilterTypeDirection(node.value) {
-		case filterTypeDirectionIn, filterTypeDirectionInSugared:
+		switch types.FilterTypeDirection(node.value) {
+		case types.FilterTypeDirectionIn, types.FilterTypeDirectionInSugared:
 			filter = types.Counters.IsOnlyInbound
-		case filterTypeDirectionOut, filterTypeDirectionOutSugared:
+		case types.FilterTypeDirectionOut, types.FilterTypeDirectionOutSugared:
 			filter = types.Counters.IsOnlyOutbound
-		case filterTypeDirectionUni, filterTypeDirectionUniSugared:
+		case types.FilterTypeDirectionUni, types.FilterTypeDirectionUniSugared:
 			filter = types.Counters.IsUnidirectional
-		case filterTypeDirectionBi, filterTypeDirectionBiSugared:
+		case types.FilterTypeDirectionBi, types.FilterTypeDirectionBiSugared:
 			filter = types.Counters.IsBidirectional
 		default:
 			return nil, fmt.Errorf(unsupportedDirectionFilterStr, node.value)
