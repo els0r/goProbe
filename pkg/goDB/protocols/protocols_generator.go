@@ -12,6 +12,7 @@ import (
 	"go/format"
 	"os"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -34,9 +35,14 @@ func main() {
 	}
 }
 
+type proto struct {
+	name string
+	id   int
+}
+
 // readProtocols loads contents of /etc/protocols into protocols map
 // for quick access.
-func readProtocols() (protoList []string, err error) {
+func readProtocols() (protoList []proto, err error) {
 	file, err := os.Open(protocolsFile)
 	if err != nil {
 		return nil, err
@@ -47,7 +53,7 @@ func readProtocols() (protoList []string, err error) {
 		}
 	}()
 
-	protoList = make([]string, 256)
+	protoList = make([]proto, 256)
 	fileScanner := bufio.NewScanner(file)
 	for fileScanner.Scan() {
 
@@ -66,15 +72,26 @@ func readProtocols() (protoList []string, err error) {
 			continue
 		}
 
-		protoList[protoID] = fields[2]
+		// discard any id that's greater than 252
+		// /etc/protocols has reserved experimental protocols for 253 and 254
+		//
+		// use          253 Use          # for experimentation and testing                  [RFC3692]
+		// use          254 Use          # for experimentation and testing                  [RFC3692]
+		if protoID > 252 {
+			continue
+		}
+
+		protoList = append(protoList,
+			proto{name: fields[2], id: int(protoID)},
+		)
 	}
 
-	protoList[255] = "UNKNOWN"
+	protoList = append(protoList, proto{name: "UNKNOWN", id: 255})
 
 	return
 }
 
-func generateOutput(protoList []string) error {
+func generateOutput(protoList []proto) error {
 
 	buffer := bytes.NewBuffer(nil)
 
@@ -89,9 +106,14 @@ func generateOutput(protoList []string) error {
 // IPProtocols stores the IP protocol mappings to friendly name
 var IPProtocols = map[int]string{`)
 
-	for protoID, protoName := range protoList {
-		if protoName != "" {
-			fmt.Fprintf(buffer, "\t%d:\t\t\"%s\",\n", protoID, protoName)
+	// sort by id
+	sort.SliceStable(protoList, func(i, j int) bool {
+		return protoList[i].id < protoList[j].id
+	})
+
+	for _, proto := range protoList {
+		if proto.name != "" {
+			fmt.Fprintf(buffer, "\t%d:\t\t\"%s\",\n", proto.id, proto.name)
 		}
 	}
 
@@ -100,9 +122,14 @@ var IPProtocols = map[int]string{`)
 // IPProtocolIDs is the reverse mapping from friendly name to protocol number
 var IPProtocolIDs = map[string]int{`)
 
-	for protoID, protoName := range protoList {
-		if protoName != "" {
-			fmt.Fprintf(buffer, "\t\"%s\":\t\t%d,\n", strings.ToLower(protoName), protoID)
+	// sort by name now
+	sort.SliceStable(protoList, func(i, j int) bool {
+		return strings.ToLower(protoList[i].name) < strings.ToLower(protoList[j].name)
+	})
+
+	for _, proto := range protoList {
+		if proto.name != "" {
+			fmt.Fprintf(buffer, "\t\"%s\":\t\t%d,\n", strings.ToLower(proto.name), proto.id)
 		}
 	}
 
