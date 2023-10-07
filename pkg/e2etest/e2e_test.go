@@ -62,14 +62,6 @@ var defaultCaptureConfig = config.CaptureConfig{
 
 var externalPCAPPath string
 
-var valFilters = []*node.ValFilterNode{
-	nil,
-	{ValFilter: types.Counters.IsOnlyInbound},
-	{ValFilter: types.Counters.IsOnlyOutbound},
-	{ValFilter: types.Counters.IsUnidirectional},
-	{ValFilter: types.Counters.IsBidirectional},
-}
-
 func TestStartStop(t *testing.T) {
 	for i := 0; i < 1000; i++ {
 		testStartStop(t)
@@ -139,10 +131,7 @@ func testStartStop(t *testing.T) {
 func TestE2EBasic(t *testing.T) {
 	pcapData, err := pcaps.ReadFile(filepath.Join(testDataPath, defaultPcapTestFile))
 	require.Nil(t, err)
-	for _, varFilterNode := range valFilters {
-		testE2E(t, varFilterNode, pcapData)
-
-	}
+	testE2E(t, nil, pcapData)
 }
 
 func TestE2EMultipleIfaces(t *testing.T) {
@@ -158,13 +147,11 @@ func TestE2EMultipleIfaces(t *testing.T) {
 		for i := 0; i < len(ifaceData); i++ {
 			ifaceData[i] = pcapData
 		}
-		for _, varFilterNode := range valFilters {
-			testE2E(t, varFilterNode, ifaceData...)
-		}
+		testE2E(t, nil, ifaceData...)
 	}
 }
 
-func TestE2EExtended(t *testing.T) {
+func testE2EExtended(t *testing.T, valFilters []*node.ValFilterNode) {
 	pcapDir, err := pcaps.ReadDir(testDataPath)
 	require.Nil(t, err)
 
@@ -174,11 +161,25 @@ func TestE2EExtended(t *testing.T) {
 		t.Run(path, func(t *testing.T) {
 			pcapData, err := pcaps.ReadFile(path)
 			require.Nil(t, err)
-			for _, varFilterNode := range valFilters {
-				testE2E(t, varFilterNode, pcapData)
+			for _, valFilter := range valFilters {
+				testE2E(t, valFilter, pcapData)
 			}
 		})
 	}
+}
+
+func TestE2EExtended(t *testing.T) {
+	testE2EExtended(t, []*node.ValFilterNode{nil})
+}
+
+func TestE2EDirFilter(t *testing.T) {
+	valFilters := []*node.ValFilterNode{
+		{ValFilter: types.Counters.IsOnlyInbound},
+		{ValFilter: types.Counters.IsOnlyOutbound},
+		{ValFilter: types.Counters.IsUnidirectional},
+		{ValFilter: types.Counters.IsBidirectional},
+	}
+	testE2EExtended(t, valFilters)
 }
 
 func TestE2EExtendedPermuted(t *testing.T) {
@@ -199,9 +200,7 @@ func TestE2EExtendedPermuted(t *testing.T) {
 		}
 
 		t.Run(testMsg, func(t *testing.T) {
-			for _, valFilterNode := range valFilters {
-				testE2E(t, valFilterNode, ifaceData...)
-			}
+			testE2E(t, nil, ifaceData...)
 		})
 	})
 }
@@ -226,10 +225,7 @@ func TestE2EExternal(t *testing.T) {
 			fmt.Println("Running E2E test on", path)
 			pcapData, err := os.ReadFile(filepath.Clean(path))
 			require.Nil(t, err)
-			for _, valFilterNode := range valFilters {
-				testE2E(t, valFilterNode, pcapData)
-			}
-
+			testE2E(t, nil, pcapData)
 			return nil
 		}))
 
@@ -237,9 +233,7 @@ func TestE2EExternal(t *testing.T) {
 		fmt.Println("Running E2E test on", externalPCAPPath)
 		pcapData, err := os.ReadFile(filepath.Clean(externalPCAPPath))
 		require.Nil(t, err)
-		for _, valFilterNode := range valFilters {
-			testE2E(t, valFilterNode, pcapData)
-		}
+		testE2E(t, nil, pcapData)
 	}
 }
 
