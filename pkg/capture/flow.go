@@ -227,6 +227,11 @@ func (f *FlowLog) Aggregate() (agg *hashmap.AggFlowMap) {
 	// Reusable key conversion buffers
 	keyBufV4, keyBufV6 := types.NewEmptyV4Key(), types.NewEmptyV6Key()
 	for _, v := range f.flowMap {
+		// update totals
+		f.totals.BytesRcvd += v.bytesRcvd
+		f.totals.BytesSent += v.bytesSent
+		f.totals.PacketsRcvd += v.packetsRcvd
+		f.totals.PacketsSent += v.packetsSent
 
 		// Check if the flow actually has any interesting information for us
 		if v.packetsRcvd != 0 || v.packetsSent != 0 {
@@ -239,12 +244,6 @@ func (f *FlowLog) Aggregate() (agg *hashmap.AggFlowMap) {
 				keyBufV6.PutAllV6(v.epHash[0:16], v.epHash[16:32], v.epHash[32:34], v.epHash[36])
 				agg.SetOrUpdate(keyBufV6, v.isIPv4, v.bytesRcvd, v.bytesSent, v.packetsRcvd, v.packetsSent)
 			}
-
-			// update totals
-			f.totals.BytesRcvd += v.bytesRcvd
-			f.totals.BytesSent += v.bytesSent
-			f.totals.PacketsRcvd += v.packetsRcvd
-			f.totals.PacketsSent += v.packetsSent
 		}
 	}
 
@@ -263,6 +262,11 @@ func (f *FlowLog) transferAndAggregate() (agg *hashmap.AggFlowMap) {
 	keyBufV4, keyBufV6 := types.NewEmptyV4Key(), types.NewEmptyV6Key()
 
 	for k, v := range f.flowMap {
+		// update totals
+		f.totals.BytesRcvd += v.bytesRcvd
+		f.totals.BytesSent += v.bytesSent
+		f.totals.PacketsRcvd += v.packetsRcvd
+		f.totals.PacketsSent += v.packetsSent
 
 		// Check if the flow actually has any interesting information for us, otherwise
 		// delete it from the FlowMap
@@ -289,12 +293,6 @@ func (f *FlowLog) transferAndAggregate() (agg *hashmap.AggFlowMap) {
 		} else {
 			delete(f.flowMap, k)
 		}
-
-		// update totals
-		f.totals.BytesRcvd += v.bytesRcvd
-		f.totals.BytesSent += v.bytesSent
-		f.totals.PacketsRcvd += v.packetsRcvd
-		f.totals.PacketsSent += v.packetsSent
 	}
 
 	return
