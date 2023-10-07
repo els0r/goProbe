@@ -40,7 +40,7 @@ var extractDirectionFilterTest = []struct {
 	{node: conditionNode{attribute: "dir", comparator: "=", value: "bi"}, expectedFilter: types.Counters.IsBidirectional, expectedErr: nil},
 	{node: conditionNode{attribute: "dir", comparator: "!=", value: "bi"}, expectedFilter: nil, expectedErr: fmt.Errorf(unsupportedDirectionFilterComparatorStr, "!=")},
 	{node: conditionNode{attribute: "dir", comparator: "=", value: "unknown"}, expectedFilter: nil, expectedErr: fmt.Errorf(unsupportedDirectionFilterStr, "unknown")},
-	{node: notNode{node: conditionNode{attribute: "dir", comparator: "=", value: "unknown"}}, expectedFilter: nil, expectedErr: nil},
+	{node: notNode{node: conditionNode{attribute: "dir", comparator: "=", value: "unknown"}}, expectedFilter: nil, expectedErr: errNoFilter},
 }
 
 func TestExtractDirectionFilter(t *testing.T) {

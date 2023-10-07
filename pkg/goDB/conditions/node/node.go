@@ -238,6 +238,14 @@ type ValFilterNode struct {
 	LeftNode   bool
 }
 
+func (filter *ValFilterNode) setValFilterValues(cn conditionNode, ft string,
+	vf hashmap.ValFilter, ln bool) {
+	filter.conditionNode = cn
+	filter.FilterType = ft
+	filter.ValFilter = vf
+	filter.LeftNode = ln
+}
+
 // QueryConditionalString constructs the conditional string shown in the
 // "Conditions" output field based on the query conditions and the query filter
 func QueryConditionalString(conditionalNode Node, filterNode Node) string {

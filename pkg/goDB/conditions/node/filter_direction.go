@@ -18,6 +18,9 @@ var (
 	// filter
 	errMisplacedDirectionFilterCondition = errors.New("misplaced direction filter")
 
+	// errNoFilter indicates that the node does not contain a filter condition
+	errNoFilter = errors.New("Node does not contain a filter condition")
+
 	unsupportedDirectionFilterComparatorStr = "unsupported direction filter comparator: %s"
 	unsupportedDirectionFilterStr           = "unsupported direction filter: %s (use one of 'in', 'out', 'uni', 'bi')"
 )
@@ -29,7 +32,7 @@ var (
 // top level of the node or the second level in case the
 // top level represents a conjunction (AND).
 func isDirectionCondition(node conditionNode) (Node, error) {
-	if node.attribute == types.FilterKeywordDirection {
+	if node.attribute == types.FilterKeywordDirection || node.attribute == types.FilterKeywordDirectionSugared {
 		return nil, errMisplacedDirectionFilterCondition
 	}
 	return node, nil
@@ -40,8 +43,7 @@ func isDirectionCondition(node conditionNode) (Node, error) {
 // nil is returned with an error describing the invalidity reason.
 // If the node does not contain a filter condition, nil is returned without any error.
 func extractDirectionFilter(node Node) (hashmap.ValFilter, error) {
-	switch node := node.(type) {
-	case conditionNode:
+	if node, ok := node.(conditionNode); ok {
 		if node.attribute != types.FilterKeywordDirection && node.attribute != types.FilterKeywordDirectionSugared {
 			return nil, nil
 		}
@@ -62,9 +64,20 @@ func extractDirectionFilter(node Node) (hashmap.ValFilter, error) {
 			return nil, fmt.Errorf(unsupportedDirectionFilterStr, node.value)
 		}
 		return filter, nil
-	default:
+	} else {
 		return nil, nil
 	}
+}
+
+// extractDirectionFiltersFromNodes extracts the ValFilters from a list of nodes.
+// If the i-th node does not represent a ValFilter, the i-th entry of the output is nil.
+func extractDirectionFiltersFromNodes(nodes []Node) []hashmap.ValFilter {
+	filters := make([]hashmap.ValFilter, len(nodes))
+	for i, node := range nodes {
+		filter, _ := extractDirectionFilter(node)
+		filters[i] = filter
+	}
+	return filters
 }
 
 // splitOffDirectionFilter splits off the traffic direction filter
@@ -84,24 +97,17 @@ func splitOffDirectionFilter(node Node) (Node, ValFilterNode, error) {
 		if filter == nil {
 			return node, valFilterNode, nil
 		}
-		valFilterNode.FilterType = types.FilterKeywordDirection
-		valFilterNode.conditionNode = node
-		valFilterNode.LeftNode = false
-		valFilterNode.ValFilter = filter
+		valFilterNode.setValFilterValues(node, types.FilterKeywordDirection, filter, false)
 		return nil, valFilterNode, errEmptyConditional
 	case andNode:
-		nodes := [2]Node{node.left, node.right}
-		filters := [2]hashmap.ValFilter{nil, nil}
-		for i := 0; i < 2; i++ {
-			n := nodes[i]
-			filter, err := extractDirectionFilter(n)
-			if err != nil {
-				continue
-			}
-			filters[i] = filter
-		}
-		// none of the two child nodes represent direction conditions
-		// => nothing to split off
+
+		// extract filters from both AND conditions
+		nodes := []Node{node.left, node.right}
+		filters := extractDirectionFiltersFromNodes(nodes)
+
+		// none of the two child nodes represent direction filters
+		// => check that the node does not contain any filter condition
+		// at a lower level
 		if filters[0] == nil && filters[1] == nil {
 			_, err := node.transform(isDirectionCondition)
 			if err != nil {
@@ -109,34 +115,39 @@ func splitOffDirectionFilter(node Node) (Node, ValFilterNode, error) {
 			}
 			return node, valFilterNode, nil
 		}
-		// both of the two child nodes represent direction conditions
+
+		// both AND conditions represent direction filters
+		// (e.g. "dir = in and dir = out")
 		// => invalid filter condition string
-		// e.g. "dir = in and dir = out"
 		if filters[0] != nil && filters[1] != nil {
 			return nil, valFilterNode, errMultipleDirectionFilterConditions
 		}
 
-		// check that the conjunction child node that does not represent a direction filter
-		// condition also does not contain a filtering condition at a lower level
-		// e.g. forbidden: "dir = in and ( sip = 1.2.3.4 and dir = out )"
-		i := 0
-		if filters[i] != nil {
-			i = 1
+		// determine which AND condition represents a
+		// direction filter
+		filterIndex := 0
+		if filters[filterIndex] == nil {
+			filterIndex = 1
 		}
-		n := nodes[i]
+
+		// check that the non-filter AND condition also does not
+		// contain a direction filter at a lower level
+		// (e.g. "dir = in & (sip = 1.2.3.4 & dir = out)")
+		// => invalid filter condition string
+		n := nodes[1-filterIndex]
 		_, err := n.transform(isDirectionCondition)
 		if err != nil {
 			return nil, valFilterNode, errMultipleDirectionFilterConditions
 		}
-		valFilterNode.FilterType = types.FilterKeywordDirection
-		valFilterNode.conditionNode = nodes[1-i].(conditionNode)
-		valFilterNode.LeftNode = i == 1
-		valFilterNode.ValFilter = filters[1-i]
+
+		// set the ValFilterNode values
+		filterNode := nodes[filterIndex].(conditionNode)
+		filter := filters[filterIndex]
+		valFilterNode.setValFilterValues(filterNode, types.FilterKeywordDirection, filter, filterIndex == 0)
 		return n, valFilterNode, nil
+	case nil:
+		return node, valFilterNode, nil
 	default:
-		if node == nil {
-			return node, valFilterNode, nil
-		}
 		_, err := node.transform(isDirectionCondition)
 		if err != nil {
 			return nil, valFilterNode, err
