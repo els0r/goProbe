@@ -1,10 +1,10 @@
 package node
 
 import (
-	"errors"
 	"fmt"
 	"github.com/els0r/goProbe/pkg/types"
 	"github.com/els0r/goProbe/pkg/types/hashmap"
+	"github.com/stretchr/testify/require"
 	"reflect"
 	"testing"
 )
@@ -20,11 +20,10 @@ var isDirectionConditionTest = []struct {
 func TestIsDirectionCondition(t *testing.T) {
 	for _, test := range isDirectionConditionTest {
 		n, err := isDirectionCondition(test.node)
-		if !errors.Is(err, test.expectedErr) {
-			t.Fatalf("Expected error: %s Actual error: %s\n", test.expectedErr, err)
-		}
-		if err == nil && n.String() != test.node.String() {
-			t.Fatalf("Expected node: %s  Returned node:%s \n", n.String(), test.node.String())
+
+		require.Equalf(t, err, test.expectedErr, "Expected error: %s Actual error: %s\n", test.expectedErr, err)
+		if err == nil {
+			require.Equalf(t, n.String(), test.node.String(), "Expected node: %s  Returned node:%s \n", n.String(), test.node.String())
 		}
 	}
 }
@@ -46,8 +45,8 @@ var extractDirectionFilterTest = []struct {
 func TestExtractDirectionFilter(t *testing.T) {
 	for _, test := range extractDirectionFilterTest {
 		filter, err := extractDirectionFilter(test.node)
-		if err != nil && err.Error() != test.expectedErr.Error() {
-			t.Fatalf("Expected error: %s Actual error: %s\n", test.expectedErr, err)
+		if err != nil {
+			require.Equalf(t, test.expectedErr, err, "Expected error: %s Actual error: %s\n", test.expectedErr, err)
 		}
 		if err == nil && reflect.ValueOf(filter) != reflect.ValueOf(test.expectedFilter) {
 			t.Fatalf("Expected filter type: %s Got: %s", reflect.TypeOf(test.expectedFilter), reflect.TypeOf(filter))
@@ -115,18 +114,16 @@ var splitOffDirectionFilterTest = []struct {
 func TestSplitOffDirectionFilter(t *testing.T) {
 	for _, test := range splitOffDirectionFilterTest {
 		condition, valFilterNode, err := splitOffDirectionFilter(test.node)
-		if err != nil && err.Error() != test.expectedErr.Error() {
-			t.Fatalf("Expected error: %s Actual error: %s\n", test.expectedErr, err)
+		if err != nil {
+			require.Equalf(t, test.expectedErr, err, "Expected error: %s Actual error: %s\n", test.expectedErr, err)
 		}
 
-		if err == nil && reflect.ValueOf(valFilterNode.ValFilter) != reflect.ValueOf(test.expectedFilter) {
-			t.Fatalf("Expected filter type: %s Got: %s", reflect.TypeOf(test.expectedFilter), reflect.TypeOf(valFilterNode.ValFilter))
-		}
-		if err == nil && condition.String() != test.expectedCondition.String() {
-			t.Log("Incorrect split off of condition")
-			t.Logf("Expected: %s", test.expectedCondition.String())
-			t.Logf("Got: %s", condition.String())
-			t.Fatal()
+		if err == nil {
+			if reflect.ValueOf(valFilterNode.ValFilter) != reflect.ValueOf(test.expectedFilter) {
+				t.Fatalf("Expected filter type: %s Got: %s", reflect.TypeOf(test.expectedFilter), reflect.TypeOf(valFilterNode.ValFilter))
+			}
+			require.Equalf(t, condition.String(), test.expectedCondition.String(), "Expected Node: %s Got %s",
+				test.expectedCondition.String(), condition.String())
 		}
 	}
 }
