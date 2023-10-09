@@ -191,17 +191,17 @@ func (c *Capture) rotate(ctx context.Context) (agg *hashmap.AggFlowMap) {
 
 	var totals = &types.Counters{}
 	defer func() {
-		go func() {
+		go func(iface string) {
 			// write volume metrics to prometheus
 			promNumFlows.WithLabelValues(c.iface).Set(float64(nFlows))
 
 			if totals != nil {
-				promBytes.WithLabelValues(c.iface, "inbound").Add(float64(totals.BytesRcvd))
-				promBytes.WithLabelValues(c.iface, "outbound").Add(float64(totals.BytesSent))
-				promPackets.WithLabelValues(c.iface, "inbound").Add(float64(totals.PacketsRcvd))
-				promPackets.WithLabelValues(c.iface, "outbound").Add(float64(totals.PacketsSent))
+				promBytes.WithLabelValues(iface, "inbound").Add(float64(totals.BytesRcvd))
+				promBytes.WithLabelValues(iface, "outbound").Add(float64(totals.BytesSent))
+				promPackets.WithLabelValues(iface, "inbound").Add(float64(totals.PacketsRcvd))
+				promPackets.WithLabelValues(iface, "outbound").Add(float64(totals.PacketsSent))
 			}
-		}()
+		}(c.iface)
 	}()
 
 	if nFlows == 0 {

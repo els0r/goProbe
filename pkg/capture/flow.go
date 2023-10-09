@@ -248,15 +248,15 @@ func (f *FlowLog) transferAndAggregate() (agg *hashmap.AggFlowMap, totals *types
 	keyBufV4, keyBufV6 := types.NewEmptyV4Key(), types.NewEmptyV6Key()
 
 	for k, v := range f.flowMap {
-		// update totals
-		totals.BytesRcvd += v.bytesRcvd
-		totals.BytesSent += v.bytesSent
-		totals.PacketsRcvd += v.packetsRcvd
-		totals.PacketsSent += v.packetsSent
 
 		// Check if the flow actually has any interesting information for us, otherwise
 		// delete it from the FlowMap
 		if v.packetsRcvd > 0 || v.packetsSent > 0 {
+			// update totals
+			totals.BytesRcvd += v.bytesRcvd
+			totals.BytesSent += v.bytesSent
+			totals.PacketsRcvd += v.packetsRcvd
+			totals.PacketsSent += v.packetsSent
 
 			// Populate key buffer according to source flow and update result
 			if v.isIPv4 {
