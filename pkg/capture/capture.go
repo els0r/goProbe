@@ -9,6 +9,7 @@ import (
 
 	"github.com/els0r/goProbe/cmd/goProbe/config"
 	"github.com/els0r/goProbe/pkg/capture/capturetypes"
+	"github.com/els0r/goProbe/pkg/types"
 	"github.com/els0r/goProbe/pkg/types/hashmap"
 	"github.com/els0r/telemetry/logging"
 	"github.com/fako1024/slimcap/capture"
@@ -187,17 +188,27 @@ func (c *Capture) rotate(ctx context.Context) (agg *hashmap.AggFlowMap) {
 
 	// write how many flows are currently in the map
 	nFlows := c.flowLog.Len()
-	promNumFlows.WithLabelValues(c.iface).Set(float64(nFlows))
+
+	var totals = &types.Counters{}
+	defer func() {
+		go func() {
+			// write volume metrics to prometheus
+			promNumFlows.WithLabelValues(c.iface).Set(float64(nFlows))
+
+			if nFlows > 0 && totals != nil {
+				promBytes.WithLabelValues(c.iface, "inbound").Add(float64(totals.BytesRcvd))
+				promBytes.WithLabelValues(c.iface, "outbound").Add(float64(totals.BytesSent))
+				promPackets.WithLabelValues(c.iface, "inbound").Add(float64(totals.PacketsRcvd))
+				promPackets.WithLabelValues(c.iface, "outbound").Add(float64(totals.PacketsSent))
+			}
+		}()
+	}()
+
 	if nFlows == 0 {
 		logger.Debug("there are currently no flow records available")
 		return
 	}
-	agg = c.flowLog.Rotate()
-
-	// write volume metrics to prometheus. This needs to happen after aggregation
-	// to make sure that the totals are correct
-	promBytesReceived.WithLabelValues(c.iface).Add(float64(c.flowLog.totals.BytesRcvd))
-	promBytesSent.WithLabelValues(c.iface).Add(float64(c.flowLog.totals.BytesSent))
+	agg, totals = c.flowLog.Rotate()
 
 	return
 }

@@ -18,21 +18,21 @@ var promPacketsProcessed = prometheus.NewCounterVec(prometheus.CounterOpts{
 },
 	[]string{"iface"},
 )
-var promBytesReceived = prometheus.NewCounterVec(prometheus.CounterOpts{
+var promBytes = prometheus.NewCounterVec(prometheus.CounterOpts{
 	Namespace: config.ServiceName,
 	Subsystem: captureSubsystem,
-	Name:      "bytes_received_total",
-	Help:      "Number of bytes received",
+	Name:      "bytes_total",
+	Help:      "Number of bytes tracked in flow map",
 },
-	[]string{"iface"},
+	[]string{"iface", "direction"},
 )
-var promBytesSent = prometheus.NewCounterVec(prometheus.CounterOpts{
+var promPackets = prometheus.NewCounterVec(prometheus.CounterOpts{
 	Namespace: config.ServiceName,
 	Subsystem: captureSubsystem,
-	Name:      "bytes_sent_total",
-	Help:      "Number of bytes sent",
+	Name:      "packets_total",
+	Help:      "Number of packets seen in flow map",
 },
-	[]string{"iface"},
+	[]string{"iface", "direction"},
 )
 var promNumFlows = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 	Namespace: config.ServiceName,
@@ -80,8 +80,8 @@ func init() {
 	prometheus.MustRegister(
 		promPacketsProcessed,
 		promPacketsDropped,
-		promBytesReceived,
-		promBytesSent,
+		promBytes,
+		promPackets,
 		promNumFlows,
 		promCaptureErrors,
 		promInterfacesCapturing,

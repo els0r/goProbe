@@ -36,10 +36,6 @@ const (
 // FlowLog stores flows. It is NOT threadsafe.
 type FlowLog struct {
 	flowMap map[string]*Flow
-
-	// for summaries. Will only be updated on aggregation to
-	// not duplicate the computation inside the flow update
-	totals types.Counters
 }
 
 // NewFlowLog creates a new flow log for storing flows.
@@ -209,7 +205,7 @@ func (f *FlowLog) Add(epHash capturetypes.EPHash, pktType byte, pktSize uint32, 
 // are discarded.
 //
 // Returns an AggFlowMap containing all flows since the last call to Rotate.
-func (f *FlowLog) Rotate() *hashmap.AggFlowMap {
+func (f *FlowLog) Rotate() (agg *hashmap.AggFlowMap, totals *types.Counters) {
 	return f.transferAndAggregate()
 }
 
@@ -221,17 +217,9 @@ func (f *FlowLog) Aggregate() (agg *hashmap.AggFlowMap) {
 
 	agg = hashmap.NewAggFlowMap()
 
-	// for recomputing the most up to date running sum of bytes and packets
-	f.totals.Reset()
-
 	// Reusable key conversion buffers
 	keyBufV4, keyBufV6 := types.NewEmptyV4Key(), types.NewEmptyV6Key()
 	for _, v := range f.flowMap {
-		// update totals
-		f.totals.BytesRcvd += v.bytesRcvd
-		f.totals.BytesSent += v.bytesSent
-		f.totals.PacketsRcvd += v.packetsRcvd
-		f.totals.PacketsSent += v.packetsSent
 
 		// Check if the flow actually has any interesting information for us
 		if v.packetsRcvd != 0 || v.packetsSent != 0 {
@@ -250,23 +238,23 @@ func (f *FlowLog) Aggregate() (agg *hashmap.AggFlowMap) {
 	return
 }
 
-func (f *FlowLog) transferAndAggregate() (agg *hashmap.AggFlowMap) {
+func (f *FlowLog) transferAndAggregate() (agg *hashmap.AggFlowMap, totals *types.Counters) {
 
 	// Initialize aggregate flow map / result
 	agg = hashmap.NewAggFlowMap()
 
 	// for recomputing the most up to date running sum of bytes and packets
-	f.totals.Reset()
+	totals = new(types.Counters)
 
 	// Create reusable key conversion buffers
 	keyBufV4, keyBufV6 := types.NewEmptyV4Key(), types.NewEmptyV6Key()
 
 	for k, v := range f.flowMap {
 		// update totals
-		f.totals.BytesRcvd += v.bytesRcvd
-		f.totals.BytesSent += v.bytesSent
-		f.totals.PacketsRcvd += v.packetsRcvd
-		f.totals.PacketsSent += v.packetsSent
+		totals.BytesRcvd += v.bytesRcvd
+		totals.BytesSent += v.bytesSent
+		totals.PacketsRcvd += v.packetsRcvd
+		totals.PacketsSent += v.packetsSent
 
 		// Check if the flow actually has any interesting information for us, otherwise
 		// delete it from the FlowMap
