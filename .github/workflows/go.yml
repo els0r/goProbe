@@ -23,15 +23,6 @@ jobs:
     - name: Check out code into the Go module directory
       uses: actions/checkout@v3
 
-    - name: Build for AMD64
-      run: GOOS=linux GOARCH=amd64 go build -tags jsoniter -v -a ./...
-
-    - name: Build for AMD64 (No-GCO Mode)
-      run: GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -tags jsoniter -v -a ./...
-
-    - name: Build for AMD64 (Production Mode)
-      run: GOOS=linux GOARCH=amd64 go build -tags jsoniter,slimcap_nomock -v -a ./...
-
     - name: Test
       run: |
         go test -tags jsoniter -v ./... -covermode=atomic -coverprofile=coverage.out
@@ -48,3 +39,12 @@ jobs:
     - name: Race Detector
       run: |
         go test -tags jsoniter -race -v ./...
+
+    - name: Build for AMD64
+      run: GOOS=linux GOARCH=amd64 go build -tags jsoniter -v -a ./...
+
+    - name: Build for AMD64 (Production Mode)
+      run: GOOS=linux GOARCH=amd64 go build -tags jsoniter,slimcap_nomock -v -a ./...
+
+    - name: Build for AMD64 (No-GCO Mode)
+      run: GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -tags jsoniter -v -a ./...
