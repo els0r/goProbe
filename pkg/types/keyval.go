@@ -474,11 +474,3 @@ func (c Counters) IsBidirectional() bool {
 func (c Counters) IsUnidirectional() bool {
 	return c.IsOnlyInbound() || c.IsOnlyOutbound()
 }
-
-// Reset resets all counters to zero
-func (c Counters) Reset() {
-	c.BytesRcvd = 0
-	c.BytesSent = 0
-	c.PacketsRcvd = 0
-	c.PacketsSent = 0
-}
