@@ -9,6 +9,7 @@ import (
 
 	"github.com/els0r/goProbe/cmd/goProbe/config"
 	"github.com/els0r/goProbe/pkg/capture/capturetypes"
+	"github.com/els0r/goProbe/pkg/types"
 	"github.com/els0r/goProbe/pkg/types/hashmap"
 	"github.com/els0r/telemetry/logging"
 	"github.com/fako1024/slimcap/capture"
@@ -185,11 +186,29 @@ func (c *Capture) rotate(ctx context.Context) (agg *hashmap.AggFlowMap) {
 
 	logger := logging.FromContext(ctx)
 
-	if c.flowLog.Len() == 0 {
+	// write how many flows are currently in the map
+	nFlows := c.flowLog.Len()
+
+	var totals = &types.Counters{}
+	defer func() {
+		go func(iface string) {
+			// write volume metrics to prometheus
+			promNumFlows.WithLabelValues(c.iface).Set(float64(nFlows))
+
+			if totals != nil {
+				promBytes.WithLabelValues(iface, "inbound").Add(float64(totals.BytesRcvd))
+				promBytes.WithLabelValues(iface, "outbound").Add(float64(totals.BytesSent))
+				promPackets.WithLabelValues(iface, "inbound").Add(float64(totals.PacketsRcvd))
+				promPackets.WithLabelValues(iface, "outbound").Add(float64(totals.PacketsSent))
+			}
+		}(c.iface)
+	}()
+
+	if nFlows == 0 {
 		logger.Debug("there are currently no flow records available")
 		return
 	}
-	agg = c.flowLog.Rotate()
+	agg, totals = c.flowLog.Rotate()
 
 	return
 }
@@ -360,9 +379,11 @@ func (c *Capture) status() (*capturetypes.CaptureStats, error) {
 	// main packet processing loop. If this counter moves slowly (as in gets
 	// gets an update only every 5 minutes) it's not an issue to understand
 	// processed data volumes across longer time frames
-	packetsProcessed.Add(float64(c.stats.Processed))
-	packetsDropped.Add(float64(stats.PacketsDropped))
-	captureErrors.Add(float64(c.stats.ParsingErrors.Sum()))
+	go func(iface string, processed, dropped, errors uint64) {
+		promPacketsProcessed.WithLabelValues(iface).Add(float64(processed))
+		promPacketsDropped.WithLabelValues(iface).Add(float64(dropped))
+		promCaptureErrors.WithLabelValues(iface).Add(float64(errors))
+	}(c.iface, c.stats.Processed, stats.PacketsDropped, uint64(c.stats.ParsingErrors.Sum()))
 
 	res := capturetypes.CaptureStats{
 		StartedAt:      c.startedAt,

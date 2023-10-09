@@ -1,0 +1,69 @@
+{
+  "name": "goprobe-dev",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "args": {
+      "HTTP_PROXY": "${localEnv:HTTP_PROXY}",
+      "HTTPS_PROXY": "${localEnv:HTTP_PROXY}",
+      "http_proxy": "${localEnv:HTTP_PROXY}",
+      "https_proxy": "${localEnv:HTTP_PROXY}"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "golang.go",
+        "eamodio.gitlens",
+        "davidanson.vscode-markdownlint",
+        "ms-azuretools.vscode-docker",
+        "shardulm94.trailing-spaces",
+        "Gruntfuggly.todo-tree",
+        "bierner.emojisense",
+        "stkb.rewrap",
+        "vscode-icons-team.vscode-icons",
+        "github.vscode-pull-request-github",
+        "redhat.vscode-yaml",
+        "IBM.output-colorizer",
+        "github.copilot"
+      ],
+      "settings": {
+        "files.eol": "\n",
+        "editor.formatOnSave": true,
+        "go.buildTags": "",
+        "go.toolsEnvVars": {
+          "CGO_ENABLED": "0"
+        },
+        "go.useLanguageServer": true,
+        "go.testEnvVars": {
+          "CGO_ENABLED": "1"
+        },
+        "go.testFlags": [
+          "-v",
+          "-race"
+        ],
+        "go.testTimeout": "10s",
+        "go.coverOnSingleTest": true,
+        "go.coverOnSingleTestFile": true,
+        "go.coverOnTestPackage": true,
+        "go.lintTool": "golangci-lint",
+        "go.lintOnSave": "package",
+        "[go]": {
+          "editor.codeActionsOnSave": {
+            "source.organizeImports": true
+          }
+        },
+        "gopls": {
+          "usePlaceholders": false,
+          "staticcheck": true,
+          "vulncheck": "Imports"
+        },
+        "remote.extensionKind": {
+          "ms-azuretools.vscode-docker": "workspace"
+        }
+      }
+    }
+  },
+  "forwardPorts": [
+    8145
+  ]
+}

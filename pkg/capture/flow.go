@@ -40,7 +40,9 @@ type FlowLog struct {
 
 // NewFlowLog creates a new flow log for storing flows.
 func NewFlowLog() *FlowLog {
-	return &FlowLog{make(map[string]*Flow)}
+	return &FlowLog{
+		flowMap: make(map[string]*Flow),
+	}
 }
 
 // MarshalJSON implements the jsoniter.Marshaler interface
@@ -122,7 +124,6 @@ func ParsePacket(ipLayer capture.IPLayer) (epHash capturetypes.EPHash, isIPv4 bo
 		} else if protocol == capturetypes.ICMP {
 			auxInfo = ipLayer[ipv4.HeaderLen] // store ICMP type
 		}
-
 	} else if ipLayerType == ipLayerTypeV6 {
 
 		_ = ipLayer[ipv6.HeaderLen] // bounds check hint to compiler
@@ -159,7 +160,6 @@ func ParsePacket(ipLayer capture.IPLayer) (epHash capturetypes.EPHash, isIPv4 bo
 		} else if protocol == capturetypes.ICMPv6 {
 			auxInfo = ipLayer[ipv6.HeaderLen] // store ICMP type
 		}
-
 	} else {
 		errno = capturetypes.ErrnoInvalidIPHeader
 		return
@@ -203,7 +203,7 @@ func (f *FlowLog) Add(epHash capturetypes.EPHash, pktType byte, pktSize uint32, 
 // are discarded.
 //
 // Returns an AggFlowMap containing all flows since the last call to Rotate.
-func (f *FlowLog) Rotate() *hashmap.AggFlowMap {
+func (f *FlowLog) Rotate() (agg *hashmap.AggFlowMap, totals *types.Counters) {
 	return f.transferAndAggregate()
 }
 
@@ -236,10 +236,13 @@ func (f *FlowLog) Aggregate() (agg *hashmap.AggFlowMap) {
 	return
 }
 
-func (f *FlowLog) transferAndAggregate() (agg *hashmap.AggFlowMap) {
+func (f *FlowLog) transferAndAggregate() (agg *hashmap.AggFlowMap, totals *types.Counters) {
 
 	// Initialize aggregate flow map / result
 	agg = hashmap.NewAggFlowMap()
+
+	// for recomputing the most up to date running sum of bytes and packets
+	totals = new(types.Counters)
 
 	// Create reusable key conversion buffers
 	keyBufV4, keyBufV6 := types.NewEmptyV4Key(), types.NewEmptyV6Key()
@@ -249,6 +252,11 @@ func (f *FlowLog) transferAndAggregate() (agg *hashmap.AggFlowMap) {
 		// Check if the flow actually has any interesting information for us, otherwise
 		// delete it from the FlowMap
 		if v.packetsRcvd > 0 || v.packetsSent > 0 {
+			// update totals
+			totals.BytesRcvd += v.bytesRcvd
+			totals.BytesSent += v.bytesSent
+			totals.PacketsRcvd += v.packetsRcvd
+			totals.PacketsSent += v.packetsSent
 
 			// Populate key buffer according to source flow and update result
 			if v.isIPv4 {

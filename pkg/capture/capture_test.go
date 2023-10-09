@@ -245,12 +245,12 @@ func BenchmarkRotation(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 
 			// Run best-case scenario (keep all flows)
-			aggMap := benchData[i].transferAndAggregate()
+			aggMap, _ := benchData[i].transferAndAggregate()
 			require.EqualValues(b, nFlows, len(benchData[i].flowMap))
 			require.EqualValues(b, nFlows, aggMap.Len())
 
 			// Run worst-case scenario (keep no flows)
-			aggMap = benchData[i].transferAndAggregate()
+			aggMap, _ = benchData[i].transferAndAggregate()
 			require.EqualValues(b, 0, len(benchData[i].flowMap))
 			require.EqualValues(b, 0, aggMap.Len())
 		}

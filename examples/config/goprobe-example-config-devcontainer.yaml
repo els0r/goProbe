@@ -1,0 +1,19 @@
+---
+db:
+  path: /usr/local/goProbe/db
+local_buffers:
+  size_limit: 67108864
+  num_buffers: 1
+interfaces:
+  eth0:
+    promisc: false
+    ring_buffer:
+      num_blocks: 4
+      block_size: 1048576
+api:
+  addr: 0.0.0.0:8145
+  profiling: true
+  metrics: true
+logging:
+  level: debug
+  encoding: logfmt
