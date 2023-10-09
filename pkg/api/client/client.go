@@ -124,6 +124,13 @@ func NewDefault(addr string, opts ...Option) *DefaultClient {
 		c.scheme = c.scheme + unixIdent
 	}
 
+	// extract the scheme from the address if it is available
+	scheme, addr := api.ExtractSchemeAddr(c.hostAddr)
+	if scheme != "" {
+		c.scheme = scheme
+		c.hostAddr = addr
+	}
+
 	c.client = &http.Client{
 		// trace propagation is enabled by default
 		Transport: &transport{
