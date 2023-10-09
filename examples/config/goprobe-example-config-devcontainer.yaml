@@ -12,7 +12,7 @@ interfaces:
       block_size: 1048576
 api:
   addr: 0.0.0.0:8145
-    profiling: true
+  profiling: true
   metrics: true
 logging:
   level: debug
