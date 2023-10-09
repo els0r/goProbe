@@ -81,6 +81,8 @@ github.com/fako1024/httpc v1.0.15 h1:HyNdnSCT+6J1xHRtRlsDeVkBkhNhaFdTyUdLl5++Xlo
 github.com/fako1024/httpc v1.0.15/go.mod h1:nBXDuoouYUotAgt6t7fxrsnBJWbrhWXDQW1k9A7DNOg=
 github.com/fako1024/slimcap v1.0.0 h1:jZSlpAfDBXxghI4XND+QRLi0M+0lw2VBIpSCpkqfMXw=
 github.com/fako1024/slimcap v1.0.0/go.mod h1:NiARI9lJKI53qCmt+ecSx1lWii2uQHANw6T68liiLcE=
+github.com/fako1024/slimcap v1.0.1-0.20230926063550-92124d4d5fca h1:zyrqmNVmtTxV9UW5Lw2itXivCJXxp+0imoaWbnsNqWo=
+github.com/fako1024/slimcap v1.0.1-0.20230926063550-92124d4d5fca/go.mod h1:NiARI9lJKI53qCmt+ecSx1lWii2uQHANw6T68liiLcE=
 github.com/felixge/httpsnoop v1.0.3 h1:s/nj+GCswXYzN5v2DpNMuMQYe+0DDwt5WVCU6CWBdXk=
 github.com/felixge/httpsnoop v1.0.3/go.mod h1:m8KPJKqk1gH5J9DgRY2ASl2lWCfGKXixSwevea8zH2U=
 github.com/frankban/quicktest v1.14.4 h1:g2rn0vABPOOXmZUj+vbmUp0lPoXEMuhTpIluN0XL9UY=
