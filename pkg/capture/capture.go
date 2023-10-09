@@ -379,9 +379,11 @@ func (c *Capture) status() (*capturetypes.CaptureStats, error) {
 	// main packet processing loop. If this counter moves slowly (as in gets
 	// gets an update only every 5 minutes) it's not an issue to understand
 	// processed data volumes across longer time frames
-	promPacketsProcessed.WithLabelValues(c.iface).Add(float64(c.stats.Processed))
-	promPacketsDropped.WithLabelValues(c.iface).Add(float64(stats.PacketsDropped))
-	promCaptureErrors.WithLabelValues(c.iface).Add(float64(c.stats.ParsingErrors.Sum()))
+	go func(iface string, processed, dropped, errors uint64) {
+		promPacketsProcessed.WithLabelValues(iface).Add(float64(processed))
+		promPacketsDropped.WithLabelValues(iface).Add(float64(dropped))
+		promCaptureErrors.WithLabelValues(iface).Add(float64(errors))
+	}(c.iface, c.stats.Processed, stats.PacketsDropped, uint64(c.stats.ParsingErrors.Sum()))
 
 	res := capturetypes.CaptureStats{
 		StartedAt:      c.startedAt,
