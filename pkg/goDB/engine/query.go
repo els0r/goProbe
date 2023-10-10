@@ -230,7 +230,7 @@ func (qr *QueryRunner) RunStatement(ctx context.Context, stmt *query.Statement) 
 	var rs = make(results.Rows, agg.aggregatedMaps.Len())
 	count := 0
 
-	var metaIterOption hashmap.MetaIterOption = nil
+	var metaIterOption hashmap.MetaIterOption
 	if valFilterNode != nil && valFilterNode.ValFilter != nil {
 		metaIterOption = hashmap.WithFilter(valFilterNode.ValFilter)
 	}
