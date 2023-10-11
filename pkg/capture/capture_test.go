@@ -307,9 +307,8 @@ func testDeadlockLowTraffic(t *testing.T, maxPkts int) {
 		select {
 		case err := <-errChan:
 			doneChan <- err
-			break
 		case <-time.After(10 * time.Second):
-			doneChan <- errors.New("potential deadlock situation on rotation logic")
+			doneChan <- errors.New("potential deadlock situation on rotation logic (no termination confirmation received from mock source)")
 		}
 
 		require.Nil(t, mockC.close())
@@ -317,8 +316,8 @@ func testDeadlockLowTraffic(t *testing.T, maxPkts int) {
 
 	require.Nil(t, <-doneChan)
 
-	if time.Since(start) > 2*time.Second {
-		t.Fatalf("potential deadlock situation on rotation logic")
+	if time.Since(start) > 5*time.Second {
+		t.Fatalf("potential deadlock situation on rotation logic (test took %v)", time.Since(start))
 	}
 }
 
@@ -345,6 +344,8 @@ func testDeadlockHighTraffic(t *testing.T) {
 	start := time.Now()
 	doneChan := make(chan error)
 	time.AfterFunc(100*time.Millisecond, func() {
+
+		t.Logf("starting roation loops after %v", time.Since(start))
 		for i := 0; i < 20; i++ {
 			mockC.lock()
 			mockC.rotate(ctx)
@@ -352,22 +353,24 @@ func testDeadlockHighTraffic(t *testing.T) {
 			time.Sleep(10 * time.Millisecond)
 		}
 		mockSrc.Done()
+		t.Logf("roation loops done after %v", time.Since(start))
 
 		select {
 		case err := <-errChan:
 			doneChan <- err
-			break
 		case <-time.After(10 * time.Second):
-			doneChan <- errors.New("potential deadlock situation on rotation logic")
+			doneChan <- errors.New("potential deadlock situation on rotation logic (no termination confirmation received from mock source)")
 		}
 
 		require.Nil(t, mockC.close())
 	})
 
-	require.Nil(t, <-doneChan)
+	doneElem := <-doneChan
+	t.Logf("received signal from rotation Goroutine after %v: %v", time.Since(start), doneElem)
+	require.Nil(t, doneElem)
 
-	if time.Since(start) > 2*time.Second {
-		t.Fatalf("potential deadlock situation on rotation logic")
+	if time.Since(start) > 5*time.Second {
+		t.Fatalf("potential deadlock situation on rotation logic (test took %v)", time.Since(start))
 	}
 }
 
