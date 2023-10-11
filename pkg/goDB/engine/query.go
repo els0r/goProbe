@@ -86,7 +86,7 @@ func (qr *QueryRunner) RunStatement(ctx context.Context, stmt *query.Statement) 
 	}
 
 	// build condition tree to check if there is a syntax error before starting processing
-	queryConditional, parseErr := node.ParseAndInstrument(stmt.Condition, stmt.DNSResolution.Timeout)
+	queryConditional, valFilterNode, parseErr := node.ParseAndInstrument(stmt.Condition, stmt.DNSResolution.Timeout)
 	if parseErr != nil {
 		return res, fmt.Errorf("conditions parsing error: %w", parseErr)
 	}
@@ -99,9 +99,7 @@ func (qr *QueryRunner) RunStatement(ctx context.Context, stmt *query.Statement) 
 	result.Query = results.Query{
 		Attributes: qr.query.AttributesToString(),
 	}
-	if qr.query.Conditional != nil {
-		result.Query.Condition = qr.query.Conditional.String()
-	}
+	result.Query.Condition = node.QueryConditionalString(qr.query.Conditional, valFilterNode)
 
 	// get hostname and host ID if available
 	hostname, err := os.Hostname()
@@ -152,13 +150,6 @@ func (qr *QueryRunner) RunStatement(ctx context.Context, stmt *query.Statement) 
 			return
 		}
 	}()
-
-	result.Query = results.Query{
-		Attributes: qr.query.AttributesToString(),
-	}
-	if qr.query.Conditional != nil {
-		result.Query.Condition = qr.query.Conditional.String()
-	}
 
 	// create work managers
 	workManagers := map[string]*goDB.DBWorkManager{} // map interfaces to workManagers
@@ -239,12 +230,21 @@ func (qr *QueryRunner) RunStatement(ctx context.Context, stmt *query.Statement) 
 	var rs = make(results.Rows, agg.aggregatedMaps.Len())
 	count := 0
 
+	var metaIterOption hashmap.MetaIterOption
+	if valFilterNode != nil && valFilterNode.ValFilter != nil {
+		metaIterOption = hashmap.WithFilter(valFilterNode.ValFilter)
+	}
+	var totals hashmap.Val
 	for iface, aggMap := range agg.aggregatedMaps {
-		for i := aggMap.Iter(); i.Next(); {
+		var i = aggMap.Iter()
+		if metaIterOption != nil {
+			i = aggMap.Iter(metaIterOption)
+		}
+		for i.Next() {
 
 			key := types.ExtendedKey(i.Key())
 			val := i.Val()
-
+			totals = totals.Add(val)
 			if ts, hasTS := key.AttrTime(); hasTS {
 				rs[count].Labels.Timestamp = time.Unix(ts, 0)
 			}
@@ -282,20 +282,25 @@ func (qr *QueryRunner) RunStatement(ctx context.Context, stmt *query.Statement) 
 		runtime.GC()
 	}
 
-	result.Summary.Totals = agg.totals
+	result.Summary.Totals = totals
 
 	// sort the results
 	results.By(stmt.SortBy, stmt.Direction, stmt.SortAscending).Sort(rs)
 
 	// stop timing everything related to the query and store the hits
-	result.Summary.Hits.Total = len(rs)
+	result.Summary.Hits.Total = count
 
-	if stmt.NumResults < uint64(len(rs)) {
-		rs = rs[:stmt.NumResults]
+	// due to filtering, might display less than min(stmt.NumResults, len(rs))
+	// result rows
+	nDisplay := stmt.NumResults
+	if uint64(count) < stmt.NumResults {
+		nDisplay = uint64(count)
+	}
+	if nDisplay < uint64(len(rs)) {
+		rs = rs[:nDisplay]
 	}
 	result.Summary.Hits.Displayed = len(rs)
 	result.Rows = rs
-
 	return result, nil
 }
 

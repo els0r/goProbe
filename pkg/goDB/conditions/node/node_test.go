@@ -14,6 +14,7 @@ package node
 import (
 	"errors"
 	"fmt"
+	"github.com/els0r/goProbe/pkg/types"
 	"testing"
 )
 
@@ -103,6 +104,30 @@ func TestListToTree(t *testing.T) {
 		}
 		if !checkNoPointer(node) {
 			t.Fatalf("testcase: %v andflag: %v contains pointers somewhere in the tree", test.inNodes, test.and)
+		}
+	}
+}
+
+var queryConditionalStringTests = []struct {
+	conditionalNode Node
+	filterNode      Node
+	expected        string
+}{
+	{nil, nil, ""},
+	{nil, &ValFilterNode{FilterType: types.FilterKeywordNone}, ""},
+	{conditionNode{attribute: "sip", comparator: "=", value: "127.0.0.1"}, nil, "sip = 127.0.0.1"},
+	{conditionNode{attribute: "sip", comparator: "=", value: "127.0.0.1"},
+		&ValFilterNode{conditionNode: conditionNode{attribute: types.FilterKeywordDirection, comparator: "=", value: "in"}, FilterType: types.FilterKeywordDirection, ValFilter: types.Counters.IsOnlyInbound, LeftNode: true},
+		"(dir = in & sip = 127.0.0.1)"},
+	{conditionNode{attribute: "sip", comparator: "=", value: "127.0.0.1"},
+		&ValFilterNode{conditionNode: conditionNode{attribute: types.FilterKeywordDirection, comparator: "=", value: "in"}, FilterType: types.FilterKeywordDirection, ValFilter: types.Counters.IsOnlyInbound, LeftNode: false},
+		"(sip = 127.0.0.1 & dir = in)"},
+}
+
+func TestQueryConditionalString(t *testing.T) {
+	for _, test := range queryConditionalStringTests {
+		if got := QueryConditionalString(test.conditionalNode, test.filterNode); test.expected != got {
+			t.Fatalf("Expected: %s Got: %s", test.expected, got)
 		}
 	}
 }

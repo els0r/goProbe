@@ -23,6 +23,7 @@ package node
 import (
 	"errors"
 	"fmt"
+	"github.com/els0r/goProbe/pkg/types/hashmap"
 	"time"
 
 	"github.com/els0r/goProbe/pkg/goDB/conditions"
@@ -33,34 +34,38 @@ const resNil = "<nil>"
 
 // ParseAndInstrument parses and instruments the given conditional string for evaluation.
 // This is the main external function related to conditionals.
-func ParseAndInstrument(conditional string, dnsTimeout time.Duration) (Node, error) {
+func ParseAndInstrument(conditional string, dnsTimeout time.Duration) (Node, *ValFilterNode, error) {
 	tokens, err := conditions.Tokenize(conditional)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	conditionalNode, err := parseConditional(tokens)
 	if err != nil && !errors.Is(err, errEmptyConditional) {
-		return nil, err
+		return nil, nil, err
+	}
+	conditionalNode, valFilterNode, err := splitOffDirectionFilter(conditionalNode)
+	if err != nil && !errors.Is(err, errEmptyConditional) {
+		return nil, nil, err
 	}
 
 	if conditionalNode != nil {
 		if conditionalNode, err = desugar(conditionalNode); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		if conditionalNode, err = resolve(conditionalNode, dnsTimeout); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		conditionalNode = negationNormalForm(conditionalNode)
 
 		if conditionalNode, err = instrument(conditionalNode); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 
-	return conditionalNode, nil
+	return conditionalNode, &valFilterNode, nil
 }
 
 // Node describes an AST node for the conditional grammar
@@ -220,6 +225,47 @@ func (n orNode) Attributes() map[string]types.IPVersion {
 		result[attribute] = result[attribute].Merge(ipVersion)
 	}
 	return result
+}
+
+// ValFilterNode describes a node representing a ValFilter.
+// LeftNode is true if the ValFilterNode occurs on the left side
+// of a conjunction (andNode) and false if it occurs on the
+// right side.
+type ValFilterNode struct {
+	conditionNode
+	FilterType string
+	ValFilter  hashmap.ValFilter
+	LeftNode   bool
+}
+
+func (filter *ValFilterNode) setValFilterValues(cn conditionNode, ft string,
+	vf hashmap.ValFilter, ln bool) {
+	filter.conditionNode = cn
+	filter.FilterType = ft
+	filter.ValFilter = vf
+	filter.LeftNode = ln
+}
+
+// QueryConditionalString constructs the conditional string shown in the
+// "Conditions" output field based on the query conditions and the query filter
+func QueryConditionalString(conditionalNode Node, filterNode Node) string {
+	valFilterNode, ok := filterNode.(*ValFilterNode)
+	if !ok || valFilterNode.FilterType == types.FilterKeywordNone {
+		if conditionalNode == nil {
+			return ""
+		}
+		return conditionalNode.String()
+	}
+	if conditionalNode == nil {
+		return valFilterNode.String()
+	}
+	var n andNode
+	if valFilterNode.LeftNode {
+		n = andNode{left: valFilterNode.conditionNode, right: conditionalNode}
+	} else {
+		n = andNode{left: conditionalNode, right: valFilterNode.conditionNode}
+	}
+	return n.String()
 }
 
 // Brings a conditional ast tree into negation normal form.

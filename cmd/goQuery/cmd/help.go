@@ -216,6 +216,25 @@ ATTRIBUTES:
     EXAMPLE: "dport = 22 & proto = TCP" is equivalent to
              "port = 22 & proto = 6"
 
+  Traffic Direction:
+
+    direction (or dir)   Direction filter to match against aggregated results
+
+    USAGE:
+      dir = {in|inbound}:         incoming but no outgoing packets
+      dir = {out|outbound}:       outgoing but no incoming packets
+      dir = {uni|unidirectional}: either only incoming or only outgoing packets
+      dir = {bi|bidirectional}:   both incoming and outgoing packets (no unidir. traffic)
+
+    NOTE:
+      dir may only appear as (1) a top-level condition,
+      or (2) a condition of a top-level AND (&)
+
+    EXAMPLE:
+      dir = uni
+      dir = in & sip = 192.168.1.34
+      (dport = 22 & sip = 192.168.1.34) & dir = out
+
 COMPARATIVE OPERATORS:
 
   Base    Description            Other representations
