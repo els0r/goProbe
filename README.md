@@ -126,6 +126,7 @@ goProbe is currently set up to run on Linux based systems only (this might chang
 * Lennart Elsen
 * Fabian Kohn
 * Lorenz Breidenbach
+* Silvan Bitterli
 
 This software was initially developed at [Open Systems AG](https://www.open.ch/) in close collaboration with the [Distributed Computing Group](http://www.disco.ethz.ch/) at the [Swiss Federal Institute of Technology](https://www.ethz.ch/en.html).
 
