@@ -9,7 +9,6 @@ import (
 	"embed"
 	"flag"
 	"fmt"
-	"github.com/els0r/goProbe/pkg/goDB/conditions/node"
 	"io"
 	"io/fs"
 	"os"
@@ -22,6 +21,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/els0r/goProbe/pkg/goDB/conditions/node"
 
 	"github.com/els0r/goProbe/cmd/goProbe/config"
 	"github.com/els0r/goProbe/cmd/goQuery/cmd"
@@ -61,6 +62,14 @@ var defaultCaptureConfig = config.CaptureConfig{
 }
 
 var externalPCAPPath string
+
+var valFilters = []*node.ValFilterNode{
+	nil,
+	{ValFilter: types.Counters.IsOnlyInbound},
+	{ValFilter: types.Counters.IsOnlyOutbound},
+	{ValFilter: types.Counters.IsUnidirectional},
+	{ValFilter: types.Counters.IsBidirectional},
+}
 
 func TestStartStop(t *testing.T) {
 	for i := 0; i < 1000; i++ {
@@ -131,7 +140,8 @@ func testStartStop(t *testing.T) {
 func TestE2EBasic(t *testing.T) {
 	pcapData, err := pcaps.ReadFile(filepath.Join(testDataPath, defaultPcapTestFile))
 	require.Nil(t, err)
-	testE2E(t, nil, pcapData)
+
+	testE2E(t, 0, pcapData)
 }
 
 func TestE2EMultipleIfaces(t *testing.T) {
@@ -141,17 +151,20 @@ func TestE2EMultipleIfaces(t *testing.T) {
 	for _, n := range []int{
 		2, 3, 5, 10, 21, 100,
 	} {
+		t.Run(fmt.Sprintf("%02d interfaces", n), func(t *testing.T) {
 
-		// Use identical data several times
-		ifaceData := make([][]byte, n)
-		for i := 0; i < len(ifaceData); i++ {
-			ifaceData[i] = pcapData
-		}
-		testE2E(t, nil, ifaceData...)
+			// Use identical data several times
+			ifaceData := make([][]byte, n)
+			for i := 0; i < len(ifaceData); i++ {
+				ifaceData[i] = pcapData
+			}
+
+			testE2E(t, 0, ifaceData...)
+		})
 	}
 }
 
-func testE2EExtended(t *testing.T, valFilters []*node.ValFilterNode) {
+func testE2EExtended(t *testing.T, valFilterDescriptor int) {
 	pcapDir, err := pcaps.ReadDir(testDataPath)
 	require.Nil(t, err)
 
@@ -161,25 +174,20 @@ func testE2EExtended(t *testing.T, valFilters []*node.ValFilterNode) {
 		t.Run(path, func(t *testing.T) {
 			pcapData, err := pcaps.ReadFile(path)
 			require.Nil(t, err)
-			for _, valFilter := range valFilters {
-				testE2E(t, valFilter, pcapData)
-			}
+
+			testE2E(t, valFilterDescriptor, pcapData)
 		})
 	}
 }
 
 func TestE2EExtended(t *testing.T) {
-	testE2EExtended(t, []*node.ValFilterNode{nil})
+	testE2EExtended(t, 0)
 }
 
 func TestE2EDirFilter(t *testing.T) {
-	valFilters := []*node.ValFilterNode{
-		{ValFilter: types.Counters.IsOnlyInbound},
-		{ValFilter: types.Counters.IsOnlyOutbound},
-		{ValFilter: types.Counters.IsUnidirectional},
-		{ValFilter: types.Counters.IsBidirectional},
+	for valFilterDescriptor := range valFilters {
+		testE2EExtended(t, valFilterDescriptor)
 	}
-	testE2EExtended(t, valFilters)
 }
 
 func TestE2EExtendedPermuted(t *testing.T) {
@@ -200,7 +208,7 @@ func TestE2EExtendedPermuted(t *testing.T) {
 		}
 
 		t.Run(testMsg, func(t *testing.T) {
-			testE2E(t, nil, ifaceData...)
+			testE2E(t, 0, ifaceData...)
 		})
 	})
 }
@@ -225,7 +233,9 @@ func TestE2EExternal(t *testing.T) {
 			fmt.Println("Running E2E test on", path)
 			pcapData, err := os.ReadFile(filepath.Clean(path))
 			require.Nil(t, err)
-			testE2E(t, nil, pcapData)
+
+			testE2E(t, 0, pcapData)
+
 			return nil
 		}))
 
@@ -233,11 +243,12 @@ func TestE2EExternal(t *testing.T) {
 		fmt.Println("Running E2E test on", externalPCAPPath)
 		pcapData, err := os.ReadFile(filepath.Clean(externalPCAPPath))
 		require.Nil(t, err)
-		testE2E(t, nil, pcapData)
+
+		testE2E(t, 0, pcapData)
 	}
 }
 
-func testE2E(t *testing.T, valFilterNode *node.ValFilterNode, datasets ...[]byte) {
+func testE2E(t *testing.T, valFilterDescriptor int, datasets ...[]byte) {
 
 	// Setup a temporary directory for the test DB
 	tempDir, err := os.MkdirTemp(os.TempDir(), "goprobe_e2e")
@@ -280,19 +291,17 @@ func testE2E(t *testing.T, valFilterNode *node.ValFilterNode, datasets ...[]byte
 		"sip,dip,dport,proto",
 	}
 	dir := ""
-	if valFilterNode != nil {
-		filter := reflect.ValueOf(valFilterNode.ValFilter).Pointer()
-		switch filter {
-		case reflect.ValueOf(types.Counters.IsOnlyInbound).Pointer():
-			dir = "in"
-		case reflect.ValueOf(types.Counters.IsOnlyOutbound).Pointer():
-			dir = "out"
-		case reflect.ValueOf(types.Counters.IsUnidirectional).Pointer():
-			dir = "uni"
-		case reflect.ValueOf(types.Counters.IsBidirectional).Pointer():
-			dir = "bi"
-		}
+	switch valFilterDescriptor {
+	case 1:
+		dir = "in"
+	case 2:
+		dir = "out"
+	case 3:
+		dir = "uni"
+	case 4:
+		dir = "bi"
 	}
+	valFilterNode := valFilters[valFilterDescriptor]
 	tmp := make([]string, len(queryArgs)+2)
 	copy(tmp, queryArgs[:2])
 	tmp[2] = "-c"
