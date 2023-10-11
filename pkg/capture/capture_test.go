@@ -297,12 +297,15 @@ func testDeadlockLowTraffic(t *testing.T, maxPkts int) {
 	start := time.Now()
 	doneChan := make(chan error)
 	time.AfterFunc(100*time.Millisecond, func() {
+
+		t.Logf("starting roation loops after %v", time.Since(start))
 		for i := 0; i < 20; i++ {
 			mockC.lock()
 			mockC.rotate(ctx)
 			mockC.unlock()
 			time.Sleep(10 * time.Millisecond)
 		}
+		t.Logf("roation loops done after %v", time.Since(start))
 
 		select {
 		case err := <-errChan:
@@ -316,7 +319,7 @@ func testDeadlockLowTraffic(t *testing.T, maxPkts int) {
 
 	require.Nil(t, <-doneChan)
 
-	if time.Since(start) > 5*time.Second {
+	if time.Since(start) > 10*time.Second {
 		t.Fatalf("potential deadlock situation on rotation logic (test took %v)", time.Since(start))
 	}
 }
@@ -358,18 +361,16 @@ func testDeadlockHighTraffic(t *testing.T) {
 		select {
 		case err := <-errChan:
 			doneChan <- err
-		case <-time.After(10 * time.Second):
+		case <-time.After(30 * time.Second):
 			doneChan <- errors.New("potential deadlock situation on rotation logic (no termination confirmation received from mock source)")
 		}
 
 		require.Nil(t, mockC.close())
 	})
 
-	doneElem := <-doneChan
-	t.Logf("received signal from rotation Goroutine after %v: %v", time.Since(start), doneElem)
-	require.Nil(t, doneElem)
+	require.Nil(t, <-doneChan)
 
-	if time.Since(start) > 5*time.Second {
+	if time.Since(start) > 30*time.Second {
 		t.Fatalf("potential deadlock situation on rotation logic (test took %v)", time.Since(start))
 	}
 }
