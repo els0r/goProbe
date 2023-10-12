@@ -48,3 +48,18 @@ jobs:
 
     - name: Build for AMD64 (No-GCO Mode)
       run: GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -tags jsoniter -v -a ./...
+
+    - name: Benchmark
+      uses: WillAbides/benchdiff-action@v0.3.2
+      with:
+        status_sha: ${{ github.sha }}
+        status_name: benchmark-result
+        status_on_degraded: neutral
+        benchdiff_args: |
+          --packages ./...
+          --cpu=2
+          --count=10
+          --warmup-count=1
+          --benchtime=1s
+          --tolerance=50
+          --base-ref main
