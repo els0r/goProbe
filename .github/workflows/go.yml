@@ -31,12 +31,11 @@ jobs:
         status_on_degraded: neutral
         benchdiff_args: |
           --packages ./...
-          --cpu=2
+          --cpu=1,2
           --count=10
           --warmup-count=1
           --benchtime=1s
-          --tolerance=50
-          --base-ref=main
+          --tolerance=5
 
     - name: Test
       run: |
