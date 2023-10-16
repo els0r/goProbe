@@ -23,11 +23,11 @@ package node
 import (
 	"errors"
 	"fmt"
-	"github.com/els0r/goProbe/pkg/types/hashmap"
 	"time"
 
 	"github.com/els0r/goProbe/pkg/goDB/conditions"
 	"github.com/els0r/goProbe/pkg/types"
+	"github.com/els0r/goProbe/pkg/types/hashmap"
 )
 
 const resNil = "<nil>"

@@ -22,8 +22,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/els0r/goProbe/pkg/goDB/conditions/node"
-
 	"github.com/els0r/goProbe/cmd/goProbe/config"
 	"github.com/els0r/goProbe/cmd/goQuery/cmd"
 
@@ -32,6 +30,7 @@ import (
 	"github.com/els0r/goProbe/pkg/capture"
 	"github.com/els0r/goProbe/pkg/capture/capturetypes"
 	"github.com/els0r/goProbe/pkg/goDB"
+	"github.com/els0r/goProbe/pkg/goDB/conditions/node"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 	"github.com/els0r/goProbe/pkg/results"
 	"github.com/els0r/goProbe/pkg/types"

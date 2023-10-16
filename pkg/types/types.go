@@ -106,27 +106,24 @@ const (
 	FilterKeywordNone             = "none"
 )
 
-// FilterTypeDirection denotes filters wrt. directionality of traffic
-type FilterTypeDirection string
-
 const (
 	// incoming but no outgoing packets
-	FilterTypeDirectionIn        FilterTypeDirection = "in"
-	FilterTypeDirectionInSugared FilterTypeDirection = "inbound"
+	FilterTypeDirectionIn        = "in"
+	FilterTypeDirectionInSugared = "inbound"
 	// outgoing but no incoming packets
-	FilterTypeDirectionOut        FilterTypeDirection = "out"
-	FilterTypeDirectionOutSugared FilterTypeDirection = "outbound"
+	FilterTypeDirectionOut        = "out"
+	FilterTypeDirectionOutSugared = "outbound"
 	// either only incoming or only outgoing packets
-	FilterTypeDirectionUni        FilterTypeDirection = "uni"
-	FilterTypeDirectionUniSugared FilterTypeDirection = "unidirectional"
+	FilterTypeDirectionUni        = "uni"
+	FilterTypeDirectionUniSugared = "unidirectional"
 	// both incoming and outgoing packets (excluding unidirectional traffic)
-	FilterTypeDirectionBi        FilterTypeDirection = "bi"
-	FilterTypeDirectionBiSugared FilterTypeDirection = "bidirectional"
+	FilterTypeDirectionBi        = "bi"
+	FilterTypeDirectionBiSugared = "bidirectional"
 )
 
-var DirectionFilters = []FilterTypeDirection{FilterTypeDirectionIn, FilterTypeDirectionInSugared,
-	FilterTypeDirectionOut, FilterTypeDirectionOutSugared, FilterTypeDirectionOutSugared,
-	FilterTypeDirectionUni, FilterTypeDirectionUniSugared, FilterTypeDirectionBi, FilterTypeDirectionBiSugared}
+var DirectionFilters = []string{FilterTypeDirectionIn, FilterTypeDirectionInSugared,
+	FilterTypeDirectionOut, FilterTypeDirectionOutSugared, FilterTypeDirectionUni, FilterTypeDirectionUniSugared,
+	FilterTypeDirectionBi, FilterTypeDirectionBiSugared}
 
 // AnySelector denotes any / all (interfaces, hosts, ...)
 const AnySelector = "any"

@@ -53,6 +53,10 @@ type knownSuggestions struct {
 
 func (knownSuggestions) suggestionsMarker() {}
 
+// quit can be used as a suggestion token to trigger
+// termination of the condition string (no further recursion).
+const quit = "q"
+
 func complete(
 	tokenize func(string) []string,
 	join func([]string) string,
@@ -74,12 +78,23 @@ func complete(
 			// do nothing
 		case 1:
 			sugg := suggs.suggestions[0]
+
+			// trigger auto-termination
+			if sugg.token == quit {
+				return []string{""}
+			}
 			tokens[len(tokens)-1] = sugg.token
 			if sugg.accept {
 				completions = append(completions, join(tokens))
 			}
 			tokens = append(tokens, "")
-			completions = append(completions, complete(tokenize, join, next, unknown, join(tokens))...)
+			suggCompletions := complete(tokenize, join, next, unknown, join(tokens))
+			for _, suggCompletion := range suggCompletions {
+				if suggCompletion != "" {
+					completions = append(completions, suggCompletion)
+				}
+			}
+
 		default:
 			for _, sugg := range suggs.suggestions {
 				tokens[len(tokens)-1] = sugg.tokenPlusMeta
