@@ -11,6 +11,12 @@ servers:
 paths:
   /_query:
     $ref: '../../spec/paths/query.yaml'
+  /-/health:
+    $ref: '../../spec/paths/health.yaml'
+  /-/info:
+    $ref: '../../spec/paths/info.yaml'
+  /-/ready:
+    $ref: '../../spec/paths/ready.yaml'
 components:
   schemas:
     $ref: '../../spec/schemas/_index.yaml'

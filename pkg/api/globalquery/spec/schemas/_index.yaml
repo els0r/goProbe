@@ -27,3 +27,7 @@ Labels:
   $ref: '../../../spec/schemas/Labels.yaml'
 Attributes:
   $ref: '../../../spec/schemas/Attributes.yaml'
+
+# info endpoints
+ServiceInfo:
+  $ref: '../../../spec/schemas/ServiceInfo.yaml'

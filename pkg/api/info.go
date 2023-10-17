@@ -11,10 +11,10 @@ import (
 // ServiceInfo summarizes the running service's name, version, and commit. If running in
 // kubernetes, it will also print the name of the pod which returned the API call
 type ServiceInfo struct {
-	Name    string `json:"name"`
-	Version string `json:"version"`
-	Commit  string `json:"commit,omitempty"`
-	Pod     string `json:"pod,omitempty"`
+	Name    string `json:"name"`             // Name: service name. Example: global-query
+	Version string `json:"version"`          // Version: (semantic) version and commit short.  Example: 4.0.0-824f5847
+	Commit  string `json:"commit,omitempty"` // Commit: full git commit SHA. Example: 824f58479a8f326cb350085b3a0e287645e11bc1
+	Pod     string `json:"pod,omitempty"`    // Pod: name of kubernetes pod, if available. Example: global-query-5987cbf795-dvnsl
 }
 
 // ServiceInfoHandler returns a handler that returns the service name, version, and commit
