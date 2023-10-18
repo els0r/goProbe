@@ -17,8 +17,13 @@ const (
 	IfacesQueryParam = "ifaces"
 )
 
-// QueryRoute is the route to run a goquery query
-const QueryRoute = "/_query"
+const (
+	// QueryRoute is the route to run a goquery query
+	QueryRoute = "/_query"
+
+	// ValidationRoute is the route to validate a goquery query
+	ValidationRoute = QueryRoute + "/validate"
+)
 
 type response struct {
 	StatusCode int    `json:"status_code"`     // StatusCode: stores the HTTP status code of the response. Example: 200

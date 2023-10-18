@@ -44,3 +44,20 @@ func (c *Client) Query(ctx context.Context, args *query.Args) (*results.Result, 
 
 	return res, nil
 }
+
+// Query runs a query on the API endpoint
+func (c *Client) Validate(ctx context.Context, args *query.Args) (*results.Result, error) {
+	var res = new(results.Result)
+
+	req := c.Modify(ctx,
+		httpc.NewWithClient("POST", c.NewURL(gpapi.ValidationRoute), c.Client()).
+			EncodeJSON(args).
+			ParseJSON(res),
+	)
+	err := req.RunWithContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return res, nil
+}

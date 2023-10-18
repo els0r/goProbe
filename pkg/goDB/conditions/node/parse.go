@@ -56,7 +56,7 @@ func parseConditional(tokens []string) (conditionalNode Node, err error) {
 	if !p.success() {
 		return nil, p.err
 	} else if !p.eof() {
-		p.die("Input unexpectyly continues")
+		p.die("Input unexpectedly continues")
 		return nil, p.err
 	}
 

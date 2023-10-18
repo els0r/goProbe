@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/els0r/goProbe/pkg/goDB/conditions"
+	"github.com/els0r/goProbe/pkg/goDB/conditions/node"
 	"github.com/els0r/goProbe/pkg/query/dns"
 	"github.com/els0r/goProbe/pkg/results"
 	"github.com/els0r/goProbe/pkg/types"
@@ -102,6 +103,22 @@ type Args struct {
 	outputs []io.Writer
 }
 
+// ArgsError provides a more detailed error description for invalid query args
+type ArgsError struct {
+	Field   string `json:"field"`   // Field: the string describing which field led to the error. It MUST match the json definition for a field
+	Message string `json:"message"` // Message: a human-readable, UI friendly description of the error. Example: Condition parsing failed
+	Err     error  `json:"error"`   // Error: the underlying error encountered. Example: "unknown output format"
+}
+
+func (err *ArgsError) String() string {
+	return fmt.Sprintf("%s: %s: %s", err.Field, err.Message, err.Err)
+}
+
+// Error implements the error interface
+func (err *ArgsError) Error() string {
+	return err.String()
+}
+
 // DNSResolution contains DNS query / resolution related config arguments / parameters
 type DNSResolution struct {
 	Enabled bool          `json:"enabled" yaml:"enabled" form:"dns_enabled"`                                  // Enabled: enable reverse DNS lookups. Example: false
@@ -174,14 +191,22 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 	// verify config format
 	_, verifies := PermittedFormats[a.Format]
 	if !verifies {
-		return s, fmt.Errorf("unknown output format '%s'", a.Format)
+		return s, &ArgsError{
+			Field:   "format",
+			Message: "unknown output format",
+			Err:     fmt.Errorf("'%s' is not supported", a.Format),
+		}
 	}
 	s.Format = a.Format
 
 	// assign sort order and direction
 	s.SortBy, verifies = PermittedSortBy[a.SortBy]
 	if !verifies {
-		return s, fmt.Errorf("unknown sorting parameter '%s' specified", a.SortBy)
+		return s, &ArgsError{
+			Field:   "sort_by",
+			Message: "unknown sorting parameter",
+			Err:     fmt.Errorf("'%s' is not supported", a.SortBy),
+		}
 	}
 
 	// the query type is parsed here already in order to validate if the query contains
@@ -189,7 +214,11 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 	var selector types.LabelSelector
 	s.attributes, selector, err = types.ParseQueryType(a.Query)
 	if err != nil {
-		return s, fmt.Errorf("failed to parse query type: %w", err)
+		return s, &ArgsError{
+			Field:   "query",
+			Message: "invalid query type",
+			Err:     err,
+		}
 	}
 
 	// insert iface attribute here in case multiple interfaces where specified and the
@@ -210,7 +239,11 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 	// parse time bound
 	s.First, s.Last, err = ParseTimeRange(a.First, a.Last)
 	if err != nil {
-		return s, err
+		return s, &ArgsError{
+			Field:   "first/last",
+			Message: "invalid time range",
+			Err:     err,
+		}
 	}
 
 	switch {
@@ -228,38 +261,76 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 	if s.DNSResolution.Enabled {
 		err := dns.CheckDNS()
 		if err != nil {
-			return s, fmt.Errorf("DNS warning: %w", err)
+			return s, &ArgsError{
+				Field:   "dns_resolution.enabled",
+				Message: "DNS check failed",
+				Err:     err,
+			}
 		}
 		if !(0 < s.DNSResolution.Timeout) {
-			return s, fmt.Errorf("resolve-timeout must be greater than 0")
+			return s, &ArgsError{
+				Field:   "dns_resolution.enabled",
+				Message: "invalid resolution timeout",
+				Err:     errors.New("timeout must be greater than 0"),
+			}
 		}
 		if !(0 < s.DNSResolution.MaxRows) {
-			return s, fmt.Errorf("resolve-rows must be greater than 0")
+			return s, &ArgsError{
+				Field:   "dns_resolution.max_rows",
+				Message: "invalid number of DNS rows",
+				Err:     errors.New("value must be greater than 0"),
+			}
 		}
 	}
 
 	// sanitize conditional if one was provided
 	a.Condition, err = conditions.SanitizeUserInput(a.Condition)
 	if err != nil {
-		return s, fmt.Errorf("failed to sanitize condition: %w", err)
+		return s, &ArgsError{
+			Field:   "condition",
+			Message: "sanitization failed",
+			Err:     err,
+		}
 	}
 	s.Condition = a.Condition
 
+	// build condition tree to check if there is a syntax error before starting processing
+	_, _, parseErr := node.ParseAndInstrument(s.Condition, s.DNSResolution.Timeout)
+	if parseErr != nil {
+		return s, &ArgsError{
+			Field:   "condition",
+			Message: "parsing failed",
+			Err:     fmt.Errorf("\n\n%w", parseErr),
+		}
+	}
+
 	// check memory flag
 	if !(0 < a.MaxMemPct && a.MaxMemPct <= 100) {
-		return s, fmt.Errorf("invalid memory percentage of '%d' provided", a.MaxMemPct)
+		return s, &ArgsError{
+			Field:   "max_mem_pct",
+			Message: "invalid memory percentage",
+			Err:     fmt.Errorf("'%d' is out of bounds (0-100)", a.MaxMemPct),
+		}
 	}
 	s.MaxMemPct = a.MaxMemPct
 
 	// check limits flag
 	if a.NumResults <= 0 {
-		return s, errors.New("the printed row limit must be greater than 0")
+		return s, &ArgsError{
+			Field:   "num_results",
+			Message: "invalid row limit",
+			Err:     fmt.Errorf("value must be greater than 0"),
+		}
 	}
 	s.NumResults = a.NumResults
 
 	// check for consistent use of the live flag
 	if s.Live && s.Last != types.MaxTime.Unix() {
-		return s, errors.New("live query not possible if query has last timestamp")
+		return s, &ArgsError{
+			Field:   "live",
+			Message: "query not possible",
+			Err:     errors.New("last timestamp unsupported"),
+		}
 	}
 
 	// fan-out query results in case multiple writers were supplied

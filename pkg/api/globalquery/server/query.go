@@ -25,4 +25,8 @@ func RegisterQueryHandler(engine *gin.Engine, route string, resolver hosts.Resol
 	queryGroup := engine.Group(route)
 	queryGroup.GET("/", handler)  // support for URL-encoded form data GET requests
 	queryGroup.POST("/", handler) // support for JSON or form-data body POST requests
+
+	// validation
+	queryGroup.GET("/validate", api.ValidationHandler())
+	queryGroup.POST("/validate", api.ValidationHandler())
 }
