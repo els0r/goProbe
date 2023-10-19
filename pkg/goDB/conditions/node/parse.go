@@ -33,8 +33,11 @@ package node
 import (
 	"errors"
 	"fmt"
+	"log/slog"
+	"strings"
 
 	"github.com/els0r/goProbe/pkg/types"
+	jsoniter "github.com/json-iterator/go"
 )
 
 // errEmptyConditional is a sentinel error indicating that an emoty conditional was parsed
@@ -108,6 +111,78 @@ func (p parser) success() bool {
 	return p.err == nil
 }
 
+// ParseError stores an error encountered during condition parsing
+type ParseError struct {
+	tokens      []string
+	pos         int
+	description string
+}
+
+type parseErrorJson struct {
+	Condition   string `json:"condition"`
+	Token       string `json:"token"`
+	Pos         int    `json:"pos"`
+	Description string `json:"description"`
+}
+
+func (err *ParseError) MarshalJSON() ([]byte, error) {
+	var m = parseErrorJson{
+		Condition:   err.tokenString(),
+		Token:       err.tokens[err.pos],
+		Pos:         len(err.parsedString()) + len(sep),
+		Description: err.description,
+	}
+	return jsoniter.Marshal(&m)
+}
+
+func (err *ParseError) UnmarshalJSON(data []byte) error {
+	var m = new(parseErrorJson)
+	e := jsoniter.Unmarshal(data, m)
+	if e != nil {
+		return e
+	}
+
+	err.tokens = strings.Split(m.Condition, sep)
+	err.pos = m.Pos
+	err.description = m.Description
+	return nil
+}
+
+const sep = " "
+
+func (err *ParseError) parsedString() string {
+	return strings.Join(err.tokens[:err.pos], sep)
+}
+
+func (err *ParseError) tokenString() string {
+	return strings.Join(err.tokens, sep)
+}
+
+func (err *ParseError) Error() string {
+	// Reassemble the tokens.
+	final := err.parsedString() + sep
+
+	// Remember position of current token in reassembled string
+	offset := len(final)
+
+	// Add remaining tokens
+	final += strings.Join(err.tokens[err.pos:], sep)
+
+	// Draw arrow
+	final += "\n" + strings.Repeat(sep, offset) + "^\n"
+
+	// Add error description
+	final += err.description
+	return final
+}
+
+func (err *ParseError) LogValue() slog.Value {
+	return slog.GroupValue(
+		slog.String("token", err.tokens[err.pos]),
+		slog.Int("pos", err.pos),
+	)
+}
+
 // Creates a parser error with the given description and a nice error
 // message pointing to current token in the token stream.
 // Example of an error message created by this method:
@@ -116,26 +191,11 @@ func (p parser) success() bool {
 //	                    ^
 //	Expected ), but didn't get it.
 func (p *parser) die(description string, args ...interface{}) {
-	// Reassemble the tokens.
-	final := ""
-	for i := 0; i < p.pos; i++ {
-		final += p.tokens[i] + " "
+	p.err = &ParseError{
+		tokens:      p.tokens,
+		pos:         p.pos,
+		description: fmt.Sprintf(description, args...),
 	}
-	// Remember position of current token in reassembled string
-	offset := len(final)
-	// Add remaining tokens
-	for i := p.pos; i < len(p.tokens); i++ {
-		final += p.tokens[i] + " "
-	}
-	final += "\n"
-	// Draw arrow
-	for i := 0; i < offset; i++ {
-		final += " "
-	}
-	final += "^\n"
-	// Add error description
-	final += description
-	p.err = fmt.Errorf(final, args...)
 }
 
 // Returns the token at the current position in the token stream
@@ -169,7 +229,7 @@ func (p *parser) accept(token string) bool {
 // Like accept, but the parse fails if the argument token doesn't equal the current token.
 func (p *parser) expect(token string) {
 	if !p.accept(token) {
-		p.die("Expected %v, but didn't get it.\n", token)
+		p.die("Expected %q, but didn't get it", token)
 		return
 	}
 }

@@ -1,6 +1,7 @@
 package query
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -107,16 +108,51 @@ type Args struct {
 type ArgsError struct {
 	Field   string `json:"field"`   // Field: the string describing which field led to the error. It MUST match the json definition for a field
 	Message string `json:"message"` // Message: a human-readable, UI friendly description of the error. Example: Condition parsing failed
-	Err     error  `json:"error"`   // Error: the underlying error encountered. Example: "unknown output format"
+	err     error
 }
 
 func (err *ArgsError) String() string {
-	return fmt.Sprintf("%s: %s: %s", err.Field, err.Message, err.Err)
+	return fmt.Sprintf("%s: %s: %s", err.Field, err.Message, err.err)
 }
 
 // Error implements the error interface
 func (err *ArgsError) Error() string {
 	return err.String()
+}
+
+// Unwrap makes the error wrappable
+func (err *ArgsError) Unwrap() error {
+	return err.err
+}
+
+// LogValue implements slog.LogValuer
+func (err *ArgsError) LogValue() slog.Value {
+	return slog.GroupValue(
+		slog.String("field", err.Field),
+		slog.String("message", err.Message),
+		slog.Any("error", err.err),
+	)
+}
+
+func (err *ArgsError) MarshalJSON() ([]byte, error) {
+	var m = struct {
+		*ArgsError
+		Error interface{} `json:"error"`
+	}{ArgsError: err}
+
+	// check if the underlying error can be marshalled
+	e := errors.Unwrap(err.err)
+	if e == nil {
+		e = err.err
+	}
+
+	switch t := e.(type) {
+	case json.Marshaler:
+		m.Error = t
+	default:
+		m.Error = t.Error()
+	}
+	return jsoniter.Marshal(&m)
 }
 
 // DNSResolution contains DNS query / resolution related config arguments / parameters
@@ -194,7 +230,7 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 		return s, &ArgsError{
 			Field:   "format",
 			Message: "unknown output format",
-			Err:     fmt.Errorf("'%s' is not supported", a.Format),
+			err:     fmt.Errorf("'%s' is not supported", a.Format),
 		}
 	}
 	s.Format = a.Format
@@ -205,7 +241,7 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 		return s, &ArgsError{
 			Field:   "sort_by",
 			Message: "unknown sorting parameter",
-			Err:     fmt.Errorf("'%s' is not supported", a.SortBy),
+			err:     fmt.Errorf("'%s' is not supported", a.SortBy),
 		}
 	}
 
@@ -217,7 +253,7 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 		return s, &ArgsError{
 			Field:   "query",
 			Message: "invalid query type",
-			Err:     err,
+			err:     err,
 		}
 	}
 
@@ -242,7 +278,7 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 		return s, &ArgsError{
 			Field:   "first/last",
 			Message: "invalid time range",
-			Err:     err,
+			err:     err,
 		}
 	}
 
@@ -264,21 +300,21 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 			return s, &ArgsError{
 				Field:   "dns_resolution.enabled",
 				Message: "DNS check failed",
-				Err:     err,
+				err:     err,
 			}
 		}
 		if !(0 < s.DNSResolution.Timeout) {
 			return s, &ArgsError{
 				Field:   "dns_resolution.enabled",
 				Message: "invalid resolution timeout",
-				Err:     errors.New("timeout must be greater than 0"),
+				err:     errors.New("timeout must be greater than 0"),
 			}
 		}
 		if !(0 < s.DNSResolution.MaxRows) {
 			return s, &ArgsError{
 				Field:   "dns_resolution.max_rows",
 				Message: "invalid number of DNS rows",
-				Err:     errors.New("value must be greater than 0"),
+				err:     errors.New("value must be greater than 0"),
 			}
 		}
 	}
@@ -289,7 +325,7 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 		return s, &ArgsError{
 			Field:   "condition",
 			Message: "sanitization failed",
-			Err:     err,
+			err:     err,
 		}
 	}
 	s.Condition = a.Condition
@@ -300,7 +336,7 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 		return s, &ArgsError{
 			Field:   "condition",
 			Message: "parsing failed",
-			Err:     fmt.Errorf("\n\n%w", parseErr),
+			err:     fmt.Errorf("\n\n%w", parseErr),
 		}
 	}
 
@@ -309,7 +345,7 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 		return s, &ArgsError{
 			Field:   "max_mem_pct",
 			Message: "invalid memory percentage",
-			Err:     fmt.Errorf("'%d' is out of bounds (0-100)", a.MaxMemPct),
+			err:     fmt.Errorf("'%d' is out of bounds (0-100)", a.MaxMemPct),
 		}
 	}
 	s.MaxMemPct = a.MaxMemPct
@@ -319,7 +355,7 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 		return s, &ArgsError{
 			Field:   "num_results",
 			Message: "invalid row limit",
-			Err:     fmt.Errorf("value must be greater than 0"),
+			err:     fmt.Errorf("value must be greater than 0"),
 		}
 	}
 	s.NumResults = a.NumResults
@@ -329,7 +365,7 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 		return s, &ArgsError{
 			Field:   "live",
 			Message: "query not possible",
-			Err:     errors.New("last timestamp unsupported"),
+			err:     errors.New("last timestamp unsupported"),
 		}
 	}
 

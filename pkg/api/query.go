@@ -77,9 +77,9 @@ func ValidationHandler() gin.HandlerFunc {
 			}
 		}
 
-		logger := logging.FromContext(ctx)
+		logger := logging.FromContext(ctx).With("args", queryArgs)
 
-		logger.With("args", queryArgs).Info("validating args")
+		logger.Info("validating args")
 		_, err := queryArgs.Prepare()
 		if err != nil {
 			vr := &ValidationResponse{StatusCode: http.StatusBadRequest}
@@ -90,6 +90,8 @@ func ValidationHandler() gin.HandlerFunc {
 				LogAndAbort(ctx, c, http.StatusInternalServerError, err)
 				return
 			}
+
+			logger.With("error", vr.ArgsError).Error("invalid query args")
 
 			c.JSON(http.StatusBadRequest, vr)
 			return
