@@ -1,7 +1,6 @@
 package query
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -106,8 +105,8 @@ type Args struct {
 
 // ArgsError provides a more detailed error description for invalid query args
 type ArgsError struct {
-	Field   string `json:"field"`   // Field: the string describing which field led to the error. It MUST match the json definition for a field
-	Message string `json:"message"` // Message: a human-readable, UI friendly description of the error. Example: Condition parsing failed
+	Field   string `json:"field"`             // Field: the string describing which field led to the error. It MUST match the json definition for a field
+	Message string `json:"message,omitempty"` // Message: a human-readable, UI friendly description of the error. Example: Condition parsing failed
 	err     error
 }
 
@@ -134,24 +133,40 @@ func (err *ArgsError) LogValue() slog.Value {
 	)
 }
 
+type marshallableError struct {
+	error
+}
+
+func (m *marshallableError) MarshalJSON() ([]byte, error) {
+	return jsoniter.Marshal(m.Error())
+}
+
 func (err *ArgsError) MarshalJSON() ([]byte, error) {
 	var m = struct {
-		*ArgsError
-		Error interface{} `json:"error"`
-	}{ArgsError: err}
+		Field   string `json:"field"`
+		Message string `json:"message,omitempty"`
+		Error   any    `json:"error,omitempty"`
+	}{Field: err.Field, Message: err.Message}
 
-	// check if the underlying error can be marshalled
+	if err.err == nil {
+		m.Error = nil
+		return jsoniter.Marshal(&m)
+	}
+
+	// check if the underlying error is a parse error
 	e := errors.Unwrap(err.err)
 	if e == nil {
 		e = err.err
 	}
 
+	// need assertion because error doesn't know how to deal with marshalling
 	switch t := e.(type) {
-	case json.Marshaler:
+	case *node.ParseError:
 		m.Error = t
 	default:
-		m.Error = t.Error()
+		m.Error = &marshallableError{e}
 	}
+
 	return jsoniter.Marshal(&m)
 }
 

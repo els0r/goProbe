@@ -37,7 +37,6 @@ import (
 	"strings"
 
 	"github.com/els0r/goProbe/pkg/types"
-	jsoniter "github.com/json-iterator/go"
 )
 
 // errEmptyConditional is a sentinel error indicating that an emoty conditional was parsed
@@ -113,49 +112,19 @@ func (p parser) success() bool {
 
 // ParseError stores an error encountered during condition parsing
 type ParseError struct {
-	tokens      []string
-	pos         int
-	description string
-}
-
-type parseErrorJson struct {
-	Condition   string `json:"condition"`
-	Token       string `json:"token"`
-	Pos         int    `json:"pos"`
-	Description string `json:"description"`
-}
-
-func (err *ParseError) MarshalJSON() ([]byte, error) {
-	var m = parseErrorJson{
-		Condition:   err.tokenString(),
-		Token:       err.tokens[err.pos],
-		Pos:         len(err.parsedString()) + len(sep),
-		Description: err.description,
-	}
-	return jsoniter.Marshal(&m)
-}
-
-func (err *ParseError) UnmarshalJSON(data []byte) error {
-	var m = new(parseErrorJson)
-	e := jsoniter.Unmarshal(data, m)
-	if e != nil {
-		return e
-	}
-
-	err.tokens = strings.Split(m.Condition, sep)
-	err.pos = m.Pos
-	err.description = m.Description
-	return nil
+	Tokens      []string `json:"tokens"`
+	Pos         int      `json:"pos"`
+	Description string   `json:"description"`
 }
 
 const sep = " "
 
 func (err *ParseError) parsedString() string {
-	return strings.Join(err.tokens[:err.pos], sep)
+	return strings.Join(err.Tokens[:err.Pos], sep)
 }
 
 func (err *ParseError) tokenString() string {
-	return strings.Join(err.tokens, sep)
+	return strings.Join(err.Tokens, sep)
 }
 
 func (err *ParseError) Error() string {
@@ -166,21 +135,22 @@ func (err *ParseError) Error() string {
 	offset := len(final)
 
 	// Add remaining tokens
-	final += strings.Join(err.tokens[err.pos:], sep)
+	final += strings.Join(err.Tokens[err.Pos:], sep)
 
 	// Draw arrow
 	final += "\n" + strings.Repeat(sep, offset) + "^\n"
 
 	// Add error description
-	final += err.description
+	final += err.Description
 	return final
 }
 
 func (err *ParseError) LogValue() slog.Value {
-	return slog.GroupValue(
-		slog.String("token", err.tokens[err.pos]),
-		slog.Int("pos", err.pos),
-	)
+	attr := []slog.Attr{
+		slog.Int("pos", err.Pos),
+		slog.String("description", err.Description),
+	}
+	return slog.GroupValue(attr...)
 }
 
 // Creates a parser error with the given description and a nice error
@@ -190,12 +160,17 @@ func (err *ParseError) LogValue() slog.Value {
 //	( sip = 192.168.1.1
 //	                    ^
 //	Expected ), but didn't get it.
-func (p *parser) die(description string, args ...interface{}) {
-	p.err = &ParseError{
-		tokens:      p.tokens,
-		pos:         p.pos,
-		description: fmt.Sprintf(description, args...),
+func (p *parser) die(description string, args ...any) {
+	p.err = newParseError(p.tokens, p.pos, description, args...)
+}
+
+func newParseError(tokens []string, pos int, description string, args ...any) *ParseError {
+	err := &ParseError{
+		Tokens:      tokens,
+		Pos:         pos,
+		Description: fmt.Sprintf(description, args...),
 	}
+	return err
 }
 
 // Returns the token at the current position in the token stream

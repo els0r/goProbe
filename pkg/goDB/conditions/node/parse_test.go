@@ -14,6 +14,8 @@ package node
 import (
 	"errors"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 var parseConditionalTests = []struct {
@@ -51,6 +53,52 @@ var parseConditionalTests = []struct {
 	{[]string{"directio", "=", "in"},
 		"direction = in",
 		false},
+}
+
+func TestParseError(t *testing.T) {
+	var tests = []struct {
+		name        string
+		tokens      []string
+		expectedErr *ParseError
+	}{
+		{"missing comparison operator",
+			[]string{"sip", "=", "192.168.1.1", "|", "(", "host"},
+			&ParseError{
+				Pos:         6,
+				Description: `Expected comparison operator`,
+			},
+		},
+		{"incorrect attribute beginning",
+			[]string{"sipl", "=", "192.168.1.1"},
+			&ParseError{
+				Pos:         0,
+				Description: `Expected attribute`,
+			},
+		},
+		{"incorrect attribute middle",
+			[]string{"sip", "=", "192.168.1.1", "&", "dipl", "=", "192.168.1.2"},
+			&ParseError{
+				Pos:         4,
+				Description: `Expected attribute`,
+			},
+		},
+	}
+	for _, test := range tests {
+		test := test
+
+		t.Run(test.name, func(t *testing.T) {
+			// test parse error
+			_, err := parseConditional(test.tokens)
+			if test.expectedErr == nil {
+				require.Nil(t, err)
+				return
+			}
+			t.Logf("error:\n%v", err)
+
+			test.expectedErr.Tokens = test.tokens
+			require.Equal(t, test.expectedErr, err)
+		})
+	}
 }
 
 func TestParseConditional(t *testing.T) {
