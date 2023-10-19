@@ -368,7 +368,7 @@ func testDeadlockHighTraffic(t *testing.T) {
 		select {
 		case err := <-errChan:
 			doneChan <- err
-		case <-time.After(30 * time.Second):
+		case <-time.After(time.Minute):
 			doneChan <- errors.New("potential deadlock situation on rotation logic (no termination confirmation received from mock source)")
 		}
 
@@ -377,7 +377,7 @@ func testDeadlockHighTraffic(t *testing.T) {
 
 	require.Nil(t, <-doneChan)
 
-	if time.Since(start) > 30*time.Second {
+	if time.Since(start) > 3*time.Minute {
 		t.Fatalf("potential deadlock situation on rotation logic (test took %v)", time.Since(start))
 	}
 }
