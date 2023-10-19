@@ -45,12 +45,11 @@ import (
 // NOTE:  the current implementation of GPDPIProtocols.go has to make sure that the map keys
 //
 //	of "proto" to numbers are all lower case
-func SanitizeUserInput(conditional string) (string, error) {
+func SanitizeUserInput(conditional string) string {
 
 	var (
 		sanitized string
 		r         *regexp.Regexp
-		err       error
 	)
 
 	// expressions that count as "user grammar" for the different parts of the conditional
@@ -70,26 +69,19 @@ func SanitizeUserInput(conditional string) (string, error) {
 	}
 
 	// first, convert everything to lower case
-	r, err = regexp.Compile(".*")
-	if err != nil {
-		return sanitized, err
-	}
+	r = regexp.MustCompile(".*")
 
 	sanitized = string(r.ReplaceAllFunc([]byte(conditional), bytes.ToLower))
 
 	// range over map to convert the individual entries
 	for condGrammarOp, userGrammarOps := range grammarConversionMap {
 		for _, userOp := range userGrammarOps {
-			r, err = regexp.Compile(userOp)
-			if err != nil {
-				return sanitized, err
-			}
-
+			r = regexp.MustCompile(userOp)
 			sanitized = r.ReplaceAllString(sanitized, condGrammarOp)
 		}
 	}
 
-	return sanitized, err
+	return sanitized
 }
 
 func startsDelimiter(char byte) bool {

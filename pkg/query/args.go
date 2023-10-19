@@ -103,15 +103,37 @@ type Args struct {
 	outputs []io.Writer
 }
 
+type ErrorType string
+
+const (
+	ParseErrorType       ErrorType = "ParseError"
+	RangeErrorType       ErrorType = "RangeError"
+	UnknownErrorType     ErrorType = "UnknownError"
+	UnsupportedErrorType ErrorType = "UnsupportedError"
+)
+
 // ArgsError provides a more detailed error description for invalid query args
 type ArgsError struct {
-	Field   string `json:"field"`             // Field: the string describing which field led to the error. It MUST match the json definition for a field
-	Message string `json:"message,omitempty"` // Message: a human-readable, UI friendly description of the error. Example: Condition parsing failed
+	Field   string    // Field: the string describing which field led to the error. It MUST match the json definition for a field
+	Type    ErrorType // Type: the type of the error. Example: ParseError
+	Message string    // Message: a human-readable, UI friendly description of the error. Example: Condition parsing failed
 	err     error
 }
 
+func newArgsError(field string, t ErrorType, msg string, err error) *ArgsError {
+	if t == "" {
+		t = UnknownErrorType
+	}
+	return &ArgsError{
+		Field:   field,
+		Type:    t,
+		Message: msg,
+		err:     err,
+	}
+}
+
 func (err *ArgsError) String() string {
-	return fmt.Sprintf("%s: %s: %s", err.Field, err.Message, err.err)
+	return fmt.Sprintf("%s: %s: (%s: %s", err.Field, err.Message, err.Type, err.err)
 }
 
 // Error implements the error interface
@@ -128,6 +150,7 @@ func (err *ArgsError) Unwrap() error {
 func (err *ArgsError) LogValue() slog.Value {
 	return slog.GroupValue(
 		slog.String("field", err.Field),
+		slog.String("type", string(err.Type)),
 		slog.String("message", err.Message),
 		slog.Any("error", err.err),
 	)
@@ -143,10 +166,11 @@ func (m *marshallableError) MarshalJSON() ([]byte, error) {
 
 func (err *ArgsError) MarshalJSON() ([]byte, error) {
 	var m = struct {
-		Field   string `json:"field"`
-		Message string `json:"message,omitempty"`
-		Error   any    `json:"error,omitempty"`
-	}{Field: err.Field, Message: err.Message}
+		Field   string    `json:"field"`
+		Type    ErrorType `json:"type"`
+		Message string    `json:"message,omitempty"`
+		Error   any       `json:"error,omitempty"`
+	}{Field: err.Field, Type: err.Type, Message: err.Message}
 
 	if err.err == nil {
 		m.Error = nil
@@ -222,10 +246,7 @@ func (a *Args) LogValue() slog.Value {
 
 // Prepare takes the query Arguments, validates them and creates an executable statement. Optionally, additional writers can be passed to route query results to different destinations.
 func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
-	// if not already done beforehand, enforce defaults for args
-	if a.SortBy == "" {
-		a.SortBy = "packets"
-	}
+	var err error
 
 	s := &Statement{
 		QueryType:     a.Query,
@@ -237,39 +258,46 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 		Output:        os.Stdout, // by default, we write results to the console
 	}
 
-	var err error
+	// the query type is parsed here already in order to validate if the query contains
+	// errors
+	var selector types.LabelSelector
+	s.attributes, selector, err = types.ParseQueryType(a.Query)
+	if err != nil {
+		return s, newArgsError(
+			"query",
+			ParseErrorType,
+			"invalid query type",
+			err,
+		)
+	}
+
+	// if not already done beforehand, enforce defaults for args
+	if a.SortBy == "" {
+		a.SortBy = "packets"
+	}
 
 	// verify config format
 	_, verifies := PermittedFormats[a.Format]
 	if !verifies {
-		return s, &ArgsError{
-			Field:   "format",
-			Message: "unknown output format",
-			err:     fmt.Errorf("'%s' is not supported", a.Format),
-		}
+		return s, newArgsError(
+			"format",
+			UnsupportedErrorType,
+			"unknown output format",
+			fmt.Errorf("'%s' is not supported", a.Format),
+		)
 	}
 	s.Format = a.Format
 
 	// assign sort order and direction
 	s.SortBy, verifies = PermittedSortBy[a.SortBy]
 	if !verifies {
-		return s, &ArgsError{
-			Field:   "sort_by",
-			Message: "unknown sorting parameter",
-			err:     fmt.Errorf("'%s' is not supported", a.SortBy),
-		}
-	}
+		return s, newArgsError(
+			"sort_by",
+			UnsupportedErrorType,
+			"unknown sorting parameter",
+			fmt.Errorf("'%s' is not supported", a.SortBy),
+		)
 
-	// the query type is parsed here already in order to validate if the query contains
-	// errors
-	var selector types.LabelSelector
-	s.attributes, selector, err = types.ParseQueryType(a.Query)
-	if err != nil {
-		return s, &ArgsError{
-			Field:   "query",
-			Message: "invalid query type",
-			err:     err,
-		}
 	}
 
 	// insert iface attribute here in case multiple interfaces where specified and the
@@ -290,11 +318,12 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 	// parse time bound
 	s.First, s.Last, err = ParseTimeRange(a.First, a.Last)
 	if err != nil {
-		return s, &ArgsError{
-			Field:   "first/last",
-			Message: "invalid time range",
-			err:     err,
-		}
+		return s, newArgsError(
+			"first/last",
+			RangeErrorType,
+			"invalid time range",
+			err,
+		)
 	}
 
 	switch {
@@ -310,78 +339,79 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 
 	// check resolve timeout and DNS
 	if s.DNSResolution.Enabled {
+		// TODO: make this function available in the public domain or skip
 		err := dns.CheckDNS()
 		if err != nil {
-			return s, &ArgsError{
-				Field:   "dns_resolution.enabled",
-				Message: "DNS check failed",
-				err:     err,
-			}
+			return s, newArgsError(
+				"dns_resolution.enabled",
+				"",
+				"DNS check failed",
+				err,
+			)
 		}
 		if !(0 < s.DNSResolution.Timeout) {
-			return s, &ArgsError{
-				Field:   "dns_resolution.enabled",
-				Message: "invalid resolution timeout",
-				err:     errors.New("timeout must be greater than 0"),
-			}
+			return s, newArgsError(
+				"dns_resolution.timeout",
+				RangeErrorType,
+				"invalid resolution timeout",
+				errors.New("must be greater than 0"),
+			)
 		}
 		if !(0 < s.DNSResolution.MaxRows) {
-			return s, &ArgsError{
-				Field:   "dns_resolution.max_rows",
-				Message: "invalid number of DNS rows",
-				err:     errors.New("value must be greater than 0"),
-			}
+			return s, newArgsError(
+				"dns_resolution.max_rows",
+				RangeErrorType,
+				"invalid number of DNS rows",
+				errors.New("must be greater than 0"),
+			)
 		}
 	}
 
 	// sanitize conditional if one was provided
-	a.Condition, err = conditions.SanitizeUserInput(a.Condition)
-	if err != nil {
-		return s, &ArgsError{
-			Field:   "condition",
-			Message: "sanitization failed",
-			err:     err,
-		}
-	}
+	a.Condition = conditions.SanitizeUserInput(a.Condition)
 	s.Condition = a.Condition
 
 	// build condition tree to check if there is a syntax error before starting processing
 	_, _, parseErr := node.ParseAndInstrument(s.Condition, s.DNSResolution.Timeout)
 	if parseErr != nil {
-		return s, &ArgsError{
-			Field:   "condition",
-			Message: "parsing failed",
-			err:     fmt.Errorf("\n\n%w", parseErr),
-		}
+		return s, newArgsError(
+			"condition",
+			ParseErrorType,
+			"parsing failed",
+			fmt.Errorf("\n\n%w", parseErr),
+		)
 	}
 
 	// check memory flag
 	if !(0 < a.MaxMemPct && a.MaxMemPct <= 100) {
-		return s, &ArgsError{
-			Field:   "max_mem_pct",
-			Message: "invalid memory percentage",
-			err:     fmt.Errorf("'%d' is out of bounds (0-100)", a.MaxMemPct),
-		}
+		return s, newArgsError(
+			"max_mem_pct",
+			RangeErrorType,
+			"invalid memory percentage",
+			fmt.Errorf("'%d' is out of bounds (0-100)", a.MaxMemPct),
+		)
 	}
 	s.MaxMemPct = a.MaxMemPct
 
 	// check limits flag
 	if a.NumResults <= 0 {
-		return s, &ArgsError{
-			Field:   "num_results",
-			Message: "invalid row limit",
-			err:     fmt.Errorf("value must be greater than 0"),
-		}
+		return s, newArgsError(
+			"num_results",
+			RangeErrorType,
+			"invalid row limit",
+			fmt.Errorf("must be greater than 0"),
+		)
 	}
 	s.NumResults = a.NumResults
 
 	// check for consistent use of the live flag
 	if s.Live && s.Last != types.MaxTime.Unix() {
-		return s, &ArgsError{
-			Field:   "live",
-			Message: "query not possible",
-			err:     errors.New("last timestamp unsupported"),
-		}
+		return s, newArgsError(
+			"live",
+			UnsupportedErrorType,
+			"query not possible",
+			errors.New("last timestamp unsupported"),
+		)
 	}
 
 	// fan-out query results in case multiple writers were supplied
