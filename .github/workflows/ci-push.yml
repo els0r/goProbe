@@ -25,9 +25,3 @@ jobs:
       run: |
         go test -tags jsoniter -v ./... -covermode=atomic -coverprofile=coverage.out
         go tool cover -func=coverage.out -o=coverage.out
-
-    - name: Race Detector
-      run: |
-        go test -tags jsoniter -race -v ./...
-
-

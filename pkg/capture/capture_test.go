@@ -20,6 +20,7 @@ import (
 	"github.com/els0r/goProbe/pkg/capture/capturetypes"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 	"github.com/els0r/goProbe/pkg/goprobe/writeout"
+	"github.com/els0r/telemetry/logging"
 	"github.com/fako1024/slimcap/capture"
 	"github.com/fako1024/slimcap/capture/afpacket/afring"
 	"github.com/fako1024/slimcap/link"
@@ -59,6 +60,12 @@ func (t testMockSrcs) Wait() error {
 }
 
 func TestConcurrentMethodAccess(t *testing.T) {
+
+	require.Nil(t, logging.Init(logging.LevelWarn, logging.EncodingLogfmt,
+		logging.WithOutput(os.Stdout),
+		logging.WithErrorOutput(os.Stderr),
+	))
+
 	for _, i := range []int{1, 2, 3, 10} {
 		t.Run(fmt.Sprintf("%d ifaces", i), func(t *testing.T) {
 			testConcurrentMethodAccess(t, i, 1000)
