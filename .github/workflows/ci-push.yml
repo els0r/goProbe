@@ -1,0 +1,33 @@
+name: CI Build / Test (Push)
+
+on:
+  - push
+
+jobs:
+
+  build-linux:
+    name: Build / Test on Linux
+    runs-on: ubuntu-latest
+    steps:
+    - name: Set up Go
+      uses: actions/setup-go@v3
+      with:
+        go-version: ^1.21
+      id: go
+
+    - name: Check out code into the Go module directory
+      uses: actions/checkout@v3
+
+    - name: Build for AMD64
+      run: GOOS=linux GOARCH=amd64 go build -tags jsoniter -v ./...
+
+    - name: Test
+      run: |
+        go test -tags jsoniter -v ./... -covermode=atomic -coverprofile=coverage.out
+        go tool cover -func=coverage.out -o=coverage.out
+
+    - name: Race Detector
+      run: |
+        go test -tags jsoniter -race -v ./...
+
+
