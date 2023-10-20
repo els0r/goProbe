@@ -32,7 +32,6 @@ package node
 
 import (
 	"errors"
-	"fmt"
 
 	"github.com/els0r/goProbe/pkg/types"
 )
@@ -119,13 +118,8 @@ func (p *parser) die(description string, args ...any) {
 	p.err = newParseError(p.tokens, p.pos, description, args...)
 }
 
-func newParseError(tokens []string, pos int, description string, args ...any) *ParseError {
-	err := &ParseError{
-		Tokens:      tokens,
-		Pos:         pos,
-		Description: fmt.Sprintf(description, args...),
-	}
-	return err
+func newParseError(tokens []string, pos int, description string, args ...any) *types.ParseError {
+	return types.NewParseError(tokens, pos, " ", description, args...)
 }
 
 // Returns the token at the current position in the token stream

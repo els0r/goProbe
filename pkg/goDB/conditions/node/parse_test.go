@@ -15,6 +15,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/els0r/goProbe/pkg/types"
 	"github.com/stretchr/testify/require"
 )
 
@@ -55,32 +56,29 @@ var parseConditionalTests = []struct {
 		false},
 }
 
+var (
+	missingComparisonTokens       = []string{"sip", "=", "192.168.1.1", "|", "(", "host"}
+	wrongAttributeTokensBeginning = []string{"sipl", "=", "192.168.1.1"}
+	wrongAttributeTokensMiddle    = []string{"sip", "=", "192.168.1.1", "&", "dipl", "=", "192.168.1.2"}
+)
+
 func TestParseError(t *testing.T) {
 	var tests = []struct {
 		name        string
 		tokens      []string
-		expectedErr *ParseError
+		expectedErr *types.ParseError
 	}{
 		{"missing comparison operator",
-			[]string{"sip", "=", "192.168.1.1", "|", "(", "host"},
-			&ParseError{
-				Pos:         6,
-				Description: `Expected comparison operator`,
-			},
+			missingComparisonTokens,
+			newParseError(missingComparisonTokens, 6, `Expected comparison operator`),
 		},
 		{"incorrect attribute beginning",
-			[]string{"sipl", "=", "192.168.1.1"},
-			&ParseError{
-				Pos:         0,
-				Description: `Expected attribute`,
-			},
+			wrongAttributeTokensBeginning,
+			newParseError(wrongAttributeTokensBeginning, 0, `Expected attribute`),
 		},
 		{"incorrect attribute middle",
-			[]string{"sip", "=", "192.168.1.1", "&", "dipl", "=", "192.168.1.2"},
-			&ParseError{
-				Pos:         4,
-				Description: `Expected attribute`,
-			},
+			wrongAttributeTokensMiddle,
+			newParseError(wrongAttributeTokensMiddle, 4, `Expected attribute`),
 		},
 	}
 	for _, test := range tests {

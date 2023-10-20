@@ -108,14 +108,43 @@ func TestParseQueryType(t *testing.T) {
 		test := test
 		t.Run(fmt.Sprint(i), func(t *testing.T) {
 			attributes, selector, err := ParseQueryType(test.InQueryType)
-
-			if err != nil {
-				t.Fatalf("Unexpectedly failed on input %v. The error is: %s",
-					test.InQueryType, err)
-			}
+			require.Nilf(t, err, "Unexpectedly failed on input %v", test.InQueryType)
 			require.Equal(t, test.OutHasAttrIface, selector.Iface)
 			require.Equal(t, test.OutHasAttrTime, selector.Timestamp)
 			require.Equal(t, test.OutAttributes, attributes)
+		})
+	}
+}
+
+func TestParseQueryError(t *testing.T) {
+	var tests = []struct {
+		name        string
+		query       string
+		expectedErr *ParseError
+	}{
+		{"all valid", "sip,dip,dip,sip,dport,talk_src", nil},
+		{"empty query", "",
+			NewParseError([]string{""}, 0, ",", errorUnknownAttribute.Error())},
+		{"incorrect first", "sipl,talk_src",
+			NewParseError([]string{"sipl", "sip"}, 0, ",", errorUnknownAttribute.Error())},
+		{"incorrect middle", "sip,dipl,talk_src",
+			NewParseError([]string{"sip", "dipl", "sip"}, 1, ",", errorUnknownAttribute.Error())},
+		{"incorrect end", "sip,dip,talk_src,d",
+			NewParseError([]string{"sip", "dip", "sip", "d"}, 3, ",", errorUnknownAttribute.Error())},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			_, _, err := ParseQueryType(test.query)
+			t.Logf("error:\n%v", err)
+
+			if test.expectedErr == nil {
+				require.Nil(t, err)
+				return
+			}
+
+			require.Equal(t, test.expectedErr, err)
 		})
 	}
 }

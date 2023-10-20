@@ -15,6 +15,8 @@ import (
 	"bufio"
 	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 var sanitizeUserInputTests = []struct {
@@ -48,15 +50,8 @@ var sanitizeUserInputTests = []struct {
 
 func TestSanitizeUserInput(t *testing.T) {
 	for _, test := range sanitizeUserInputTests {
-		sanitized, err := SanitizeUserInput(test.input)
-		if err != nil {
-			t.Fatalf("SanitizeUserInput unexpectedly failed on input %v. The error is: %s",
-				test.input, err)
-		}
-		if test.output != sanitized {
-			t.Fatalf("SanitizeUserInput returned an unexpected output. Expected output: %v. Actual output: %s",
-				test.output, sanitized)
-		}
+		sanitized := SanitizeUserInput(test.input)
+		require.Equal(t, test.output, sanitized)
 	}
 }
 

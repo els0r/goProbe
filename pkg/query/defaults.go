@@ -1,6 +1,7 @@
 package query
 
 import (
+	"sort"
 	"time"
 
 	"github.com/els0r/goProbe/pkg/defaults"
@@ -22,15 +23,33 @@ var (
 )
 
 // PermittedFormats stores all supported output formats
-var PermittedFormats = map[string]struct{}{
+var permittedFormats = map[string]struct{}{
 	"txt":  {},
 	"json": {},
 	"csv":  {},
 }
 
+func PermittedFormats() []string {
+	var aux []string
+	for format := range permittedFormats {
+		aux = append(aux, format)
+	}
+	sort.StringSlice(aux).Sort()
+	return aux
+}
+
 // PermittedSortBy sorts all permitted sorting orders
-var PermittedSortBy = map[string]results.SortOrder{
+var permittedSortBy = map[string]results.SortOrder{
 	"bytes":   results.SortTraffic,
 	"packets": results.SortPackets,
 	"time":    results.SortTime,
+}
+
+func PermittedSortBy() []string {
+	var aux []string
+	for format := range permittedSortBy {
+		aux = append(aux, format)
+	}
+	sort.StringSlice(aux).Sort()
+	return aux
 }

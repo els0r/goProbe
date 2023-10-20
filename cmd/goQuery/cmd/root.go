@@ -312,14 +312,14 @@ func entrypoint(cmd *cobra.Command, args []string) (err error) {
 
 		// store the query type and make sure that aliases are resolved. This
 		// is important so that the hostname/hostid can be appended
-		queryArgs.Query = strings.Join(types.ToAttributeNames(queryArgs.Query), ",")
+		queryArgs.Query = types.SanitizeQueryType(queryArgs.Query)
 
 		// make sure that the hostname is present in the query type (and therefore output)
 		// The assumption being that a human will have better knowledge
 		// of hostnames than of their ID counterparts
 		if queryArgs.Format == "txt" {
 			if !strings.Contains(queryArgs.Query, types.HostnameName) {
-				queryArgs.Query += "," + types.HostnameName
+				queryArgs.Query += types.AttrSep + types.HostnameName
 			}
 		}
 

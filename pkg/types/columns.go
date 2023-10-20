@@ -13,6 +13,7 @@ package types
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -215,6 +216,8 @@ func (DportAttribute) Name() string {
 
 func (DportAttribute) attributeMarker() {}
 
+var errorUnknownAttribute = errors.New("unknown attribute")
+
 // NewAttribute returns an attribute for the given name. If no such attribute
 // exists, an error is returned.
 func NewAttribute(name string) (Attribute, error) {
@@ -229,7 +232,7 @@ func NewAttribute(name string) (Attribute, error) {
 	case DportName, "port":
 		return DportAttribute{}, nil
 	default:
-		return nil, fmt.Errorf("unknown attribute name: '%s'", name)
+		return nil, errorUnknownAttribute
 	}
 }
 
@@ -240,7 +243,8 @@ func AllColumns() []string {
 	}
 }
 
-const attrSep = ","
+// AttrSep stores how query attributes are delimited in a query
+const AttrSep = ","
 
 // Static shorthands for some column combinations
 const (
@@ -252,15 +256,15 @@ const (
 	RawCompoundQuery         = "raw"
 )
 
-// ToAttributeNames translates query abbreviations into the attributes they hold
-func ToAttributeNames(queryType string) (attrs []string) {
+// Tokenize translates query abbreviations into the attributes they hold
+func Tokenize(queryType string) (tokens []string) {
 	// covers the case where aliases and attribute/label names are mixed (e.g. talk_conv,dport)
-	qtSplit := strings.Split(queryType, attrSep)
+	qtSplit := strings.Split(queryType, AttrSep)
 	if len(qtSplit) > 1 {
 		for _, attr := range qtSplit {
-			attrs = append(attrs, ToAttributeNames(attr)...)
+			tokens = append(tokens, Tokenize(attr)...)
 		}
-		return attrs
+		return tokens
 	}
 
 	switch queryType {
@@ -279,7 +283,17 @@ func ToAttributeNames(queryType string) (attrs []string) {
 	}
 	// We didn't match any of the preset query types, so we are dealing with
 	// a comma separated list of attribute names.
-	return strings.Split(queryType, attrSep)
+	return strings.Split(queryType, AttrSep)
+}
+
+type parser struct {
+	tokens []string
+	pos    int
+}
+
+// SanitizeQueryType will resolve all aliases and reconstruct the query string
+func SanitizeQueryType(query string) string {
+	return strings.Join(Tokenize(query), AttrSep)
 }
 
 // ParseQueryType parses the given query type into a list of attributes.
@@ -293,9 +307,13 @@ func ToAttributeNames(queryType string) (attrs []string) {
 // 'raw', or if it is explicitly mentioned in a list of attribute
 // names.
 func ParseQueryType(queryType string) (attributes []Attribute, selector LabelSelector, err error) {
-	attributeNames := ToAttributeNames(queryType)
+	attributeNames := Tokenize(queryType)
 	attributeSet := make(map[string]struct{})
-	for _, attributeName := range attributeNames {
+
+	parser := &parser{tokens: attributeNames}
+
+	var attributeName string
+	for parser.pos, attributeName = range attributeNames {
 		switch attributeName {
 		case TimeName:
 			selector.Timestamp = true
@@ -313,14 +331,14 @@ func ParseQueryType(queryType string) (attributes []Attribute, selector LabelSel
 
 		attribute, err := NewAttribute(attributeName)
 		if err != nil {
-			return nil, LabelSelector{}, err
+			return nil, LabelSelector{}, NewParseError(parser.tokens, parser.pos, AttrSep, err.Error())
 		}
 		if _, exists := attributeSet[attribute.Name()]; !exists {
 			attributeSet[attribute.Name()] = struct{}{}
 			attributes = append(attributes, attribute)
 		}
 	}
-	return
+	return attributes, selector, nil
 }
 
 // HasDNSAttributes finds out if any of the attributes are usable for a reverse DNS lookup

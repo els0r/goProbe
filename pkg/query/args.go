@@ -103,37 +103,34 @@ type Args struct {
 	outputs []io.Writer
 }
 
-type ErrorType string
-
-const (
-	ParseErrorType       ErrorType = "ParseError"
-	RangeErrorType       ErrorType = "RangeError"
-	UnknownErrorType     ErrorType = "UnknownError"
-	UnsupportedErrorType ErrorType = "UnsupportedError"
-)
-
 // ArgsError provides a more detailed error description for invalid query args
 type ArgsError struct {
-	Field   string    // Field: the string describing which field led to the error. It MUST match the json definition for a field
-	Type    ErrorType // Type: the type of the error. Example: ParseError
-	Message string    // Message: a human-readable, UI friendly description of the error. Example: Condition parsing failed
+	Field   string // Field: the string describing which field led to the error. It MUST match the json definition for a field
+	Type    string // Type: the type of the error. Example: *types.ParseError
+	Message string // Message: a human-readable, UI friendly description of the error. Example: Condition parsing failed
 	err     error
 }
 
-func newArgsError(field string, t ErrorType, msg string, err error) *ArgsError {
-	if t == "" {
-		t = UnknownErrorType
-	}
-	return &ArgsError{
+func newArgsError(field string, msg string, err error) *ArgsError {
+	args := &ArgsError{
 		Field:   field,
-		Type:    t,
 		Message: msg,
 		err:     err,
 	}
+	if err != nil {
+		args.Type = fmt.Sprintf("%T", err)
+
+		// make sure the type of the wrapped error is found out
+		e := errors.Unwrap(err)
+		if e != nil {
+			args.Type = fmt.Sprintf("%T", e)
+		}
+	}
+	return args
 }
 
 func (err *ArgsError) String() string {
-	return fmt.Sprintf("%s: %s: (%s: %s", err.Field, err.Message, err.Type, err.err)
+	return fmt.Sprintf("%s: %s: (%s: %s)", err.Field, err.Message, err.Type, err.err)
 }
 
 // Error implements the error interface
@@ -166,10 +163,10 @@ func (m *marshallableError) MarshalJSON() ([]byte, error) {
 
 func (err *ArgsError) MarshalJSON() ([]byte, error) {
 	var m = struct {
-		Field   string    `json:"field"`
-		Type    ErrorType `json:"type"`
-		Message string    `json:"message,omitempty"`
-		Error   any       `json:"error,omitempty"`
+		Field   string `json:"field"`
+		Type    string `json:"type,omitempty"`
+		Message string `json:"message,omitempty"`
+		Error   any    `json:"error,omitempty"`
 	}{Field: err.Field, Type: err.Type, Message: err.Message}
 
 	if err.err == nil {
@@ -181,11 +178,12 @@ func (err *ArgsError) MarshalJSON() ([]byte, error) {
 	e := errors.Unwrap(err.err)
 	if e == nil {
 		e = err.err
+		m.Type = fmt.Sprintf("%T", e)
 	}
 
 	// need assertion because error doesn't know how to deal with marshalling
 	switch t := e.(type) {
-	case *node.ParseError:
+	case *types.ParseError, *types.RangeError, *types.UnsupportedError:
 		m.Error = t
 	default:
 		m.Error = &marshallableError{e}
@@ -244,6 +242,19 @@ func (a *Args) LogValue() slog.Value {
 	return slog.StringValue(val)
 }
 
+const (
+	invalidQueryTypeMsg            = "invalid query type"
+	invalidFormatMsg               = "unknown format"
+	invalidSortByMsg               = "unknown format"
+	invalidTimeRangeMsg            = "invalid time range"
+	invalidDNSResolutionTimeoutMsg = "invalid resolution timeout"
+	invalidDNSResolutionRowsMsg    = "invalid number of rows"
+	invalidConditionMsg            = "invalid condition"
+	invalidMaxMemPctMsg            = "invalid max memory percentage"
+	invalidRowLimitMsg             = "invalid row limit"
+	invalidLiveQueryMsg            = "query not possible"
+)
+
 // Prepare takes the query Arguments, validates them and creates an executable statement. Optionally, additional writers can be passed to route query results to different destinations.
 func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 	var err error
@@ -265,37 +276,34 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 	if err != nil {
 		return s, newArgsError(
 			"query",
-			ParseErrorType,
-			"invalid query type",
-			err,
+			invalidQueryTypeMsg,
+			fmt.Errorf("\n\n%w", err),
 		)
 	}
+
+	// verify config format
+	_, verifies := permittedFormats[a.Format]
+	if !verifies {
+		return s, newArgsError(
+			"format",
+			invalidFormatMsg,
+			types.NewUnsupportedError(a.Format, PermittedFormats()),
+		)
+	}
+	s.Format = a.Format
 
 	// if not already done beforehand, enforce defaults for args
 	if a.SortBy == "" {
 		a.SortBy = "packets"
 	}
 
-	// verify config format
-	_, verifies := PermittedFormats[a.Format]
-	if !verifies {
-		return s, newArgsError(
-			"format",
-			UnsupportedErrorType,
-			"unknown output format",
-			fmt.Errorf("'%s' is not supported", a.Format),
-		)
-	}
-	s.Format = a.Format
-
 	// assign sort order and direction
-	s.SortBy, verifies = PermittedSortBy[a.SortBy]
+	s.SortBy, verifies = permittedSortBy[a.SortBy]
 	if !verifies {
 		return s, newArgsError(
 			"sort_by",
-			UnsupportedErrorType,
-			"unknown sorting parameter",
-			fmt.Errorf("'%s' is not supported", a.SortBy),
+			invalidSortByMsg,
+			types.NewUnsupportedError(a.SortBy, PermittedSortBy()),
 		)
 
 	}
@@ -320,8 +328,7 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 	if err != nil {
 		return s, newArgsError(
 			"first/last",
-			RangeErrorType,
-			"invalid time range",
+			invalidTimeRangeMsg,
 			err,
 		)
 	}
@@ -344,7 +351,6 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 		if err != nil {
 			return s, newArgsError(
 				"dns_resolution.enabled",
-				"",
 				"DNS check failed",
 				err,
 			)
@@ -352,32 +358,28 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 		if !(0 < s.DNSResolution.Timeout) {
 			return s, newArgsError(
 				"dns_resolution.timeout",
-				RangeErrorType,
-				"invalid resolution timeout",
-				errors.New("must be greater than 0"),
+				invalidDNSResolutionTimeoutMsg,
+				types.NewMinBoundsError("0", false),
 			)
 		}
 		if !(0 < s.DNSResolution.MaxRows) {
 			return s, newArgsError(
 				"dns_resolution.max_rows",
-				RangeErrorType,
-				"invalid number of DNS rows",
-				errors.New("must be greater than 0"),
+				invalidDNSResolutionRowsMsg,
+				types.NewMinBoundsError("0", false),
 			)
 		}
 	}
 
 	// sanitize conditional if one was provided
-	a.Condition = conditions.SanitizeUserInput(a.Condition)
-	s.Condition = a.Condition
+	s.Condition = conditions.SanitizeUserInput(a.Condition)
 
 	// build condition tree to check if there is a syntax error before starting processing
 	_, _, parseErr := node.ParseAndInstrument(s.Condition, s.DNSResolution.Timeout)
 	if parseErr != nil {
 		return s, newArgsError(
 			"condition",
-			ParseErrorType,
-			"parsing failed",
+			invalidConditionMsg,
 			fmt.Errorf("\n\n%w", parseErr),
 		)
 	}
@@ -386,9 +388,8 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 	if !(0 < a.MaxMemPct && a.MaxMemPct <= 100) {
 		return s, newArgsError(
 			"max_mem_pct",
-			RangeErrorType,
-			"invalid memory percentage",
-			fmt.Errorf("'%d' is out of bounds (0-100)", a.MaxMemPct),
+			invalidMaxMemPctMsg,
+			types.NewRangeError("0", false, "100", true),
 		)
 	}
 	s.MaxMemPct = a.MaxMemPct
@@ -397,9 +398,8 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 	if a.NumResults <= 0 {
 		return s, newArgsError(
 			"num_results",
-			RangeErrorType,
-			"invalid row limit",
-			fmt.Errorf("must be greater than 0"),
+			invalidRowLimitMsg,
+			types.NewMinBoundsError("0", false),
 		)
 	}
 	s.NumResults = a.NumResults
@@ -408,8 +408,7 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 	if s.Live && s.Last != types.MaxTime.Unix() {
 		return s, newArgsError(
 			"live",
-			UnsupportedErrorType,
-			"query not possible",
+			invalidLiveQueryMsg,
 			errors.New("last timestamp unsupported"),
 		)
 	}
