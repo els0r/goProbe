@@ -182,3 +182,10 @@ func IPStringToBytes(ip string) (ipData []byte, isIPv4 bool, err error) {
 
 	return
 }
+
+// Prettier is an interface allowing types to pretty-print themselves. Think of it as
+// a nicer version of String. Meant to be used for cases where a human being consumes
+// the output directly
+type Prettier interface {
+	Pretty() string
+}

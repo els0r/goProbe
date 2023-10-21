@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -183,13 +184,39 @@ func (err *ArgsError) MarshalJSON() ([]byte, error) {
 
 	// need assertion because error doesn't know how to deal with marshalling
 	switch t := e.(type) {
-	case *types.ParseError, *types.RangeError, *types.UnsupportedError:
+	case *types.ParseError,
+		*types.MinBoundsError,
+		*types.MaxBoundsError,
+		*types.RangeError,
+		*types.UnsupportedError:
 		m.Error = t
 	default:
 		m.Error = &marshallableError{e}
 	}
 
 	return jsoniter.Marshal(&m)
+}
+
+// Pretty implements the Prettier interface to represent the error in a human-readable way
+func (err *ArgsError) Pretty() string {
+	str := `
+  Field:   %s
+  Message: %s
+  Details: %s
+`
+	errStr := err.err.Error()
+
+	prettyErr, ok := err.err.(types.Prettier)
+	if ok {
+		// a bit of sugar to make sure the pretty details are nicely indented
+		spaces := strings.Repeat(" ", 4)
+		errStr = "\n" + spaces + strings.Join(
+			strings.Split(prettyErr.Pretty(), "\n"),
+			"\n"+spaces,
+		)
+	}
+
+	return fmt.Sprintf(str, err.Field, err.Message, errStr)
 }
 
 // DNSResolution contains DNS query / resolution related config arguments / parameters
@@ -277,7 +304,7 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 		return s, newArgsError(
 			"query",
 			invalidQueryTypeMsg,
-			fmt.Errorf("\n\n%w", err),
+			err,
 		)
 	}
 
@@ -359,14 +386,14 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 			return s, newArgsError(
 				"dns_resolution.timeout",
 				invalidDNSResolutionTimeoutMsg,
-				types.NewMinBoundsError("0", false),
+				types.NewMinBoundsError(strconv.Itoa(int(s.DNSResolution.Timeout)), "0", false),
 			)
 		}
 		if !(0 < s.DNSResolution.MaxRows) {
 			return s, newArgsError(
 				"dns_resolution.max_rows",
 				invalidDNSResolutionRowsMsg,
-				types.NewMinBoundsError("0", false),
+				types.NewMinBoundsError(strconv.Itoa(int(s.DNSResolution.MaxRows)), "0", false),
 			)
 		}
 	}
@@ -380,7 +407,7 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 		return s, newArgsError(
 			"condition",
 			invalidConditionMsg,
-			fmt.Errorf("\n\n%w", parseErr),
+			parseErr,
 		)
 	}
 
@@ -389,7 +416,7 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 		return s, newArgsError(
 			"max_mem_pct",
 			invalidMaxMemPctMsg,
-			types.NewRangeError("0", false, "100", true),
+			types.NewRangeError(strconv.Itoa(a.MaxMemPct), "0", false, "100", true),
 		)
 	}
 	s.MaxMemPct = a.MaxMemPct
@@ -399,7 +426,7 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 		return s, newArgsError(
 			"num_results",
 			invalidRowLimitMsg,
-			types.NewMinBoundsError("0", false),
+			types.NewMinBoundsError(strconv.Itoa(int(s.NumResults)), "0", false),
 		)
 	}
 	s.NumResults = a.NumResults

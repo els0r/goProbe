@@ -224,11 +224,7 @@ func nextAll(prevprev, prev string, openParens int) []suggestion {
 
 func conditional(args []string) []string {
 	tokenize := func(conditional string) []string {
-		san, err := conditions.SanitizeUserInput(conditional)
-		if err != nil {
-			return nil
-		}
-		tokens, err := conditions.Tokenize(san)
+		tokens, err := conditions.Tokenize(conditions.SanitizeUserInput(conditional))
 		if err != nil {
 			return nil
 		}
