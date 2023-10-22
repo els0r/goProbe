@@ -24,6 +24,7 @@ import (
 
 	"github.com/els0r/goProbe/cmd/goProbe/config"
 	"github.com/els0r/goProbe/cmd/goQuery/cmd"
+	"github.com/els0r/telemetry/logging"
 
 	// "github.com/els0r/goProbe/cmd/goQuery/commands"
 
@@ -70,12 +71,6 @@ var valFilters = []*node.ValFilterNode{
 	{ValFilter: types.Counters.IsBidirectional},
 }
 
-func TestStartStop(t *testing.T) {
-	for i := 0; i < 1000; i++ {
-		testStartStop(t)
-	}
-}
-
 func testStartStop(t *testing.T) {
 
 	// Setup a temporary directory for the test DB
@@ -104,10 +99,6 @@ func testStartStop(t *testing.T) {
 			Permissions: goDB.DefaultPermissions,
 		},
 		Interfaces: ifaces,
-		Logging: config.LogConfig{
-			Destination: "logfmt",
-			Level:       "warn",
-		},
 	}, capture.WithSourceInitFn(func(c *capture.Capture) (capture.Source, error) {
 		mockSrc, err := afring.NewMockSource(c.Iface(),
 			afring.CaptureLength(link.CaptureLengthMinimalIPv6Transport),
@@ -244,6 +235,12 @@ func TestE2EExternal(t *testing.T) {
 		require.Nil(t, err)
 
 		testE2E(t, 0, pcapData)
+	}
+}
+
+func TestStartStop(t *testing.T) {
+	for i := 0; i < 1000; i++ {
+		testStartStop(t)
 	}
 }
 
@@ -387,7 +384,6 @@ func runGoProbe(t *testing.T, testDir string, sourceInitFn func() (mockIfaces, f
 			Permissions: goDB.DefaultPermissions,
 		},
 		Interfaces: ifaceConfigs,
-		Logging:    config.LogConfig{},
 	},
 		capture.WithSourceInitFn(initFn),
 		capture.WithSkipWriteoutSchedule(true),
@@ -432,7 +428,12 @@ func runGoQuery(t *testing.T, res interface{}, args []string) {
 	require.Nil(t, command.Execute())
 	require.Nil(t, wr.Close())
 	<-copyDone
+
 	os.Stdout = old // restore the inital STDOUT
+	require.Nil(t, logging.Init(logging.LevelWarn, logging.EncodingLogfmt,
+		logging.WithOutput(os.Stdout),
+		logging.WithErrorOutput(os.Stderr),
+	))
 
 	require.Nil(t, jsoniter.NewDecoder(buf).Decode(&res))
 }
@@ -686,6 +687,13 @@ func TestMain(m *testing.M) {
 
 	flag.StringVar(&externalPCAPPath, "ext-pcap-data", "", "path to external pcap file(s) for E2E tests (can be a single file or directory)")
 	flag.Parse()
+
+	if err := logging.Init(logging.LevelWarn, logging.EncodingLogfmt,
+		logging.WithOutput(os.Stdout),
+		logging.WithErrorOutput(os.Stderr),
+	); err != nil {
+		panic(err)
+	}
 
 	os.Exit(m.Run())
 }
