@@ -150,7 +150,7 @@ func (err *ArgsError) LogValue() slog.Value {
 		slog.String("field", err.Field),
 		slog.String("type", string(err.Type)),
 		slog.String("message", err.Message),
-		slog.Any("error", err.err),
+		slog.Any("details", err.err),
 	)
 }
 
@@ -167,11 +167,11 @@ func (err *ArgsError) MarshalJSON() ([]byte, error) {
 		Field   string `json:"field"`
 		Type    string `json:"type,omitempty"`
 		Message string `json:"message,omitempty"`
-		Error   any    `json:"error,omitempty"`
+		Details any    `json:"details,omitempty"`
 	}{Field: err.Field, Type: err.Type, Message: err.Message}
 
 	if err.err == nil {
-		m.Error = nil
+		m.Details = nil
 		return jsoniter.Marshal(&m)
 	}
 
@@ -189,9 +189,9 @@ func (err *ArgsError) MarshalJSON() ([]byte, error) {
 		*types.MaxBoundsError,
 		*types.RangeError,
 		*types.UnsupportedError:
-		m.Error = t
+		m.Details = t
 	default:
-		m.Error = &marshallableError{e}
+		m.Details = &marshallableError{e}
 	}
 
 	return jsoniter.Marshal(&m)
@@ -208,12 +208,7 @@ func (err *ArgsError) Pretty() string {
 
 	prettyErr, ok := err.err.(types.Prettier)
 	if ok {
-		// a bit of sugar to make sure the pretty details are nicely indented
-		spaces := strings.Repeat(" ", 4)
-		errStr = "\n" + spaces + strings.Join(
-			strings.Split(prettyErr.Pretty(), "\n"),
-			"\n"+spaces,
-		)
+		errStr = "\n" + types.PrettyIndent(prettyErr, 4)
 	}
 
 	return fmt.Sprintf(str, err.Field, err.Message, errStr)
@@ -410,6 +405,11 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 			parseErr,
 		)
 	}
+
+	// if we got here, the condition can definitely be tokenized. This makes sure the canonical
+	// form of the condition is stored
+	tokens, _ := conditions.Tokenize(s.Condition)
+	s.Condition = strings.Join(tokens, " ")
 
 	// check memory flag
 	if !(0 < a.MaxMemPct && a.MaxMemPct <= 100) {

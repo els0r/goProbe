@@ -71,3 +71,37 @@ func (s *Statement) String() string {
 	str += "}"
 	return str
 }
+
+func (s *Statement) Pretty() string {
+	ifaces := "any"
+	if len(s.Ifaces) > 0 {
+		ifaces = fmt.Sprintf("%v", s.Ifaces)
+	}
+	str := fmt.Sprintf(`
+    query: %s
+   ifaces: %s
+`, s.QueryType, ifaces)
+
+	if s.Condition != "" {
+		str += fmt.Sprintf(`
+condition: %s
+		`, s.Condition)
+	}
+	tFrom, tTo := time.Unix(s.First, 0), time.Unix(s.Last, 0)
+	str += fmt.Sprintf(`
+     from: %s
+       to: %s
+
+    limit: %d
+`,
+		tFrom.Format(time.ANSIC),
+		tTo.Format(time.ANSIC),
+		s.NumResults,
+	)
+	if s.DNSResolution.Enabled {
+		str += fmt.Sprintf(`
+      dns: %t
+`, s.DNSResolution.Enabled)
+	}
+	return str
+}

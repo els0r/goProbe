@@ -189,3 +189,13 @@ func IPStringToBytes(ip string) (ipData []byte, isIPv4 bool, err error) {
 type Prettier interface {
 	Pretty() string
 }
+
+// PrettyIndent takes the output from a Prettier and indents it by n spaces
+func PrettyIndent(p Prettier, n int) string {
+	// a bit of sugar to make sure the pretty details are nicely indented
+	indent := "\n" + strings.Repeat(" ", n)
+	return strings.Join(
+		strings.Split(p.Pretty(), "\n"),
+		indent,
+	)
+}

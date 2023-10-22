@@ -34,7 +34,7 @@ func TestMarshalArgsError(t *testing.T) {
 				"an error occurred",
 				errors.New("an error"),
 			),
-			[]byte(`{"field":"field","type":"*errors.errorString","message":"an error occurred","error":"an error"}`),
+			[]byte(`{"field":"field","type":"*errors.errorString","message":"an error occurred","details":"an error"}`),
 		},
 		{"detailed parsing error",
 			newArgsError(
@@ -42,7 +42,7 @@ func TestMarshalArgsError(t *testing.T) {
 				"parsing failed",
 				types.NewParseError([]string{"sipl", "=", "192.168.1.1"}, 0, " ", "Expected attribute"),
 			),
-			[]byte(`{"field":"condition","type":"*types.ParseError","message":"parsing failed","error":{"tokens":["sipl","=","192.168.1.1"],"pos":0,"description":"Expected attribute"}}`),
+			[]byte(`{"field":"condition","type":"*types.ParseError","message":"parsing failed","details":{"tokens":["sipl","=","192.168.1.1"],"pos":0,"description":"Expected attribute"}}`),
 		},
 		{"unsupported error",
 			newArgsError(
@@ -50,7 +50,7 @@ func TestMarshalArgsError(t *testing.T) {
 				"wrong sort by",
 				types.NewUnsupportedError("biscuits", []string{"a", "b"}),
 			),
-			[]byte(`{"field":"sort_by","type":"*types.UnsupportedError","message":"wrong sort by","error":{"val":"biscuits","valid":["a","b"]}}`),
+			[]byte(`{"field":"sort_by","type":"*types.UnsupportedError","message":"wrong sort by","details":{"val":"biscuits","valid":["a","b"]}}`),
 		},
 	}
 

@@ -374,7 +374,11 @@ func entrypoint(cmd *cobra.Command, args []string) (err error) {
 
 	result, err = querier.Run(ctx, &queryArgs)
 	if err != nil {
-		return fmt.Errorf("failed to execute query %s: %w", stmt, err)
+		return fmt.Errorf(`failed to execute query
+
+      Error: %w
+  Statement:
+%s`, err, types.PrettyIndent(stmt, 4))
 	}
 
 	// serialize raw results array if json is selected
