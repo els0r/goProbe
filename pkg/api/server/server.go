@@ -110,6 +110,10 @@ func NewDefault(serviceName, addr string, opts ...Option) *DefaultServer {
 		opt(s)
 	}
 
+	// register info routes before any other middleware so they are exempt from logging
+	// and/or tracing
+	s.registerInfoRoutes()
+
 	s.registerMiddlewares()
 
 	return s
@@ -123,6 +127,13 @@ func (server *DefaultServer) Router() *gin.Engine {
 // QueryRateLimiter returns the global rate limiter, if enabled (if not it return nil and false)
 func (server *DefaultServer) QueryRateLimiter() (*rate.Limiter, bool) {
 	return server.queryRateLimiter, server.queryRateLimiter != nil
+}
+
+func (server *DefaultServer) registerInfoRoutes() {
+	// make sure these endpoints don't interfere with the standard API path
+	server.router.GET(api.InfoRoute, api.ServiceInfoHandler(server.serviceName))
+	server.router.GET(api.HealthRoute, api.HealthHandler())
+	server.router.GET(api.ReadyRoute, api.ReadyHandler())
 }
 
 func (server *DefaultServer) registerMiddlewares() {

@@ -7,6 +7,13 @@ servers:
 paths:
   /_query:
     $ref: './paths/query.yaml'
+  /-/health:
+    $ref: './paths/health.yaml'
+  /-/info:
+    $ref: './paths/info.yaml'
+  /-/ready:
+    $ref: './paths/ready.yaml'
 components:
   schemas:
     $ref: './schemas/_index.yaml'
+

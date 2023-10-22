@@ -1,0 +1,11 @@
+get:
+  summary: Get service information
+  tags:
+    - runtime info
+  responses:
+    '200':
+      description: Successful response
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/ServiceInfo.yaml'
