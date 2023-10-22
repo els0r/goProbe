@@ -131,10 +131,9 @@ func (server *DefaultServer) QueryRateLimiter() (*rate.Limiter, bool) {
 
 func (server *DefaultServer) registerInfoRoutes() {
 	// make sure these endpoints don't interfere with the standard API path
-	infoGroup := server.router.Group("/-")
-	infoGroup.GET("/info", api.ServiceInfoHandler(server.serviceName))
-	infoGroup.GET("/health", api.HealthHandler())
-	infoGroup.GET("/ready", api.ReadyHandler())
+	server.router.GET(api.InfoRoute, api.ServiceInfoHandler(server.serviceName))
+	server.router.GET(api.HealthRoute, api.HealthHandler())
+	server.router.GET(api.ReadyRoute, api.ReadyHandler())
 }
 
 func (server *DefaultServer) registerMiddlewares() {
