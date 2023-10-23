@@ -42,7 +42,7 @@ func TestMarshalArgsError(t *testing.T) {
 				"parsing failed",
 				types.NewParseError([]string{"sipl", "=", "192.168.1.1"}, 0, " ", "Expected attribute"),
 			),
-			[]byte(`{"field":"condition","type":"*types.ParseError","message":"parsing failed","details":{"tokens":["sipl","=","192.168.1.1"],"pos":0,"description":"Expected attribute"}}`),
+			[]byte(`{"field":"condition","type":"*types.ParseError","message":"parsing failed","details":{"tokens":["sipl","=","192.168.1.1"],"pos":0,"description":"Expected attribute","sep":" "}}`),
 		},
 		{"unsupported error",
 			newArgsError(
@@ -60,6 +60,57 @@ func TestMarshalArgsError(t *testing.T) {
 			b, err := jsoniter.Marshal(test.input)
 			require.Nil(t, err)
 			require.Equal(t, string(test.expected), string(b))
+		})
+	}
+}
+
+func TestMarshalUnmarshalArgsError(t *testing.T) {
+	var tests = []struct {
+		name  string
+		input *ArgsError
+	}{
+		{"simple error, underlying error nil",
+			newArgsError(
+				"field",
+				"an error occurred",
+				nil,
+			),
+		},
+		{"simple error, underlying error set",
+			newArgsError(
+				"field",
+				"an error occurred",
+				errors.New("an error"),
+			),
+		},
+		{"detailed parsing error",
+			newArgsError(
+				"condition",
+				"parsing failed",
+				types.NewParseError([]string{"sipl", "=", "192.168.1.1"}, 0, " ", "Expected attribute"),
+			),
+		},
+		{"unsupported error",
+			newArgsError(
+				"sort_by",
+				"wrong sort by",
+				types.NewUnsupportedError("biscuits", []string{"a", "b"}),
+			),
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			b, err := jsoniter.Marshal(test.input)
+			require.Nil(t, err)
+
+			var argsErr = new(ArgsError)
+			err = jsoniter.Unmarshal(b, argsErr)
+
+			require.Nil(t, err)
+
+			require.Equal(t, test.input, argsErr)
 		})
 	}
 }

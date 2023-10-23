@@ -158,17 +158,19 @@ type marshallableError struct {
 	error
 }
 
+type marshalArgsError struct {
+	Field   string `json:"field"`
+	Type    string `json:"type,omitempty"`
+	Message string `json:"message,omitempty"`
+	Details any    `json:"details,omitempty"`
+}
+
 func (m *marshallableError) MarshalJSON() ([]byte, error) {
 	return jsoniter.Marshal(m.Error())
 }
 
 func (err *ArgsError) MarshalJSON() ([]byte, error) {
-	var m = struct {
-		Field   string `json:"field"`
-		Type    string `json:"type,omitempty"`
-		Message string `json:"message,omitempty"`
-		Details any    `json:"details,omitempty"`
-	}{Field: err.Field, Type: err.Type, Message: err.Message}
+	var m = marshalArgsError{Field: err.Field, Type: err.Type, Message: err.Message}
 
 	if err.err == nil {
 		m.Details = nil
@@ -195,6 +197,74 @@ func (err *ArgsError) MarshalJSON() ([]byte, error) {
 	}
 
 	return jsoniter.Marshal(&m)
+}
+
+var (
+	maxBoundsErrorType   = fmt.Sprintf("%T", new(types.MaxBoundsError))
+	minBoundsErrorType   = fmt.Sprintf("%T", new(types.MinBoundsError))
+	parseErrorType       = fmt.Sprintf("%T", new(types.ParseError))
+	rangeErrorType       = fmt.Sprintf("%T", new(types.RangeError))
+	unsupportedErrorType = fmt.Sprintf("%T", new(types.UnsupportedError))
+)
+
+// UnmarshalJSON implements the json.Unmarshaler interface
+func (err *ArgsError) UnmarshalJSON(data []byte) error {
+	var m = new(marshalArgsError)
+	e := jsoniter.Unmarshal(data, m)
+	if e != nil {
+		return e
+	}
+	err.Field = m.Field
+	err.Message = m.Message
+	err.Type = m.Type
+
+	// re-create the specific error
+	var detailError error = nil
+	if m.Details == nil {
+		err.err = detailError
+		return nil
+	}
+
+	switch m.Type {
+	case parseErrorType:
+		m.Details = new(types.ParseError)
+	case minBoundsErrorType:
+		m.Details = new(types.MinBoundsError)
+	case maxBoundsErrorType:
+		m.Details = new(types.MaxBoundsError)
+	case rangeErrorType:
+		m.Details = new(types.RangeError)
+	case unsupportedErrorType:
+		m.Details = new(types.UnsupportedError)
+	default:
+		m.Details = ""
+	}
+
+	e = jsoniter.Unmarshal(data, m)
+	if e != nil {
+		return e
+	}
+
+	switch t := m.Details.(type) {
+	case *types.ParseError:
+		err.err = t
+	case *types.MinBoundsError:
+		err.err = t
+	case *types.MaxBoundsError:
+		err.err = t
+	case *types.RangeError:
+		err.err = t
+	case *types.UnsupportedError:
+		err.err = t
+	case error:
+		err.err = t
+	case string:
+		err.err = errors.New(t)
+	default:
+		return fmt.Errorf("unknown error type %v", t)
+	}
+
+	return nil
 }
 
 // Pretty implements the Prettier interface to represent the error in a human-readable way
