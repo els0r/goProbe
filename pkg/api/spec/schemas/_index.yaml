@@ -31,3 +31,17 @@ Attributes:
 # info endpoints
 ServiceInfo:
   $ref: './ServiceInfo.yaml'
+
+# errors:
+ArgsError:
+  $ref: './ArgsError.yaml'
+ParseError:
+  $ref: './ParseError.yaml'
+MinBoundsError:
+  $ref: './MinBoundsError.yaml'
+MaxBoundsError:
+  $ref: './MaxBoundsError.yaml'
+RangeError:
+  $ref: './RangeError.yaml'
+UnsupportedError:
+  $ref: './UnsupportedError.yaml'

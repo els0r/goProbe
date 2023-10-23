@@ -1,0 +1,8 @@
+type: object
+properties:
+  includes:
+    type: boolean
+    example: false
+  val:
+    type: string
+    example: "0"

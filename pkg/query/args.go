@@ -106,10 +106,10 @@ type Args struct {
 
 // ArgsError provides a more detailed error description for invalid query args
 type ArgsError struct {
-	Field   string // Field: the string describing which field led to the error. It MUST match the json definition for a field
+	Field   string // Field: the string describing which field led to the error. It MUST match the json definition for a field. Example: condition
 	Type    string // Type: the type of the error. Example: *types.ParseError
 	Message string // Message: a human-readable, UI friendly description of the error. Example: Condition parsing failed
-	err     error
+	err     error  // Details: a specific error describing which part of the arguments is incorrect
 }
 
 func newArgsError(field string, msg string, err error) *ArgsError {
@@ -161,7 +161,7 @@ type marshallableError struct {
 type marshalArgsError struct {
 	Field   string `json:"field"`
 	Type    string `json:"type,omitempty"`
-	Message string `json:"message,omitempty"`
+	Message string `json:"message"`
 	Details any    `json:"details,omitempty"`
 }
 
