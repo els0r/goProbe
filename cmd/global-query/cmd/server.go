@@ -77,6 +77,7 @@ func serverEntrypoint(cmd *cobra.Command, args []string) error {
 			logging.LevelFromString(viper.GetString(conf.LogLevel)) == logging.LevelDebug,
 		),
 		server.WithProfiling(viper.GetBool(conf.ProfilingEnabled)),
+		server.WithTracing(viper.GetBool(tracing.TracingEnabledArg)),
 	)
 
 	// initializing the server in a goroutine so that it won't block the graceful

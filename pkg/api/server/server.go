@@ -13,6 +13,7 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 	"golang.org/x/time/rate"
 )
 
@@ -39,6 +40,7 @@ type DefaultServer struct {
 	// telemetry
 	profiling              bool
 	metrics                bool
+	tracing                bool
 	requestDurationBuckets []float64
 
 	serviceName string // serviceName is the name of the program that serves the API, e.g. global-query
@@ -73,6 +75,13 @@ func WithMetrics(enabled bool, requestDurationBuckets ...float64) Option {
 	return func(server *DefaultServer) {
 		server.metrics = enabled
 		server.requestDurationBuckets = requestDurationBuckets
+	}
+}
+
+// WithTracing enables trace propagation
+func WithTracing(enabled bool) Option {
+	return func(server *DefaultServer) {
+		server.tracing = enabled
 	}
 }
 
@@ -139,11 +148,33 @@ func (server *DefaultServer) registerInfoRoutes() {
 }
 
 func (server *DefaultServer) registerMiddlewares() {
-	server.router.Use(
+	var middlewares []gin.HandlerFunc
+	if server.tracing {
+		middlewares = append(middlewares,
+			otelgin.Middleware(server.serviceName, otelgin.WithFilter(
+				// make sure the excluded endpoints don't get traced
+				func(req *http.Request) bool {
+					for _, path := range []string{
+						api.InfoRoute, api.HealthRoute, api.ReadyRoute,
+					} {
+						// paths prefixed with /- should also be excluded. It's a convention pushed in prometheus projects and quite used in osag
+						if req.URL.Path == path || req.URL.Path == "/-"+path {
+							return false
+						}
+					}
+					return true
+				},
+			)),
+		)
+	}
+
+	middlewares = append(middlewares,
 		api.TraceIDMiddleware(),
 		api.RequestLoggingMiddleware(),
 		api.RecursionDetectorMiddleware(RuntimeIDHeaderKey, info.RuntimeID()),
 	)
+
+	server.router.Use(middlewares...)
 
 	if server.metrics {
 		buckets := prometheus.DefBuckets

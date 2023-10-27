@@ -24,6 +24,7 @@ require (
 	github.com/stretchr/testify v1.8.4
 	github.com/xlab/tablewriter v0.0.0-20160610135559-80b567a11ad5
 	github.com/zeebo/xxh3 v1.0.2
+	go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin v0.45.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.44.0
 	go.opentelemetry.io/contrib/propagators/b3 v1.20.0
 	go.opentelemetry.io/otel v1.19.0
