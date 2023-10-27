@@ -47,4 +47,7 @@ const (
 	// Profiling
 	profilingKey       = "profiling"
 	ProfilingOutputDir = profilingKey + ".output-dir"
+
+	// Tracing propagation
+	Traceparent = "traceparent"
 )

@@ -11,6 +11,7 @@ import (
 	"github.com/els0r/goProbe/cmd/global-query/pkg/conf"
 	gqserver "github.com/els0r/goProbe/pkg/api/globalquery/server"
 	"github.com/els0r/goProbe/pkg/api/server"
+	"github.com/els0r/goProbe/pkg/telemetry/tracing"
 	"github.com/els0r/goProbe/plugins"
 	"github.com/els0r/telemetry/logging"
 	"github.com/spf13/cobra"
@@ -46,6 +47,11 @@ func serverEntrypoint(cmd *cobra.Command, args []string) error {
 	defer stop()
 
 	logger := logging.FromContext(ctx)
+
+	shutdownTracing, err := tracing.InitFromFlags(ctx)
+	if err != nil {
+		logger.With("error", err).Error("failed to set up tracing")
+	}
 
 	hostListResolver, err := initHostListResolver()
 	if err != nil {
@@ -98,7 +104,11 @@ func serverEntrypoint(cmd *cobra.Command, args []string) error {
 	// shut down running resources, forcibly if need be
 	err = apiServer.Shutdown(ctx)
 	if err != nil {
-		logger.Errorf("forced shut down of API server: %v", err)
+		logger.With("error", err).Error("forced shut down of API server")
+	}
+	err = shutdownTracing(ctx)
+	if err != nil {
+		logger.With("error", err).Error("forced shut down of tracing")
 	}
 
 	logger.Info("shut down complete")

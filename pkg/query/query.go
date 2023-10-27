@@ -9,6 +9,7 @@ import (
 	"github.com/els0r/goProbe/pkg/query/dns"
 	"github.com/els0r/goProbe/pkg/query/heap"
 	"github.com/els0r/goProbe/pkg/results"
+	"github.com/els0r/goProbe/pkg/telemetry/tracing"
 	"github.com/els0r/goProbe/pkg/types"
 )
 
@@ -19,6 +20,9 @@ func (s *Statement) log() {
 
 // Print prints a statement to the result
 func (s *Statement) Print(ctx context.Context, result *results.Result) error {
+	ctx, span := tracing.Start(ctx, "(*Statement).Print")
+	defer span.End()
+
 	var sip, dip types.Attribute
 
 	var hasDNSattributes bool
