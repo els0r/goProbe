@@ -9,7 +9,7 @@ import (
 
 	"github.com/els0r/goProbe/pkg/api"
 	"github.com/els0r/goProbe/pkg/goDB/info"
-	"github.com/els0r/goProbe/pkg/telemetry/metrics"
+	"github.com/els0r/telemetry/metrics"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus"

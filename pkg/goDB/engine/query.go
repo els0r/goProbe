@@ -20,9 +20,9 @@ import (
 	"github.com/els0r/goProbe/pkg/query"
 	"github.com/els0r/goProbe/pkg/query/heap"
 	"github.com/els0r/goProbe/pkg/results"
-	"github.com/els0r/goProbe/pkg/telemetry/tracing"
 	"github.com/els0r/goProbe/pkg/types"
 	"github.com/els0r/goProbe/pkg/types/hashmap"
+	"github.com/els0r/telemetry/tracing"
 	jsoniter "github.com/json-iterator/go"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -59,7 +59,7 @@ func (qr *QueryRunner) Run(ctx context.Context, args *query.Args) (res *results.
 		argsStr = string(b)
 	}
 
-	ctx, span := tracing.Start(ctx, "(*QueryRunner).Run", trace.WithAttributes(attribute.String("args", argsStr)))
+	ctx, span := tracing.Start(ctx, "(*engine.QueryRunner).Run", trace.WithAttributes(attribute.String("args", argsStr)))
 	defer span.End()
 
 	stmt, err := args.Prepare()

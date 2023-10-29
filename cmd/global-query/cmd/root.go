@@ -7,9 +7,9 @@ import (
 	"github.com/els0r/goProbe/cmd/global-query/pkg/conf"
 	"github.com/els0r/goProbe/cmd/global-query/pkg/hosts"
 	"github.com/els0r/goProbe/pkg/query"
-	"github.com/els0r/goProbe/pkg/telemetry/tracing"
 	"github.com/els0r/goProbe/pkg/version"
 	"github.com/els0r/telemetry/logging"
+	"github.com/els0r/telemetry/tracing"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )

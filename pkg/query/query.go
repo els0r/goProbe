@@ -9,8 +9,8 @@ import (
 	"github.com/els0r/goProbe/pkg/query/dns"
 	"github.com/els0r/goProbe/pkg/query/heap"
 	"github.com/els0r/goProbe/pkg/results"
-	"github.com/els0r/goProbe/pkg/telemetry/tracing"
 	"github.com/els0r/goProbe/pkg/types"
+	"github.com/els0r/telemetry/tracing"
 )
 
 // log writes a json marshaled query statement to disk

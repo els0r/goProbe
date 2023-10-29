@@ -8,9 +8,9 @@ import (
 	"github.com/els0r/goProbe/cmd/global-query/pkg/hosts"
 	"github.com/els0r/goProbe/pkg/query"
 	"github.com/els0r/goProbe/pkg/results"
-	"github.com/els0r/goProbe/pkg/telemetry/tracing"
 	"github.com/els0r/goProbe/pkg/types"
 	"github.com/els0r/telemetry/logging"
+	"github.com/els0r/telemetry/tracing"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -47,7 +47,7 @@ func (q *QueryRunner) Run(ctx context.Context, args *query.Args) (*results.Resul
 		return nil, fmt.Errorf("couldn't prepare query: list of target hosts is empty")
 	}
 
-	ctx, span := tracing.Start(ctx, "(*QueryRunner).Run", trace.WithAttributes(attribute.String("args", queryArgs.ToJSONString())))
+	ctx, span := tracing.Start(ctx, "(*distributed.QueryRunner).Run", trace.WithAttributes(attribute.String("args", queryArgs.ToJSONString())))
 	defer span.End()
 
 	// check if the statement can be created
@@ -82,7 +82,7 @@ func (q *QueryRunner) Run(ctx context.Context, args *query.Args) (*results.Resul
 }
 
 func (q *QueryRunner) prepareHostList(ctx context.Context, queryHosts string) (hostList hosts.Hosts, err error) {
-	ctx, span := tracing.Start(ctx, "(*QueryRunner).prepareHostList", trace.WithAttributes(attribute.String("hosts", queryHosts)))
+	ctx, span := tracing.Start(ctx, "(*distributed.QueryRunner).prepareHostList", trace.WithAttributes(attribute.String("hosts", queryHosts)))
 	defer span.End()
 
 	// Handle ANY (all hosts) case
