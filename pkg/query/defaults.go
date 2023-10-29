@@ -29,13 +29,26 @@ var permittedFormats = map[string]struct{}{
 	"csv":  {},
 }
 
-func PermittedFormats() []string {
-	var aux []string
+var (
+	permittedFormatsSlice = []string{}
+	permittedSortBySlice  = []string{}
+)
+
+func init() {
 	for format := range permittedFormats {
-		aux = append(aux, format)
+		permittedFormatsSlice = append(permittedFormatsSlice, format)
 	}
-	sort.StringSlice(aux).Sort()
-	return aux
+	sort.StringSlice(permittedFormatsSlice).Sort()
+
+	for sortBy := range permittedSortBy {
+		permittedSortBySlice = append(permittedSortBySlice, sortBy)
+	}
+	sort.StringSlice(permittedSortBySlice).Sort()
+}
+
+// PermittedFormats list which formats are supported
+func PermittedFormats() []string {
+	return permittedFormatsSlice
 }
 
 // PermittedSortBy sorts all permitted sorting orders
@@ -45,11 +58,7 @@ var permittedSortBy = map[string]results.SortOrder{
 	"time":    results.SortTime,
 }
 
+// PermittedSortBy lists which sort by methods are supported
 func PermittedSortBy() []string {
-	var aux []string
-	for format := range permittedSortBy {
-		aux = append(aux, format)
-	}
-	sort.StringSlice(aux).Sort()
-	return aux
+	return permittedSortBySlice
 }
