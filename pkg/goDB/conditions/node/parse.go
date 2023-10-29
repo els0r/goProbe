@@ -55,7 +55,7 @@ func parseConditional(tokens []string) (conditionalNode Node, err error) {
 	if !p.success() {
 		return nil, p.err
 	} else if !p.eof() {
-		p.die("Input unexpectedly continues")
+		p.die("input unexpectedly continues")
 		return nil, p.err
 	}
 
@@ -126,7 +126,7 @@ func newParseError(tokens []string, pos int, description string, args ...any) *t
 // and advances the parser's position in the token stream by one.
 func (p *parser) advance() (result string) {
 	if p.eof() {
-		p.die("Unexpected end of input")
+		p.die("unexpected end of input")
 		return ""
 	}
 	result = p.tokens[p.pos]
@@ -153,7 +153,7 @@ func (p *parser) accept(token string) bool {
 // Like accept, but the parse fails if the argument token doesn't equal the current token.
 func (p *parser) expect(token string) {
 	if !p.accept(token) {
-		p.die("Expected %q, but didn't get it", token)
+		p.die("expected %q, but didn't get it", token)
 		return
 	}
 }
@@ -314,7 +314,7 @@ func (p *parser) attribute() (result string) {
 		}
 	}
 
-	p.die("Expected attribute")
+	p.die("expected attribute")
 	return
 }
 
@@ -351,7 +351,7 @@ func (p *parser) comparator() (result string) {
 		}
 		result = ">"
 	} else {
-		p.die("Expected comparison operator")
+		p.die("expected comparison operator")
 	}
 	return
 }

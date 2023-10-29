@@ -79,7 +79,7 @@ func ValidationHandler() gin.HandlerFunc {
 
 		logger := logging.FromContext(ctx).With("args", queryArgs)
 
-		logger.Info("validating args")
+		logger.Debug("validating args")
 		_, err := queryArgs.Prepare()
 		if err != nil {
 			vr := &ValidationResponse{StatusCode: http.StatusBadRequest}

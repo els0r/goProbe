@@ -70,15 +70,15 @@ func TestParseError(t *testing.T) {
 	}{
 		{"missing comparison operator",
 			missingComparisonTokens,
-			newParseError(missingComparisonTokens, 6, `Expected comparison operator`),
+			newParseError(missingComparisonTokens, 6, `expected comparison operator`),
 		},
 		{"incorrect attribute beginning",
 			wrongAttributeTokensBeginning,
-			newParseError(wrongAttributeTokensBeginning, 0, `Expected attribute`),
+			newParseError(wrongAttributeTokensBeginning, 0, `expected attribute`),
 		},
 		{"incorrect attribute middle",
 			wrongAttributeTokensMiddle,
-			newParseError(wrongAttributeTokensMiddle, 4, `Expected attribute`),
+			newParseError(wrongAttributeTokensMiddle, 4, `expected attribute`),
 		},
 	}
 	for _, test := range tests {

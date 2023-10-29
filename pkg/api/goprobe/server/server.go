@@ -51,8 +51,8 @@ func (server *Server) registerRoutes() {
 	if limiter, hasLimiter := server.QueryRateLimiter(); hasLimiter {
 		queryHandlers = append(gin.HandlersChain{api.RateLimitMiddleware(limiter)}, queryHandlers...)
 	}
-	router.GET(gpapi.QueryRoute, queryHandlers...)  // support for URL-encoded form data GET requests
-	router.POST(gpapi.QueryRoute, queryHandlers...) // support for JSON or form-data body POST requests
+	router.GET(api.QueryRoute, queryHandlers...)  // support for URL-encoded form data GET requests
+	router.POST(api.QueryRoute, queryHandlers...) // support for JSON or form-data body POST requests
 
 	// stats
 	statsRoutes := router.Group(gpapi.StatusRoute)

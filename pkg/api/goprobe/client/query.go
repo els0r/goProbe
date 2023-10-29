@@ -3,7 +3,7 @@ package client
 import (
 	"context"
 
-	gpapi "github.com/els0r/goProbe/pkg/api/goprobe"
+	"github.com/els0r/goProbe/pkg/api"
 	"github.com/els0r/goProbe/pkg/query"
 	"github.com/els0r/goProbe/pkg/results"
 	"github.com/fako1024/httpc"
@@ -33,7 +33,7 @@ func (c *Client) Query(ctx context.Context, args *query.Args) (*results.Result, 
 	var res = new(results.Result)
 
 	req := c.Modify(ctx,
-		httpc.NewWithClient("POST", c.NewURL(gpapi.QueryRoute), c.Client()).
+		httpc.NewWithClient("POST", c.NewURL(api.QueryRoute), c.Client()).
 			EncodeJSON(queryArgs).
 			ParseJSON(res),
 	)
@@ -50,7 +50,7 @@ func (c *Client) Validate(ctx context.Context, args *query.Args) (*results.Resul
 	var res = new(results.Result)
 
 	req := c.Modify(ctx,
-		httpc.NewWithClient("POST", c.NewURL(gpapi.ValidationRoute), c.Client()).
+		httpc.NewWithClient("POST", c.NewURL(api.ValidationRoute), c.Client()).
 			EncodeJSON(args).
 			ParseJSON(res),
 	)

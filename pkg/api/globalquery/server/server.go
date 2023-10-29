@@ -4,7 +4,7 @@ import (
 	"github.com/els0r/goProbe/cmd/global-query/pkg/conf"
 	"github.com/els0r/goProbe/cmd/global-query/pkg/distributed"
 	"github.com/els0r/goProbe/cmd/global-query/pkg/hosts"
-	gqapi "github.com/els0r/goProbe/pkg/api/globalquery"
+	"github.com/els0r/goProbe/pkg/api"
 	"github.com/els0r/goProbe/pkg/api/server"
 )
 
@@ -30,5 +30,5 @@ func New(addr string, resolver hosts.Resolver, querier distributed.Querier, opts
 }
 
 func (server *Server) registerRoutes() {
-	RegisterQueryHandler(server.Router(), gqapi.QueryRoute, server.hostListResolver, server.querier)
+	RegisterQueryHandler(server.Router(), api.QueryRoute, server.hostListResolver, server.querier)
 }
