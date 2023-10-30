@@ -1,0 +1,7 @@
+type: object
+properties:
+  val:
+    type: string
+    example: "Value that is below the lower bounds"
+  min:
+    $ref: "./boundsError.yaml"

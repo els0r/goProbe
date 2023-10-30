@@ -17,9 +17,6 @@ const (
 	IfacesQueryParam = "ifaces"
 )
 
-// QueryRoute is the route to run a goquery query
-const QueryRoute = "/_query"
-
 type response struct {
 	StatusCode int    `json:"status_code"`     // StatusCode: stores the HTTP status code of the response. Example: 200
 	Error      string `json:"error,omitempty"` // Error: stores the error message if the request failed. Example: "interface not found"

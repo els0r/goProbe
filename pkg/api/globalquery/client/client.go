@@ -3,8 +3,8 @@ package client
 import (
 	"context"
 
+	"github.com/els0r/goProbe/pkg/api"
 	"github.com/els0r/goProbe/pkg/api/client"
-	gqapi "github.com/els0r/goProbe/pkg/api/globalquery"
 	"github.com/els0r/goProbe/pkg/query"
 	"github.com/els0r/goProbe/pkg/results"
 	"github.com/fako1024/httpc"
@@ -47,7 +47,7 @@ func (c *Client) Query(ctx context.Context, args *query.Args) (*results.Result, 
 	var res = new(results.Result)
 
 	req := c.Modify(ctx,
-		httpc.NewWithClient("POST", c.NewURL(gqapi.QueryRoute), c.Client()).
+		httpc.NewWithClient("POST", c.NewURL(api.QueryRoute), c.Client()).
 			EncodeJSON(queryArgs).
 			ParseJSON(res),
 	)

@@ -59,3 +59,50 @@ func RunQuery(caller, sourceData string, querier query.Runner, c *gin.Context) {
 	// serialize raw result if json is selected
 	c.JSON(http.StatusOK, result)
 }
+
+// ValidationHandler returns the query args validation handler
+func ValidationHandler() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx := c.Request.Context()
+
+		queryArgs := new(query.Args)
+
+		// Attempt to parse args from request JSON body
+		if err := jsoniter.NewDecoder(c.Request.Body).Decode(queryArgs); err != nil {
+
+			// If that failed, attempt to bind the URL form data
+			if err = binding.Form.Bind(c.Request, queryArgs); err != nil {
+				LogAndAbort(ctx, c, http.StatusBadRequest, err)
+				return
+			}
+		}
+
+		logger := logging.FromContext(ctx).With("args", queryArgs)
+
+		logger.Debug("validating args")
+		_, err := queryArgs.Prepare()
+		if err != nil {
+			vr := &ValidationResponse{StatusCode: http.StatusBadRequest}
+			switch t := err.(type) {
+			case *query.ArgsError:
+				vr.ArgsError = t
+			default:
+				LogAndAbort(ctx, c, http.StatusInternalServerError, err)
+				return
+			}
+
+			logger.With("error", vr.ArgsError).Error("invalid query args")
+
+			c.JSON(http.StatusBadRequest, vr)
+			return
+		}
+
+		c.JSON(http.StatusNoContent, "")
+	}
+}
+
+// ValidationResponse stores the response to a validation query
+type ValidationResponse struct {
+	StatusCode int `json:"status_code"` // StatusCode: stores the HTTP status code of the response. Example: 200
+	*query.ArgsError
+}

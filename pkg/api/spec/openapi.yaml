@@ -3,17 +3,18 @@ info:
   title: Query API
   version: 1.0.0
 servers:
-  - url: http://localhost:8145
+  - url: http://localhost:8146
 paths:
   /_query:
-    $ref: './paths/query.yaml'
+    $ref: "./paths/query.yaml"
+  /_query/validate:
+    $ref: "./paths/validate.yaml"
   /-/health:
-    $ref: './paths/health.yaml'
+    $ref: "./paths/health.yaml"
   /-/info:
-    $ref: './paths/info.yaml'
+    $ref: "./paths/info.yaml"
   /-/ready:
-    $ref: './paths/ready.yaml'
+    $ref: "./paths/ready.yaml"
 components:
   schemas:
-    $ref: './schemas/_index.yaml'
-
+    $ref: "./schemas/_index.yaml"

@@ -1,0 +1,20 @@
+type: object
+properties:
+  tokens:
+    type: array
+    items:
+      type: string
+    example: ["dipl", "=", "1.2.3.4"]
+  pos:
+    type: integer
+    example: 0
+  description:
+    type: string
+    example: "Unknown attribute"
+  sep:
+    type: string
+    example: " "
+required:
+  - tokens
+  - pos
+  - description

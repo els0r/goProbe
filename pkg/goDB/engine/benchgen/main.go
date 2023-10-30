@@ -276,7 +276,7 @@ func main() {
 				for cname := range testConditions {
 
 					// iterate over all formats
-					for format := range query.PermittedFormats {
+					for _, format := range query.PermittedFormats() {
 						tuples = append(tuples, TestTuple{
 							ID:        benchNum,
 							Iface:     iarg,

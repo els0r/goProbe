@@ -182,3 +182,20 @@ func IPStringToBytes(ip string) (ipData []byte, isIPv4 bool, err error) {
 
 	return
 }
+
+// Prettier is an interface allowing types to pretty-print themselves. Think of it as
+// a nicer version of String. Meant to be used for cases where a human being consumes
+// the output directly
+type Prettier interface {
+	Pretty() string
+}
+
+// PrettyIndent takes the output from a Prettier and indents it by n spaces
+func PrettyIndent(p Prettier, n int) string {
+	// a bit of sugar to make sure the pretty details are nicely indented
+	indent := "\n" + strings.Repeat(" ", n)
+	return strings.Join(
+		strings.Split(p.Pretty(), "\n"),
+		indent,
+	)
+}

@@ -10,6 +10,7 @@ import (
 	"github.com/els0r/goProbe/pkg/api"
 	"github.com/els0r/goProbe/pkg/goDB/info"
 	"github.com/els0r/goProbe/pkg/telemetry/metrics"
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/time/rate"
@@ -101,6 +102,7 @@ func NewDefault(serviceName, addr string, opts ...Option) *DefaultServer {
 	router.MaxMultipartMemory = maxMultipartMemory
 
 	router.Use(gin.Recovery())
+	router.Use(cors.Default())
 
 	// make sure that unix sockets are handled if they are provided
 	s.unixSocketFile = api.ExtractUnixSocket(addr)

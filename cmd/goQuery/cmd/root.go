@@ -220,6 +220,10 @@ func initConfig() {
 	}
 }
 
+const (
+	queryPrepFailureMsg = "failed to prepare query"
+)
+
 // main program entrypoint
 func entrypoint(cmd *cobra.Command, args []string) (err error) {
 	// assign query args
@@ -312,14 +316,14 @@ func entrypoint(cmd *cobra.Command, args []string) (err error) {
 
 		// store the query type and make sure that aliases are resolved. This
 		// is important so that the hostname/hostid can be appended
-		queryArgs.Query = strings.Join(types.ToAttributeNames(queryArgs.Query), ",")
+		queryArgs.Query = types.SanitizeQueryType(queryArgs.Query)
 
 		// make sure that the hostname is present in the query type (and therefore output)
 		// The assumption being that a human will have better knowledge
 		// of hostnames than of their ID counterparts
 		if queryArgs.Format == "txt" {
 			if !strings.Contains(queryArgs.Query, types.HostnameName) {
-				queryArgs.Query += "," + types.HostnameName
+				queryArgs.Query += types.AttrSep + types.HostnameName
 			}
 		}
 
@@ -356,7 +360,12 @@ func entrypoint(cmd *cobra.Command, args []string) (err error) {
 	// convert the command line parameters
 	stmt, err := queryArgs.Prepare()
 	if err != nil {
-		return fmt.Errorf("failed to prepare query: %w", err)
+		// if there's an args error, print it in a user-friendly way
+		prettyErr, ok := err.(types.Prettier)
+		if ok {
+			return fmt.Errorf("%s:\n%s", queryPrepFailureMsg, prettyErr.Pretty())
+		}
+		return fmt.Errorf("%s: %w", queryPrepFailureMsg, err)
 	}
 
 	if queryLogFile != "" {
@@ -367,7 +376,11 @@ func entrypoint(cmd *cobra.Command, args []string) (err error) {
 
 	result, err = querier.Run(ctx, &queryArgs)
 	if err != nil {
-		return fmt.Errorf("failed to execute query %s: %w", stmt, err)
+		return fmt.Errorf(`failed to execute query
+
+      Error: %w
+  Statement:
+%s`, err, types.PrettyIndent(stmt, 4))
 	}
 
 	// serialize raw results array if json is selected

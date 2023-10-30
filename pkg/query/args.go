@@ -6,10 +6,12 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/els0r/goProbe/pkg/goDB/conditions"
+	"github.com/els0r/goProbe/pkg/goDB/conditions/node"
 	"github.com/els0r/goProbe/pkg/query/dns"
 	"github.com/els0r/goProbe/pkg/results"
 	"github.com/els0r/goProbe/pkg/types"
@@ -102,6 +104,186 @@ type Args struct {
 	outputs []io.Writer
 }
 
+// ArgsError provides a more detailed error description for invalid query args
+type ArgsError struct {
+	Field   string // Field: the string describing which field led to the error. It MUST match the json definition for a field. Example: condition
+	Type    string // Type: the type of the error. Example: *types.ParseError
+	Message string // Message: a human-readable, UI friendly description of the error. Example: Condition parsing failed
+	err     error  // Details: a specific error describing which part of the arguments is incorrect
+}
+
+func newArgsError(field string, msg string, err error) *ArgsError {
+	args := &ArgsError{
+		Field:   field,
+		Message: msg,
+		err:     err,
+	}
+	if err != nil {
+		args.Type = fmt.Sprintf("%T", err)
+
+		// make sure the type of the wrapped error is found out
+		e := errors.Unwrap(err)
+		if e != nil {
+			args.Type = fmt.Sprintf("%T", e)
+		}
+	}
+	return args
+}
+
+func (err *ArgsError) String() string {
+	return fmt.Sprintf("%s: %s: (%s: %s)", err.Field, err.Message, err.Type, err.err)
+}
+
+// Error implements the error interface
+func (err *ArgsError) Error() string {
+	return err.String()
+}
+
+// Unwrap makes the error wrappable
+func (err *ArgsError) Unwrap() error {
+	return err.err
+}
+
+// LogValue implements slog.LogValuer
+func (err *ArgsError) LogValue() slog.Value {
+	return slog.GroupValue(
+		slog.String("field", err.Field),
+		slog.String("type", string(err.Type)),
+		slog.String("message", err.Message),
+		slog.Any("details", err.err),
+	)
+}
+
+type marshallableError struct {
+	error
+}
+
+type marshalArgsError struct {
+	Field   string `json:"field"`
+	Type    string `json:"type,omitempty"`
+	Message string `json:"message"`
+	Details any    `json:"details,omitempty"`
+}
+
+func (m *marshallableError) MarshalJSON() ([]byte, error) {
+	return jsoniter.Marshal(m.Error())
+}
+
+func (err *ArgsError) MarshalJSON() ([]byte, error) {
+	var m = marshalArgsError{Field: err.Field, Type: err.Type, Message: err.Message}
+
+	if err.err == nil {
+		m.Details = nil
+		return jsoniter.Marshal(&m)
+	}
+
+	// check if the underlying error is a parse error
+	e := errors.Unwrap(err.err)
+	if e == nil {
+		e = err.err
+		m.Type = fmt.Sprintf("%T", e)
+	}
+
+	// need assertion because error doesn't know how to deal with marshalling
+	switch t := e.(type) {
+	case *types.ParseError,
+		*types.MinBoundsError,
+		*types.MaxBoundsError,
+		*types.RangeError,
+		*types.UnsupportedError:
+		m.Details = t
+	default:
+		m.Details = &marshallableError{e}
+	}
+
+	return jsoniter.Marshal(&m)
+}
+
+var (
+	maxBoundsErrorType   = fmt.Sprintf("%T", new(types.MaxBoundsError))
+	minBoundsErrorType   = fmt.Sprintf("%T", new(types.MinBoundsError))
+	parseErrorType       = fmt.Sprintf("%T", new(types.ParseError))
+	rangeErrorType       = fmt.Sprintf("%T", new(types.RangeError))
+	unsupportedErrorType = fmt.Sprintf("%T", new(types.UnsupportedError))
+)
+
+// UnmarshalJSON implements the json.Unmarshaler interface
+func (err *ArgsError) UnmarshalJSON(data []byte) error {
+	var m = new(marshalArgsError)
+	e := jsoniter.Unmarshal(data, m)
+	if e != nil {
+		return e
+	}
+	err.Field = m.Field
+	err.Message = m.Message
+	err.Type = m.Type
+
+	// re-create the specific error
+	var detailError error = nil
+	if m.Details == nil {
+		err.err = detailError
+		return nil
+	}
+
+	switch m.Type {
+	case parseErrorType:
+		m.Details = new(types.ParseError)
+	case minBoundsErrorType:
+		m.Details = new(types.MinBoundsError)
+	case maxBoundsErrorType:
+		m.Details = new(types.MaxBoundsError)
+	case rangeErrorType:
+		m.Details = new(types.RangeError)
+	case unsupportedErrorType:
+		m.Details = new(types.UnsupportedError)
+	default:
+		m.Details = ""
+	}
+
+	e = jsoniter.Unmarshal(data, m)
+	if e != nil {
+		return e
+	}
+
+	switch t := m.Details.(type) {
+	case *types.ParseError:
+		err.err = t
+	case *types.MinBoundsError:
+		err.err = t
+	case *types.MaxBoundsError:
+		err.err = t
+	case *types.RangeError:
+		err.err = t
+	case *types.UnsupportedError:
+		err.err = t
+	case error:
+		err.err = t
+	case string:
+		err.err = errors.New(t)
+	default:
+		return fmt.Errorf("unknown error type %v", t)
+	}
+
+	return nil
+}
+
+// Pretty implements the Prettier interface to represent the error in a human-readable way
+func (err *ArgsError) Pretty() string {
+	str := `
+  Field:   %s
+  Message: %s
+  Details: %s
+`
+	errStr := err.err.Error()
+
+	prettyErr, ok := err.err.(types.Prettier)
+	if ok {
+		errStr = "\n" + types.PrettyIndent(prettyErr, 4)
+	}
+
+	return fmt.Sprintf(str, err.Field, err.Message, errStr)
+}
+
 // DNSResolution contains DNS query / resolution related config arguments / parameters
 type DNSResolution struct {
 	Enabled bool          `json:"enabled" yaml:"enabled" form:"dns_enabled"`                                  // Enabled: enable reverse DNS lookups. Example: false
@@ -152,12 +334,22 @@ func (a *Args) LogValue() slog.Value {
 	return slog.StringValue(val)
 }
 
+const (
+	invalidQueryTypeMsg            = "invalid query type"
+	invalidFormatMsg               = "unknown format"
+	invalidSortByMsg               = "unknown format"
+	invalidTimeRangeMsg            = "invalid time range"
+	invalidDNSResolutionTimeoutMsg = "invalid resolution timeout"
+	invalidDNSResolutionRowsMsg    = "invalid number of rows"
+	invalidConditionMsg            = "invalid condition"
+	invalidMaxMemPctMsg            = "invalid max memory percentage"
+	invalidRowLimitMsg             = "invalid row limit"
+	invalidLiveQueryMsg            = "query not possible"
+)
+
 // Prepare takes the query Arguments, validates them and creates an executable statement. Optionally, additional writers can be passed to route query results to different destinations.
 func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
-	// if not already done beforehand, enforce defaults for args
-	if a.SortBy == "" {
-		a.SortBy = "packets"
-	}
+	var err error
 
 	s := &Statement{
 		QueryType:     a.Query,
@@ -169,27 +361,43 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 		Output:        os.Stdout, // by default, we write results to the console
 	}
 
-	var err error
-
-	// verify config format
-	_, verifies := PermittedFormats[a.Format]
-	if !verifies {
-		return s, fmt.Errorf("unknown output format '%s'", a.Format)
-	}
-	s.Format = a.Format
-
-	// assign sort order and direction
-	s.SortBy, verifies = PermittedSortBy[a.SortBy]
-	if !verifies {
-		return s, fmt.Errorf("unknown sorting parameter '%s' specified", a.SortBy)
-	}
-
 	// the query type is parsed here already in order to validate if the query contains
 	// errors
 	var selector types.LabelSelector
 	s.attributes, selector, err = types.ParseQueryType(a.Query)
 	if err != nil {
-		return s, fmt.Errorf("failed to parse query type: %w", err)
+		return s, newArgsError(
+			"query",
+			invalidQueryTypeMsg,
+			err,
+		)
+	}
+
+	// verify config format
+	_, verifies := permittedFormats[a.Format]
+	if !verifies {
+		return s, newArgsError(
+			"format",
+			invalidFormatMsg,
+			types.NewUnsupportedError(a.Format, PermittedFormats()),
+		)
+	}
+	s.Format = a.Format
+
+	// if not already done beforehand, enforce defaults for args
+	if a.SortBy == "" {
+		a.SortBy = "packets"
+	}
+
+	// assign sort order and direction
+	s.SortBy, verifies = permittedSortBy[a.SortBy]
+	if !verifies {
+		return s, newArgsError(
+			"sort_by",
+			invalidSortByMsg,
+			types.NewUnsupportedError(a.SortBy, PermittedSortBy()),
+		)
+
 	}
 
 	// insert iface attribute here in case multiple interfaces where specified and the
@@ -210,7 +418,11 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 	// parse time bound
 	s.First, s.Last, err = ParseTimeRange(a.First, a.Last)
 	if err != nil {
-		return s, err
+		return s, newArgsError(
+			"first/last",
+			invalidTimeRangeMsg,
+			err,
+		)
 	}
 
 	switch {
@@ -226,40 +438,76 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 
 	// check resolve timeout and DNS
 	if s.DNSResolution.Enabled {
+		// TODO: make this function available in the public domain or skip
 		err := dns.CheckDNS()
 		if err != nil {
-			return s, fmt.Errorf("DNS warning: %w", err)
+			return s, newArgsError(
+				"dns_resolution.enabled",
+				"DNS check failed",
+				err,
+			)
 		}
 		if !(0 < s.DNSResolution.Timeout) {
-			return s, fmt.Errorf("resolve-timeout must be greater than 0")
+			return s, newArgsError(
+				"dns_resolution.timeout",
+				invalidDNSResolutionTimeoutMsg,
+				types.NewMinBoundsError(strconv.Itoa(int(s.DNSResolution.Timeout)), "0", false),
+			)
 		}
 		if !(0 < s.DNSResolution.MaxRows) {
-			return s, fmt.Errorf("resolve-rows must be greater than 0")
+			return s, newArgsError(
+				"dns_resolution.max_rows",
+				invalidDNSResolutionRowsMsg,
+				types.NewMinBoundsError(strconv.Itoa(int(s.DNSResolution.MaxRows)), "0", false),
+			)
 		}
 	}
 
 	// sanitize conditional if one was provided
-	a.Condition, err = conditions.SanitizeUserInput(a.Condition)
-	if err != nil {
-		return s, fmt.Errorf("failed to sanitize condition: %w", err)
+	s.Condition = conditions.SanitizeUserInput(a.Condition)
+
+	// build condition tree to check if there is a syntax error before starting processing
+	_, _, parseErr := node.ParseAndInstrument(s.Condition, s.DNSResolution.Timeout)
+	if parseErr != nil {
+		return s, newArgsError(
+			"condition",
+			invalidConditionMsg,
+			parseErr,
+		)
 	}
-	s.Condition = a.Condition
+
+	// if we got here, the condition can definitely be tokenized. This makes sure the canonical
+	// form of the condition is stored
+	tokens, _ := conditions.Tokenize(s.Condition)
+	s.Condition = strings.Join(tokens, " ")
 
 	// check memory flag
 	if !(0 < a.MaxMemPct && a.MaxMemPct <= 100) {
-		return s, fmt.Errorf("invalid memory percentage of '%d' provided", a.MaxMemPct)
+		return s, newArgsError(
+			"max_mem_pct",
+			invalidMaxMemPctMsg,
+			types.NewRangeError(strconv.Itoa(a.MaxMemPct), "0", false, "100", true),
+		)
 	}
 	s.MaxMemPct = a.MaxMemPct
 
 	// check limits flag
 	if a.NumResults <= 0 {
-		return s, errors.New("the printed row limit must be greater than 0")
+		return s, newArgsError(
+			"num_results",
+			invalidRowLimitMsg,
+			types.NewMinBoundsError(strconv.Itoa(int(s.NumResults)), "0", false),
+		)
 	}
 	s.NumResults = a.NumResults
 
 	// check for consistent use of the live flag
 	if s.Live && s.Last != types.MaxTime.Unix() {
-		return s, errors.New("live query not possible if query has last timestamp")
+		return s, newArgsError(
+			"live",
+			invalidLiveQueryMsg,
+			errors.New("last timestamp unsupported"),
+		)
 	}
 
 	// fan-out query results in case multiple writers were supplied

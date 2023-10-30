@@ -24,6 +24,41 @@ import (
 	"strings"
 )
 
+// expressions that count as "user grammar" for the different parts of the conditional
+var grammarConversionMap = map[string][]string{
+	"!":  {"(^|\\s+)not\\s+"},
+	"!(": {"(^|\\s+)not[\\(\\[\\{]"}, // Users should be able to write "not{dport = 80}"
+	"&":  {"&&", "\\s+and\\s+", "\\*"},
+	"|":  {"\\|\\|", "\\s+or\\s+", "\\+"},
+	"(":  {"\\{", "\\["},
+	")":  {"\\}", "\\]"},
+	"=":  {"\\s+eq\\s+", "\\s+\\-eq\\s+", "\\s+equals\\s+", "===", "=="},
+	"!=": {"\\s+neq\\s+", "\\s+-neq\\s+", "\\s+ne\\s+", "\\s+\\-ne\\s+"},
+	"<=": {"\\s+le\\s+", "\\s+\\-le\\s+", "\\s+leq\\s+", "\\s+-leq\\s+"},
+	">=": {"\\s+ge\\s+", "\\s+\\-ge\\s+", "\\s+geq\\s+", "\\s+-geq\\s+"},
+	">":  {"\\s+g\\s+", "\\s+\\-g\\s+", "\\s+gt\\s+", "\\s+\\-gt\\s+", "\\s+greater\\s+"},
+	"<":  {"\\s+l\\s+", "\\s+\\-l\\s+", "\\s+lt\\s+", "\\s+\\-lt\\s+", "\\s+less\\s+"},
+}
+
+var (
+	regexAll                  *regexp.Regexp
+	regexGrammarConversionMap map[string][]*regexp.Regexp
+)
+
+func init() {
+	regexAll = regexp.MustCompile(".*")
+	regexGrammarConversionMap = make(map[string][]*regexp.Regexp)
+
+	// range over map to convert the individual entries
+	for condGrammarOp, userGrammarOps := range grammarConversionMap {
+		var regexes []*regexp.Regexp
+		for _, userOp := range userGrammarOps {
+			regexes = append(regexes, regexp.MustCompile(userOp))
+		}
+		regexGrammarConversionMap[condGrammarOp] = regexes
+	}
+}
+
 // SanitizeUserInput sanitizes a conditional string provided by the user. Its main purpose
 // is to convert other forms of precedence and logical operators to the condition grammar
 // used.
@@ -41,55 +76,17 @@ import (
 //	         include syntactical errors or malspecified conditions. These will be caught
 //	         at a latter stage
 //	error:   any error from golang's regex module
-//
-// NOTE:  the current implementation of GPDPIProtocols.go has to make sure that the map keys
-//
-//	of "proto" to numbers are all lower case
-func SanitizeUserInput(conditional string) (string, error) {
-
-	var (
-		sanitized string
-		r         *regexp.Regexp
-		err       error
-	)
-
-	// expressions that count as "user grammar" for the different parts of the conditional
-	var grammarConversionMap = map[string][]string{
-		"!":  {"(^|\\s+)not\\s+"},
-		"!(": {"(^|\\s+)not[\\(\\[\\{]"}, // Users should be able to write "not{dport = 80}"
-		"&":  {"&&", "\\s+and\\s+", "\\*"},
-		"|":  {"\\|\\|", "\\s+or\\s+", "\\+"},
-		"(":  {"\\{", "\\["},
-		")":  {"\\}", "\\]"},
-		"=":  {"\\s+eq\\s+", "\\s+\\-eq\\s+", "\\s+equals\\s+", "===", "=="},
-		"!=": {"\\s+neq\\s+", "\\s+-neq\\s+", "\\s+ne\\s+", "\\s+\\-ne\\s+"},
-		"<=": {"\\s+le\\s+", "\\s+\\-le\\s+", "\\s+leq\\s+", "\\s+-leq\\s+"},
-		">=": {"\\s+ge\\s+", "\\s+\\-ge\\s+", "\\s+geq\\s+", "\\s+-geq\\s+"},
-		">":  {"\\s+g\\s+", "\\s+\\-g\\s+", "\\s+gt\\s+", "\\s+\\-gt\\s+", "\\s+greater\\s+"},
-		"<":  {"\\s+l\\s+", "\\s+\\-l\\s+", "\\s+lt\\s+", "\\s+\\-lt\\s+", "\\s+less\\s+"},
-	}
-
-	// first, convert everything to lower case
-	r, err = regexp.Compile(".*")
-	if err != nil {
-		return sanitized, err
-	}
-
-	sanitized = string(r.ReplaceAllFunc([]byte(conditional), bytes.ToLower))
+func SanitizeUserInput(conditional string) (sanitized string) {
+	sanitized = string(regexAll.ReplaceAllFunc([]byte(conditional), bytes.ToLower))
 
 	// range over map to convert the individual entries
-	for condGrammarOp, userGrammarOps := range grammarConversionMap {
-		for _, userOp := range userGrammarOps {
-			r, err = regexp.Compile(userOp)
-			if err != nil {
-				return sanitized, err
-			}
-
-			sanitized = r.ReplaceAllString(sanitized, condGrammarOp)
+	for condGrammarOp, userGrammarOps := range regexGrammarConversionMap {
+		for _, userOpRegex := range userGrammarOps {
+			sanitized = userOpRegex.ReplaceAllString(sanitized, condGrammarOp)
 		}
 	}
 
-	return sanitized, err
+	return sanitized
 }
 
 func startsDelimiter(char byte) bool {
