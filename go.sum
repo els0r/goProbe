@@ -81,6 +81,8 @@ github.com/fako1024/gotools/concurrency v0.0.0-20230821104146-b3b1387dec32 h1:Nv
 github.com/fako1024/gotools/concurrency v0.0.0-20230821104146-b3b1387dec32/go.mod h1:4mhi2XPVVG6s5zDqL5brEXq2sVZSb4K96zKEJiWrSFs=
 github.com/fako1024/httpc v1.0.17-0.20231017193232-2697bac7cc20 h1:r9QwNMegz/b1ge3F73rlY69bmdLUEM6V12jOxfFXl90=
 github.com/fako1024/httpc v1.0.17-0.20231017193232-2697bac7cc20/go.mod h1:SSusxgBt7YDtCkkBGJ3rT3kFx4tgpRFp0eQ3VzsbFjI=
+github.com/fako1024/httpc v1.0.17 h1:qHn6VgCAbhdY5SoddZpGamdWgMUhzyJrUuHsPgBKsNY=
+github.com/fako1024/httpc v1.0.17/go.mod h1:+blZZM7exFOh5xN5ej7YnLhSepVN4cvFLkTdt7M5d00=
 github.com/fako1024/slimcap v1.0.1 h1:h1sK2klH7Phr6NvzafcNtMC8EPKKSYBwx2ovdSFn1Vg=
 github.com/fako1024/slimcap v1.0.1/go.mod h1:5mW+Y1KcVS50uB5gIq9uNsjzPpBh4Pq3lRMveRGhruA=
 github.com/felixge/httpsnoop v1.0.3 h1:s/nj+GCswXYzN5v2DpNMuMQYe+0DDwt5WVCU6CWBdXk=
@@ -114,9 +116,11 @@ github.com/go-logr/logr v1.2.4/go.mod h1:jdQByPbusPIv2/zmleS9BjJVeZ6kBagPoEUsqbV
 github.com/go-logr/stdr v1.2.2 h1:hSWxHoqTgW2S2qGc0LTAI563KZ5YKYRhT3MFKZMbjag=
 github.com/go-logr/stdr v1.2.2/go.mod h1:mMo/vtBO5dYbehREoey6XUKy/eSumjCCveDpRre4VKE=
 github.com/go-openapi/jsonpointer v0.19.5/go.mod h1:Pl9vOtqEWErmShwVjC8pYs9cog34VGT37dQOVbmoatg=
+github.com/go-openapi/jsonpointer v0.19.6/go.mod h1:osyAmYz/mB/C3I+WsTTSgw1ONzaLJoLCyoi6/zppojs=
 github.com/go-openapi/jsonpointer v0.20.0 h1:ESKJdU9ASRfaPNOPRx12IUyA1vn3R9GiE3KYD14BXdQ=
 github.com/go-openapi/jsonpointer v0.20.0/go.mod h1:6PGzBjjIIumbLYysB73Klnms1mwnU4G3YHOECG3CedA=
 github.com/go-openapi/swag v0.19.5/go.mod h1:POnQmlKehdgb5mhVOsnJFsivZCEZ/vjK9gh66Z9tfKk=
+github.com/go-openapi/swag v0.22.3/go.mod h1:UzaqsxGiab7freDnrUUra0MwWfN/q7tE4j+VcZ0yl14=
 github.com/go-openapi/swag v0.22.4 h1:QLMzNJnMGPRNDCbySlcj1x01tzU8/9LTTL9hZZZogBU=
 github.com/go-openapi/swag v0.22.4/go.mod h1:UzaqsxGiab7freDnrUUra0MwWfN/q7tE4j+VcZ0yl14=
 github.com/go-playground/assert/v2 v2.0.1/go.mod h1:VDjEfimB/XKnb+ZQfWdccd7VUvScMdVu0Titje2rxJ4=
