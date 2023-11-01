@@ -89,6 +89,8 @@ github.com/fako1024/httpc v1.0.18-0.20231101182355-3a44e1a55cd9 h1:qskJxlTnUfUYv
 github.com/fako1024/httpc v1.0.18-0.20231101182355-3a44e1a55cd9/go.mod h1:+blZZM7exFOh5xN5ej7YnLhSepVN4cvFLkTdt7M5d00=
 github.com/fako1024/httpc v1.0.18-0.20231101191807-f030c70958b7 h1:XNT+X7sfL16hqFcX1f3pyP8T7c77bUj2d2VjKgSOvWQ=
 github.com/fako1024/httpc v1.0.18-0.20231101191807-f030c70958b7/go.mod h1:+blZZM7exFOh5xN5ej7YnLhSepVN4cvFLkTdt7M5d00=
+github.com/fako1024/httpc v1.0.18-0.20231101194149-72d9d6fe2ae2 h1:qVLUdl/bjsD1KCynyPD8D7CdE09n1CALwiau0bRSeq4=
+github.com/fako1024/httpc v1.0.18-0.20231101194149-72d9d6fe2ae2/go.mod h1:+blZZM7exFOh5xN5ej7YnLhSepVN4cvFLkTdt7M5d00=
 github.com/fako1024/slimcap v1.0.1 h1:h1sK2klH7Phr6NvzafcNtMC8EPKKSYBwx2ovdSFn1Vg=
 github.com/fako1024/slimcap v1.0.1/go.mod h1:5mW+Y1KcVS50uB5gIq9uNsjzPpBh4Pq3lRMveRGhruA=
 github.com/felixge/httpsnoop v1.0.3 h1:s/nj+GCswXYzN5v2DpNMuMQYe+0DDwt5WVCU6CWBdXk=
