@@ -9,7 +9,7 @@ require (
 	github.com/els0r/telemetry/logging v0.0.0-20230905085019-03d1cd3d4b3d
 	github.com/fako1024/gotools/bitpack v0.0.0-20230821104146-b3b1387dec32
 	github.com/fako1024/gotools/concurrency v0.0.0-20230821104146-b3b1387dec32
-	github.com/fako1024/httpc v1.0.18-0.20231101182355-3a44e1a55cd9
+	github.com/fako1024/httpc v1.0.18-0.20231101191807-f030c70958b7
 	github.com/fako1024/slimcap v1.0.1
 	github.com/gin-contrib/pprof v1.4.0
 	github.com/gin-gonic/gin v1.9.1
