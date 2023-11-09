@@ -1,11 +1,57 @@
 package types
 
 import (
+	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"log/slog"
 )
+
+// DataLimitError stores / implies that the requested data range (contained in the First / Last fields, respectively)
+// exceeds the server-side limit. It provides a Next field as hint to the caller regarding the next range to be queried
+// in order to achieve pagination-style partial results until all data is consumed / returned
+type DataLimitError struct {
+	First int64
+	Last  int64
+	Next  int64
+}
+
+// IsDataLimitError provides a convenience function to ascertain if a (potentially wrapped) error is of type DataLimitError
+func IsDataLimitError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	var dataLimitErrorTarget *DataLimitError
+	return errors.As(err, &dataLimitErrorTarget)
+}
+
+// NewDataLimitError instantiates a new DataLimitError according to the provided reference timestamps
+func NewDataLimitError(first, last, next int64) *DataLimitError {
+	return &DataLimitError{
+		First: first,
+		Last:  last,
+		Next:  next,
+	}
+}
+
+// Error implements the standard error interface
+func (err *DataLimitError) Error() string {
+	return fmt.Sprintf("query range (%d -> %d) exceeds internal limits, returning partial results (next chunk starts at %d)",
+		err.First, err.Last, err.Next,
+	)
+}
+
+// Pretty implements the Prettier interface
+func (err *DataLimitError) Pretty() string {
+	return fmt.Sprintf("query range (%v -> %v) exceeds internal limits, returning partial results (next chunk starts at %d)",
+		time.Unix(err.First, 0).Format(DefaultTimeOutputFormat),
+		time.Unix(err.Last, 0).Format(DefaultTimeOutputFormat),
+		err.Next,
+	)
+}
 
 // ParseError stores an error encountered during tokenized parsing
 type ParseError struct {
@@ -61,11 +107,14 @@ func (err *ParseError) parsedString() string {
 	return strings.Join(err.Tokens[:err.Pos], err.Sep)
 }
 
-func (err *ParseError) tokenString() string {
-	return strings.Join(err.Tokens, err.Sep)
-}
+// Unused:
+// func (err *ParseError) tokenString() string {
+// 	return strings.Join(err.Tokens, err.Sep)
+// }
 
+// Error implements the standard error interface
 func (err *ParseError) Error() string {
+
 	// Reassemble the tokens.
 	final := err.parsedString()
 	if err.Pos > 0 {
@@ -91,6 +140,7 @@ func (err *ParseError) Pretty() string {
 	return "\n" + err.Error()
 }
 
+// LogValue returns a convenience slog group that can be used for structured logging
 func (err *ParseError) LogValue() slog.Value {
 	attr := []slog.Attr{
 		slog.Any("tokens", err.Tokens),
@@ -109,6 +159,7 @@ func NewRangeError(val, min string, includeMin bool, max string, includeMax bool
 	}
 }
 
+// Error implements the standard error interface
 func (err *RangeError) Error() string {
 	if err.Max.Val < err.Min.Val {
 		return "the lower bound must not be greater than the upper bound"
@@ -127,6 +178,7 @@ func (err *RangeError) Error() string {
 	return fmt.Sprintf("range constraint not met: %v not in %s", err.Val, strings.Join(strs, ""))
 }
 
+// NewMinBoundsError instantiates a new MinBoundsError according to the provided parameters
 func NewMinBoundsError(val, min string, inclusive bool) *MinBoundsError {
 	return &MinBoundsError{
 		Val: val,
@@ -134,6 +186,7 @@ func NewMinBoundsError(val, min string, inclusive bool) *MinBoundsError {
 	}
 }
 
+// Error implements the standard error interface
 func (err *MinBoundsError) Error() string {
 	comp := ">"
 	if err.Min.Includes {
@@ -142,6 +195,7 @@ func (err *MinBoundsError) Error() string {
 	return fmt.Sprintf("min constraint not met: %s must be %s %s", err.Val, comp, err.Min.Val)
 }
 
+// NewMaxBoundsError instantiates a new MaxBoundsError according to the provided parameters
 func NewMaxBoundsError(val, max string, inclusive bool) *MaxBoundsError {
 	return &MaxBoundsError{
 		Val: val,
@@ -149,6 +203,7 @@ func NewMaxBoundsError(val, max string, inclusive bool) *MaxBoundsError {
 	}
 }
 
+// Error implements the standard error interface
 func (err *MaxBoundsError) Error() string {
 	comp := "<"
 	if err.Max.Includes {
@@ -161,10 +216,12 @@ func newBoundsError(val string, inclusive bool) *boundsError {
 	return &boundsError{Val: val, Includes: inclusive}
 }
 
+// Error implements the standard error interface
 func (err *UnsupportedError) Error() string {
 	return fmt.Sprintf("'%s' is not in {%s}", err.Val, strings.Join(err.Valid, ", "))
 }
 
+// NewUnsupportedError instantiates a new UnsupportedError according to the provided parameters
 func NewUnsupportedError(val string, valid []string) *UnsupportedError {
 	return &UnsupportedError{
 		Val:   val,
