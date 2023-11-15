@@ -313,13 +313,6 @@ func entrypoint(cmd *cobra.Command, args []string) (err error) {
 
 	logger = logging.FromContext(ctx)
 
-	// check if the traceparent is set
-	ctx = tracing.ContextFromTraceparentHeader(ctx, viper.GetString(conf.Traceparent))
-
-	// build first/root span
-	ctx, span := tracing.Start(ctx, "entrypoint")
-	defer span.End()
-
 	queryArgs.Caller = os.Args[0] // take the full path of called binary
 
 	// run the query
@@ -353,6 +346,15 @@ func entrypoint(cmd *cobra.Command, args []string) (err error) {
 		// query using local goDB
 		querier = engine.NewQueryRunner(dbPathCfg)
 	}
+
+	// check if the traceparent is set
+	ctx = tracing.ContextFromTraceparentHeader(ctx, viper.GetString(conf.Traceparent))
+
+	// build first/root span
+	ctx, span := tracing.Start(ctx, "entrypoint")
+	defer span.End()
+
+	logger = logging.FromContext(ctx)
 
 	// create query logger
 	queryLogFile := viper.GetString(conf.QueryLog)
