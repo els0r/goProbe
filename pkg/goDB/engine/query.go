@@ -22,6 +22,10 @@ import (
 	"github.com/els0r/goProbe/pkg/results"
 	"github.com/els0r/goProbe/pkg/types"
 	"github.com/els0r/goProbe/pkg/types/hashmap"
+	"github.com/els0r/telemetry/tracing"
+	jsoniter "github.com/json-iterator/go"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // QueryRunner implements the Runner interface to execute queries
@@ -49,6 +53,15 @@ func NewQueryRunnerWithLiveData(dbPath string, captureManager *capture.Manager) 
 
 // Run implements the query.Runner interface
 func (qr *QueryRunner) Run(ctx context.Context, args *query.Args) (res *results.Result, err error) {
+	var argsStr string
+	b, aerr := jsoniter.Marshal(args)
+	if aerr == nil {
+		argsStr = string(b)
+	}
+
+	ctx, span := tracing.Start(ctx, "(*engine.QueryRunner).Run", trace.WithAttributes(attribute.String("args", argsStr)))
+	defer span.End()
+
 	stmt, err := args.Prepare()
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare query statement: %w", err)

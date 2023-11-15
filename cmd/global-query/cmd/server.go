@@ -13,6 +13,7 @@ import (
 	"github.com/els0r/goProbe/pkg/api/server"
 	"github.com/els0r/goProbe/plugins"
 	"github.com/els0r/telemetry/logging"
+	"github.com/els0r/telemetry/tracing"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
@@ -47,6 +48,11 @@ func serverEntrypoint(cmd *cobra.Command, args []string) error {
 
 	logger := logging.FromContext(ctx)
 
+	shutdownTracing, err := tracing.InitFromFlags(ctx)
+	if err != nil {
+		logger.With("error", err).Error("failed to set up tracing")
+	}
+
 	hostListResolver, err := initHostListResolver()
 	if err != nil {
 		logger.Errorf("failed to prepare query: %v", err)
@@ -71,6 +77,7 @@ func serverEntrypoint(cmd *cobra.Command, args []string) error {
 			logging.LevelFromString(viper.GetString(conf.LogLevel)) == logging.LevelDebug,
 		),
 		server.WithProfiling(viper.GetBool(conf.ProfilingEnabled)),
+		server.WithTracing(viper.GetBool(tracing.TracingEnabledArg)),
 	)
 
 	// initializing the server in a goroutine so that it won't block the graceful
@@ -98,7 +105,11 @@ func serverEntrypoint(cmd *cobra.Command, args []string) error {
 	// shut down running resources, forcibly if need be
 	err = apiServer.Shutdown(ctx)
 	if err != nil {
-		logger.Errorf("forced shut down of API server: %v", err)
+		logger.With("error", err).Error("forced shut down of API server")
+	}
+	err = shutdownTracing(ctx)
+	if err != nil {
+		logger.With("error", err).Error("forced shut down of tracing")
 	}
 
 	logger.Info("shut down complete")

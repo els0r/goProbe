@@ -9,6 +9,7 @@ import (
 	"github.com/els0r/goProbe/pkg/query"
 	"github.com/els0r/goProbe/pkg/version"
 	"github.com/els0r/telemetry/logging"
+	"github.com/els0r/telemetry/tracing"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -57,17 +58,21 @@ func init() {
 	rootCmd.InitDefaultHelpCmd()
 	rootCmd.InitDefaultHelpFlag()
 
-	rootCmd.PersistentFlags().String(conf.LogLevel, conf.DefaultLogLevel, "log level for logger")
-	rootCmd.PersistentFlags().String(conf.LogEncoding, conf.DefaultLogEncoding, "message encoding format for logger")
-	rootCmd.PersistentFlags().String(conf.HostsResolverType, conf.DefaultHostsResolver, "resolver used for the hosts resolution query")
-	rootCmd.PersistentFlags().String(conf.QuerierType, conf.DefaultHostsQuerierType, "querier used to run queries")
-	rootCmd.PersistentFlags().String(conf.QuerierConfig, "", "querier config file location")
-	rootCmd.PersistentFlags().Int(conf.QuerierMaxConcurrent, 0, "maximum number of concurrent queries to hosts")
+	pflags := rootCmd.PersistentFlags()
 
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.global-query.yaml)")
+	tracing.RegisterFlags(pflags)
+
+	pflags.String(conf.LogLevel, conf.DefaultLogLevel, "log level for logger")
+	pflags.String(conf.LogEncoding, conf.DefaultLogEncoding, "message encoding format for logger")
+	pflags.String(conf.HostsResolverType, conf.DefaultHostsResolver, "resolver used for the hosts resolution query")
+	pflags.String(conf.QuerierType, conf.DefaultHostsQuerierType, "querier used to run queries")
+	pflags.String(conf.QuerierConfig, "", "querier config file location")
+	pflags.Int(conf.QuerierMaxConcurrent, 0, "maximum number of concurrent queries to hosts")
+
+	pflags.StringVar(&cfgFile, "config", "", "config file (default is $HOME/.global-query.yaml)")
 
 	_ = viper.BindPFlags(rootCmd.Flags())
-	_ = viper.BindPFlags(rootCmd.PersistentFlags())
+	_ = viper.BindPFlags(pflags)
 }
 
 func initLogger() {
