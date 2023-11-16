@@ -324,6 +324,15 @@ func (a *Args) String() string {
 	return str
 }
 
+// ToJSONString marshals the args and puts the result into a string
+func (a *Args) ToJSONString() string {
+	b, err := jsoniter.Marshal(a)
+	if err != nil {
+		return ""
+	}
+	return string(b)
+}
+
 // LogValue creates an slog compatible value from an Args instance
 func (a *Args) LogValue() slog.Value {
 	val := "<marshal failed>"

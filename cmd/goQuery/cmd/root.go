@@ -22,6 +22,7 @@ import (
 	"github.com/els0r/goProbe/pkg/types"
 	"github.com/els0r/goProbe/pkg/version"
 	"github.com/els0r/telemetry/logging"
+	"github.com/els0r/telemetry/tracing"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -88,6 +89,9 @@ func init() {
 
 	flags := rootCmd.Flags()
 	pflags := rootCmd.PersistentFlags()
+
+	tracing.RegisterFlags(pflags)
+	flags.String(conf.Traceparent, "", "inject traceparent header")
 
 	flags.BoolVarP(&cmdLineParams.In, "in", "", query.DefaultIn, helpMap["In"])
 	flags.BoolVarP(&cmdLineParams.Out, "out", "", query.DefaultOut, helpMap["Out"])
@@ -287,6 +291,16 @@ func entrypoint(cmd *cobra.Command, args []string) (err error) {
 	queryCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	defer stop()
 
+	// get logger
+	logger := logging.FromContext(queryCtx)
+
+	// initialize tracing
+	shutdown, err := tracing.InitFromFlags(queryCtx)
+	if err != nil {
+		logger.Error("failed to set up tracing", "error", err)
+	}
+	defer shutdown(context.Background())
+
 	var ctx context.Context
 	queryTimeout := viper.GetDuration(conf.QueryTimeout)
 	if queryTimeout > 0 {
@@ -297,8 +311,7 @@ func entrypoint(cmd *cobra.Command, args []string) (err error) {
 		ctx = queryCtx
 	}
 
-	// get logger
-	logger := logging.FromContext(ctx)
+	logger = logging.FromContext(ctx)
 
 	queryArgs.Caller = os.Args[0] // take the full path of called binary
 
@@ -333,6 +346,15 @@ func entrypoint(cmd *cobra.Command, args []string) (err error) {
 		// query using local goDB
 		querier = engine.NewQueryRunner(dbPathCfg)
 	}
+
+	// check if the traceparent is set
+	ctx = tracing.ContextFromTraceparentHeader(ctx, viper.GetString(conf.Traceparent))
+
+	// build first/root span
+	ctx, span := tracing.Start(ctx, "entrypoint")
+	defer span.End()
+
+	logger = logging.FromContext(ctx)
 
 	// create query logger
 	queryLogFile := viper.GetString(conf.QueryLog)

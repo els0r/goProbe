@@ -10,6 +10,9 @@ import (
 	"github.com/els0r/goProbe/pkg/results"
 	"github.com/els0r/goProbe/pkg/types"
 	"github.com/els0r/telemetry/logging"
+	"github.com/els0r/telemetry/tracing"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // QueryRunner denotes a query runner / executor, wrapping a Querier interface instance with
@@ -44,6 +47,9 @@ func (q *QueryRunner) Run(ctx context.Context, args *query.Args) (*results.Resul
 		return nil, fmt.Errorf("couldn't prepare query: list of target hosts is empty")
 	}
 
+	ctx, span := tracing.Start(ctx, "(*distributed.QueryRunner).Run", trace.WithAttributes(attribute.String("args", queryArgs.ToJSONString())))
+	defer span.End()
+
 	// check if the statement can be created
 	stmt, err := queryArgs.Prepare()
 	if err != nil {
@@ -76,6 +82,8 @@ func (q *QueryRunner) Run(ctx context.Context, args *query.Args) (*results.Resul
 }
 
 func (q *QueryRunner) prepareHostList(ctx context.Context, queryHosts string) (hostList hosts.Hosts, err error) {
+	ctx, span := tracing.Start(ctx, "(*distributed.QueryRunner).prepareHostList", trace.WithAttributes(attribute.String("hosts", queryHosts)))
+	defer span.End()
 
 	// Handle ANY (all hosts) case
 	if types.IsAnySelector(queryHosts) {
@@ -101,6 +109,9 @@ func (q *QueryRunner) prepareHostList(ctx context.Context, queryHosts string) (h
 // aggregateResults takes finished query workloads from the workloads channel, aggregates the result by merging the rows and summaries,
 // and returns the final result. The `tracker` variable provides information about potential Run failures for individual hosts
 func aggregateResults(ctx context.Context, stmt *query.Statement, queryResults <-chan *results.Result) (finalResult *results.Result) {
+	ctx, span := tracing.Start(ctx, "aggregateResults")
+	defer span.End()
+
 	// aggregation
 	finalResult = results.New()
 	finalResult.Start()
