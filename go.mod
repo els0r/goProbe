@@ -9,8 +9,9 @@ require (
 	github.com/els0r/telemetry/logging v0.0.0-20230905085019-03d1cd3d4b3d
 	github.com/fako1024/gotools/bitpack v0.0.0-20230821104146-b3b1387dec32
 	github.com/fako1024/gotools/concurrency v0.0.0-20230821104146-b3b1387dec32
-	github.com/fako1024/httpc v1.0.18-0.20231115151732-a7e5c6b4221a
+	github.com/fako1024/httpc v1.0.18
 	github.com/fako1024/slimcap v1.0.1
+	github.com/gin-contrib/cors v1.4.0
 	github.com/gin-contrib/pprof v1.4.0
 	github.com/gin-gonic/gin v1.9.1
 	github.com/json-iterator/go v1.1.12
@@ -41,7 +42,6 @@ require (
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.3 // indirect
 	github.com/getkin/kin-openapi v0.120.0 // indirect
-	github.com/gin-contrib/cors v1.4.0 // indirect
 	github.com/gin-contrib/sse v0.1.0 // indirect
 	github.com/go-logr/logr v1.2.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
