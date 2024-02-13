@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"runtime/pprof"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -117,6 +118,10 @@ func main() {
 	if err != nil {
 		logger.Fatal(err.Error())
 	}
+
+	ifaceTasks := make(map[string][]fs.DirEntry)
+	maxIfaceEntries := 0
+
 	for _, iface := range ifaces {
 		if !iface.IsDir() {
 			continue
@@ -127,14 +132,31 @@ func main() {
 		if err != nil {
 			logger.Fatal(err.Error())
 		}
-		for _, date := range dates {
-			if !date.IsDir() {
+
+		// Reverse order (so we convert the latest data first)
+		slices.Reverse(dates)
+
+		// Track longest slice and append to task list / map
+		if len(dates) > maxIfaceEntries {
+			maxIfaceEntries = len(dates)
+		}
+		ifaceTasks[iface.Name()] = dates
+	}
+
+	// Loop over all entries in all directories, one directory / timestamp index at a time
+	for i := 0; i < maxIfaceEntries; i++ {
+		for iface, dates := range ifaceTasks {
+			if i >= len(dates) {
+				continue
+			}
+
+			if !dates[i].IsDir() {
 				continue
 			}
 
 			c.pipe <- work{
-				iface: iface.Name(),
-				path:  filepath.Join(inPath, iface.Name(), date.Name()),
+				iface: iface,
+				path:  filepath.Join(inPath, iface, dates[i].Name()),
 			}
 		}
 	}
