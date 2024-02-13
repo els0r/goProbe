@@ -138,10 +138,7 @@ func NewDir(basePath string, timestamp int64, accessMode int, options ...Option)
 		options:     options,
 	}
 
-	dayTimestamp := DirTimestamp(timestamp)
-	dayUnix := time.Unix(dayTimestamp, 0)
-
-	obj.dirPath = filepath.Join(basePath, strconv.Itoa(dayUnix.Year()), fmt.Sprintf("%02d", dayUnix.Month()), strconv.FormatInt(dayTimestamp, 10))
+	obj.dirPath = GenPathForTimestamp(basePath, timestamp)
 	obj.metaPath = filepath.Join(obj.dirPath, metadataFileName)
 	return &obj
 }
@@ -530,6 +527,15 @@ func (d *GPDir) writeMetadataAtomic() error {
 
 func (d *GPDir) setPermissions(permissions fs.FileMode) {
 	d.permissions = permissions
+}
+
+// GenPathForTimestamp provides a unified generator method that allows to construct the path to
+// the data on disk based on a base path and a timestamp
+func GenPathForTimestamp(basePath string, timestamp int64) string {
+	dayTimestamp := DirTimestamp(timestamp)
+	dayUnix := time.Unix(dayTimestamp, 0)
+
+	return filepath.Join(basePath, strconv.Itoa(dayUnix.Year()), fmt.Sprintf("%02d", dayUnix.Month()), strconv.FormatInt(dayTimestamp, 10))
 }
 
 // DirTimestamp returns timestamp rounded down to the nearest directory time frame (usually a day)
