@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"io/fs"
@@ -45,9 +46,11 @@ func main() {
 		inPath, outPath  string
 		profilePath      string
 		dryRun, debug    bool
+		overwrite        bool
 		nWorkers         int
 		compressionLevel int
 		dbPermissionsStr string
+		trimBeforeEpoch  int64
 		wg               sync.WaitGroup
 	)
 	flag.StringVar(&inPath, "i", "", "Path to (legacy) input goDB")
@@ -57,7 +60,9 @@ func main() {
 	flag.StringVar(&dbPermissionsStr, "p", fmt.Sprintf("%o", goDB.DefaultPermissions), "Permissions to use when writing files to DB (UNIX octal file mode)")
 	flag.IntVar(&nWorkers, "n", runtime.NumCPU()/2, "Number of parallel conversion workers")
 	flag.IntVar(&compressionLevel, "l", 0, "Custom LZ4 compression level (uses internal default if <= 0)")
+	flag.Int64Var(&trimBeforeEpoch, "trim-before", 0, "Trim / ignore all input directories before epoch timestamp (optional)")
 	flag.BoolVar(&debug, "debug", false, "Enable debug / verbose mode")
+	flag.BoolVar(&overwrite, "overwrite", false, "Overwrite data on destination even if it already exists")
 	flag.Parse()
 
 	logLevel := logging.LevelInfo
@@ -152,6 +157,30 @@ func main() {
 
 			if !dates[i].IsDir() {
 				continue
+			}
+
+			// Parse epoch timestamp from source directory
+			epochTS, err := strconv.ParseInt(dates[i].Name(), 10, 64)
+			if err != nil {
+				logger.Warnf("invalid epoch timestamp for interface / directory %s/%s (skipping): %s", iface, dates[i].Name(), err)
+				continue
+			}
+
+			// Skip input directory if its timestamp is before the trim limit
+			if trimBeforeEpoch > 0 {
+				if epochTS < trimBeforeEpoch {
+					logger.Debugf("trimming / skipping legacy dir %s/%s (before epoch %d)", iface, dates[i].Name(), trimBeforeEpoch)
+					continue
+				}
+			}
+
+			// Skip input if output already exists (unless -overwrite is specified)
+			if !overwrite {
+				destPath := gpfile.GenPathForTimestamp(filepath.Join(outPath, iface), epochTS)
+				if _, err := os.Stat(destPath); !errors.Is(err, fs.ErrNotExist) {
+					logger.Debugf("skipping already converted dir %s", destPath)
+					continue
+				}
 			}
 
 			c.pipe <- work{
