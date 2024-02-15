@@ -179,6 +179,21 @@ func printIfaceChanges(enabled, updated, disabled capturetypes.IfaceChanges) {
      Updated: %s
     Disabled: %s
 
-`, enabled, updated, disabled,
+`, formatIfaceChanges(enabled.Results()),
+		formatIfaceChanges(updated.Results()),
+		formatIfaceChanges(disabled.Results()),
 	)
+}
+
+func formatIfaceChanges(ok, failed []string) string {
+
+	// Start with the successful ones (if any, otherwise print '[]')
+	output := fmt.Sprintf("%v", ok)
+
+	// If any changes failed, append a nicely formatted list of those
+	if len(failed) > 0 {
+		output += shellformat.FormatShell(fmt.Sprintf(" (FAILED: %v)", failed), shellformat.Bold, shellformat.Red)
+	}
+
+	return output
 }

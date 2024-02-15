@@ -1,7 +1,5 @@
 package capturetypes
 
-import "fmt"
-
 // IfaceChange denotes the result from an interface / config update of an interface
 type IfaceChange struct {
 	Name    string
@@ -20,9 +18,8 @@ func (c IfaceChanges) Names() []string {
 	return names
 }
 
-// String implements a human-readable output of the IfaceChanges
-func (c IfaceChanges) String() string {
-	var ok, failed []string
+// Results return both successful and failed results in a slice, respectively
+func (c IfaceChanges) Results() (ok []string, failed []string) {
 	for _, change := range c {
 		if change.Success {
 			ok = append(ok, change.Name)
@@ -31,10 +28,7 @@ func (c IfaceChanges) String() string {
 		}
 	}
 
-	if len(failed) > 0 {
-		return fmt.Sprintf("%v (failed: %v)", ok, failed)
-	}
-	return fmt.Sprintf("%v", ok)
+	return
 }
 
 // FromIfaceNames generates a list of IfaceChange instances from a list of interface names
