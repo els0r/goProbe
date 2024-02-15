@@ -244,7 +244,8 @@ func TestPrepareArgs(t *testing.T) {
 
 			t.Logf("error:\n%v", err)
 
-			actual, ok := err.(*ArgsError)
+			actual := new(ArgsError)
+			ok := errors.As(err, &actual)
 			require.Truef(t, ok, "expected error to be of type %T", &ArgsError{})
 
 			// individually compare the struct fields. Why the detour? So we don't have
