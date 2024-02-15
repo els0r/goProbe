@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/els0r/goProbe/pkg/capture/capturetypes"
 	"github.com/els0r/telemetry/logging"
 )
 
@@ -22,7 +23,7 @@ type Monitor struct {
 }
 
 // CallbackFn denotes a function to be called upon successful reload of the configuration
-type CallbackFn func(context.Context, Ifaces) (enabled, updated, disabled []string, err error)
+type CallbackFn func(context.Context, Ifaces) (enabled, updated, disabled capturetypes.IfaceChanges, err error)
 
 // MonitorOption denotes a functional option for a config monitor
 type MonitorOption func(*Monitor)
@@ -85,7 +86,7 @@ func (m *Monitor) Start(ctx context.Context, fn CallbackFn) {
 }
 
 // Reload triggers a config reload from disk and triggers the execution of the provided callback (if any)
-func (m *Monitor) Reload(ctx context.Context, fn CallbackFn) (enabled, updated, disabled []string, err error) {
+func (m *Monitor) Reload(ctx context.Context, fn CallbackFn) (enabled, updated, disabled capturetypes.IfaceChanges, err error) {
 	cfg, perr := ParseFile(m.path)
 	if perr != nil {
 		err = fmt.Errorf("failed to reload config file: %w", err)
@@ -104,7 +105,7 @@ func (m *Monitor) Reload(ctx context.Context, fn CallbackFn) (enabled, updated, 
 }
 
 // Apply peforms a callback to the provided function and returns its result
-func (m *Monitor) Apply(ctx context.Context, fn CallbackFn) (enabled, updated, disabled []string, err error) {
+func (m *Monitor) Apply(ctx context.Context, fn CallbackFn) (enabled, updated, disabled capturetypes.IfaceChanges, err error) {
 
 	if fn == nil {
 		err = fmt.Errorf("no callback function provided")

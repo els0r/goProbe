@@ -13,6 +13,7 @@ import (
 	"github.com/els0r/goProbe/cmd/goProbe/config"
 	"github.com/els0r/goProbe/cmd/gpctl/pkg/conf"
 	"github.com/els0r/goProbe/pkg/api/goprobe/client"
+	"github.com/els0r/goProbe/pkg/capture/capturetypes"
 	"github.com/els0r/goProbe/pkg/types/shellformat"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -172,11 +173,11 @@ func updateConfig(ctx context.Context, file string, silent bool) error {
 	return nil
 }
 
-func printIfaceChanges(enabled, updated, disabled []string) {
+func printIfaceChanges(enabled, updated, disabled capturetypes.IfaceChanges) {
 	fmt.Printf(`
-     Enabled: %v
-     Updated: %v
-    Disabled: %v
+     Enabled: %s
+     Updated: %s
+    Disabled: %s
 
 `, enabled, updated, disabled,
 	)

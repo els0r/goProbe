@@ -54,9 +54,9 @@ type ConfigResponse struct {
 // ConfigUpdateResponse is the response to a config update
 type ConfigUpdateResponse struct {
 	response
-	Enabled  []string `json:"enabled"`  // Enabled: stores the interfaces that were enabled. Example: ["eth0", "eth1"]
-	Updated  []string `json:"updated"`  // Updated: stores the interfaces that were updated. Example: ["eth2"]
-	Disabled []string `json:"disabled"` // Disabled: stores the interfaces that were disabled. Example: ["eth5"]
+	Enabled  capturetypes.IfaceChanges `json:"enabled"`  // Enabled: stores the interfaces that were enabled. Example: ["eth0", "eth1"]
+	Updated  capturetypes.IfaceChanges `json:"updated"`  // Updated: stores the interfaces that were updated. Example: ["eth2"]
+	Disabled capturetypes.IfaceChanges `json:"disabled"` // Disabled: stores the interfaces that were disabled. Example: ["eth5"]
 }
 
 // ConfigUpdateRequest is the payload to update the configuration of all

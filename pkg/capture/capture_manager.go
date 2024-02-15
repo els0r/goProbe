@@ -260,7 +260,7 @@ func (cm *Manager) Status(ctx context.Context, ifaces ...string) (statusmap capt
 }
 
 // Update the configuration for all (or a set of) interfaces
-func (cm *Manager) Update(ctx context.Context, ifaces config.Ifaces) (enabled, updated, disabled []string, err error) {
+func (cm *Manager) Update(ctx context.Context, ifaces config.Ifaces) (enabled, updated, disabled capturetypes.IfaceChanges, err error) {
 	// Validate the config before doing anything else
 	err = ifaces.Validate()
 	if err != nil {
@@ -272,21 +272,21 @@ func (cm *Manager) Update(ctx context.Context, ifaces config.Ifaces) (enabled, u
 	// Build set of interfaces to enable / disable
 	var (
 		ifaceSet                                  = make(map[string]struct{})
-		enableIfaces, updateIfaces, disableIfaces []string
+		enableIfaces, updateIfaces, disableIfaces capturetypes.IfaceChanges
 	)
 
 	cm.Lock()
 	for iface, cfg := range ifaces {
 		ifaceSet[iface] = struct{}{}
 		if _, exists := cm.captures.Get(iface); !exists {
-			enableIfaces = append(enableIfaces, iface)
+			enableIfaces = append(enableIfaces, capturetypes.IfaceChange{Name: iface})
 		} else {
 			updatedCfg := cfg
 			runtimeCfg := cm.lastAppliedConfig[iface]
 
 			// take care of parameter updates to an interface that exists already
 			if !updatedCfg.Equals(runtimeCfg) {
-				updateIfaces = append(updateIfaces, iface)
+				updateIfaces = append(updateIfaces, capturetypes.IfaceChange{Name: iface})
 			}
 		}
 	}
@@ -294,7 +294,7 @@ func (cm *Manager) Update(ctx context.Context, ifaces config.Ifaces) (enabled, u
 
 	for iface := range cm.captures.Map {
 		if _, exists := ifaceSet[iface]; !exists {
-			disableIfaces = append(disableIfaces, iface)
+			disableIfaces = append(disableIfaces, capturetypes.IfaceChange{Name: iface})
 		}
 	}
 
@@ -316,11 +316,11 @@ func (cm *Manager) Update(ctx context.Context, ifaces config.Ifaces) (enabled, u
 
 }
 
-func (cm *Manager) update(ctx context.Context, ifaces config.Ifaces, enable, disable []string) {
+func (cm *Manager) update(ctx context.Context, ifaces config.Ifaces, enable, disable capturetypes.IfaceChanges) {
 
 	// execute a final writeout of all disabled interfaces in the list
 	if len(disable) > 0 {
-		cm.performWriteout(ctx, time.Now().Add(time.Second), disable...)
+		cm.performWriteout(ctx, time.Now().Add(time.Second), disable.Names()...)
 	}
 
 	// To avoid any interference the update() logic is protected as a whole
@@ -334,7 +334,9 @@ func (cm *Manager) update(ctx context.Context, ifaces config.Ifaces, enable, dis
 	// Disable any interfaces present in the negative list
 	var rg RunGroup
 	for _, iface := range disable {
-		mc, exists := cm.captures.Get(iface)
+		iface := iface
+
+		mc, exists := cm.captures.Get(iface.Name)
 		if !exists {
 			continue
 		}
@@ -346,6 +348,8 @@ func (cm *Manager) update(ctx context.Context, ifaces config.Ifaces, enable, dis
 			logger.Info("closing capture / stopping packet processing")
 			if err := mc.close(); err != nil {
 				logger.Errorf("failed to close capture: %s", err)
+			} else {
+				iface.Success = true
 			}
 
 			cm.captures.Delete(mc.iface)
@@ -359,23 +363,24 @@ func (cm *Manager) update(ctx context.Context, ifaces config.Ifaces, enable, dis
 
 		rg.Run(func() {
 
-			runCtx := withIfaceContext(ctx, iface)
+			runCtx := withIfaceContext(ctx, iface.Name)
 			logger := logging.FromContext(runCtx)
 
 			logger.Info("initializing capture / running packet processing")
 
-			newCap := newCapture(iface, ifaces[iface]).SetSourceInitFn(cm.sourceInitFn)
+			newCap := newCapture(iface.Name, ifaces[iface.Name]).SetSourceInitFn(cm.sourceInitFn)
 			if err := newCap.run(); err != nil {
 				logger.Errorf("failed to start capture: %s", err)
 				return
 			}
+			iface.Success = true
 
 			// Start up processing and error handling / logging in the
 			// background
-			go cm.logErrors(runCtx, iface,
+			go cm.logErrors(runCtx, iface.Name,
 				newCap.process())
 
-			cm.captures.Set(iface, newCap)
+			cm.captures.Set(iface.Name, newCap)
 		})
 	}
 	rg.Wait()
@@ -435,7 +440,7 @@ func (cm *Manager) Close(ctx context.Context, ifaces ...string) {
 
 	// Close all interfaces in the list using update() with the respective list of
 	// interfaces to remove
-	cm.update(ctx, nil, nil, ifaces)
+	cm.update(ctx, nil, nil, capturetypes.FromIfaceNames(ifaces))
 
 	logger.With(
 		"elapsed", time.Since(t0).Round(time.Millisecond).String(),

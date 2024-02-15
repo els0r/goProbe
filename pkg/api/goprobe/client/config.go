@@ -7,6 +7,7 @@ import (
 
 	"github.com/els0r/goProbe/cmd/goProbe/config"
 	gpapi "github.com/els0r/goProbe/pkg/api/goprobe"
+	"github.com/els0r/goProbe/pkg/capture/capturetypes"
 	"github.com/fako1024/httpc"
 )
 
@@ -37,7 +38,7 @@ func (c *Client) GetInterfaceConfig(ctx context.Context, ifaces ...string) (ifac
 }
 
 // UpdateInterfaceConfigs updates goprobe's runtime configuration for the provided interfaces
-func (c *Client) UpdateInterfaceConfigs(ctx context.Context, ifaceConfigs config.Ifaces) (enabled, updated, disabled []string, err error) {
+func (c *Client) UpdateInterfaceConfigs(ctx context.Context, ifaceConfigs config.Ifaces) (enabled, updated, disabled capturetypes.IfaceChanges, err error) {
 	var res = new(gpapi.ConfigUpdateResponse)
 
 	url := c.NewURL(gpapi.ConfigRoute)
@@ -58,7 +59,7 @@ func (c *Client) UpdateInterfaceConfigs(ctx context.Context, ifaceConfigs config
 }
 
 // ReloadConfig reads / updates goprobe's runtime configuration with the one from disk
-func (c *Client) ReloadConfig(ctx context.Context) (enabled, updated, disabled []string, err error) {
+func (c *Client) ReloadConfig(ctx context.Context) (enabled, updated, disabled capturetypes.IfaceChanges, err error) {
 	var res = new(gpapi.ConfigUpdateResponse)
 
 	url := c.NewURL(gpapi.ConfigRoute + gpapi.ConfigReloadRoute)
