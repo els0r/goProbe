@@ -135,6 +135,9 @@ func (w *DBWorkManager) CreateWorkerJobs(tfirst int64, tlast int64) (nonempty bo
 		return nil
 	}
 	numDirs, err := w.walkDB(tfirst, tlast, walkFunc)
+	if err != nil {
+		return false, err
+	}
 
 	// Flush any remaining work
 	if len(workloadBulk) > 0 {
