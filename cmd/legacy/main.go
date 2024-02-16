@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"runtime/pprof"
-	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -132,14 +131,30 @@ func main() {
 			continue
 		}
 
-		// Get all date directories (usually days)
-		dates, err := os.ReadDir(filepath.Join(inPath, iface.Name()))
+		// Get all dirents from the directory (usually days)
+		dirEnts, err := os.ReadDir(filepath.Join(inPath, iface.Name()))
 		if err != nil {
 			logger.Fatal(err.Error())
 		}
 
-		// Reverse order (so we convert the latest data first)
-		slices.Reverse(dates)
+		// Ensure that the list only contains valid timestamp directories
+		dates := make([]fs.DirEntry, 0, len(dirEnts))
+		for i := 0; i < len(dirEnts); i++ {
+			if !dirEnts[i].IsDir() {
+				continue // Skip silently
+			}
+			if _, err := strconv.ParseInt(dirEnts[i].Name(), 10, 64); err != nil {
+				logger.Warnf("invalid directory detected (skipping): %s", dirEnts[i].Name())
+				continue
+			}
+			dates = append(dates, dirEnts[i])
+		}
+
+		// Explicitly sort by timestamp (reverse order) to cover potential out-of-order scenarios
+		// an so we convert the latest data first
+		sort.Slice(dates, func(i, j int) bool {
+			return dates[i].Name() > dates[j].Name()
+		})
 
 		// Track longest slice and append to task list / map
 		if len(dates) > maxIfaceEntries {
@@ -155,6 +170,7 @@ func main() {
 				continue
 			}
 
+			// This should not be the case, but checking anyways
 			if !dates[i].IsDir() {
 				continue
 			}
