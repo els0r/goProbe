@@ -276,8 +276,8 @@ func (err *ArgsError) Pretty() string {
 `
 	errStr := err.err.Error()
 
-	prettyErr, ok := err.err.(types.Prettier)
-	if ok {
+	var prettyErr types.Prettier
+	if errors.As(err, &prettyErr) {
 		errStr = "\n" + types.PrettyIndent(prettyErr, 4)
 	}
 

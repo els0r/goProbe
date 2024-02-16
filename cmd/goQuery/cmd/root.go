@@ -383,8 +383,8 @@ func entrypoint(cmd *cobra.Command, args []string) (err error) {
 	stmt, err := queryArgs.Prepare()
 	if err != nil {
 		// if there's an args error, print it in a user-friendly way
-		prettyErr, ok := err.(types.Prettier)
-		if ok {
+		var prettyErr types.Prettier
+		if errors.As(err, &prettyErr) {
 			return fmt.Errorf("%s:\n%s", queryPrepFailureMsg, prettyErr.Pretty())
 		}
 		return fmt.Errorf("%s: %w", queryPrepFailureMsg, err)

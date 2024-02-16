@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -83,10 +84,8 @@ func ValidationHandler() gin.HandlerFunc {
 		_, err := queryArgs.Prepare()
 		if err != nil {
 			vr := &ValidationResponse{StatusCode: http.StatusBadRequest}
-			switch t := err.(type) {
-			case *query.ArgsError:
-				vr.ArgsError = t
-			default:
+
+			if !errors.As(err, &vr.ArgsError) {
 				LogAndAbort(ctx, c, http.StatusInternalServerError, err)
 				return
 			}
