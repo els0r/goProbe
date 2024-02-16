@@ -151,7 +151,7 @@ func main() {
 		}
 
 		// Explicitly sort by timestamp (reverse order) to cover potential out-of-order scenarios
-		// an so we convert the latest data first
+		// and so we convert the latest data first
 		sort.Slice(dates, func(i, j int) bool {
 			return dates[i].Name() > dates[j].Name()
 		})
