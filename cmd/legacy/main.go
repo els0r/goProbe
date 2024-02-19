@@ -14,8 +14,10 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/els0r/goProbe/pkg/capture/capturetypes"
+	"github.com/els0r/goProbe/pkg/formatting"
 	"github.com/els0r/goProbe/pkg/goDB"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 	"github.com/els0r/goProbe/pkg/goDB/storage/gpfile"
@@ -40,6 +42,8 @@ type converter struct {
 var logger *logging.L
 
 func main() {
+
+	start := time.Now()
 
 	var (
 		inPath, outPath  string
@@ -208,6 +212,17 @@ func main() {
 
 	close(c.pipe)
 	wg.Wait()
+
+	inSize, err := dirSize(inPath)
+	if err != nil {
+		logger.Warnf("failed to (correctly / completely) determine input directory size: %s", err)
+	}
+	outSize, err := dirSize(outPath)
+	if err != nil {
+		logger.Warnf("failed to (correctly / completely) determine output directory size: %s", err)
+	}
+
+	logger.Infof("Converted legacy go DB in %v, size reduction by %.1f%% (%s -> %s)", time.Since(start), 100.-100.*(float64(outSize)/float64(inSize)), formatting.Size(uint64(inSize)), formatting.Size(uint64(outSize)))
 }
 
 type blockFlows struct {
@@ -350,4 +365,17 @@ func ensureUnsigned(in int) uint64 {
 		return 0
 	}
 	return uint64(in)
+}
+
+func dirSize(path string) (int64, error) {
+	var size int64
+	err := filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		size += info.Size()
+		return err
+	})
+	return size, err
 }
