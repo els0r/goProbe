@@ -189,6 +189,11 @@ func (qr *QueryRunner) RunStatement(ctx context.Context, stmt *query.Statement) 
 		}
 	}
 
+	// Check if there actually was data available from disk (or a live query was performed)
+	if len(workManagers) > 0 || stmt.Live {
+		result.Summary.DataAvailable = true
+	}
+
 	result.Summary.First = tSpanFirst
 	result.Summary.Last = tSpanLast
 
