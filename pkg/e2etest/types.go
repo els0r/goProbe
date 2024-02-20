@@ -124,7 +124,8 @@ func (m mockIfaces) BuildResults(t *testing.T, testDir string, valFilterNode *no
 			Code: types.StatusOK,
 		},
 		Summary: results.Summary{
-			Interfaces: m.Names(),
+			Interfaces:    m.Names(),
+			DataAvailable: true,
 		},
 	}
 	ifaceMetadata := make([]goDB.InterfaceMetadata, len(m))
