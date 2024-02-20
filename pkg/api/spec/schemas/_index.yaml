@@ -19,6 +19,8 @@ Timings:
   $ref: './Timings.yaml'
 Hits:
   $ref: './Hits.yaml'
+DataAvailable:
+  $ref: './DataAvailable.yaml'
 Row:
   $ref: './Row.yaml'
 Counters:
