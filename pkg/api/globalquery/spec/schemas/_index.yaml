@@ -19,6 +19,8 @@ Timings:
   $ref: '../../../spec/schemas/Timings.yaml'
 Hits:
   $ref: '../../../spec/schemas/Hits.yaml'
+DataAvailable:
+  $ref: '../../../spec/schemas/DataAvailable.yaml'
 Row:
   $ref: '../../../spec/schemas/Row.yaml'
 Counters:

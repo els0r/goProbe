@@ -10,6 +10,7 @@ properties:
       - ok
       - error
       - empty
+      - missing_data
     example: ok
   message:
     type: string

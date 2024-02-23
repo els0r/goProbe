@@ -4,6 +4,7 @@ required:
   - totals
   - timings
   - hits
+  - data_available
   - time_first
   - time_last
 properties:
@@ -21,6 +22,8 @@ properties:
     $ref: './Timings.yaml'
   hits:
     $ref: './Hits.yaml'
+  data_available:
+    $ref: './DataAvailable.yaml'
   time_first:
     type: string
     format: date-time

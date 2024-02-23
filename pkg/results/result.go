@@ -17,6 +17,9 @@ import (
 var (
 	// ErrorNoResults denotes that no results were returned from a query
 	ErrorNoResults = errors.New("query returned no results")
+
+	// ErrorDataMissing denotes that there was no data to be queried
+	ErrorDataMissing = errors.New("no data available for the specified interface(s) / time range (maybe goProbe was not running)")
 )
 
 // Result bundles the data rows returned and the query meta information
@@ -76,9 +79,10 @@ type TimeRange struct {
 type Summary struct {
 	Interfaces []string `json:"interfaces"` // Interfaces: the interfaces that were queried
 	TimeRange
-	Totals  types.Counters `json:"totals"`  // Totals: the total traffic volume and packets observed over the queried range
-	Timings Timings        `json:"timings"` // Timings: query runtime fields
-	Hits    Hits           `json:"hits"`    // Hits: how many flow records were returned in total and how many are returned in Rows
+	Totals        types.Counters `json:"totals"`         // Totals: the total traffic volume and packets observed over the queried range
+	Timings       Timings        `json:"timings"`        // Timings: query runtime fields
+	Hits          Hits           `json:"hits"`           // Hits: how many flow records were returned in total and how many are returned in Rows
+	DataAvailable bool           `json:"data_available"` // DataAvailable: Was there any data available on disk or from a live query at all
 }
 
 // Status denotes the overall status of the result
@@ -153,9 +157,16 @@ func (r *Result) Start() {
 func (r *Result) End() {
 	r.Summary.Timings.QueryDuration = time.Since(r.Summary.Timings.QueryStart)
 	if len(r.Rows) == 0 {
-		r.Status = Status{
-			Code:    types.StatusEmpty,
-			Message: ErrorNoResults.Error(),
+		if r.Summary.DataAvailable {
+			r.Status = Status{
+				Code:    types.StatusEmpty,
+				Message: ErrorNoResults.Error(),
+			}
+		} else {
+			r.Status = Status{
+				Code:    types.StatusMissingData,
+				Message: ErrorDataMissing.Error(),
+			}
 		}
 	}
 	sort.Strings(r.Summary.Interfaces)
