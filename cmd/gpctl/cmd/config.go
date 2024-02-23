@@ -104,7 +104,7 @@ func configEntrypoint(ctx context.Context, cmd *cobra.Command, args []string) er
 
 	table := tablewriter.CreateTable()
 	table.UTF8Box()
-	table.AddTitle(shellformat.FormatShell("Interface Configuration", shellformat.Bold))
+	table.AddTitle(shellformat.Fmt(shellformat.Bold, "Interface Configuration"))
 
 	table.AddRow("", "", "ring buffer", "ring buffer")
 	table.AddRow("iface", "promisc", "block size", "num blocks")
@@ -192,7 +192,7 @@ func formatIfaceChanges(ok, failed []string) string {
 
 	// If any changes failed, append a nicely formatted list of those
 	if len(failed) > 0 {
-		output += shellformat.FormatShell(fmt.Sprintf(" (FAILED: %v)", failed), shellformat.Bold, shellformat.Red)
+		output += shellformat.Fmt(shellformat.Bold|shellformat.Red, " (FAILED: %v)", failed)
 	}
 
 	return output
