@@ -31,6 +31,21 @@ func (c IfaceChanges) Results() (ok []string, failed []string) {
 	return
 }
 
+// Len returns the length (read: number) of interface changes (implementation of sorting interface)
+func (c IfaceChanges) Len() int {
+	return len(c)
+}
+
+// Less returns if a named change is to be ordered before a second one (implementation of sorting interface)
+func (c IfaceChanges) Less(i, j int) bool {
+	return c[i].Name < c[j].Name
+}
+
+// Swap swaps two interface changes in the list (implementation of sorting interface)
+func (c IfaceChanges) Swap(i, j int) {
+	c[i], c[j] = c[j], c[i]
+}
+
 // FromIfaceNames generates a list of IfaceChange instances from a list of interface names
 func FromIfaceNames(names []string) IfaceChanges {
 	res := make(IfaceChanges, len(names))
