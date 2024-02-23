@@ -90,7 +90,7 @@ func statusEntrypoint(ctx context.Context, cmd *cobra.Command, args []string) er
 
 	table := tablewriter.CreateTable()
 	table.UTF8Box()
-	table.AddTitle(shellformat.FormatShell("Interface Statuses", shellformat.Bold))
+	table.AddTitle(shellformat.Fmt(shellformat.Bold, "Interface Statuses"))
 
 	headerRow1 := []interface{}{"", "total", "", "total", "", "total", "", "active"}
 	headerRow2 := []interface{}{"iface",
@@ -124,7 +124,7 @@ func statusEntrypoint(ctx context.Context, cmd *cobra.Command, args []string) er
 
 		dropped := fmt.Sprint(formatting.Countable(ifaceStatus.Dropped))
 		if ifaceStatus.Dropped > 0 {
-			dropped = shellformat.FormatShell(ifaceStatus.Dropped, shellformat.Bold, shellformat.Red)
+			dropped = shellformat.Fmt(shellformat.Bold|shellformat.Red, "%d", ifaceStatus.Dropped)
 		}
 
 		ifaceRow := []interface{}{st.iface,

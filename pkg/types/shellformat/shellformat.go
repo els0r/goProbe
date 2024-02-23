@@ -7,42 +7,82 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// ShellFormat denotes a simple formatting modifier for shell output
-type ShellFormat = string
+// EscapeSeq denotes a simple formatting modifier / escape sequence for shell output
+type EscapeSeq = string
 
 var isNoColorTerm = os.Getenv("TERM") == "dumb" || !isTerminal(os.Stdout.Fd())
 
 // Some standard modifiers
 var (
-	Reset ShellFormat = "\033[0m"
-	Bold  ShellFormat = "\033[1m"
-
-	Black  ShellFormat = "\033[30m"
-	Red    ShellFormat = "\033[31m"
-	Green  ShellFormat = "\033[32m"
-	Yellow ShellFormat = "\033[33m"
-	Blue   ShellFormat = "\033[34m"
-	Purple ShellFormat = "\033[35m"
-	Cyan   ShellFormat = "\033[36m"
-	Gray   ShellFormat = "\033[37m"
-	White  ShellFormat = "\033[97m"
+	EscapeSeqReset  EscapeSeq = "\033[0m"
+	EscapeSeqBold   EscapeSeq = "\033[1m"
+	EscapeSeqBlack  EscapeSeq = "\033[30m"
+	EscapeSeqRed    EscapeSeq = "\033[31m"
+	EscapeSeqGreen  EscapeSeq = "\033[32m"
+	EscapeSeqYellow EscapeSeq = "\033[33m"
+	EscapeSeqBlue   EscapeSeq = "\033[34m"
+	EscapeSeqPurple EscapeSeq = "\033[35m"
+	EscapeSeqCyan   EscapeSeq = "\033[36m"
+	EscapeSeqGray   EscapeSeq = "\033[37m"
+	EscapeSeqWhite  EscapeSeq = "\033[97m"
 )
 
-// FormatShell modifies the provided string using the list of modifiers
+// Format denotes an abstract format for shell output
+type Format uint64
+
+// Formatting codes suitable for logical combination via '|'
+const (
+	Bold   Format = 1 << 1
+	Black  Format = 1 << 2
+	Red    Format = 1 << 3
+	Green  Format = 1 << 4
+	Yellow Format = 1 << 5
+	Blue   Format = 1 << 6
+	Purple Format = 1 << 7
+	Cyan   Format = 1 << 8
+	Gray   Format = 1 << 9
+	White  Format = 1 << 10
+
+	maxFormat = White
+)
+
+var allFormats = []EscapeSeq{
+	"",
+	EscapeSeqBold,
+	EscapeSeqBlack,
+	EscapeSeqRed,
+	EscapeSeqGreen,
+	EscapeSeqYellow,
+	EscapeSeqBlue,
+	EscapeSeqPurple,
+	EscapeSeqCyan,
+	EscapeSeqGray,
+	EscapeSeqWhite,
+}
+
+// Fmt modifies the provided string using the list of modifiers
 // and resets the output formatting to default at the end
-func FormatShell(input interface{}, formats ...ShellFormat) string {
+func Fmt(format Format, input string, a ...any) string {
 
-	// If this terminal / shell cannot display color / formatting modifiers, skip
 	if isNoColorTerm {
-		return fmt.Sprint(input)
+		return fmt.Sprintf(input, a...)
 	}
 
-	var prefix string
-	for _, format := range formats {
-		prefix += format
+	seq := format.genEscapeSeq()
+	if seq == "" {
+		return fmt.Sprintf(input, a...)
 	}
 
-	return prefix + fmt.Sprint(input) + Reset
+	return fmt.Sprintf(seq+input+EscapeSeqReset, a...)
+}
+
+func (f Format) genEscapeSeq() (seq string) {
+	for i := 1; i <= int(maxFormat); i++ {
+		if f&(1<<i) != 0 {
+			seq += allFormats[i]
+		}
+	}
+	return
 }
 
 func isTerminal(fd uintptr) bool {

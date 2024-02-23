@@ -13,6 +13,7 @@ import (
 	"github.com/els0r/goProbe/cmd/goProbe/config"
 	"github.com/els0r/goProbe/cmd/gpctl/pkg/conf"
 	"github.com/els0r/goProbe/pkg/api/goprobe/client"
+	"github.com/els0r/goProbe/pkg/capture/capturetypes"
 	"github.com/els0r/goProbe/pkg/types/shellformat"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -103,7 +104,7 @@ func configEntrypoint(ctx context.Context, cmd *cobra.Command, args []string) er
 
 	table := tablewriter.CreateTable()
 	table.UTF8Box()
-	table.AddTitle(shellformat.FormatShell("Interface Configuration", shellformat.Bold))
+	table.AddTitle(shellformat.Fmt(shellformat.Bold, "Interface Configuration"))
 
 	table.AddRow("", "", "ring buffer", "ring buffer")
 	table.AddRow("iface", "promisc", "block size", "num blocks")
@@ -172,12 +173,27 @@ func updateConfig(ctx context.Context, file string, silent bool) error {
 	return nil
 }
 
-func printIfaceChanges(enabled, updated, disabled []string) {
+func printIfaceChanges(enabled, updated, disabled capturetypes.IfaceChanges) {
 	fmt.Printf(`
-     Enabled: %v
-     Updated: %v
-    Disabled: %v
+     Enabled: %s
+     Updated: %s
+    Disabled: %s
 
-`, enabled, updated, disabled,
+`, formatIfaceChanges(enabled.Results()),
+		formatIfaceChanges(updated.Results()),
+		formatIfaceChanges(disabled.Results()),
 	)
+}
+
+func formatIfaceChanges(ok, failed []string) string {
+
+	// Start with the successful ones (if any, otherwise print '[]')
+	output := fmt.Sprintf("%v", ok)
+
+	// If any changes failed, append a nicely formatted list of those
+	if len(failed) > 0 {
+		output += shellformat.Fmt(shellformat.Bold|shellformat.Red, " (FAILED: %v)", failed)
+	}
+
+	return output
 }

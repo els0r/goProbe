@@ -5,18 +5,39 @@ properties:
   enabled:
     type: array
     items:
-      type: string
+      type: object
+      additionalProperties:
+        $ref: './IfaceChange.yaml'
     description: Interfaces that were enabled.
-    example: ["eth0", "eth1"]
+    example:
+      - IfaceChange:
+        name: "eth0"
+        success: true
+      - IfaceChange:
+        name: "eth1"
+        success: false
   updated:
     type: array
     items:
-      type: string
+      type: object
+      additionalProperties:
+        $ref: './IfaceChange.yaml'
     description: Interfaces that were updated.
-    example: ["eth2"]
+    example:
+      - IfaceChange:
+        name: "eth2"
+        success: true
   disabled:
     type: array
     items:
-      type: string
+      type: object
+      additionalProperties:
+        $ref: './IfaceChange.yaml'
     description: Interfaces that were disabled.
-    example: ["eth5"]
+    example:
+      - IfaceChange:
+        name: "eth5"
+        success: true
+      - IfaceChange:
+        name: "eth6"
+        success: false
