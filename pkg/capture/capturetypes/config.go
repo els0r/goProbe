@@ -1,9 +1,9 @@
 package capturetypes
 
-// IfaceChange denotes the result from an interface / config update of an interface
+// IfaceChange denotes the result from a config update / reload of an interface
 type IfaceChange struct {
-	Name    string
-	Success bool
+	Name    string // Name: the name of the interface. Example: "eth0"
+	Success bool   // Success: the config update / reload operation(s) succeeded. Example: true
 }
 
 // IfaceChanges denotes a list of IfaceChange instances
