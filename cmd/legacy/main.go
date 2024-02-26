@@ -61,7 +61,7 @@ func main() {
 	flag.StringVar(&profilePath, "profile", "", "Path to (optional) output CPU profile")
 	flag.BoolVar(&dryRun, "dry-run", true, "Perform a dry-run")
 	flag.StringVar(&dbPermissionsStr, "p", fmt.Sprintf("%o", goDB.DefaultPermissions), "Permissions to use when writing files to DB (UNIX octal file mode)")
-	flag.IntVar(&nWorkers, "n", runtime.NumCPU()/2, "Number of parallel conversion workers")
+	flag.IntVar(&nWorkers, "n", max(runtime.NumCPU()/2, 1), "Number of parallel conversion workers")
 	flag.IntVar(&compressionLevel, "l", 0, "Custom LZ4 compression level (uses internal default if <= 0)")
 	flag.Int64Var(&trimBeforeEpoch, "trim-before", 0, "Trim / ignore all input directories before epoch timestamp (optional)")
 	flag.BoolVar(&debug, "debug", false, "Enable debug / verbose mode")
