@@ -2,6 +2,7 @@ package types
 
 import (
 	"errors"
+	"fmt"
 	"net"
 	"net/netip"
 	"strings"
@@ -189,6 +190,15 @@ func IPStringToBytes(ip string) (ipData []byte, isIPv4 bool, err error) {
 // the output directly
 type Prettier interface {
 	Pretty() string
+}
+
+// ShouldPretty attempts to pretty-print an error (if it fulfills the Prettier interface)
+func ShouldPretty(err error, msg string) error {
+	var prettyErr Prettier
+	if errors.As(err, &prettyErr) {
+		return fmt.Errorf("%s:\n%s", msg, prettyErr.Pretty())
+	}
+	return fmt.Errorf("%s: %w", msg, err)
 }
 
 // PrettyIndent takes the output from a Prettier and indents it by n spaces
