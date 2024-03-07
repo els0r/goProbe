@@ -473,37 +473,36 @@ func (w *DBWorkManager) grabAndProcessWorkload(ctx context.Context, wg *sync.Wai
 			}
 		}()
 
-		var workload DBWorkload
-		for chanOpen := true; chanOpen; {
-			select {
-			case <-ctx.Done():
-				// query was cancelled, exit
-				logger.Infof("Query cancelled (workload %d / %d)...", w.nWorkloadsProcessed.Load(), w.nWorkloads)
-				return
-			case workload, chanOpen = <-workloadChan:
-				if chanOpen {
-					resultMap := hashmap.NewAggFlowMapWithMetadata()
-					for _, workDir := range workload.workDirs {
+		for workload := range workloadChan {
+			resultMap := hashmap.NewAggFlowMapWithMetadata()
+			for _, workDir := range workload.workDirs {
+				select {
+				case <-ctx.Done():
 
-						if memPool != nil {
-							workDir.SetMemPool(memPool)
-						}
+					// query was cancelled, exit
+					logger.Infof("Query cancelled (workload %d / %d)...", w.nWorkloadsProcessed.Load(), w.nWorkloads)
+					return
+				default:
 
-						// if there is an error during one of the read jobs, throw a syslog message and terminate
-						err := w.readBlocksAndEvaluate(workDir, enc, &resultMap)
-						if err != nil {
-							logger.Error(err)
-							mapChan <- hashmap.NilAggFlowMapWithMetadata
-							return
-						}
+					// check if a memory pool is available
+					if memPool != nil {
+						workDir.SetMemPool(memPool)
 					}
 
-					// Workload is counted, but we only add it to the final result if we got any entries
-					w.nWorkloadsProcessed.Add(1)
-					if resultMap.Len() > 0 {
-						mapChan <- resultMap
+					// if there is an error during one of the read jobs, throw a syslog message and terminate
+					err := w.readBlocksAndEvaluate(workDir, enc, &resultMap)
+					if err != nil {
+						logger.Error(err)
+						mapChan <- hashmap.NilAggFlowMapWithMetadata
+						return
 					}
 				}
+			}
+
+			// Workload is counted, but we only add it to the final result if we got any entries
+			w.nWorkloadsProcessed.Add(1)
+			if resultMap.Len() > 0 {
+				mapChan <- resultMap
 			}
 		}
 	}()

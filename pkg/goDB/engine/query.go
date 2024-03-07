@@ -198,7 +198,7 @@ func (qr *QueryRunner) RunStatement(ctx context.Context, stmt *query.Statement) 
 	result.Summary.Last = tSpanLast
 
 	// If enabled, run a live query in the background / parallel to the DB query and put the results on the same output channel
-	liveQueryWG := qr.runLiveQuery(ctx, mapChan, stmt)
+	liveQueryWG := qr.runLiveQuery(queryCtx, mapChan, stmt)
 
 	// spawn reader processing units and make them work on the individual DB blocks
 	// processing by interface is sequential, e.g. for multi-interface queries
