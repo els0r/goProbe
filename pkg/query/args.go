@@ -276,11 +276,6 @@ func (err *ArgsError) Pretty() string {
 `
 	errStr := err.err.Error()
 
-	var prettyErr types.Prettier
-	if errors.As(err, &prettyErr) {
-		errStr = "\n" + types.PrettyIndent(prettyErr, 4)
-	}
-
 	return fmt.Sprintf(str, err.Field, err.Message, errStr)
 }
 
