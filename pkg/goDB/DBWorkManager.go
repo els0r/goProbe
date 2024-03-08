@@ -480,7 +480,7 @@ func (w *DBWorkManager) grabAndProcessWorkload(ctx context.Context, wg *sync.Wai
 				case <-ctx.Done():
 
 					// query was cancelled, exit
-					logger.Infof("Query cancelled (workload %d / %d)...", w.nWorkloadsProcessed.Load(), w.nWorkloads)
+					logger.Infof("query cancelled (workload %d / %d)...", w.nWorkloadsProcessed.Load(), w.nWorkloads)
 					return
 				default:
 
