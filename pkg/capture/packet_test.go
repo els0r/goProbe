@@ -79,6 +79,31 @@ func TestPortMergeLogic(t *testing.T) {
 	}
 }
 
+func TestSmallInvalidIPPackets(t *testing.T) {
+	invalidProto := byte(0xF8)
+
+	for _, params := range []testParams{
+		{"10.0.0.1", "10.0.0.2", 0, 0, invalidProto, 0x0, capturetypes.DirectionRemains},
+		{"2c04:4000::6ab", "2c01:2000::3", 0, 0, invalidProto, 0x0, capturetypes.DirectionRemains},
+	} {
+		testPacket := params.genDummyPacket(0)
+		refHash, refIsIPv4 := params.genEPHash()
+
+		var croppedIPLayer capture.IPLayer
+		if refIsIPv4 {
+			croppedIPLayer = testPacket.IPLayer()[:ipv4.HeaderLen]
+		} else {
+			croppedIPLayer = testPacket.IPLayer()[:ipv6.HeaderLen]
+		}
+
+		epHash, isIPv4, _, errno := ParsePacket(croppedIPLayer)
+		require.Equal(t, capturetypes.ErrnoOK, errno, "population error")
+
+		require.Equal(t, refHash, epHash)
+		require.Equal(t, refIsIPv4, isIPv4)
+	}
+}
+
 func TestPopulation(t *testing.T) {
 	for _, params := range testCases {
 		t.Run(params.String(), func(t *testing.T) {
