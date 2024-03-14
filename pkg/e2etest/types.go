@@ -25,9 +25,10 @@ import (
 )
 
 type mockTracking struct {
-	nRead      uint64
-	nProcessed uint64
-	nErr       uint64
+	nRead       uint64
+	nProcessed  uint64
+	nErr        uint64
+	nErrTracked uint64
 
 	done chan struct{}
 }
@@ -112,6 +113,15 @@ func (m mockIfaces) NErr() (res uint64) {
 	for _, v := range m {
 		v.RLock()
 		res += v.tracking.nErr
+		v.RUnlock()
+	}
+	return
+}
+
+func (m mockIfaces) NErrTracked() (res uint64) {
+	for _, v := range m {
+		v.RLock()
+		res += v.tracking.nErrTracked
 		v.RUnlock()
 	}
 	return

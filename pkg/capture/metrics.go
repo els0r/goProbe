@@ -88,3 +88,14 @@ func init() {
 		promRotationDuration,
 	)
 }
+
+// ResetCounters allows to externally reset all Prometheus counters (e.g. for testing purposes
+// or in order to manually reset all of them)
+func ResetCounters() {
+	promPacketsProcessed.Reset()
+	promBytes.Reset()
+	promPackets.Reset()
+	promNumFlows.Reset()
+	promPacketsDropped.Reset()
+	promCaptureErrors.Reset()
+}
