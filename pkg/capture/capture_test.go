@@ -216,9 +216,21 @@ func TestMockPacketCapturePerformance(t *testing.T) {
 	require.Nil(t, mockC.close())
 }
 
-func BenchmarkRotation(b *testing.B) {
+func BenchmarkRotationLowCardinality(b *testing.B) {
+	benchmarkRotation(b, 100, 1)
+}
 
-	nFlows := uint64(100000)
+func BenchmarkRotationMediumCardinality(b *testing.B) {
+	benchmarkRotation(b, 10000, 1)
+}
+
+func BenchmarkRotationHighCardinality(b *testing.B) {
+	benchmarkRotation(b, 1000, 1000)
+}
+
+func benchmarkRotation(b *testing.B, nX, nY uint64) {
+
+	nFlows := nX * nY
 
 	pkt, err := capture.BuildPacket(
 		net.ParseIP("1.2.3.4"),
@@ -231,11 +243,22 @@ func BenchmarkRotation(b *testing.B) {
 	ipLayer := pkt.IPLayer()
 
 	flowLog := NewFlowLog()
-	for i := uint64(0); i < nFlows; i++ {
-		*(*uint64)(unsafe.Pointer(&ipLayer[16])) = i // #nosec G103
-		epHash, isIPv4, auxInfo, errno := ParsePacket(ipLayer)
-		require.Equal(b, capturetypes.ErrnoOK, flowLog.Add(epHash, capture.PacketOutgoing, 128, isIPv4, auxInfo, errno))
-	}
+	b.Run("pre_add", func(b *testing.B) {
+		b.ReportAllocs()
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			for i := uint64(0); i < nX; i++ {
+				for j := uint64(0); j < nY; j++ {
+					*(*uint64)(unsafe.Pointer(&ipLayer[16])) = i // #nosec G103
+					*(*uint64)(unsafe.Pointer(&ipLayer[18])) = j // #nosec G103
+					epHash, isIPv4, auxInfo, errno := ParsePacket(ipLayer)
+					require.Equal(b, capturetypes.ErrnoOK, flowLog.Add(epHash, capture.PacketOutgoing, 128, isIPv4, auxInfo, errno))
+				}
+			}
+		}
+	})
+
 	for _, flow := range flowLog.flowMap {
 		flow.directionConfidenceHigh = true
 	}
@@ -276,7 +299,6 @@ func BenchmarkRotation(b *testing.B) {
 			require.Equal(b, capturetypes.ErrnoOK, testLog.Add(epHash, capture.PacketOutgoing, 128, isIPv4, auxInfo, errno))
 		}
 	})
-
 }
 
 func testDeadlockLowTraffic(t *testing.T, maxPkts int) {
