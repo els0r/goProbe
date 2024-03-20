@@ -25,6 +25,7 @@ import (
 	"github.com/els0r/goProbe/cmd/goProbe/config"
 	"github.com/els0r/goProbe/cmd/goQuery/cmd"
 	"github.com/els0r/telemetry/logging"
+	"github.com/prometheus/client_golang/prometheus"
 
 	// "github.com/els0r/goProbe/cmd/goQuery/commands"
 
@@ -362,6 +363,40 @@ func testE2E(t *testing.T, valFilterDescriptor int, datasets ...[]byte) {
 			resGoQuery.Rows[i].Counters)
 	}
 	require.EqualValues(t, refRows, resRows)
+
+	// Cross-check metrics collected by Prometheus for consistency
+	validateMetrics(t, mockIfaces)
+}
+
+func validateMetrics(t *testing.T, mockIfaces mockIfaces) {
+	metrics, err := prometheus.DefaultGatherer.Gather()
+	require.Nil(t, err)
+
+	for _, metric := range metrics {
+		switch metric.GetName() {
+		case "packets_processed_total":
+			var sum float64
+			for _, metricVal := range metric.Metric {
+				sum += metricVal.Counter.GetValue()
+			}
+			require.Equal(t, float64(mockIfaces.NProcessed()), sum)
+		case "goprobe_capture_errors_total":
+			var sum float64
+			for _, metricVal := range metric.Metric {
+				sum += metricVal.Counter.GetValue()
+			}
+			require.Equal(t, float64(mockIfaces.NErrTracked()), sum)
+		case "packets_dropped_total":
+			var sum float64
+			for _, metricVal := range metric.Metric {
+				sum += metricVal.Counter.GetValue()
+			}
+			require.Zero(t, sum)
+		}
+	}
+
+	// Reset all Prometheus counters for the next E2E test to avoid double counting
+	capture.ResetCountersTestingOnly()
 }
 
 func runGoProbe(t *testing.T, testDir string, sourceInitFn func() (mockIfaces, func(c *capture.Capture) (capture.Source, error))) chan hashmap.AggFlowMapWithMetadata {
@@ -502,6 +537,9 @@ func newPcapSource(t testing.TB, name string, data []byte) (res *mockIface) {
 			hash, isIPv4, auxInfo, errno := capture.ParsePacket(pkt.IPLayer())
 			if errno > capturetypes.ErrnoOK {
 				res.tracking.nErr++
+				if errno != capturetypes.ErrnoPacketFragmentIgnore {
+					res.tracking.nErrTracked++
+				}
 				return
 			}
 			if errno != capturetypes.ErrnoPacketFragmentIgnore {

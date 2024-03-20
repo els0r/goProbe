@@ -1,6 +1,8 @@
 package capture
 
 import (
+	"testing"
+
 	"github.com/els0r/goProbe/cmd/goProbe/config"
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -87,4 +89,22 @@ func init() {
 		promInterfacesCapturing,
 		promRotationDuration,
 	)
+}
+
+// ResetCountersTestingOnly allows to externally reset all Prometheus counters (e.g. for
+// testing purposes or in order to manually reset all of them)
+// This method must not (and cannot) be called outside of testing
+func ResetCountersTestingOnly() {
+
+	// Check if we are actually calling this function from test code
+	if !testing.Testing() {
+		panic("cannot reset counter from non-testing code")
+	}
+
+	promPacketsProcessed.Reset()
+	promBytes.Reset()
+	promPackets.Reset()
+	promNumFlows.Reset()
+	promPacketsDropped.Reset()
+	promCaptureErrors.Reset()
 }

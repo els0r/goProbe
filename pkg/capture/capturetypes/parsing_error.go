@@ -42,7 +42,7 @@ func (e ParsingErrno) ParsingFailed() bool {
 type ParsingErrTracker [NumParsingErrors]int
 
 // Sum returns the sum of all errors currently tracked in the error table
-func (e ParsingErrTracker) Sum() (res int) {
+func (e *ParsingErrTracker) Sum() (res int) {
 	for i := ErrnoInvalidIPHeader; i < NumParsingErrors; i++ {
 		res += e[i]
 	}
@@ -50,7 +50,7 @@ func (e ParsingErrTracker) Sum() (res int) {
 }
 
 // Reset resets all error counters in the error table (for reuse)
-func (e ParsingErrTracker) Reset() {
+func (e *ParsingErrTracker) Reset() {
 	for i := ErrnoInvalidIPHeader; i < NumParsingErrors; i++ {
 		e[i] = 0
 	}
