@@ -396,7 +396,7 @@ func validateMetrics(t *testing.T, mockIfaces mockIfaces) {
 	}
 
 	// Reset all Prometheus counters for the next E2E test to avoid double counting
-	capture.ResetCounters()
+	capture.ResetCountersTestingOnly()
 }
 
 func runGoProbe(t *testing.T, testDir string, sourceInitFn func() (mockIfaces, func(c *capture.Capture) (capture.Source, error))) chan hashmap.AggFlowMapWithMetadata {

@@ -91,10 +91,10 @@ func init() {
 	)
 }
 
-// ResetCounters allows to externally reset all Prometheus counters (e.g. for testing purposes
-// or in order to manually reset all of them)
+// ResetCountersTestingOnly allows to externally reset all Prometheus counters (e.g. for
+// testing purposes or in order to manually reset all of them)
 // This method must not (and cannot) be called outside of testing
-func ResetCounters() {
+func ResetCountersTestingOnly() {
 
 	// Check if we are actually calling this function from test code
 	if !testing.Testing() {
