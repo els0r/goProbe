@@ -300,6 +300,9 @@ func (qr *QueryRunner) RunStatement(ctx context.Context, stmt *query.Statement) 
 		runtime.GC()
 	}
 
+	// Ensure that potentially unused pre-allocated rows are dropped
+	rs = rs[:count]
+
 	result.Summary.Totals = totals
 
 	// sort the results
