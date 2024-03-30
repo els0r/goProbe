@@ -30,8 +30,11 @@ import (
 	"github.com/els0r/goProbe/pkg/types"
 	"github.com/els0r/goProbe/pkg/types/hashmap"
 	"github.com/els0r/telemetry/logging"
+	"github.com/els0r/telemetry/tracing"
 	"github.com/fako1024/gotools/bitpack"
 	"github.com/fako1024/gotools/concurrency"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 const (
@@ -510,6 +513,13 @@ func (w *DBWorkManager) grabAndProcessWorkload(ctx context.Context, wg *sync.Wai
 
 // ExecuteWorkerReadJobs runs the query concurrently with multiple sprocessing units
 func (w *DBWorkManager) ExecuteWorkerReadJobs(ctx context.Context, mapChan chan hashmap.AggFlowMapWithMetadata) {
+	// measure how long it takes to process a single interface. Performance-wise, this is agreable, as
+	// the hot path is within grabAndProcessWorkload
+	// The benefit: more insight on long-running multi-interface queries (a.k.a "any")
+	ctx, span := tracing.Start(ctx, "(*goDB.DBWorkManager).ExecuteWorkerReadJobs",
+		trace.WithAttributes(attribute.String("iface", w.iface)),
+	)
+	defer span.End()
 
 	var wg = new(sync.WaitGroup)
 	wg.Add(w.numProcessingUnits)

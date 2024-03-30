@@ -225,7 +225,8 @@ func TestPrepareArgs(t *testing.T) {
 		},
 		{"valid query args",
 			&Args{
-				Query: "sip,time", Format: "json", Last: "-7d",
+				Ifaces: "eth0",
+				Query:  "sip,time", Format: "json", Last: "-7d",
 				MaxMemPct: 20, NumResults: 20,
 				outputs: []io.Writer{os.Stdout, os.Stderr},
 			},
@@ -244,16 +245,92 @@ func TestPrepareArgs(t *testing.T) {
 
 			t.Logf("error:\n%v", err)
 
-			actual := new(ArgsError)
-			ok := errors.As(err, &actual)
+			ok := errors.As(err, &test.err)
 			require.Truef(t, ok, "expected error to be of type %T", &ArgsError{})
 
 			// individually compare the struct fields. Why the detour? So we don't have
 			// to re-create (and test) errors that are caught by other packages (such as
 			// parsing errors)
-			require.Equal(t, test.err.Field, actual.Field)
-			require.Equal(t, test.err.Type, actual.Type)
-			require.Equal(t, test.err.Message, actual.Message)
+			require.Equal(t, test.err.Field, test.err.Field)
+			require.Equal(t, test.err.Type, test.err.Type)
+			require.Equal(t, test.err.Message, test.err.Message)
+		})
+	}
+}
+
+func TestSelector(t *testing.T) {
+	var tests = []struct {
+		name     string
+		input    *Args
+		selector types.LabelSelector
+		err      *ArgsError
+	}{
+		{
+			name: "empty interface",
+			input: &Args{
+				Query: "sip", Format: "json", Last: "-7d",
+				MaxMemPct: 20, NumResults: 20,
+				outputs: []io.Writer{os.Stdout, os.Stderr},
+			},
+			selector: types.LabelSelector{},
+			err: &ArgsError{
+				Field:   "iface",
+				Message: invalidInterfaceMsg,
+				Type:    "*types.ParseError",
+			},
+		},
+		{
+			name: "single interface",
+			input: &Args{
+				Ifaces: "eth0",
+				Query:  "sip", Format: "json", Last: "-7d",
+				MaxMemPct: 20, NumResults: 20,
+				outputs: []io.Writer{os.Stdout, os.Stderr},
+			},
+			selector: types.LabelSelector{},
+		},
+		{
+			name: "two interfaces",
+			input: &Args{
+				Ifaces: "eth0,eth2",
+				Query:  "sip", Format: "json", Last: "-7d",
+				MaxMemPct: 20, NumResults: 20,
+				outputs: []io.Writer{os.Stdout, os.Stderr},
+			},
+			selector: types.LabelSelector{
+				Iface: true,
+			},
+		},
+		{
+			name: "invalid interface name",
+			input: &Args{
+				Ifaces: "eth0,eth two",
+				Query:  "sip", Format: "json", Last: "-7d",
+				MaxMemPct: 20, NumResults: 20,
+				outputs: []io.Writer{os.Stdout, os.Stderr},
+			},
+			err: &ArgsError{
+				Field:   "iface",
+				Message: invalidInterfaceMsg,
+				Type:    "*errors.errorString",
+			},
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			stmt, err := test.input.Prepare()
+			if test.err != nil {
+				require.ErrorAs(t, err, &test.err)
+				require.Equal(t, test.err.Field, test.err.Field)
+				require.Equal(t, test.err.Type, test.err.Type)
+
+				t.Log(err)
+				return
+			}
+			require.Nil(t, err)
+			require.Equal(t, test.selector, stmt.LabelSelector)
 		})
 	}
 }
