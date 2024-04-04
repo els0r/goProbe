@@ -98,6 +98,20 @@ func (k Key) Len() int {
 	return len(k)
 }
 
+// PutV4String stores all elements into an existing key (assuming it is an IPv4 key)
+// based on the string representation of an EPHashV4
+func (k Key) PutV4String(epHashKey string) {
+	copy(k[sipPos:sipPos+IPv4Width], epHashKey[0:4])
+	copy(k[dipPosIPv4:dipPosIPv4+dipDportProtoPosIPv4], epHashKey[6:13])
+}
+
+// PutV6String stores all elements into an existing key (assuming it is an IPv6 key)
+// based on the string representation of an EPHashV6
+func (k Key) PutV6String(epHashKey string) {
+	copy(k[sipPos:sipPos+IPv6Width], epHashKey[0:16])
+	copy(k[dipPosIPv6:dipPosIPv6+dipDportProtoPosIPv6], epHashKey[18:37])
+}
+
 // PutAllV4 stores all elements into an existing key (assuming it is an IPv4 key)
 func (k Key) PutAllV4(sip, dip, dport []byte, proto byte) {
 	k.PutSIP(sip)
@@ -437,22 +451,20 @@ func (c Counters) SumBytes() uint64 {
 	return c.BytesRcvd + c.BytesSent
 }
 
-// Add adds the values from a different counter and returns the result
-func (c Counters) Add(c2 Counters) Counters {
+// Add adds the values from a different counter (in place)
+func (c *Counters) Add(c2 Counters) {
 	c.BytesRcvd += c2.BytesRcvd
 	c.BytesSent += c2.BytesSent
 	c.PacketsRcvd += c2.PacketsRcvd
 	c.PacketsSent += c2.PacketsSent
-	return c
 }
 
-// Sub subtracts the values from a different counter and returns the result
-func (c Counters) Sub(c2 Counters) Counters {
+// Sub subtracts the values from a different counter (in place)
+func (c *Counters) Sub(c2 Counters) {
 	c.BytesRcvd -= c2.BytesRcvd
 	c.BytesSent -= c2.BytesSent
 	c.PacketsRcvd -= c2.PacketsRcvd
 	c.PacketsSent -= c2.PacketsSent
-	return c
 }
 
 // IsOnlyInbound returns if a set of counters represents traffic that is only inbound

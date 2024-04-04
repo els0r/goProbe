@@ -78,14 +78,14 @@ func (t TrafficMetadata) Sub(t2 TrafficMetadata) TrafficMetadata {
 
 // Add computes the sum of all counters and traffic metadata for the stats
 func (s Stats) Add(s2 Stats) Stats {
-	s.Counts = s.Counts.Add(s2.Counts)
+	s.Counts.Add(s2.Counts)
 	s.Traffic = s.Traffic.Add(s2.Traffic)
 	return s
 }
 
 // Sub computes the sum of all counters and traffic metadata for the stats
 func (s Stats) Sub(s2 Stats) Stats {
-	s.Counts = s.Counts.Sub(s2.Counts)
+	s.Counts.Sub(s2.Counts)
 	s.Traffic = s.Traffic.Sub(s2.Traffic)
 	return s
 }
@@ -238,7 +238,7 @@ func (d *GPDir) WriteBlocks(timestamp int64, blockTraffic TrafficMetadata, count
 	// Update global block info / counters
 	d.Metadata.BlockTraffic = append(d.Metadata.BlockTraffic, blockTraffic)
 	d.Metadata.Traffic = d.Metadata.Traffic.Add(blockTraffic)
-	d.Metadata.Counts = d.Metadata.Counts.Add(counters)
+	d.Metadata.Counts.Add(counters)
 
 	return nil
 }

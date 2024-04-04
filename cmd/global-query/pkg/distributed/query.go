@@ -180,7 +180,7 @@ func aggregateResults(ctx context.Context, stmt *query.Statement, queryResults <
 			finalResult.Query = res.Query
 			finalResult.Summary.First = res.Summary.First
 			finalResult.Summary.Last = res.Summary.Last
-			finalResult.Summary.Totals = finalResult.Summary.Totals.Add(res.Summary.Totals)
+			finalResult.Summary.Totals.Add(res.Summary.Totals)
 
 			// take the total from the query result. Since there may be overlap between the queries of two
 			// different systems, the overlap has to be deducted from the total

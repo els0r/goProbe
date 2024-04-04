@@ -500,7 +500,8 @@ func newPcapSource(t testing.TB, name string, data []byte) (res *mockIface) {
 		tracking: &mockTracking{
 			done: make(chan struct{}, 1),
 		},
-		flows:   &map[capturetypes.EPHash]types.Counters{},
+		flowsV4: &map[capturetypes.EPHashV4]types.Counters{},
+		flowsV6: &map[capturetypes.EPHashV6]types.Counters{},
 		RWMutex: sync.RWMutex{},
 	}
 
@@ -534,64 +535,136 @@ func newPcapSource(t testing.TB, name string, data []byte) (res *mockIface) {
 			defer res.Unlock()
 
 			pkt = slimcap.NewIPPacket(pkt, payload, pktType, int(totalLen), ipLayerOffset)
-			hash, isIPv4, auxInfo, errno := capture.ParsePacket(pkt.IPLayer())
-			if errno > capturetypes.ErrnoOK {
-				res.tracking.nErr++
+			ipLayer := pkt.IPLayer()
+
+			if ipLayerType := ipLayer.Type(); ipLayerType == 0x04 {
+				hash, auxInfo, errno := capture.ParsePacketV4(ipLayer)
+				if errno > capturetypes.ErrnoOK {
+					res.tracking.nErr++
+					if errno != capturetypes.ErrnoPacketFragmentIgnore {
+						res.tracking.nErrTracked++
+					}
+					return
+				}
 				if errno != capturetypes.ErrnoPacketFragmentIgnore {
-					res.tracking.nErrTracked++
+					res.tracking.nProcessed++
 				}
-				return
-			}
-			if errno != capturetypes.ErrnoPacketFragmentIgnore {
-				res.tracking.nProcessed++
-			}
 
-			hashReverse := hash.Reverse()
-			if direction := capturetypes.ClassifyPacketDirection(hash, isIPv4, auxInfo); direction != capturetypes.DirectionUnknown {
-				if direction == capturetypes.DirectionReverts || direction == capturetypes.DirectionMaybeReverts {
-					hash, hashReverse = hashReverse, hash
+				hashReverse := hash.Reverse()
+				if direction := capturetypes.ClassifyPacketDirectionV4(hash, auxInfo); direction != capturetypes.DirectionUnknown {
+					if direction == capturetypes.DirectionReverts {
+						hash, hashReverse = hashReverse, hash
+					}
 				}
-			}
 
-			hash[34], hash[35] = 0, 0
-			hashReverse[34], hashReverse[35] = 0, 0
+				hash[4], hash[5] = 0, 0
+				hashReverse[4], hashReverse[5] = 0, 0
 
-			if flow, exists := (*res.flows)[hash]; exists {
-				if pkt.Type() != slimcap.PacketOutgoing {
-					(*res.flows)[hash] = flow.Add(types.Counters{
-						PacketsRcvd: 1,
-						BytesRcvd:   uint64(totalLen),
-					})
+				if flow, exists := (*res.flowsV4)[hash]; exists {
+					if pkt.Type() != slimcap.PacketOutgoing {
+						flow.Add(types.Counters{
+							PacketsRcvd: 1,
+							BytesRcvd:   uint64(totalLen),
+						})
+					} else {
+						flow.Add(types.Counters{
+							PacketsSent: 1,
+							BytesSent:   uint64(totalLen),
+						})
+					}
+					(*res.flowsV4)[hash] = flow
+				} else if flow, exists = (*res.flowsV4)[hashReverse]; exists {
+					if pkt.Type() != slimcap.PacketOutgoing {
+						flow.Add(types.Counters{
+							PacketsRcvd: 1,
+							BytesRcvd:   uint64(totalLen),
+						})
+					} else {
+						flow.Add(types.Counters{
+							PacketsSent: 1,
+							BytesSent:   uint64(totalLen),
+						})
+					}
+					(*res.flowsV4)[hashReverse] = flow
 				} else {
-					(*res.flows)[hash] = flow.Add(types.Counters{
-						PacketsSent: 1,
-						BytesSent:   uint64(totalLen),
-					})
+					if pkt.Type() != slimcap.PacketOutgoing {
+						(*res.flowsV4)[hash] = types.Counters{
+							PacketsRcvd: 1,
+							BytesRcvd:   uint64(totalLen),
+						}
+					} else {
+						(*res.flowsV4)[hash] = types.Counters{
+							PacketsSent: 1,
+							BytesSent:   uint64(totalLen),
+						}
+					}
 				}
-			} else if flow, exists = (*res.flows)[hashReverse]; exists {
-				if pkt.Type() != slimcap.PacketOutgoing {
-					(*res.flows)[hashReverse] = flow.Add(types.Counters{
-						PacketsRcvd: 1,
-						BytesRcvd:   uint64(totalLen),
-					})
+			} else if ipLayerType == 0x06 {
+				hash, auxInfo, errno := capture.ParsePacketV6(ipLayer)
+				if errno > capturetypes.ErrnoOK {
+					res.tracking.nErr++
+					if errno != capturetypes.ErrnoPacketFragmentIgnore {
+						res.tracking.nErrTracked++
+					}
+					return
+				}
+				if errno != capturetypes.ErrnoPacketFragmentIgnore {
+					res.tracking.nProcessed++
+				}
+
+				hashReverse := hash.Reverse()
+				if direction := capturetypes.ClassifyPacketDirectionV6(hash, auxInfo); direction != capturetypes.DirectionUnknown {
+					if direction == capturetypes.DirectionReverts {
+						hash, hashReverse = hashReverse, hash
+					}
+				}
+
+				hash[16], hash[17] = 0, 0
+				hashReverse[16], hashReverse[17] = 0, 0
+
+				if flow, exists := (*res.flowsV6)[hash]; exists {
+					if pkt.Type() != slimcap.PacketOutgoing {
+						flow.Add(types.Counters{
+							PacketsRcvd: 1,
+							BytesRcvd:   uint64(totalLen),
+						})
+					} else {
+						flow.Add(types.Counters{
+							PacketsSent: 1,
+							BytesSent:   uint64(totalLen),
+						})
+					}
+					(*res.flowsV6)[hash] = flow
+				} else if flow, exists = (*res.flowsV6)[hashReverse]; exists {
+					if pkt.Type() != slimcap.PacketOutgoing {
+						flow.Add(types.Counters{
+							PacketsRcvd: 1,
+							BytesRcvd:   uint64(totalLen),
+						})
+					} else {
+						flow.Add(types.Counters{
+							PacketsSent: 1,
+							BytesSent:   uint64(totalLen),
+						})
+					}
+					(*res.flowsV6)[hashReverse] = flow
 				} else {
-					(*res.flows)[hashReverse] = flow.Add(types.Counters{
-						PacketsSent: 1,
-						BytesSent:   uint64(totalLen),
-					})
+					if pkt.Type() != slimcap.PacketOutgoing {
+						(*res.flowsV6)[hash] = types.Counters{
+							PacketsRcvd: 1,
+							BytesRcvd:   uint64(totalLen),
+						}
+					} else {
+						(*res.flowsV6)[hash] = types.Counters{
+							PacketsSent: 1,
+							BytesSent:   uint64(totalLen),
+						}
+					}
 				}
 			} else {
-				if pkt.Type() != slimcap.PacketOutgoing {
-					(*res.flows)[hash] = types.Counters{
-						PacketsRcvd: 1,
-						BytesRcvd:   uint64(totalLen),
-					}
-				} else {
-					(*res.flows)[hash] = types.Counters{
-						PacketsSent: 1,
-						BytesSent:   uint64(totalLen),
-					}
-				}
+				res.tracking.nErr++
+				res.tracking.nErrTracked++
+				// TODO: Handle capturetypes.ErrnoInvalidIPHeader which currently is in post-classification
 			}
 		})
 
@@ -647,7 +720,7 @@ func newPcapSource(t testing.TB, name string, data []byte) (res *mockIface) {
 
 // 			hashReverse := hash.Reverse()
 // 			if direction := capturetypes.ClassifyPacketDirection(hash, isIPv4, auxInfo); direction != capturetypes.DirectionUnknown {
-// 				if direction == capturetypes.DirectionReverts || direction == capturetypes.DirectionMaybeReverts {
+// 				if direction == capturetypes.DirectionReverts {
 // 					hash, hashReverse = hashReverse, hash
 // 				}
 // 			}
@@ -733,5 +806,12 @@ func TestMain(m *testing.M) {
 		panic(err)
 	}
 
-	os.Exit(m.Run())
+	res := m.Run()
+
+	if benchBuf.Len() > 0 {
+		fmt.Println("Benchmark data:")
+		fmt.Println(benchBuf.String())
+	}
+
+	os.Exit(res)
 }

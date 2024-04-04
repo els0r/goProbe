@@ -26,9 +26,11 @@ func (p testParams) String() string {
 }
 
 type testCase struct {
-	input  testParams
-	EPHash capturetypes.EPHash
-	IsIPv4 bool
+	input testParams
+
+	isIPv4   bool
+	EPHashV4 capturetypes.EPHashV4
+	EPHashV6 capturetypes.EPHashV6
 }
 
 var testCases = []testParams{
@@ -60,21 +62,22 @@ var testCases = []testParams{
 	{"2c04:4000::6ab", "2c04:4000::6ab", 0, 53, capturetypes.UDP, 0, capturetypes.DirectionRemains},          // DNS request from NULLed ephemaral port
 }
 
-func TestMaxEphemeralPort(t *testing.T) {
+func TestEphemeralPort(t *testing.T) {
+	require.Equal(t, uint16(32768), capturetypes.MinEphemeralPort, "Minimum ephemeral port is != []byte{128, 0}, adapt isEphemeralPort() accordingly !")
 	require.Equal(t, uint16(65535), capturetypes.MaxEphemeralPort, "Maximum ephemeral port is != max(uint16), adapt isEphemeralPort() accordingly !")
 }
 
 func TestPortMergeLogic(t *testing.T) {
 	for i := uint16(0); i < 65535; i++ {
-		if i == 53 || i == 80 || i == 443 {
-			require.Truef(t, isCommonPort(uint16ToPort(i), capturetypes.TCP), "Port %d/TCP considered common port, adapt isNotCommonPort() accordingly !", i)
+		if i == 53 || i == 80 || i == 443 || i == 445 || i == 8080 {
+			require.Truef(t, isCommonPort(uint16ToPort(i), capturetypes.TCP), "Port %d/TCP (%v) considered common port, adapt isCommonPort() accordingly !", i, uint16ToPort(i))
 		} else {
-			require.Falsef(t, isCommonPort(uint16ToPort(i), capturetypes.TCP), "Port %d/TCP not considered common port, adapt isNotCommonPort() accordingly !", i)
+			require.Falsef(t, isCommonPort(uint16ToPort(i), capturetypes.TCP), "Port %d/TCP (%v) not considered common port, adapt isCommonPort() accordingly !", i, uint16ToPort(i))
 		}
 		if i == 53 || i == 443 {
-			require.Truef(t, isCommonPort(uint16ToPort(i), capturetypes.UDP), "Port %d/capturetypes.UDP considered common port, adapt isNotCommonPort() accordingly !", i)
+			require.Truef(t, isCommonPort(uint16ToPort(i), capturetypes.UDP), "Port %d/UDP (%v) considered common port, adapt isCommonPort() accordingly !", i, uint16ToPort(i))
 		} else {
-			require.Falsef(t, isCommonPort(uint16ToPort(i), capturetypes.UDP), "Port %d/capturetypes.UDP not considered common port, adapt isNotCommonPort() accordingly !", i)
+			require.Falsef(t, isCommonPort(uint16ToPort(i), capturetypes.UDP), "Port %d/UDP (%v) not considered common port, adapt isCommonPort() accordingly !", i, uint16ToPort(i))
 		}
 	}
 }
@@ -92,15 +95,15 @@ func TestSmallInvalidIPPackets(t *testing.T) {
 		var croppedIPLayer capture.IPLayer
 		if refIsIPv4 {
 			croppedIPLayer = testPacket.IPLayer()[:ipv4.HeaderLen]
+			epHash, _, errno := ParsePacketV4(croppedIPLayer)
+			require.Equal(t, capturetypes.ErrnoOK, errno, "population error")
+			require.Equal(t, capturetypes.EPHashV4(refHash), epHash)
 		} else {
 			croppedIPLayer = testPacket.IPLayer()[:ipv6.HeaderLen]
+			epHash, _, errno := ParsePacketV6(croppedIPLayer)
+			require.Equal(t, capturetypes.ErrnoOK, errno, "population error")
+			require.Equal(t, capturetypes.EPHashV6(refHash), epHash)
 		}
-
-		epHash, isIPv4, _, errno := ParsePacket(croppedIPLayer)
-		require.Equal(t, capturetypes.ErrnoOK, errno, "population error")
-
-		require.Equal(t, refHash, epHash)
-		require.Equal(t, refIsIPv4, isIPv4)
 	}
 }
 
@@ -110,11 +113,15 @@ func TestPopulation(t *testing.T) {
 			testPacket := params.genDummyPacket(0)
 			refHash, refIsIPv4 := params.genEPHash()
 
-			epHash, isIPv4, _, errno := ParsePacket(testPacket.IPLayer())
-			require.Equal(t, capturetypes.ErrnoOK, errno, "population error")
-
-			require.Equal(t, refHash, epHash)
-			require.Equal(t, refIsIPv4, isIPv4)
+			if refIsIPv4 {
+				epHash, _, errno := ParsePacketV4(testPacket.IPLayer())
+				require.Equal(t, capturetypes.ErrnoOK, errno, "population error")
+				require.Equal(t, capturetypes.EPHashV4(refHash), epHash)
+			} else {
+				epHash, _, errno := ParsePacketV6(testPacket.IPLayer())
+				require.Equal(t, capturetypes.ErrnoOK, errno, "population error")
+				require.Equal(t, capturetypes.EPHashV6(refHash), epHash)
+			}
 		})
 	}
 }
@@ -123,49 +130,102 @@ func TestClassification(t *testing.T) {
 	for _, params := range testCases {
 		t.Run(params.String(), func(t *testing.T) {
 			testCase := params.genTestCase()
-			require.Equal(t, params.expectedDirection, capturetypes.ClassifyPacketDirection(testCase.EPHash, testCase.IsIPv4, testCase.input.AuxInfo), "classification mismatch")
+			if testCase.isIPv4 {
+				require.Equal(t, params.expectedDirection, capturetypes.ClassifyPacketDirectionV4(testCase.EPHashV4, testCase.input.AuxInfo), "classification mismatch")
+			} else {
+				require.Equal(t, params.expectedDirection, capturetypes.ClassifyPacketDirectionV6(testCase.EPHashV6, testCase.input.AuxInfo), "classification mismatch")
+			}
 		})
 	}
 }
 
+var commonPortBenchResult bool // required to prevent compiler from optimizing below calls
+
+func BenchmarkCommonPort(b *testing.B) {
+	port := make([]byte, 2)
+
+	b.Run("hit", func(b *testing.B) {
+		binary.BigEndian.PutUint16(port, 10000)
+		for i := 0; i < b.N; i++ {
+			commonPortBenchResult = isCommonPort(port, capturetypes.TCP)
+		}
+	})
+	b.Run("miss", func(b *testing.B) {
+		binary.BigEndian.PutUint16(port, 443)
+		for i := 0; i < b.N; i++ {
+			commonPortBenchResult = isCommonPort(port, capturetypes.UDP)
+		}
+	})
+}
+
 func BenchmarkPopulation(b *testing.B) {
 	for _, params := range testCases {
-		b.Run(params.String(), func(b *testing.B) {
-			testPacket := params.genDummyPacket(0)
+		testPacket := params.genDummyPacket(0)
 
-			b.ReportAllocs()
-			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
-				_, _, _, _ = ParsePacket(testPacket.IPLayer())
-			}
-		})
+		if testPacket.IPLayer().Type() == ipLayerTypeV4 {
+			b.Run(params.String(), func(b *testing.B) {
+				b.ReportAllocs()
+				b.ResetTimer()
+				for i := 0; i < b.N; i++ {
+					_, _, _ = ParsePacketV4(testPacket.IPLayer())
+				}
+			})
+		} else {
+			b.Run(params.String(), func(b *testing.B) {
+				b.ReportAllocs()
+				b.ResetTimer()
+				for i := 0; i < b.N; i++ {
+					_, _, _ = ParsePacketV6(testPacket.IPLayer())
+				}
+			})
+		}
 	}
 }
 
 func BenchmarkClassification(b *testing.B) {
 	for _, params := range testCases {
-		b.Run(params.String(), func(b *testing.B) {
-			testCase := params.genTestCase()
+		testCase := params.genTestCase()
 
-			b.ReportAllocs()
-			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
-				capturetypes.ClassifyPacketDirection(testCase.EPHash, testCase.IsIPv4, testCase.input.AuxInfo)
-			}
-		})
+		if testCase.isIPv4 {
+			b.Run(params.String(), func(b *testing.B) {
+				b.ReportAllocs()
+				b.ResetTimer()
+
+				for i := 0; i < b.N; i++ {
+					capturetypes.ClassifyPacketDirectionV4(testCase.EPHashV4, testCase.input.AuxInfo)
+				}
+			})
+		} else {
+			b.Run(params.String(), func(b *testing.B) {
+				b.ReportAllocs()
+				b.ResetTimer()
+
+				for i := 0; i < b.N; i++ {
+					capturetypes.ClassifyPacketDirectionV6(testCase.EPHashV6, testCase.input.AuxInfo)
+				}
+			})
+		}
 	}
 }
 
 func (p testParams) genTestCase() testCase {
-	EPHash, IsIPv4 := p.genEPHash()
-	return testCase{
+	epHashData, IsIPv4 := p.genEPHash()
+
+	res := testCase{
 		input:  p,
-		EPHash: EPHash,
-		IsIPv4: IsIPv4,
+		isIPv4: IsIPv4,
 	}
+
+	if IsIPv4 {
+		res.EPHashV4 = capturetypes.EPHashV4(epHashData)
+	} else {
+		res.EPHashV6 = capturetypes.EPHashV6(epHashData)
+	}
+
+	return res
 }
 
-func (p testParams) genEPHash() (res capturetypes.EPHash, IsIPv4 bool) {
+func (p testParams) genEPHash() (res []byte, IsIPv4 bool) {
 
 	src, err := netip.ParseAddr(p.sip)
 	if err != nil {
@@ -178,41 +238,55 @@ func (p testParams) genEPHash() (res capturetypes.EPHash, IsIPv4 bool) {
 
 	IsIPv4 = src.Is4()
 	if IsIPv4 {
-		tmpSrc, tmpDst := src.As4(), dst.As4()
-		copy(res[0:], tmpSrc[:])
-		copy(res[16:], tmpDst[:])
-	} else {
-		tmpSrc, tmpDst := src.As16(), dst.As16()
-		copy(res[0:], tmpSrc[:])
-		copy(res[16:], tmpDst[:])
-	}
+		epHash := capturetypes.EPHashV4{}
 
-	binary.BigEndian.PutUint16(res[32:34], p.dport)
-	binary.BigEndian.PutUint16(res[34:36], p.sport)
-	res[36] = p.proto
+		tmpSrc, tmpDst := src.As4(), dst.As4()
+		copy(epHash[0:], tmpSrc[:])
+		copy(epHash[6:], tmpDst[:])
+		binary.BigEndian.PutUint16(epHash[10:12], p.dport)
+		binary.BigEndian.PutUint16(epHash[4:6], p.sport)
+		epHash[12] = p.proto
+
+		res = epHash[:]
+	} else {
+		epHash := capturetypes.EPHashV6{}
+
+		tmpSrc, tmpDst := src.As16(), dst.As16()
+		copy(epHash[0:], tmpSrc[:])
+		copy(epHash[18:], tmpDst[:])
+		binary.BigEndian.PutUint16(epHash[34:36], p.dport)
+		binary.BigEndian.PutUint16(epHash[16:18], p.sport)
+		epHash[36] = p.proto
+
+		res = epHash[:]
+	}
 
 	return
 }
 
 func (p testParams) genDummyPacket(pktType capture.PacketType) capture.Packet {
-	EPHash, IsIPv4 := p.genEPHash()
-	data := make([]byte, len(capturetypes.EPHash{})+ipv6.HeaderLen)
+	epHashData, IsIPv4 := p.genEPHash()
+	data := make([]byte, len(capturetypes.EPHashV6{})+ipv6.HeaderLen)
 
 	if IsIPv4 {
+		epHash := capturetypes.EPHashV4(epHashData)
+
 		data[0] = (4 << 4)
 		data[9] = p.proto
-		copy(data[12:16], EPHash[0:4])
-		copy(data[16:20], EPHash[16:20])
-		copy(data[ipv4.HeaderLen:ipv4.HeaderLen+2], EPHash[34:36])
-		copy(data[ipv4.HeaderLen+2:ipv4.HeaderLen+4], EPHash[32:34])
+		copy(data[12:16], epHash[0:4])
+		copy(data[16:20], epHash[6:10])
+		copy(data[ipv4.HeaderLen:ipv4.HeaderLen+2], epHash[4:6])
+		copy(data[ipv4.HeaderLen+2:ipv4.HeaderLen+4], epHash[10:12])
 
 	} else {
+		epHash := capturetypes.EPHashV6(epHashData)
+
 		data[0] = (6 << 4)
 		data[6] = p.proto
-		copy(data[8:24], EPHash[0:16])
-		copy(data[24:40], EPHash[16:32])
-		copy(data[ipv6.HeaderLen:ipv6.HeaderLen+2], EPHash[34:36])
-		copy(data[ipv6.HeaderLen+2:ipv6.HeaderLen+4], EPHash[32:34])
+		copy(data[8:24], epHash[0:16])
+		copy(data[24:40], epHash[18:34])
+		copy(data[ipv6.HeaderLen:ipv6.HeaderLen+2], epHash[16:18])
+		copy(data[ipv6.HeaderLen+2:ipv6.HeaderLen+4], epHash[34:36])
 	}
 
 	return capture.NewIPPacket(nil, data, pktType, 128, 0)

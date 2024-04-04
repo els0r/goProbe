@@ -4,11 +4,15 @@
 package e2etest
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -19,11 +23,16 @@ import (
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 	"github.com/els0r/goProbe/pkg/goprobe/writeout"
 	"github.com/fako1024/slimcap/capture/afpacket/afring"
+	"github.com/fako1024/slimcap/capture/pcap"
 	"github.com/fako1024/slimcap/link"
 	"github.com/stretchr/testify/require"
 
 	slimcap "github.com/fako1024/slimcap/capture"
 )
+
+const benchtime = 30 * time.Second
+
+var benchBuf = bytes.NewBuffer(nil)
 
 func TestBenchmarkCaptureThroughput(t *testing.T) {
 
@@ -31,22 +40,26 @@ func TestBenchmarkCaptureThroughput(t *testing.T) {
 		t.SkipNow()
 	}
 
+	t.Run("pcap_data", func(t *testing.T) {
+		runBenchmarkCaptureThroughput(t, benchBuf, benchtime, setupDataUnblockingSource(t))
+	})
+
 	t.Run("random", func(t *testing.T) {
-		runBenchmarkCaptureThroughput(t, 10*time.Second, true, false)
+		runBenchmarkCaptureThroughput(t, benchBuf, benchtime, setupSyntheticUnblockingSource(t, true, false))
 	})
 	t.Run("random+return", func(t *testing.T) {
-		runBenchmarkCaptureThroughput(t, 10*time.Second, true, true)
+		runBenchmarkCaptureThroughput(t, benchBuf, benchtime, setupSyntheticUnblockingSource(t, true, true))
 	})
 
 	t.Run("non-random", func(t *testing.T) {
-		runBenchmarkCaptureThroughput(t, 10*time.Second, false, false)
+		runBenchmarkCaptureThroughput(t, benchBuf, benchtime, setupSyntheticUnblockingSource(t, false, false))
 	})
 	t.Run("non-random+return", func(t *testing.T) {
-		runBenchmarkCaptureThroughput(t, 10*time.Second, false, true)
+		runBenchmarkCaptureThroughput(t, benchBuf, benchtime, setupSyntheticUnblockingSource(t, false, true))
 	})
 }
 
-func runBenchmarkCaptureThroughput(t *testing.T, runtime time.Duration, randomize, addReturn bool) {
+func runBenchmarkCaptureThroughput(t *testing.T, w io.Writer, runtime time.Duration, fn func(*capture.Capture) (capture.Source, error)) {
 
 	// Setup a temporary directory for the test DB
 	tempDir, err := os.MkdirTemp(os.TempDir(), "goprobe_e2e_bench")
@@ -62,7 +75,7 @@ func runBenchmarkCaptureThroughput(t *testing.T, runtime time.Duration, randomiz
 	writeoutHandler := writeout.NewGoDBHandler(tempDir, encoders.EncoderTypeLZ4).
 		WithPermissions(goDB.DefaultPermissions)
 
-	captureManager := capture.NewManager(writeoutHandler, capture.WithSourceInitFn(setupSyntheticUnblockingSource(t, randomize, addReturn)))
+	captureManager := capture.NewManager(writeoutHandler, capture.WithSourceInitFn(fn))
 	_, _, _, err = captureManager.Update(ctx, config.Ifaces{
 		"mock": defaultCaptureConfig,
 	})
@@ -80,9 +93,18 @@ func runBenchmarkCaptureThroughput(t *testing.T, runtime time.Duration, randomiz
 
 	// Extract interface stats and calculate metrics
 	stats := captureManager.Status(context.Background(), "mock")
+	rate := time.Duration(0)
+	if stats["mock"].ProcessedTotal > 0 {
+		rate = runtime / time.Duration(stats["mock"].ProcessedTotal)
+	}
+
+	fmt.Fprintf(w, "%s\t%d\t%d ns/op\n", strings.TrimPrefix(t.Name(), "Test"),
+		stats["mock"].ProcessedTotal,
+		rate.Nanoseconds())
+
 	fmt.Printf("Packets processed after %v: %d (%v/pkt), %d dropped\n", runtime,
 		stats["mock"].ProcessedTotal,
-		runtime/time.Duration(stats["mock"].ProcessedTotal),
+		rate,
 		stats["mock"].Dropped)
 
 	shutDownCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -158,6 +180,34 @@ func setupSyntheticUnblockingSource(t testing.TB, randomize, addReturn bool) fun
 					require.Nil(t, mockSrc.AddPacket(pRet))
 				}
 			}
+		}
+
+		_, err = mockSrc.Run(time.Microsecond)
+
+		return mockSrc, err
+	}
+}
+
+func setupDataUnblockingSource(t testing.TB) func(c *capture.Capture) (capture.Source, error) {
+	return func(c *capture.Capture) (capture.Source, error) {
+
+		pcapData, err := pcaps.ReadFile(filepath.Join(testDataPath, defaultPcapTestFile))
+		require.Nil(t, err)
+
+		src, err := pcap.NewSource("default_data", bytes.NewBuffer(pcapData))
+		require.Nil(t, err)
+
+		mockSrc, err := afring.NewMockSourceNoDrain(c.Iface(),
+			afring.CaptureLength(link.CaptureLengthMinimalIPv6Transport),
+			afring.Promiscuous(false),
+			afring.BufferSize(1024*1024, 4),
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		for mockSrc.CanAddPackets() {
+			require.Nil(t, mockSrc.AddPacketFromSource(src))
 		}
 
 		_, err = mockSrc.Run(time.Microsecond)
