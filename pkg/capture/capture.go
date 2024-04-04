@@ -342,7 +342,6 @@ func (c *Capture) bufferPackets(buf *LocalBuffer, captureErrors chan error) erro
 
 			break
 		}
-		c.stats.Processed++
 
 		// Parse the packet and extract relevant data for future addition to the flow log
 		// Note: Since the compiler fails to inline this as a function, it is kept in the
@@ -378,6 +377,7 @@ func (c *Capture) bufferPackets(buf *LocalBuffer, captureErrors chan error) erro
 		if !ok {
 			break
 		}
+		c.stats.Processed++
 
 		if isIPv4 {
 			c.addToFlowLogV4(capturetypes.EPHashV4(epHash), pktType, pktSize, auxInfo, errno)
