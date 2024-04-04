@@ -102,14 +102,14 @@ func (k Key) Len() int {
 // based on the string representation of an EPHashV4
 func (k Key) PutV4String(epHashKey string) {
 	copy(k[sipPos:sipPos+IPv4Width], epHashKey[0:4])
-	copy(k[dipPosIPv4:dipPosIPv4+dipDportProtoPosIPv4], epHashKey[6:13])
+	copy(k[dipPosIPv4:dipPosIPv4+dipDportProtoIPv4Width], epHashKey[6:13])
 }
 
 // PutV6String stores all elements into an existing key (assuming it is an IPv6 key)
 // based on the string representation of an EPHashV6
 func (k Key) PutV6String(epHashKey string) {
 	copy(k[sipPos:sipPos+IPv6Width], epHashKey[0:16])
-	copy(k[dipPosIPv6:dipPosIPv6+dipDportProtoPosIPv6], epHashKey[18:37])
+	copy(k[dipPosIPv6:dipPosIPv6+dipDportProtoIPv6Width], epHashKey[18:37])
 }
 
 // PutAllV4 stores all elements into an existing key (assuming it is an IPv4 key)

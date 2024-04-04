@@ -93,8 +93,8 @@ const (
 	protoPosIPv4 = dportPosIPv4 + DPortWidth
 	protoPosIPv6 = dportPosIPv6 + DPortWidth
 
-	dipDportProtoPosIPv4 = IPv4Width + DPortWidth + 1
-	dipDportProtoPosIPv6 = IPv6Width + DPortWidth + 1
+	dipDportProtoIPv4Width = IPv4Width + DPortWidth + 1
+	dipDportProtoIPv6Width = IPv6Width + DPortWidth + 1
 
 	nonIPKeysWidth  = DPortWidth + ProtoWidth
 	sipDipIPv4Width = 2 * IPv4Width

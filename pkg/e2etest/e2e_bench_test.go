@@ -57,6 +57,9 @@ func TestBenchmarkCaptureThroughput(t *testing.T) {
 	t.Run("non-random+return", func(t *testing.T) {
 		runBenchmarkCaptureThroughput(t, benchBuf, benchtime, setupSyntheticUnblockingSource(t, false, true))
 	})
+
+	// Reset all Prometheus counters for the next E2E test to avoid double counting
+	capture.ResetCountersTestingOnly()
 }
 
 func runBenchmarkCaptureThroughput(t *testing.T, w io.Writer, runtime time.Duration, fn func(*capture.Capture) (capture.Source, error)) {
