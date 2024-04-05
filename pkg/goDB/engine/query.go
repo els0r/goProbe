@@ -96,8 +96,6 @@ func (qr *QueryRunner) RunStatement(ctx context.Context, stmt *query.Statement) 
 		return res, fmt.Errorf("failed to parse query type: %w", err)
 	}
 
-	// make sure that the interface label is added if a query contains
-
 	// build condition tree to check if there is a syntax error before starting processing
 	queryConditional, valFilterNode, parseErr := node.ParseAndInstrument(stmt.Condition, stmt.DNSResolution.Timeout)
 	if parseErr != nil {

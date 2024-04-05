@@ -339,6 +339,7 @@ func (a *Args) LogValue() slog.Value {
 }
 
 const (
+	emptyInterfaceMsg              = "empty interface name"
 	invalidInterfaceMsg            = "invalid interface name"
 	invalidQueryTypeMsg            = "invalid query type"
 	invalidFormatMsg               = "unknown format"
@@ -409,7 +410,7 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 	if a.Ifaces == "" {
 		err := newArgsError(
 			"iface",
-			invalidInterfaceMsg,
+			emptyInterfaceMsg,
 			&types.ParseError{
 				Description: "empty input",
 			},

@@ -275,7 +275,7 @@ func TestSelector(t *testing.T) {
 			selector: types.LabelSelector{},
 			err: &ArgsError{
 				Field:   "iface",
-				Message: invalidInterfaceMsg,
+				Message: emptyInterfaceMsg,
 				Type:    "*types.ParseError",
 			},
 		},
