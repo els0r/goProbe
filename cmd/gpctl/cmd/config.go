@@ -25,7 +25,7 @@ const (
 	flagReload = "reload"
 	flagSilent = "silent"
 
-	defaultRequestTimeout = 3 * time.Second
+	defaultRequestTimeout = 10 * time.Second
 )
 
 var (
