@@ -53,7 +53,7 @@ func (l *LocalBuffer) Release() {
 	l.data = nil
 }
 
-// Usage return the relative fraaction of the buffer capacity in use (i.e. written to, independent of
+// Usage return the relative fraction of the buffer capacity in use (i.e. written to, independent of
 // number of items already retreived by Next())
 func (l *LocalBuffer) Usage() float64 {
 
