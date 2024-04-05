@@ -5,11 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"regexp"
 	"runtime"
 	"runtime/debug"
 	"sort"
-	"strings"
 	"sync"
 	"time"
 
@@ -363,34 +361,10 @@ func parseIfaceList(dbPath string, ifaceList string) ([]string, error) {
 		return ifaces, nil
 	}
 
-	ifaces, err := validateIfaceNames(ifaceList)
+	ifaces, err := types.ValidateIfaceNames(ifaceList)
 	if err != nil {
 		return nil, err
 	}
 
-	return ifaces, nil
-}
-
-var ifaceNameRegexp = regexp.MustCompile(`^[a-zA-Z0-9\.:_-]{1,15}$`)
-
-func validateIfaceName(iface string) error {
-	if iface == "" {
-		return errors.New("interface list contains empty interface name")
-	}
-
-	if !ifaceNameRegexp.MatchString(iface) {
-		return fmt.Errorf("interface name `%s` is invalid", iface)
-	}
-
-	return nil
-}
-
-func validateIfaceNames(ifaceList string) ([]string, error) {
-	ifaces := strings.Split(ifaceList, ",")
-	for _, iface := range ifaces {
-		if err := validateIfaceName(iface); err != nil {
-			return nil, err
-		}
-	}
 	return ifaces, nil
 }

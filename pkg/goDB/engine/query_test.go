@@ -161,7 +161,7 @@ func TestInterfaceValidation(t *testing.T) {
 	// run table-driven test
 	for _, test := range tests {
 		t.Run(test.iface, func(t *testing.T) {
-			err := validateIfaceName(test.iface)
+			err := types.ValidateIfaceName(test.iface)
 			if test.expectedErr != nil {
 				if err == nil || err.Error() != test.expectedErr.Error() {
 					t.Fatalf("unexpected result for interface name validation: %s", err)

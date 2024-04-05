@@ -339,6 +339,8 @@ func (a *Args) LogValue() slog.Value {
 }
 
 const (
+	emptyInterfaceMsg              = "empty interface name"
+	invalidInterfaceMsg            = "invalid interface name"
 	invalidQueryTypeMsg            = "invalid query type"
 	invalidFormatMsg               = "unknown format"
 	invalidSortByMsg               = "unknown format"
@@ -404,10 +406,30 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 
 	}
 
+	// set and validate the interfaces
+	if a.Ifaces == "" {
+		err := newArgsError(
+			"iface",
+			emptyInterfaceMsg,
+			&types.ParseError{
+				Description: "empty input",
+			},
+		)
+		return s, err
+	}
+	s.Ifaces, err = types.ValidateIfaceNames(a.Ifaces)
+	if err != nil {
+		return s, newArgsError(
+			"iface",
+			invalidInterfaceMsg,
+			err,
+		)
+	}
+
 	// insert iface attribute here in case multiple interfaces where specified and the
 	// interface column was not added as an attribute
 	if (len(s.Ifaces) > 1 || strings.Contains(a.Ifaces, types.AnySelector)) &&
-		!strings.Contains(a.Query, "iface") {
+		!strings.Contains(a.Query, types.IfaceName) {
 		selector.Iface = true
 	}
 	s.LabelSelector = selector
