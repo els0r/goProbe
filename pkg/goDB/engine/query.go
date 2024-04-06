@@ -260,7 +260,7 @@ func (qr *QueryRunner) RunStatement(ctx context.Context, stmt *query.Statement) 
 
 			key := types.ExtendedKey(i.Key())
 			val := i.Val()
-			totals = totals.Add(val)
+			totals.Add(val)
 			if ts, hasTS := key.AttrTime(); hasTS {
 				rs[count].Labels.Timestamp = time.Unix(ts, 0)
 			}
@@ -285,7 +285,7 @@ func (qr *QueryRunner) RunStatement(ctx context.Context, stmt *query.Statement) 
 			}
 
 			// assign / update counters
-			rs[count].Counters = rs[count].Counters.Add(val)
+			rs[count].Counters.Add(val)
 			count++
 		}
 

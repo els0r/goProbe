@@ -434,7 +434,7 @@ func (w *DBWorkManager) readMetadataAndEvaluate(workDir *gpfile.GPDir, blocks []
 		pktsSentValues = bitpack.UnpackInto(colBlocks[types.PacketsSentColIdx], pktsSentValues)
 
 		for i := 0; i < numEntries; i++ {
-			stats.Counts = stats.Counts.Add(types.Counters{
+			stats.Counts.Add(types.Counters{
 				BytesRcvd:   bytesRcvdValues[i],
 				BytesSent:   bytesSentValues[i],
 				PacketsRcvd: pktsRcvdValues[i],

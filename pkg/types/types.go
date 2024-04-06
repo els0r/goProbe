@@ -93,6 +93,9 @@ const (
 	protoPosIPv4 = dportPosIPv4 + DPortWidth
 	protoPosIPv6 = dportPosIPv6 + DPortWidth
 
+	dipDportProtoIPv4Width = IPv4Width + DPortWidth + 1
+	dipDportProtoIPv6Width = IPv6Width + DPortWidth + 1
+
 	nonIPKeysWidth  = DPortWidth + ProtoWidth
 	sipDipIPv4Width = 2 * IPv4Width
 	sipDipIPv6Width = 2 * IPv6Width
@@ -108,6 +111,7 @@ const (
 	FilterKeywordNone             = "none"
 )
 
+// Filter types / direction classifiers
 const (
 	// incoming but no outgoing packets
 	FilterTypeDirectionIn        = "in"
@@ -123,6 +127,7 @@ const (
 	FilterTypeDirectionBiSugared = "bidirectional"
 )
 
+// DirectionFilters denotes the list of all available direction filters
 var DirectionFilters = []string{FilterTypeDirectionIn, FilterTypeDirectionInSugared,
 	FilterTypeDirectionOut, FilterTypeDirectionOutSugared, FilterTypeDirectionUni, FilterTypeDirectionUniSugared,
 	FilterTypeDirectionBi, FilterTypeDirectionBiSugared}

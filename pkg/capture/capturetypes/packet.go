@@ -1,17 +1,3 @@
-/////////////////////////////////////////////////////////////////////////////////
-//
-// GPPacket.go
-//
-// Main packet Interface that provides the datastructure that is passed around
-// every channel within the program. Contains the necessary information that a flow
-// needs
-//
-// Written by Lennart Elsen lel@open.ch, May 2014
-// Copyright (c) 2014 Open Systems AG, Switzerland
-// All Rights Reserved.
-//
-/////////////////////////////////////////////////////////////////////////////////
-
 package capturetypes
 
 // Direction denotes if the detected packet direction should remain or changed, based
@@ -23,15 +9,7 @@ const (
 	DirectionUnknown Direction = iota
 	DirectionRemains
 	DirectionReverts
-	DirectionMaybeRemains
-	DirectionMaybeReverts
 )
-
-// IsConfidenceHigh returns if the heuristic was successful in determining the flow direction
-// with high confidence (i.e. we trust the assessment and won't perform any further analysis)
-func (d Direction) IsConfidenceHigh() bool {
-	return d == DirectionRemains || d == DirectionReverts
-}
 
 // Enumeration of the most common IP protocols
 const (
@@ -41,222 +19,152 @@ const (
 	ESP    = 0x32 // ESP : 50
 	ICMPv6 = 0x3A // ICMPv6 : 58
 
-	EPHashSize = 37 // EPHashSize : The (static) length of an EPHash
+	EPHashSizeV4 = 13 // EPHashSizeV4 : The (static) length of an IPv4 EPHash
+	EPHashSizeV6 = 37 // EPHashSizeV6 : The (static) length of an IPv6 EPHash
 )
 
-// EPHash is a typedef that allows us to replace the type of hash
-type EPHash [EPHashSize]byte
+// EPHashV4 array position constants (all explicit so they can theoretically be switched
+// around with zero effort and to avoid having to do index math in functions)
+// epHash[0:4] -> Src IP
+// epHash[4:6] -> Src Port
+// epHash[6:10] -> Dst IP
+// epHash[10:12] -> Dst Port
+// epHash[12] -> Protocol
+const (
+	EPHashV4SipStart    = 0
+	EPHashV4SipEnd      = 4
+	EPHashV4SPortStart  = 4
+	EPHashV4SPortEnd    = 6
+	EPHashV4DipStart    = 6
+	EPHashV4DipEnd      = 10
+	EPHashV4DPortStart  = 10
+	EPHashV4DPortEnd    = 12
+	EPHashV4ProtocolPos = 12
 
-// Reverse calculates the reverse of an EPHash (i.e. source / destination switched)
-func (h EPHash) Reverse() (rev EPHash) {
-	copy(rev[0:16], h[16:32])
-	copy(rev[16:32], h[0:16])
-	copy(rev[32:34], h[34:36])
-	copy(rev[34:36], h[32:34])
-	rev[36] = h[36]
+	EPHashV4SPortFirstByte = EPHashV4SPortStart     // 4
+	EPHashV4SPortLastByte  = EPHashV4SPortStart + 1 // 5
+	EPHashV4DPortFirstByte = EPHashV4DPortStart     // 10
+	EPHashV4DPortLastByte  = EPHashV4DPortStart + 1 // 11
+)
+
+// EPHashV4 is a typedef that allows us to replace the type of hash for IPv4 flows
+type EPHashV4 [EPHashSizeV4]byte
+
+// EPHashV6 array position constants (all explicit so they can theoretically be switched
+// around with zero effort and to avoid having to do index math in functions)
+// epHash[0:16] -> Src IP
+// epHash[16:18] -> Src Port
+// epHash[18:34] -> Dst IP
+// epHash[34:36] -> Dst Port
+// epHash[36] -> Protocol
+const (
+	EPHashV6SipStart    = 0
+	EPHashV6SipEnd      = 16
+	EPHashV6SPortStart  = 16
+	EPHashV6SPortEnd    = 18
+	EPHashV6DipStart    = 18
+	EPHashV6DipEnd      = 34
+	EPHashV6DPortStart  = 34
+	EPHashV6DPortEnd    = 36
+	EPHashV6ProtocolPos = 36
+
+	EPHashV6SPortFirstByte = EPHashV6SPortStart     // 16
+	EPHashV6SPortLastByte  = EPHashV6SPortStart + 1 // 17
+	EPHashV6DPortFirstByte = EPHashV6DPortStart     // 34
+	EPHashV6DPortLastByte  = EPHashV6DPortStart + 1 // 35
+)
+
+// EPHashV6 is a typedef that allows us to replace the type of hash for IPv6 flows
+type EPHashV6 [EPHashSizeV6]byte
+
+// Reverse calculates the reverse of an EPHashV4 (i.e. source / destination switched)
+func (h EPHashV4) Reverse() (rev EPHashV4) {
+
+	// Switch source / destination IP & port information
+	copy(rev[EPHashV4SipStart:EPHashV4SPortEnd], h[EPHashV4DipStart:EPHashV4DPortEnd])
+	copy(rev[EPHashV4DipStart:EPHashV4DPortEnd], h[EPHashV4SipStart:EPHashV4SPortEnd])
+
+	// Copy protocol information as is
+	rev[EPHashV4ProtocolPos] = h[EPHashV4ProtocolPos]
 
 	return
 }
 
-// ClassifyPacketDirection is responsible for running a variety of heuristics on the packet
-// in order to determine its direction. This classification is important since the
-// termination of flows in regular intervals otherwise results in the incapability
-// to correctly assign the appropriate endpoints. Current heuristics include:
-//   - investigating the TCP flags (if available)
-//   - incorporating the port information (with respect to privileged ports)
-//   - dissecting ICMP traffic
-//
-// Return value: according to above enumeration
-//
-//	0: if no classification possible
-//	1: if packet direction is "request" (with high confidence)
-//	2: if packet direction is "response" (with high confidence)
-//	3: if packet direction is "request" (with low confidence -> continue to assess)
-//	4: if packet direction is "response" (with low confidence -> continue to assess)
-func ClassifyPacketDirection(epHash EPHash, isIPv4 bool, auxInfo byte) Direction {
+// IsProbablyReverse performs a very simple heuristic in order to determine if a packet
+// is most likely to be classified as forward or backward (hence allowing to optimize
+// the flow map lookup path)
+func (h EPHashV4) IsProbablyReverse() bool {
 
-	// Check IP protocol
-	switch epHash[36] {
-	case TCP:
-		return classifyTCP(epHash, auxInfo)
-	case UDP:
-		return classifyUDP(epHash, isIPv4)
-	case ICMP:
-		return classifyICMPv4(auxInfo)
-	case ICMPv6:
-		return classifyICMPv6(epHash, auxInfo)
-	default:
+	// If the (alleged) source port is zero, we either removed it or this isn't even
+	// a TCP / UDP packet, so we proceed normally
+	if h[EPHashV4SPortFirstByte] == 0 && h[EPHashV4SPortLastByte] == 0 {
+		return false
 	}
 
-	// if there is no verdict, return "Unknown"
-	return DirectionUnknown
+	// If the (alleged) destination port is zero (bur the source port wasn't) this was a common
+	// port and we nulled it, so we assume it was reverted (because the source port was a common one)
+	if h[EPHashV4DPortFirstByte] == 0 && h[EPHashV4DPortLastByte] == 0 {
+		return true
+	}
+
+	// If the most significant byte is already smaller for the (alleged) source port this
+	// is probably a reverse packet
+	if h[EPHashV4SPortFirstByte] < h[EPHashV4DPortFirstByte] {
+		return true
+	}
+
+	// If the most significant bytes are equal, check again for the least significant one and
+	// follow the same logic
+	if h[EPHashV4SPortFirstByte] == h[EPHashV4DPortFirstByte] {
+		return h[EPHashV4SPortLastByte] < h[EPHashV4DPortLastByte]
+	}
+
+	// Nothing of the above, so we proceed normally
+	return false
 }
 
-const (
-	tcpFlagSYN = 0x02
-	tcpFlagACK = 0x10
-)
+// Reverse calculates the reverse of an EPHashV6 (i.e. source / destination switched)
+func (h EPHashV6) Reverse() (rev EPHashV6) {
 
-func classifyTCP(epHash EPHash, tcpFlags byte) Direction {
+	// Switch source / destination IP & port information
+	copy(rev[EPHashV6SipStart:EPHashV6SPortEnd], h[EPHashV6DipStart:EPHashV6DPortEnd])
+	copy(rev[EPHashV6DipStart:EPHashV6DPortEnd], h[EPHashV6SipStart:EPHashV6SPortEnd])
 
-	// Use the TCP handshake to determine the direction
-	if tcpFlags != 0x00 {
+	// Copy protocol information as is
+	rev[EPHashV6ProtocolPos] = h[EPHashV6ProtocolPos]
 
-		// Handshake stage
-		if tcpFlags&tcpFlagSYN != 0 {
-			if tcpFlags&tcpFlagACK != 0 {
-
-				// SYN-ACK
-				return DirectionReverts
-			}
-
-			// SYN
-			return DirectionRemains
-		}
-	}
-
-	return classifyByPorts(epHash)
+	return
 }
 
-func classifyUDP(epHash EPHash, isIPv4 bool) Direction {
+// IsProbablyReverse performs a very simple heuristic in order to determine if a packet
+// is most likely to be classified as forward or backward (hence allowing to optimize
+// the flow map lookup path)
+func (h EPHashV6) IsProbablyReverse() bool {
 
-	// Handle broadcast / multicast addresses (we do not need to check the
-	// inverse direction because it won't be in multicast format)
-	if isBroadcastMulticast(epHash[16:32], isIPv4) {
-		return DirectionRemains
+	// If the (alleged) source port is zero, we either removed it or this isn't even
+	// a TCP / UDP packet, so we proceed normally
+	if h[EPHashV6SPortFirstByte] == 0 && h[EPHashV6SPortLastByte] == 0 {
+		return false
 	}
 
-	return classifyByPorts(epHash)
-}
-
-const (
-	icmpV4EchoReply              = 0x00
-	icmpV4DestinationUnreachable = 0x03
-	icmpV4EchoRrequest           = 0x08
-	icmpV4TimeExceeded           = 0x0B
-	icmpV4ParameterProblem       = 0x0C
-	icmpV4TimestampRequest       = 0x0D
-	icmpV4TimestampReply         = 0x0E
-)
-
-func classifyICMPv4(icmpType byte) Direction {
-
-	// Check the ICMPv4 Type parameter
-	switch icmpType {
-
-	// Reply-type ICMP v4 messages
-	case icmpV4EchoReply, icmpV4DestinationUnreachable, icmpV4TimeExceeded, icmpV4ParameterProblem, icmpV4TimestampReply:
-		return DirectionReverts
-
-	// Request-type ICMP v4 messages
-	case icmpV4EchoRrequest, icmpV4TimestampRequest:
-		return DirectionRemains
+	// If the (alleged) destination port is zero (bur the source port wasn't) this was a common
+	// port and we nulled it, so we assume it was reverted (because the source port was a common one)
+	if h[EPHashV6DPortFirstByte] == 0 && h[EPHashV6DPortLastByte] == 0 {
+		return true
 	}
 
-	return DirectionUnknown
-}
-
-const (
-	icmpV6EchoReply              = 0x81
-	icmpV6DestinationUnreachable = 0x01
-	icmpV6TimeExceeded           = 0x03
-	icmpV6ParameterProblem       = 0x04
-	icmpV6EchoRrequest           = 0x80
-)
-
-func classifyICMPv6(epHash EPHash, icmpType byte) Direction {
-
-	// Handle broadcast / multicast addresses (we do not need to check the
-	// inverse direction because it won't be in multicast format)
-	if isBroadcastMulticast(epHash[16:32], false) {
-		return DirectionRemains
+	// If the most significant byte is already smaller for the (alleged) source port this
+	// is probably a reverse packet
+	if h[EPHashV6SPortFirstByte] < h[EPHashV6DPortFirstByte] {
+		return true
 	}
 
-	// Check the ICMPv6 Type parameter
-	switch icmpType {
-
-	// Reply-type ICMP v6 messages
-	case icmpV6EchoReply, icmpV6DestinationUnreachable, icmpV6TimeExceeded, icmpV6ParameterProblem:
-		return DirectionReverts
-
-	// Request-type ICMP v6 messages
-	case icmpV6EchoRrequest:
-		return DirectionRemains
+	// If the most significant bytes are equal, check again for the least significant one and
+	// follow the same logic
+	if h[EPHashV6SPortFirstByte] == h[EPHashV6DPortFirstByte] {
+		return h[EPHashV6SPortLastByte] < h[EPHashV6DPortLastByte]
 	}
 
-	return DirectionUnknown
-}
-
-func classifyByPorts(epHash EPHash) Direction {
-	sport := uint16(epHash[34])<<8 | uint16(epHash[35])
-	dport := uint16(epHash[32])<<8 | uint16(epHash[33])
-
-	// Source port is ephemeral
-	if isEphemeralPort(sport) {
-
-		// Destination port is not ephemeral -> Probably this is client -> server
-		if !isEphemeralPort(dport) {
-			return DirectionRemains
-		}
-
-		// Destination port is ephemeral as well
-		// If destination port is smaller than the source port -> Probably this is client -> server
-		if dport < sport {
-			return DirectionRemains
-
-			// If source port is smaller than the destination port -> Probably this is server -> client
-		} else if sport < dport {
-			return DirectionReverts
-		}
-
-		// Source port is not ephemeral
-	} else {
-
-		// Destination port is ephemeral -> Probably this is server -> client
-		if isEphemeralPort(dport) {
-			return DirectionReverts
-		}
-
-		// Destination port is not ephemeral either
-		// If source port is smaller than the destination port -> Probably this is server -> client
-		if sport < dport {
-			return DirectionReverts
-
-			// If destination port is smaller than the source  port -> Probably this is client -> server
-		} else if dport < sport {
-			return DirectionRemains
-		}
-	}
-
-	// Ports are identical, we have nothing to go by and can only assume this is the first packet
-	return DirectionRemains
-}
-
-// Ephemeral ports as union of:
-// -> suggested by IANA / RFC6335 (49152–65535)
-// -> used by most Linux kernels (32768–60999)
-const (
-	MinEphemeralPort uint16 = 32768
-	MaxEphemeralPort uint16 = 65535
-)
-
-func isEphemeralPort(port uint16) bool {
-	return port >= MinEphemeralPort || // Since maxEphemeralPort is 65535 we don't need to check the upper bound
-		port == 0 // We consider an empty port to be ephemaral (because it indicates that the source port was disregarded)
-}
-
-func isBroadcastMulticast(destinationIP []byte, isIPv4 bool) bool {
-	if isIPv4 {
-		// These comparisons are more clumsy than using e.g. bytes.Equal, but they are faster
-		return (destinationIP[0] == 0xFF && destinationIP[1] == 0xFF && destinationIP[2] == 0xFF && destinationIP[3] == 0xFF) ||
-			((destinationIP[0] == 0xE0 && destinationIP[1] == 0x00) && (destinationIP[2] == 0x00 || destinationIP[2] == 0x01))
-	}
-
-	// IPv6 only has the concept of multicast addresses (there are no "broadcasts")
-	// According to RFC4291:
-	// IPv6 multicast addresses are distinguished from unicast addresses by the
-	// value of the high-order octet of the addresses: a value of 0xFF (binary
-	// 11111111) identifies an address as a multicast address; any other value
-	// identifies an address as a unicast address.
-	return destinationIP[0] == 0xFF
+	// Nothing of the above, so we proceed normally
+	return false
 }

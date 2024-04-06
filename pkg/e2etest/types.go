@@ -37,7 +37,8 @@ type mockIface struct {
 	name         string
 	src          *afring.MockSource
 	tracking     *mockTracking
-	flows        *map[capturetypes.EPHash]types.Counters
+	flowsV4      *map[capturetypes.EPHashV4]types.Counters
+	flowsV6      *map[capturetypes.EPHashV6]types.Counters
 	sourceInitFn func(c *capture.Capture) (capture.Source, error)
 
 	sync.RWMutex
@@ -51,15 +52,15 @@ func (m *mockIface) aggregate() hashmap.AggFlowMapWithMetadata {
 
 	// Reusable key conversion buffers
 	keyBufV4, keyBufV6 := types.NewEmptyV4Key(), types.NewEmptyV6Key()
-	for k, v := range *m.flows {
-
-		if types.RawIPToAddr(k[0:16]).Is4() && types.RawIPToAddr(k[16:32]).Is4() {
-			keyBufV4.PutAllV4(k[0:4], k[16:20], k[32:34], k[36])
-			result.SetOrUpdate(keyBufV4, true, v.BytesRcvd, v.BytesSent, v.PacketsRcvd, v.PacketsSent)
-		} else {
-			keyBufV6.PutAllV6(k[0:16], k[16:32], k[32:34], k[36])
-			result.SetOrUpdate(keyBufV6, false, v.BytesRcvd, v.BytesSent, v.PacketsRcvd, v.PacketsSent)
-		}
+	for k, v := range *m.flowsV4 {
+		keyBufV4.PutAllV4(k[capturetypes.EPHashV4SipStart:capturetypes.EPHashV4SipEnd], k[capturetypes.EPHashV4DipStart:capturetypes.EPHashV4DipEnd],
+			k[capturetypes.EPHashV4DPortStart:capturetypes.EPHashV4DPortEnd], k[capturetypes.EPHashV4ProtocolPos])
+		result.SetOrUpdate(keyBufV4, true, v.BytesRcvd, v.BytesSent, v.PacketsRcvd, v.PacketsSent)
+	}
+	for k, v := range *m.flowsV6 {
+		keyBufV6.PutAllV6(k[capturetypes.EPHashV6SipStart:capturetypes.EPHashV6SipEnd], k[capturetypes.EPHashV6DipStart:capturetypes.EPHashV6DipEnd],
+			k[capturetypes.EPHashV6DPortStart:capturetypes.EPHashV6DPortEnd], k[capturetypes.EPHashV6ProtocolPos])
+		result.SetOrUpdate(keyBufV6, false, v.BytesRcvd, v.BytesSent, v.PacketsRcvd, v.PacketsSent)
 	}
 
 	return hashmap.AggFlowMapWithMetadata{
@@ -147,24 +148,49 @@ func (m mockIfaces) BuildResults(t *testing.T, testDir string, valFilterNode *no
 		ifaceMetadata[i].First = resGoQuery.Summary.First
 		ifaceMetadata[i].Last = resGoQuery.Summary.Last
 
-		for k, v := range *iface.flows {
+		for k, v := range *iface.flowsV4 {
 			row := results.Row{
 				Labels: results.Labels{
 					Iface: iface.name,
 				},
 				Attributes: results.Attributes{
-					SrcIP:   types.RawIPToAddr(k[0:16]),
-					DstIP:   types.RawIPToAddr(k[16:32]),
-					IPProto: k[36],
-					DstPort: types.PortToUint16(k[32:34]),
+					SrcIP:   types.RawIPToAddr(k[capturetypes.EPHashV4SipStart:capturetypes.EPHashV4SipEnd]),
+					DstIP:   types.RawIPToAddr(k[capturetypes.EPHashV4DipStart:capturetypes.EPHashV4DipEnd]),
+					IPProto: k[capturetypes.EPHashV4ProtocolPos],
+					DstPort: types.PortToUint16(k[capturetypes.EPHashV4DPortStart:capturetypes.EPHashV4DPortEnd]),
 				},
 				Counters: v,
 			}
 			if valFilterNode == nil || valFilterNode.ValFilter(row.Counters) {
 				res.Rows = append(res.Rows, row)
-				res.Summary.Totals = res.Summary.Totals.Add(v)
+				res.Summary.Totals.Add(v)
 			}
-			ifaceMetadata[i].Counts = ifaceMetadata[i].Counts.Add(v)
+			ifaceMetadata[i].Counts.Add(v)
+			if row.Attributes.SrcIP.Is4() && row.Attributes.DstIP.Is4() {
+				ifaceMetadata[i].Traffic.NumV4Entries++
+			} else {
+				ifaceMetadata[i].Traffic.NumV6Entries++
+			}
+		}
+
+		for k, v := range *iface.flowsV6 {
+			row := results.Row{
+				Labels: results.Labels{
+					Iface: iface.name,
+				},
+				Attributes: results.Attributes{
+					SrcIP:   types.RawIPToAddr(k[capturetypes.EPHashV6SipStart:capturetypes.EPHashV6SipEnd]),
+					DstIP:   types.RawIPToAddr(k[capturetypes.EPHashV6DipStart:capturetypes.EPHashV6DipEnd]),
+					IPProto: k[capturetypes.EPHashV6ProtocolPos],
+					DstPort: types.PortToUint16(k[capturetypes.EPHashV6DPortStart:capturetypes.EPHashV6DPortEnd]),
+				},
+				Counters: v,
+			}
+			if valFilterNode == nil || valFilterNode.ValFilter(row.Counters) {
+				res.Rows = append(res.Rows, row)
+				res.Summary.Totals.Add(v)
+			}
+			ifaceMetadata[i].Counts.Add(v)
 			if row.Attributes.SrcIP.Is4() && row.Attributes.DstIP.Is4() {
 				ifaceMetadata[i].Traffic.NumV4Entries++
 			} else {

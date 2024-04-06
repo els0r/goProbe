@@ -243,8 +243,12 @@ func (c *Capture) process() <-chan error {
 			c.wgProc.Done()
 		}()
 
-		// Main packet capture loop which an interface should be in most of the time
+		// Iniitalize a new local buffer for this interface - this is kept local to avoid
+		// any possibility of escaping to the heap and / or accidental misuse of the underlying
+		// memory area
 		localBuf := new(LocalBuffer)
+
+		// Main packet capture loop which an interface should be in most of the time
 		for {
 
 			// Since lock confirmation is only done from a single goroutine (this one)
@@ -259,59 +263,22 @@ func (c *Capture) process() <-chan error {
 				c.capLock.confirm <- struct{}{} // Confirm that process() is not processing
 
 				// Claim / assign the shared data from the memory pool for / to this buffer
+				// Release is handled in bufferPackets()
 				localBuf.Assign(buf)
 
-				// Continue fetching packets and add them to the local buffer
-				for {
-					if len(c.capLock.done) > 0 {
-						<-c.capLock.done // Consume the unlock request to continue normal processing
-						break
-					}
-
-					// Fetch the next packet form the wire
-					ipLayer, pktType, pktSize, err := c.captureHandle.NextIPPacketZeroCopy()
-					if err != nil {
-
-						// If we receive an unblock event while capturing to buffer, continue
-						if errors.Is(err, capture.ErrCaptureUnblocked) { // capture unblocked (during lock)
-							continue
-						}
-						if errors.Is(err, capture.ErrCaptureStopped) { // capture stopped gracefully
-							localBuf.Release()
-							return
-						}
-
-						localBuf.Release()
-						captureErrors <- fmt.Errorf("capture error while buffering: %w", err)
-						return
-					}
-
-					// Parse the packet and extract relevant data for future addition to the flow log
-					epHash, isIPv4, auxInfo, errno := ParsePacket(ipLayer)
-
-					// Try to append to local buffer. In case the buffer is full, stop buffering and
-					// wait for the unlock request
-					if !localBuf.Add(epHash, pktType, pktSize, isIPv4, auxInfo, errno) {
-						captureErrors <- ErrLocalBufferOverflow
-						<-c.capLock.done // Consume the unlock request to continue normal processing
-						break
-					}
+				// Continue fetching packets and add them to the local buffer - if the method
+				// returns with a non-nil error, it means that graceful termination has been requested
+				if err := c.bufferPackets(localBuf, captureErrors); err != nil {
+					return
 				}
-
-				// Drain buffer if not empty
-				if localBuf.N() > 0 {
-					for i := 0; i < localBuf.N(); i++ {
-						c.addToFlowLog(localBuf.Get(i))
-					}
-				}
-				localBuf.Release()
 
 				// Advance to the next loop iteration in case there is a pending lock
 				continue
 			}
 
 			// Fetch the next packet or PPOLL event from the source
-			if err := c.capturePacket(); err != nil {
+			ipLayer, pktType, pktSize, err := c.captureHandle.NextIPPacketZeroCopy()
+			if err != nil {
 				if errors.Is(err, capture.ErrCaptureUnblocked) { // capture unblocked
 
 					// Advance to the next loop iteration (during which the pending lock will be
@@ -322,8 +289,21 @@ func (c *Capture) process() <-chan error {
 					return
 				}
 
-				captureErrors <- err
+				captureErrors <- fmt.Errorf("capture error: %w", err)
 				return
+			}
+			c.stats.Processed++
+
+			// Parse the packet, extract relevant data and add to the flow log
+			// Note: Since the compiler fails to inline this as a function, it is kept in the main loop
+			if iplayerType := ipLayer.Type(); iplayerType == ipLayerTypeV4 {
+				epHash, direction, errno := ParsePacketV4(ipLayer)
+				c.addToFlowLogV4(epHash, pktType, pktSize, direction, errno)
+			} else if iplayerType == ipLayerTypeV6 {
+				epHash, direction, errno := ParsePacketV6(ipLayer)
+				c.addToFlowLogV6(epHash, pktType, pktSize, direction, errno)
+			} else {
+				c.stats.ParsingErrors[capturetypes.ErrnoInvalidIPHeader]++
 			}
 		}
 	}()
@@ -331,35 +311,172 @@ func (c *Capture) process() <-chan error {
 	return captureErrors
 }
 
-func (c *Capture) capturePacket() error {
+func (c *Capture) bufferPackets(buf *LocalBuffer, captureErrors chan error) error {
 
-	// Fetch the next packet form the wire
-	ipLayer, pktType, pktSize, err := c.captureHandle.NextIPPacketZeroCopy()
-	if err != nil {
+	// Ensure that the buffer is released at the end of the method
+	defer buf.Release()
 
-		// NextPacket should return a ErrCaptureStopped in case the handle is closed or
-		// ErrCaptureUnblock in case the PPOLL was unblocked
-		return fmt.Errorf("capture error: %w", err)
+	// Populate the buffer
+	for {
+		if len(c.capLock.done) > 0 {
+			<-c.capLock.done // Consume the unlock request to continue normal processing
+			break
+		}
+
+		// Fetch the next packet form the wire
+		ipLayer, pktType, pktSize, err := c.captureHandle.NextIPPacketZeroCopy()
+		if err != nil {
+
+			// If we receive an unblock event while capturing to buffer, continue
+			if errors.Is(err, capture.ErrCaptureUnblocked) { // capture unblocked (during lock)
+				continue
+			}
+			if errors.Is(err, capture.ErrCaptureStopped) { // capture stopped gracefully
+
+				// This is the only error we return in order to react with graceful termination
+				// in the calling routine
+				return err
+			}
+
+			captureErrors <- fmt.Errorf("capture error while buffering: %w", err)
+
+			break
+		}
+
+		// Parse the packet and extract relevant data for future addition to the flow log
+		// Note: Since the compiler fails to inline this as a function, it is kept in the
+		// main buffer loop
+		if iplayerType := ipLayer.Type(); iplayerType == ipLayerTypeV4 {
+			epHash, auxInfo, errno := ParsePacketV4(ipLayer)
+
+			// Try to append to local buffer. In case the buffer is full, stop buffering and
+			// wait for the unlock request
+			if !buf.Add(epHash[:], pktType, pktSize, true, auxInfo, errno) {
+				captureErrors <- ErrLocalBufferOverflow
+				<-c.capLock.done // Consume the unlock request to continue normal processing
+				break
+			}
+		} else if iplayerType == ipLayerTypeV6 {
+			epHash, auxInfo, errno := ParsePacketV6(ipLayer)
+
+			// Try to append to local buffer. In case the buffer is full, stop buffering and
+			// wait for the unlock request
+			if !buf.Add(epHash[:], pktType, pktSize, true, auxInfo, errno) {
+				captureErrors <- ErrLocalBufferOverflow
+				<-c.capLock.done // Consume the unlock request to continue normal processing
+				break
+			}
+		} else {
+			c.stats.ParsingErrors[capturetypes.ErrnoInvalidIPHeader]++
+		}
 	}
 
-	// Parse the packet, extract relevant data and add to the flow log
-	epHash, isIPv4, auxInfo, errno := ParsePacket(ipLayer)
-	c.addToFlowLog(epHash, pktType, pktSize, isIPv4, auxInfo, errno)
+	// Drain the buffer (if not empty)
+	for {
+		epHash, pktType, pktSize, isIPv4, auxInfo, errno, ok := buf.Next()
+		if !ok {
+			break
+		}
+		c.stats.Processed++
+
+		if isIPv4 {
+			c.addToFlowLogV4(capturetypes.EPHashV4(epHash), pktType, pktSize, auxInfo, errno)
+			continue
+		}
+		c.addToFlowLogV6(capturetypes.EPHashV6(epHash), pktType, pktSize, auxInfo, errno)
+	}
+
+	// Update the buffer usage gauge for this interface and release the buffer
+	promGlobalBufferUsage.WithLabelValues(c.iface).Set(buf.Usage())
 
 	return nil
 }
 
-func (c *Capture) addToFlowLog(epHash capturetypes.EPHash, pktType byte, pktSize uint32, isIPv4 bool, auxInfo byte, errno capturetypes.ParsingErrno) {
+func (c *Capture) addToFlowLogV4(epHash capturetypes.EPHashV4, pktType byte, pktSize uint32, auxInfo byte, errno capturetypes.ParsingErrno) {
 
 	// Parse / add the received data to the map of flows
-	errno = c.flowLog.Add(epHash, pktType, pktSize, isIPv4, auxInfo, errno)
-	c.stats.Processed++
-	if errno == capturetypes.ErrnoOK {
+	if errno > capturetypes.ErrnoOK {
+		if errno.ParsingFailed() {
+			c.stats.ParsingErrors[errno]++
+		}
 		return
 	}
 
-	if errno.ParsingFailed() {
-		c.stats.ParsingErrors[errno]++
+	// Predict if the packet is most likely to trigger the reverse hash lookup and start with that flow then
+	if epHash.IsProbablyReverse() {
+		epHashReverse := epHash.Reverse()
+		if flowToUpdate, existsReverseHash := c.flowLog.flowMapV4[string(epHashReverse[:])]; existsReverseHash {
+			flowToUpdate.UpdateFlow(pktType, pktSize)
+		} else if flowToUpdate, existsHash := c.flowLog.flowMapV4[string(epHash[:])]; existsHash {
+			flowToUpdate.UpdateFlow(pktType, pktSize)
+		} else {
+			if direction := capturetypes.ClassifyPacketDirectionV4(epHash, auxInfo); direction == capturetypes.DirectionReverts {
+				c.flowLog.flowMapV4[string(epHashReverse[:])] = NewFlow(pktType, pktSize)
+			} else {
+				c.flowLog.flowMapV4[string(epHash[:])] = NewFlow(pktType, pktSize)
+			}
+		}
+		return
+	}
+
+	// Update or assign the flow in forward lookup mode first
+	if flowToUpdate, existsHash := c.flowLog.flowMapV4[string(epHash[:])]; existsHash {
+		flowToUpdate.UpdateFlow(pktType, pktSize)
+	} else {
+		epHashReverse := epHash.Reverse()
+		if flowToUpdate, existsReverseHash := c.flowLog.flowMapV4[string(epHashReverse[:])]; existsReverseHash {
+			flowToUpdate.UpdateFlow(pktType, pktSize)
+		} else {
+			if direction := capturetypes.ClassifyPacketDirectionV4(epHash, auxInfo); direction == capturetypes.DirectionReverts {
+				c.flowLog.flowMapV4[string(epHashReverse[:])] = NewFlow(pktType, pktSize)
+			} else {
+				c.flowLog.flowMapV4[string(epHash[:])] = NewFlow(pktType, pktSize)
+			}
+		}
+	}
+}
+
+func (c *Capture) addToFlowLogV6(epHash capturetypes.EPHashV6, pktType byte, pktSize uint32, auxInfo byte, errno capturetypes.ParsingErrno) {
+
+	// Parse / add the received data to the map of flows
+	if errno > capturetypes.ErrnoOK {
+		if errno.ParsingFailed() {
+			c.stats.ParsingErrors[errno]++
+		}
+		return
+	}
+
+	// Predict if the packet is most likely to trigger the reverse hash lookup and start with that flow then
+	if epHash.IsProbablyReverse() {
+		epHashReverse := epHash.Reverse()
+		if flowToUpdate, existsReverseHash := c.flowLog.flowMapV6[string(epHashReverse[:])]; existsReverseHash {
+			flowToUpdate.UpdateFlow(pktType, pktSize)
+		} else if flowToUpdate, existsHash := c.flowLog.flowMapV6[string(epHash[:])]; existsHash {
+			flowToUpdate.UpdateFlow(pktType, pktSize)
+		} else {
+			if direction := capturetypes.ClassifyPacketDirectionV6(epHash, auxInfo); direction == capturetypes.DirectionReverts {
+				c.flowLog.flowMapV6[string(epHashReverse[:])] = NewFlow(pktType, pktSize)
+			} else {
+				c.flowLog.flowMapV6[string(epHash[:])] = NewFlow(pktType, pktSize)
+			}
+		}
+		return
+	}
+
+	// Update or assign the flow in forward lookup mode first
+	if flowToUpdate, existsHash := c.flowLog.flowMapV6[string(epHash[:])]; existsHash {
+		flowToUpdate.UpdateFlow(pktType, pktSize)
+	} else {
+		epHashReverse := epHash.Reverse()
+		if flowToUpdate, existsReverseHash := c.flowLog.flowMapV6[string(epHashReverse[:])]; existsReverseHash {
+			flowToUpdate.UpdateFlow(pktType, pktSize)
+		} else {
+			if direction := capturetypes.ClassifyPacketDirectionV6(epHash, auxInfo); direction == capturetypes.DirectionReverts {
+				c.flowLog.flowMapV6[string(epHashReverse[:])] = NewFlow(pktType, pktSize)
+			} else {
+				c.flowLog.flowMapV6[string(epHash[:])] = NewFlow(pktType, pktSize)
+			}
+		}
 	}
 }
 

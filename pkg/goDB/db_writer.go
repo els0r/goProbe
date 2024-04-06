@@ -143,7 +143,7 @@ func dbData(aggFlowMap *hashmap.AggFlowMap) ([types.ColIdxCount][]byte, gpfile.S
 		for _, flow := range list {
 
 			// global counters
-			summUpdate.Counts = summUpdate.Counts.Add(flow.Val)
+			summUpdate.Counts.Add(flow.Val)
 
 			// counters
 			bytesRcvd = append(bytesRcvd, flow.BytesRcvd)

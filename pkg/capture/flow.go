@@ -31,24 +31,55 @@ import (
 const (
 	ipLayerTypeV4 = 0x04 // IPv4
 	ipLayerTypeV6 = 0x06 // IPv6
+
+	ipLayerV4BoundsLimit       = ipv4.HeaderLen - 1
+	ipLayerV4ProtoPos          = 9
+	ipLayerV4SipStart          = 12
+	ipLayerV4SipEnd            = 16
+	ipLayerV4DipStart          = 16
+	ipLayerV4DipEnd            = 20
+	ipLayerV4SPortStart        = ipv4.HeaderLen
+	ipLayerV4SPortEnd          = ipv4.HeaderLen + 2
+	ipLayerV4DPortStart        = ipv4.HeaderLen + 2
+	ipLayerV4DPortEnd          = ipv4.HeaderLen + 4
+	ipLayerV4TCPFlagsPos       = ipv4.HeaderLen + 13
+	ipLayerV4FragFlagFirstByte = 6
+	ipLayerV4FragFlagLastByte  = 7
+
+	ipLayerV6BoundsLimit = ipv6.HeaderLen - 1
+	ipLayerV6ProtoPos    = 6
+	ipLayerV6SipStart    = 8
+	ipLayerV6SipEnd      = 24
+	ipLayerV6DipStart    = 24
+	ipLayerV6DipEnd      = 40
+	ipLayerV6SPortStart  = ipv6.HeaderLen
+	ipLayerV6SPortEnd    = ipv6.HeaderLen + 2
+	ipLayerV6DPortStart  = ipv6.HeaderLen + 2
+	ipLayerV6DPortEnd    = ipv6.HeaderLen + 4
+	ipLayerV6TCPFlagsPos = ipv6.HeaderLen + 13
 )
 
 // FlowLog stores flows. It is NOT threadsafe.
 type FlowLog struct {
-	flowMap map[string]*Flow
+	flowMapV4 map[string]*Flow
+	flowMapV6 map[string]*Flow
 }
 
 // NewFlowLog creates a new flow log for storing flows.
 func NewFlowLog() *FlowLog {
 	return &FlowLog{
-		flowMap: make(map[string]*Flow),
+		flowMapV4: make(map[string]*Flow),
+		flowMapV6: make(map[string]*Flow),
 	}
 }
 
 // MarshalJSON implements the jsoniter.Marshaler interface
 func (f *FlowLog) MarshalJSON() ([]byte, error) {
 	var toMarshal []interface{}
-	for _, v := range f.flowMap {
+	for _, v := range f.flowMapV4 {
+		toMarshal = append(toMarshal, v)
+	}
+	for _, v := range f.flowMapV6 {
 		toMarshal = append(toMarshal, v)
 	}
 	return jsoniter.Marshal(toMarshal)
@@ -56,146 +87,124 @@ func (f *FlowLog) MarshalJSON() ([]byte, error) {
 
 // Len returns the number of flows in the FlowLog
 func (f *FlowLog) Len() int {
-	return len(f.flowMap)
+	return len(f.flowMapV4) + len(f.flowMapV6)
 }
 
-// Flows provides an iterator for the internal flow map
-func (f *FlowLog) Flows() map[string]*Flow {
-	return f.flowMap
+// FlowsV4 provides an iterator for the internal flow map
+func (f *FlowLog) FlowsV4() map[string]*Flow {
+	return f.flowMapV4
 }
 
-// ParsePacket processes / extracts all information contained in the IP layer received
+// FlowsV6 provides an iterator for the internal flow map
+func (f *FlowLog) FlowsV6() map[string]*Flow {
+	return f.flowMapV6
+}
+
+// ParsePacketV4 processes / extracts all information contained in the v6 IP layer received
 // from a capture source and converts it to a hash and flags to be added to the flow map
-func ParsePacket(ipLayer capture.IPLayer) (epHash capturetypes.EPHash, isIPv4 bool, auxInfo byte, errno capturetypes.ParsingErrno) {
+func ParsePacketV4(ipLayer capture.IPLayer) (epHash capturetypes.EPHashV4, auxInfo byte, errno capturetypes.ParsingErrno) {
 
-	var protocol byte
-	if ipLayerType := ipLayer.Type(); ipLayerType == ipLayerTypeV4 {
+	_ = ipLayer[ipLayerV4BoundsLimit] // bounds check hint to compiler
+	protocol := ipLayer[ipLayerV4ProtoPos]
 
-		_ = ipLayer[ipv4.HeaderLen-1] // bounds check hint to compiler
+	// Only run the fragmentation checks on fragmented TCP/UDP packets. For
+	// ESP, we don't have any transport layer information so there's no
+	// need to distinguish between ESP fragments or other ESP traffic
+	//
+	// Note: an ESP fragment will carry fragmentation information like any
+	// other IP packet. The fragment offset will of be MTU - 20 bytes (IP layer).
+	if protocol != capturetypes.ESP {
 
-		isIPv4, protocol = true, ipLayer[9]
+		// Check for IP fragmentation
+		fragOffset := (uint16(0x1f&ipLayer[ipLayerV4FragFlagFirstByte]) << 8) | uint16(ipLayer[ipLayerV4FragFlagLastByte])
 
-		// Only run the fragmentation checks on fragmented TCP/UDP packets. For
-		// ESP, we don't have any transport layer information so there's no
-		// need to distinguish between ESP fragments or other ESP traffic
-		//
-		// Note: an ESP fragment will carry fragmentation information like any
-		// other IP packet. The fragment offset will of be MTU - 20 bytes (IP layer).
-		if protocol != capturetypes.ESP {
-
-			// Check for IP fragmentation
-			fragOffset := (uint16(0x1f&ipLayer[6]) << 8) | uint16(ipLayer[7])
-
-			// Skip packet if it carries anything other than the first fragment,
-			// i.e. if the packet lacks a transport layer header
-			if fragOffset != 0 {
-				errno = capturetypes.ErrnoPacketFragmentIgnore
-				return
-			}
+		// Skip packet if it carries anything other than the first fragment,
+		// i.e. if the packet lacks a transport layer header
+		if fragOffset != 0 {
+			errno = capturetypes.ErrnoPacketFragmentIgnore
+			return
 		}
-
-		// Parse IPv4 packet information
-		copy(epHash[0:4], ipLayer[12:16])
-		copy(epHash[16:20], ipLayer[16:20])
-
-		if protocol == capturetypes.TCP || protocol == capturetypes.UDP {
-
-			dport := ipLayer[ipv4.HeaderLen+2 : ipv4.HeaderLen+4]
-			sport := ipLayer[ipv4.HeaderLen : ipv4.HeaderLen+2]
-
-			// If session based traffic is observed, the source port is taken
-			// into account. A major exception is traffic over port 53 as
-			// considering every single DNS request/response would
-			// significantly fill up the flow map
-			if !isCommonPort(dport, protocol) {
-				copy(epHash[34:36], sport)
-			}
-			if !isCommonPort(sport, protocol) {
-				copy(epHash[32:34], dport)
-			}
-
-			if protocol == capturetypes.TCP {
-				if len(ipLayer) < ipv4.HeaderLen+13 {
-					errno = capturetypes.ErrnoPacketTruncated
-					return
-				}
-				auxInfo = ipLayer[ipv4.HeaderLen+13] // store TCP flags
-			}
-		} else if protocol == capturetypes.ICMP {
-			auxInfo = ipLayer[ipv4.HeaderLen] // store ICMP type
-		}
-	} else if ipLayerType == ipLayerTypeV6 {
-
-		_ = ipLayer[ipv6.HeaderLen-1] // bounds check hint to compiler
-
-		protocol = ipLayer[6]
-
-		// Parse IPv6 packet information
-		copy(epHash[0:16], ipLayer[8:24])
-		copy(epHash[16:32], ipLayer[24:40])
-
-		if protocol == capturetypes.TCP || protocol == capturetypes.UDP {
-
-			dport := ipLayer[ipv6.HeaderLen+2 : ipv6.HeaderLen+4]
-			sport := ipLayer[ipv6.HeaderLen : ipv6.HeaderLen+2]
-
-			// If session based traffic is observed, the source port is taken
-			// into account. A major exception is traffic over port 53 as
-			// considering every single DNS request/response would
-			// significantly fill up the flow map
-			if !isCommonPort(dport, protocol) {
-				copy(epHash[34:36], sport)
-			}
-			if !isCommonPort(sport, protocol) {
-				copy(epHash[32:34], dport)
-			}
-
-			if protocol == capturetypes.TCP {
-				if len(ipLayer) < ipv6.HeaderLen+13 {
-					errno = capturetypes.ErrnoPacketTruncated
-					return
-				}
-				auxInfo = ipLayer[ipv6.HeaderLen+13] // store TCP flags
-			}
-		} else if protocol == capturetypes.ICMPv6 {
-			auxInfo = ipLayer[ipv6.HeaderLen] // store ICMP type
-		}
-	} else {
-		errno = capturetypes.ErrnoInvalidIPHeader
-		return
 	}
 
-	epHash[36] = protocol
+	// Parse IPv4 packet information
+	copy(epHash[capturetypes.EPHashV4SipStart:capturetypes.EPHashV4SipEnd], ipLayer[ipLayerV4SipStart:ipLayerV4SipEnd])
+	copy(epHash[capturetypes.EPHashV4DipStart:capturetypes.EPHashV4DipEnd], ipLayer[ipLayerV4DipStart:ipLayerV4DipEnd])
+
+	if protocol == capturetypes.TCP || protocol == capturetypes.UDP {
+
+		dport := ipLayer[ipLayerV4DPortStart:ipLayerV4DPortEnd]
+		sport := ipLayer[ipLayerV4SPortStart:ipLayerV4SPortEnd]
+
+		// If session based traffic is observed, the source port is taken
+		// into account. A major exception is traffic over port 53 as
+		// considering every single DNS request/response would
+		// significantly fill up the flow map
+		if !isCommonPort(dport, protocol) {
+			copy(epHash[capturetypes.EPHashV4SPortStart:capturetypes.EPHashV4SPortEnd], sport)
+		}
+		if !isCommonPort(sport, protocol) {
+			copy(epHash[capturetypes.EPHashV4DPortStart:capturetypes.EPHashV4DPortEnd], dport)
+		}
+
+		if protocol == capturetypes.TCP {
+			if len(ipLayer) < ipLayerV4TCPFlagsPos {
+				errno = capturetypes.ErrnoPacketTruncated
+				return
+			}
+			auxInfo = ipLayer[ipLayerV4TCPFlagsPos] // store TCP flags
+		}
+	} else if protocol == capturetypes.ICMP {
+		auxInfo = ipLayer[ipv4.HeaderLen] // store ICMP type
+	}
+
+	epHash[capturetypes.EPHashV4ProtocolPos] = protocol
 
 	errno = capturetypes.ErrnoOK
 	return
 }
 
-// Add a packet to the flow log. If the packet belongs to a flow
-// already present in the log, the flow will be updated. Otherwise,
-// a new flow will be created.
-func (f *FlowLog) Add(epHash capturetypes.EPHash, pktType byte, pktSize uint32, isIPv4 bool, auxInfo byte, errno capturetypes.ParsingErrno) capturetypes.ParsingErrno {
+// ParsePacketV6 processes / extracts all information contained in the v6 IP layer received
+// from a capture source and converts it to a hash and flags to be added to the flow map
+func ParsePacketV6(ipLayer capture.IPLayer) (epHash capturetypes.EPHashV6, auxInfo byte, errno capturetypes.ParsingErrno) {
 
-	if errno > capturetypes.ErrnoOK {
-		if errno.ParsingFailed() {
-			return errno
+	_ = ipLayer[ipLayerV6BoundsLimit] // bounds check hint to compiler
+	protocol := ipLayer[ipLayerV6ProtoPos]
+
+	// Parse IPv6 packet information
+	copy(epHash[capturetypes.EPHashV6SipStart:capturetypes.EPHashV6SipEnd], ipLayer[ipLayerV6SipStart:ipLayerV6SipEnd])
+	copy(epHash[capturetypes.EPHashV6DipStart:capturetypes.EPHashV6DipEnd], ipLayer[ipLayerV6DipStart:ipLayerV6DipEnd])
+
+	if protocol == capturetypes.TCP || protocol == capturetypes.UDP {
+
+		dport := ipLayer[ipLayerV6DPortStart:ipLayerV6DPortEnd]
+		sport := ipLayer[ipLayerV6SPortStart:ipLayerV6SPortEnd]
+
+		// If session based traffic is observed, the source port is taken
+		// into account. A major exception is traffic over port 53 as
+		// considering every single DNS request/response would
+		// significantly fill up the flow map
+		if !isCommonPort(dport, protocol) {
+			copy(epHash[capturetypes.EPHashV6SPortStart:capturetypes.EPHashV6SPortEnd], sport)
 		}
-		return capturetypes.ErrnoOK
+		if !isCommonPort(sport, protocol) {
+			copy(epHash[capturetypes.EPHashV6DPortStart:capturetypes.EPHashV6DPortEnd], dport)
+		}
+
+		if protocol == capturetypes.TCP {
+			if len(ipLayer) < ipLayerV6TCPFlagsPos {
+				errno = capturetypes.ErrnoPacketTruncated
+				return
+			}
+			auxInfo = ipLayer[ipLayerV6TCPFlagsPos] // store TCP flags
+		}
+	} else if protocol == capturetypes.ICMPv6 {
+		auxInfo = ipLayer[ipv6.HeaderLen] // store ICMP type
 	}
 
-	// update or assign the flow
-	if flowToUpdate, existsHash := f.flowMap[string(epHash[:])]; existsHash {
-		flowToUpdate.UpdateFlow(epHash, auxInfo, pktType, pktSize)
-	} else {
-		epHashReverse := epHash.Reverse()
-		if flowToUpdate, existsReverseHash := f.flowMap[string(epHashReverse[:])]; existsReverseHash {
-			flowToUpdate.UpdateFlow(epHashReverse, auxInfo, pktType, pktSize)
-		} else {
-			f.flowMap[string(epHash[:])] = NewFlow(epHash, isIPv4, auxInfo, pktType, pktSize)
-		}
-	}
+	epHash[capturetypes.EPHashV6ProtocolPos] = protocol
 
-	return capturetypes.ErrnoOK
+	errno = capturetypes.ErrnoOK
+	return
 }
 
 // Rotate rotates the flow log. All flows are reset to no packets and traffic.
@@ -213,23 +222,30 @@ func (f *FlowLog) Rotate() (agg *hashmap.AggFlowMap, totals *types.Counters) {
 // Returns an AggFlowMap containing all flows since the last call to Rotate.
 func (f *FlowLog) Aggregate() (agg *hashmap.AggFlowMap) {
 
+	// Initialize aggregate flow map / result
 	agg = hashmap.NewAggFlowMap()
 
 	// Reusable key conversion buffers
 	keyBufV4, keyBufV6 := types.NewEmptyV4Key(), types.NewEmptyV6Key()
-	for _, v := range f.flowMap {
+	for k, v := range f.flowMapV4 {
 
 		// Check if the flow actually has any interesting information for us
-		if v.packetsRcvd != 0 || v.packetsSent != 0 {
+		if v.PacketsRcvd != 0 || v.PacketsSent != 0 {
 
 			// Populate key buffer according to source flow
-			if v.isIPv4 {
-				keyBufV4.PutAllV4(v.epHash[0:4], v.epHash[16:20], v.epHash[32:34], v.epHash[36])
-				agg.SetOrUpdate(keyBufV4, v.isIPv4, v.bytesRcvd, v.bytesSent, v.packetsRcvd, v.packetsSent)
-			} else {
-				keyBufV6.PutAllV6(v.epHash[0:16], v.epHash[16:32], v.epHash[32:34], v.epHash[36])
-				agg.SetOrUpdate(keyBufV6, v.isIPv4, v.bytesRcvd, v.bytesSent, v.packetsRcvd, v.packetsSent)
-			}
+			keyBufV4.PutV4String(k)
+			agg.PrimaryMap.SetOrUpdate(keyBufV4, v.BytesRcvd, v.BytesSent, v.PacketsRcvd, v.PacketsSent)
+		}
+	}
+
+	for k, v := range f.flowMapV6 {
+
+		// Check if the flow actually has any interesting information for us
+		if v.PacketsRcvd != 0 || v.PacketsSent != 0 {
+
+			// Populate key buffer according to source flow
+			keyBufV6.PutV6String(k)
+			agg.SecondaryMap.SetOrUpdate(keyBufV6, v.BytesRcvd, v.BytesSent, v.PacketsRcvd, v.PacketsSent)
 		}
 	}
 
@@ -247,38 +263,47 @@ func (f *FlowLog) transferAndAggregate() (agg *hashmap.AggFlowMap, totals *types
 	// Create reusable key conversion buffers
 	keyBufV4, keyBufV6 := types.NewEmptyV4Key(), types.NewEmptyV6Key()
 
-	for k, v := range f.flowMap {
+	for k, v := range f.flowMapV4 {
 
 		// Check if the flow actually has any interesting information for us, otherwise
 		// delete it from the FlowMap
-		if v.packetsRcvd > 0 || v.packetsSent > 0 {
-			// update totals
-			totals.BytesRcvd += v.bytesRcvd
-			totals.BytesSent += v.bytesSent
-			totals.PacketsRcvd += v.packetsRcvd
-			totals.PacketsSent += v.packetsSent
+		if v.PacketsRcvd > 0 || v.PacketsSent > 0 {
+
+			// Update totals
+			totals.Add(types.Counters(*v))
 
 			// Populate key buffer according to source flow and update result
-			if v.isIPv4 {
-				keyBufV4.PutAllV4(v.epHash[0:4], v.epHash[16:20], v.epHash[32:34], v.epHash[36])
-				agg.SetOrUpdate(keyBufV4, true, v.bytesRcvd, v.bytesSent, v.packetsRcvd, v.packetsSent)
-			} else {
-				keyBufV6.PutAllV6(v.epHash[0:16], v.epHash[16:32], v.epHash[32:34], v.epHash[36])
-				agg.SetOrUpdate(keyBufV6, false, v.bytesRcvd, v.bytesSent, v.packetsRcvd, v.packetsSent)
-			}
+			keyBufV4.PutV4String(k)
+			agg.PrimaryMap.SetOrUpdate(keyBufV4, v.BytesRcvd, v.BytesSent, v.PacketsRcvd, v.PacketsSent)
 
-			// Check whether the flow should be retained / reset for the next interval
-			// or thrown away
-			if v.directionConfidenceHigh {
-
-				// Reset the flow
-				v.Reset()
-			} else {
-				delete(f.flowMap, k)
-			}
-		} else {
-			delete(f.flowMap, k)
+			// Reset the flow
+			v.Reset()
+			continue
 		}
+
+		delete(f.flowMapV4, k)
+	}
+
+	for k, v := range f.flowMapV6 {
+
+		// Check if the flow actually has any interesting information for us, otherwise
+		// delete it from the FlowMap
+		if v.PacketsRcvd > 0 || v.PacketsSent > 0 {
+
+			// Update totals
+			totals.Add(types.Counters(*v))
+
+			// Populate key buffer according to source flow and update result
+			keyBufV6.PutV6String(k)
+			agg.SecondaryMap.SetOrUpdate(keyBufV6, v.BytesRcvd, v.BytesSent, v.PacketsRcvd, v.PacketsSent)
+
+			// Reset the flow
+			v.Reset()
+			continue
+		}
+
+		delete(f.flowMapV6, k)
+
 	}
 
 	return
@@ -286,76 +311,58 @@ func (f *FlowLog) transferAndAggregate() (agg *hashmap.AggFlowMap, totals *types
 
 func (f *FlowLog) clone() (f2 *FlowLog) {
 	f2 = NewFlowLog()
-	for k, v := range f.flowMap {
+	for k, v := range f.flowMapV4 {
 		vCopy := *v
-		f2.flowMap[k] = &vCopy
+		f2.flowMapV4[k] = &vCopy
+	}
+	for k, v := range f.flowMapV6 {
+		vCopy := *v
+		f2.flowMapV6[k] = &vCopy
 	}
 	return
 }
 
-// Flow stores a goProbe flow
-type Flow struct {
-	epHash capturetypes.EPHash
-
-	// Hash Map Value variables
-	bytesRcvd               uint64
-	bytesSent               uint64
-	packetsRcvd             uint64
-	packetsSent             uint64
-	directionConfidenceHigh bool
-	isIPv4                  bool
-}
-
-// MarshalJSON implements the Marshaler interface for a flow
-func (f *Flow) MarshalJSON() ([]byte, error) {
-	return jsoniter.Marshal(f.toExtendedRow())
-}
+// Flow stores a goProbe flow (alias for types.Counters to allow for extension with
+// flow specific methods)
+type Flow types.Counters
 
 // NewFlow creates a new flow based on the packet
-func NewFlow(epHash capturetypes.EPHash, isIPv4 bool, auxInfo byte, pktType capture.PacketType, pktTotalLen uint32) *Flow {
+func NewFlow(pktType capture.PacketType, pktTotalLen uint32) *Flow {
 
-	res := Flow{
-		epHash: epHash,
-		isIPv4: isIPv4,
-	}
-	res.updateDirection(epHash, auxInfo)
-
-	// set packet and byte counters with respect to its interface direction
-	if pktType != capture.PacketOutgoing {
-		res.bytesRcvd = uint64(pktTotalLen)
-		res.packetsRcvd = 1
-	} else {
-		res.bytesSent = uint64(pktTotalLen)
-		res.packetsSent = 1
+	// Set packet and byte counters with respect to the interface direction
+	if pktType == capture.PacketOutgoing {
+		return &Flow{
+			BytesSent:   uint64(pktTotalLen),
+			PacketsSent: 1,
+		}
 	}
 
-	return &res
+	return &Flow{
+		BytesRcvd:   uint64(pktTotalLen),
+		PacketsRcvd: 1,
+	}
 }
 
 // UpdateFlow increments flow counters if the packet belongs to an existing flow
-func (f *Flow) UpdateFlow(epHash capturetypes.EPHash, auxInfo byte, pktType capture.PacketType, pktTotalLen uint32) {
+func (f *Flow) UpdateFlow(pktType capture.PacketType, pktTotalLen uint32) {
 
 	// increment packet and byte counters with respect to its interface direction
-	if pktType != capture.PacketOutgoing {
-		f.bytesRcvd += uint64(pktTotalLen)
-		f.packetsRcvd++
-	} else {
-		f.bytesSent += uint64(pktTotalLen)
-		f.packetsSent++
+	if pktType == capture.PacketOutgoing {
+		f.BytesSent += uint64(pktTotalLen)
+		f.PacketsSent++
+		return
 	}
 
-	// try to update direction if necessary (as long as we're not confident enough)
-	if !f.directionConfidenceHigh {
-		f.updateDirection(epHash, auxInfo)
-	}
+	f.BytesRcvd += uint64(pktTotalLen)
+	f.PacketsRcvd++
 }
 
-// Reset resets all flow counters
+// Reset resets / null all counter values
 func (f *Flow) Reset() {
-	f.bytesRcvd = 0
-	f.bytesSent = 0
-	f.packetsRcvd = 0
-	f.packetsSent = 0
+	f.BytesRcvd = 0
+	f.BytesSent = 0
+	f.PacketsRcvd = 0
+	f.PacketsSent = 0
 }
 
 // FlowInfo summarizes information about a given flow
@@ -413,55 +420,44 @@ func (fs FlowInfos) TablePrint(w io.Writer) error {
 	return tw.Flush()
 }
 
-func (f *Flow) updateDirection(epHash capturetypes.EPHash, auxInfo byte) {
-	if direction := capturetypes.ClassifyPacketDirection(epHash, f.isIPv4, auxInfo); direction != capturetypes.DirectionUnknown {
-		f.directionConfidenceHigh = direction.IsConfidenceHigh()
+const commonPortsMaxTrackedFirstByte = 31
 
-		// switch fields if direction was opposite to the default direction
-		// "DirectionRemains"
-		if direction == capturetypes.DirectionReverts || direction == capturetypes.DirectionMaybeReverts {
-			f.epHash = epHash.Reverse()
-		}
-	}
-}
+// Byte-level lookup table for common ports (allows for constant-time lookup that is almost as
+// fast as a best case conditional logic)
+var commonPorts = [18][commonPortsMaxTrackedFirstByte + 1][256]bool{
 
-func (f *Flow) toExtendedRow() results.ExtendedRow {
-	return results.ExtendedRow{
-		Attributes: results.ExtendedAttributes{
-			SrcPort: types.PortToUint16(f.epHash[34:36]),
-			Attributes: results.Attributes{
-				SrcIP:   types.RawIPToAddr(f.epHash[0:16]),
-				DstIP:   types.RawIPToAddr(f.epHash[16:32]),
-				DstPort: types.PortToUint16(f.epHash[32:34]),
-				IPProto: f.epHash[36],
-			},
+	// TCP
+	6: {
+		0: {
+			53: true, // 53/TCP (DNS)
+			80: true, // 80/TCP (HTTP)
 		},
-		Counters: types.Counters{
-			BytesRcvd:   f.bytesRcvd,
-			BytesSent:   f.bytesSent,
-			PacketsRcvd: f.packetsRcvd,
-			PacketsSent: f.packetsSent,
+		1: {
+			187: true, // 443/TCP (HTTPS)
+			189: true, // 445/TCP (SMB)
 		},
-	}
+		31: {
+			144: true, // 8080/TCP (Proxy)
+		},
+	},
+
+	// UDP
+	17: {
+		0: {
+			53: true, // 53/UDP (DNS)
+		},
+		1: {
+			187: true, // 443/UDP (streaming etc.)
+		},
+	},
 }
 
 func isCommonPort(port []byte, proto byte) bool {
-	// Fast path for neither of the below
-	if port[0] > 1 {
+
+	// Fast path for unsupported protocols / obvious cases
+	if port[0] > commonPortsMaxTrackedFirstByte || proto > capturetypes.UDP {
 		return false
 	}
 
-	// TCP common ports
-	if proto == capturetypes.TCP {
-		return (port[0] == 0 && (port[1] == 53 || port[1] == 80)) || // DNS(TCP), HTTP
-			(port[0] == 1 && port[1] == 187) // HTTPS
-	}
-
-	// UDP common ports
-	if proto == capturetypes.UDP {
-		return (port[0] == 0 && port[1] == 53) || // DNS(UDP)
-			(port[0] == 1 && port[1] == 187) // 443(UDP)
-	}
-
-	return false
+	return commonPorts[proto][port[0]][port[1]]
 }

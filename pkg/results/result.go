@@ -369,7 +369,8 @@ func (rm RowsMap) MergeRows(r Rows) (merged int) {
 	for _, res := range r {
 		counters, exists := rm[MergeableAttributes{res.Labels, res.Attributes}]
 		if exists {
-			rm[MergeableAttributes{res.Labels, res.Attributes}] = counters.Add(res.Counters)
+			counters.Add(res.Counters)
+			rm[MergeableAttributes{res.Labels, res.Attributes}] = counters
 			merged++
 		} else {
 			rm[MergeableAttributes{res.Labels, res.Attributes}] = res.Counters
@@ -383,7 +384,8 @@ func (rm RowsMap) MergeRowsMap(om RowsMap) (merged int) {
 	for oma, oc := range om {
 		counters, exists := rm[oma]
 		if exists {
-			rm[oma] = counters.Add(oc)
+			counters.Add(oc)
+			rm[oma] = counters
 			merged++
 		} else {
 			rm[oma] = oc

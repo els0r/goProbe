@@ -36,6 +36,14 @@ var promPackets = prometheus.NewCounterVec(prometheus.CounterOpts{
 },
 	[]string{"iface", "direction"},
 )
+var promGlobalBufferUsage = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+	Namespace: config.ServiceName,
+	Subsystem: captureSubsystem,
+	Name:      "global_packet_buffer_usage",
+	Help:      "Percentage of global buffer capacity used during flow map rotation",
+},
+	[]string{"iface"},
+)
 var promNumFlows = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 	Namespace: config.ServiceName,
 	Subsystem: captureSubsystem,
@@ -84,6 +92,7 @@ func init() {
 		promPacketsDropped,
 		promBytes,
 		promPackets,
+		promGlobalBufferUsage,
 		promNumFlows,
 		promCaptureErrors,
 		promInterfacesCapturing,
