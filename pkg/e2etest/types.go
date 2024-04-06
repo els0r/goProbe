@@ -53,11 +53,13 @@ func (m *mockIface) aggregate() hashmap.AggFlowMapWithMetadata {
 	// Reusable key conversion buffers
 	keyBufV4, keyBufV6 := types.NewEmptyV4Key(), types.NewEmptyV6Key()
 	for k, v := range *m.flowsV4 {
-		keyBufV4.PutAllV4(k[0:4], k[6:10], k[10:12], k[12])
+		keyBufV4.PutAllV4(k[capturetypes.EPHashV4SipStart:capturetypes.EPHashV4SipEnd], k[capturetypes.EPHashV4DipStart:capturetypes.EPHashV4DipEnd],
+			k[capturetypes.EPHashV4DPortStart:capturetypes.EPHashV4DPortEnd], k[capturetypes.EPHashV4ProtocolPos])
 		result.SetOrUpdate(keyBufV4, true, v.BytesRcvd, v.BytesSent, v.PacketsRcvd, v.PacketsSent)
 	}
 	for k, v := range *m.flowsV6 {
-		keyBufV6.PutAllV6(k[0:16], k[18:34], k[34:36], k[36])
+		keyBufV6.PutAllV6(k[capturetypes.EPHashV6SipStart:capturetypes.EPHashV6SipEnd], k[capturetypes.EPHashV6DipStart:capturetypes.EPHashV6DipEnd],
+			k[capturetypes.EPHashV6DPortStart:capturetypes.EPHashV6DPortEnd], k[capturetypes.EPHashV6ProtocolPos])
 		result.SetOrUpdate(keyBufV6, false, v.BytesRcvd, v.BytesSent, v.PacketsRcvd, v.PacketsSent)
 	}
 
@@ -152,10 +154,10 @@ func (m mockIfaces) BuildResults(t *testing.T, testDir string, valFilterNode *no
 					Iface: iface.name,
 				},
 				Attributes: results.Attributes{
-					SrcIP:   types.RawIPToAddr(k[0:4]),
-					DstIP:   types.RawIPToAddr(k[6:10]),
-					IPProto: k[12],
-					DstPort: types.PortToUint16(k[10:12]),
+					SrcIP:   types.RawIPToAddr(k[capturetypes.EPHashV4SipStart:capturetypes.EPHashV4SipEnd]),
+					DstIP:   types.RawIPToAddr(k[capturetypes.EPHashV4DipStart:capturetypes.EPHashV4DipEnd]),
+					IPProto: k[capturetypes.EPHashV4ProtocolPos],
+					DstPort: types.PortToUint16(k[capturetypes.EPHashV4DPortStart:capturetypes.EPHashV4DPortEnd]),
 				},
 				Counters: v,
 			}
@@ -177,10 +179,10 @@ func (m mockIfaces) BuildResults(t *testing.T, testDir string, valFilterNode *no
 					Iface: iface.name,
 				},
 				Attributes: results.Attributes{
-					SrcIP:   types.RawIPToAddr(k[0:16]),
-					DstIP:   types.RawIPToAddr(k[18:34]),
-					IPProto: k[36],
-					DstPort: types.PortToUint16(k[34:36]),
+					SrcIP:   types.RawIPToAddr(k[capturetypes.EPHashV6SipStart:capturetypes.EPHashV6SipEnd]),
+					DstIP:   types.RawIPToAddr(k[capturetypes.EPHashV6DipStart:capturetypes.EPHashV6DipEnd]),
+					IPProto: k[capturetypes.EPHashV6ProtocolPos],
+					DstPort: types.PortToUint16(k[capturetypes.EPHashV6DPortStart:capturetypes.EPHashV6DPortEnd]),
 				},
 				Counters: v,
 			}

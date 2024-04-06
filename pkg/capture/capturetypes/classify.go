@@ -18,7 +18,7 @@ package capturetypes
 func ClassifyPacketDirectionV4(epHash EPHashV4, auxInfo byte) Direction {
 
 	// Check IP protocol
-	switch epHash[12] {
+	switch epHash[EPHashV4ProtocolPos] {
 	case TCP:
 
 		// Use the TCP handshake to determine the direction
@@ -43,7 +43,7 @@ func ClassifyPacketDirectionV4(epHash EPHashV4, auxInfo byte) Direction {
 
 		// Handle broadcast / multicast addresses (we do not need to check the
 		// inverse direction because it won't be in multicast format)
-		if isBroadcastMulticastV4(epHash[6:10]) {
+		if isBroadcastMulticastV4(epHash[EPHashV4DipStart:EPHashV4DipEnd]) {
 			return DirectionRemains
 		}
 
@@ -77,7 +77,7 @@ func ClassifyPacketDirectionV4(epHash EPHashV4, auxInfo byte) Direction {
 func ClassifyPacketDirectionV6(epHash EPHashV6, auxInfo byte) Direction {
 
 	// Check IP protocol
-	switch epHash[36] {
+	switch epHash[EPHashV6ProtocolPos] {
 	case TCP:
 
 		// Use the TCP handshake to determine the direction
@@ -102,7 +102,7 @@ func ClassifyPacketDirectionV6(epHash EPHashV6, auxInfo byte) Direction {
 
 		// Handle broadcast / multicast addresses (we do not need to check the
 		// inverse direction because it won't be in multicast format)
-		if isBroadcastMulticastV6(epHash[18:34]) {
+		if isBroadcastMulticastV6(epHash[EPHashV6DipStart:EPHashV6DipEnd]) {
 			return DirectionRemains
 		}
 
@@ -162,7 +162,7 @@ func classifyICMPv6(epHash EPHashV6, icmpType byte) Direction {
 
 	// Handle broadcast / multicast addresses (we do not need to check the
 	// inverse direction because it won't be in multicast format)
-	if isBroadcastMulticastV6(epHash[18:34]) {
+	if isBroadcastMulticastV6(epHash[EPHashV6DipStart:EPHashV6DipEnd]) {
 		return DirectionRemains
 	}
 
@@ -184,23 +184,25 @@ func classifyICMPv6(epHash EPHashV6, icmpType byte) Direction {
 func classifyByPortsV4(epHash EPHashV4) Direction {
 
 	// Compiler hint
-	_ = epHash[11]
+	_ = epHash[EPHashV4ProtocolPos]
 
 	// Source port is ephemeral
-	if isEphemeralPort(epHash[4:6]) {
+	if isEphemeralPort(epHash[EPHashV4SPortStart:EPHashV4SPortEnd]) {
 
 		// Destination port is not ephemeral -> Probably this is client -> server
-		if !isEphemeralPort(epHash[10:12]) {
+		if !isEphemeralPort(epHash[EPHashV4DPortStart:EPHashV4DPortEnd]) {
 			return DirectionRemains
 		}
 
 		// Destination port is ephemeral as well
 		// If destination port is smaller than the source port -> Probably this is client -> server
-		if epHash[10] < epHash[4] || (epHash[10] == epHash[4] && epHash[11] < epHash[5]) {
+		if epHash[EPHashV4DPortFirstByte] < epHash[EPHashV4SPortFirstByte] ||
+			(epHash[EPHashV4DPortFirstByte] == epHash[EPHashV4SPortFirstByte] && epHash[EPHashV4DPortLastByte] < epHash[EPHashV4SPortLastByte]) {
 			return DirectionRemains
 
 			// If source port is smaller than the destination port -> Probably this is server -> client
-		} else if epHash[4] < epHash[10] || (epHash[4] == epHash[10] && epHash[5] < epHash[11]) {
+		} else if epHash[EPHashV4SPortFirstByte] < epHash[EPHashV4DPortFirstByte] ||
+			(epHash[EPHashV4SPortFirstByte] == epHash[EPHashV4DPortFirstByte] && epHash[EPHashV4SPortLastByte] < epHash[EPHashV4DPortLastByte]) {
 			return DirectionReverts
 		}
 
@@ -208,17 +210,19 @@ func classifyByPortsV4(epHash EPHashV4) Direction {
 	} else {
 
 		// Destination port is ephemeral -> Probably this is server -> client
-		if isEphemeralPort(epHash[10:12]) {
+		if isEphemeralPort(epHash[EPHashV4DPortStart:EPHashV4DPortEnd]) {
 			return DirectionReverts
 		}
 
 		// Destination port is not ephemeral either
 		// If source port is smaller than the destination port -> Probably this is server -> client
-		if epHash[4] < epHash[10] || (epHash[4] == epHash[10] && epHash[5] < epHash[11]) {
+		if epHash[EPHashV4SPortFirstByte] < epHash[EPHashV4DPortFirstByte] ||
+			(epHash[EPHashV4SPortFirstByte] == epHash[EPHashV4DPortFirstByte] && epHash[EPHashV4SPortLastByte] < epHash[EPHashV4DPortLastByte]) {
 			return DirectionReverts
 
 			// If destination port is smaller than the source  port -> Probably this is client -> server
-		} else if epHash[10] < epHash[4] || (epHash[10] == epHash[4] && epHash[11] < epHash[5]) {
+		} else if epHash[EPHashV4DPortFirstByte] < epHash[EPHashV4SPortFirstByte] ||
+			(epHash[EPHashV4DPortFirstByte] == epHash[EPHashV4SPortFirstByte] && epHash[EPHashV4DPortLastByte] < epHash[EPHashV4SPortLastByte]) {
 			return DirectionRemains
 		}
 	}
@@ -230,23 +234,25 @@ func classifyByPortsV4(epHash EPHashV4) Direction {
 func classifyByPortsV6(epHash EPHashV6) Direction {
 
 	// Compiler hint
-	_ = epHash[35]
+	_ = epHash[EPHashV6ProtocolPos]
 
 	// Source port is ephemeral
-	if isEphemeralPort(epHash[16:18]) {
+	if isEphemeralPort(epHash[EPHashV6SPortStart:EPHashV6SPortEnd]) {
 
 		// Destination port is not ephemeral -> Probably this is client -> server
-		if !isEphemeralPort(epHash[34:36]) {
+		if !isEphemeralPort(epHash[EPHashV6DPortStart:EPHashV6DPortEnd]) {
 			return DirectionRemains
 		}
 
 		// Destination port is ephemeral as well
 		// If destination port is smaller than the source port -> Probably this is client -> server
-		if epHash[34] < epHash[16] || (epHash[34] == epHash[16] && epHash[35] < epHash[17]) {
+		if epHash[EPHashV6DPortFirstByte] < epHash[EPHashV6SPortFirstByte] ||
+			(epHash[EPHashV6DPortFirstByte] == epHash[EPHashV6SPortFirstByte] && epHash[EPHashV6DPortLastByte] < epHash[EPHashV6SPortLastByte]) {
 			return DirectionRemains
 
 			// If source port is smaller than the destination port -> Probably this is server -> client
-		} else if epHash[16] < epHash[34] || (epHash[16] == epHash[34] && epHash[17] < epHash[35]) {
+		} else if epHash[EPHashV6SPortFirstByte] < epHash[EPHashV6DPortFirstByte] ||
+			(epHash[EPHashV6SPortFirstByte] == epHash[EPHashV6DPortFirstByte] && epHash[EPHashV6SPortLastByte] < epHash[EPHashV6DPortLastByte]) {
 			return DirectionReverts
 		}
 
@@ -254,17 +260,19 @@ func classifyByPortsV6(epHash EPHashV6) Direction {
 	} else {
 
 		// Destination port is ephemeral -> Probably this is server -> client
-		if isEphemeralPort(epHash[34:36]) {
+		if isEphemeralPort(epHash[EPHashV6DPortStart:EPHashV6DPortEnd]) {
 			return DirectionReverts
 		}
 
 		// Destination port is not ephemeral either
 		// If source port is smaller than the destination port -> Probably this is server -> client
-		if epHash[16] < epHash[34] || (epHash[16] == epHash[34] && epHash[17] < epHash[35]) {
+		if epHash[EPHashV6SPortFirstByte] < epHash[EPHashV6DPortFirstByte] ||
+			(epHash[EPHashV6SPortFirstByte] == epHash[EPHashV6DPortFirstByte] && epHash[EPHashV6SPortLastByte] < epHash[EPHashV6DPortLastByte]) {
 			return DirectionReverts
 
 			// If destination port is smaller than the source  port -> Probably this is client -> server
-		} else if epHash[34] < epHash[16] || (epHash[34] == epHash[16] && epHash[35] < epHash[17]) {
+		} else if epHash[EPHashV6DPortFirstByte] < epHash[EPHashV6SPortFirstByte] ||
+			(epHash[EPHashV6DPortFirstByte] == epHash[EPHashV6SPortFirstByte] && epHash[EPHashV6DPortLastByte] < epHash[EPHashV6SPortLastByte]) {
 			return DirectionRemains
 		}
 	}

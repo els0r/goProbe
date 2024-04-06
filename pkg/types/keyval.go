@@ -100,6 +100,7 @@ func (k Key) Len() int {
 
 // PutV4String stores all elements into an existing key (assuming it is an IPv4 key)
 // based on the string representation of an EPHashV4
+// Note: Array indeces must match definitions in packet.go (not used here to avoid import cycle)
 func (k Key) PutV4String(epHashKey string) {
 	copy(k[sipPos:sipPos+IPv4Width], epHashKey[0:4])
 	copy(k[dipPosIPv4:dipPosIPv4+dipDportProtoIPv4Width], epHashKey[6:13])
@@ -107,6 +108,7 @@ func (k Key) PutV4String(epHashKey string) {
 
 // PutV6String stores all elements into an existing key (assuming it is an IPv6 key)
 // based on the string representation of an EPHashV6
+// Note: Array indeces must match definitions in packet.go (not used here to avoid import cycle)
 func (k Key) PutV6String(epHashKey string) {
 	copy(k[sipPos:sipPos+IPv6Width], epHashKey[0:16])
 	copy(k[dipPosIPv6:dipPosIPv6+dipDportProtoIPv6Width], epHashKey[18:37])

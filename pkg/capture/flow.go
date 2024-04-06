@@ -31,6 +31,32 @@ import (
 const (
 	ipLayerTypeV4 = 0x04 // IPv4
 	ipLayerTypeV6 = 0x06 // IPv6
+
+	ipLayerV4BoundsLimit       = ipv4.HeaderLen - 1
+	ipLayerV4ProtoPos          = 9
+	ipLayerV4SipStart          = 12
+	ipLayerV4SipEnd            = 16
+	ipLayerV4DipStart          = 16
+	ipLayerV4DipEnd            = 20
+	ipLayerV4SPortStart        = ipv4.HeaderLen
+	ipLayerV4SPortEnd          = ipv4.HeaderLen + 2
+	ipLayerV4DPortStart        = ipv4.HeaderLen + 2
+	ipLayerV4DPortEnd          = ipv4.HeaderLen + 4
+	ipLayerV4TCPFlagsPos       = ipv4.HeaderLen + 13
+	ipLayerV4FragFlagFirstByte = 6
+	ipLayerV4FragFlagLastByte  = 7
+
+	ipLayerV6BoundsLimit = ipv6.HeaderLen - 1
+	ipLayerV6ProtoPos    = 6
+	ipLayerV6SipStart    = 8
+	ipLayerV6SipEnd      = 24
+	ipLayerV6DipStart    = 24
+	ipLayerV6DipEnd      = 40
+	ipLayerV6SPortStart  = ipv6.HeaderLen
+	ipLayerV6SPortEnd    = ipv6.HeaderLen + 2
+	ipLayerV6DPortStart  = ipv6.HeaderLen + 2
+	ipLayerV6DPortEnd    = ipv6.HeaderLen + 4
+	ipLayerV6TCPFlagsPos = ipv6.HeaderLen + 13
 )
 
 // FlowLog stores flows. It is NOT threadsafe.
@@ -78,8 +104,8 @@ func (f *FlowLog) FlowsV6() map[string]*Flow {
 // from a capture source and converts it to a hash and flags to be added to the flow map
 func ParsePacketV4(ipLayer capture.IPLayer) (epHash capturetypes.EPHashV4, auxInfo byte, errno capturetypes.ParsingErrno) {
 
-	_ = ipLayer[ipv4.HeaderLen-1] // bounds check hint to compiler
-	protocol := ipLayer[9]
+	_ = ipLayer[ipLayerV4BoundsLimit] // bounds check hint to compiler
+	protocol := ipLayer[ipLayerV4ProtoPos]
 
 	// Only run the fragmentation checks on fragmented TCP/UDP packets. For
 	// ESP, we don't have any transport layer information so there's no
@@ -90,7 +116,7 @@ func ParsePacketV4(ipLayer capture.IPLayer) (epHash capturetypes.EPHashV4, auxIn
 	if protocol != capturetypes.ESP {
 
 		// Check for IP fragmentation
-		fragOffset := (uint16(0x1f&ipLayer[6]) << 8) | uint16(ipLayer[7])
+		fragOffset := (uint16(0x1f&ipLayer[ipLayerV4FragFlagFirstByte]) << 8) | uint16(ipLayer[ipLayerV4FragFlagLastByte])
 
 		// Skip packet if it carries anything other than the first fragment,
 		// i.e. if the packet lacks a transport layer header
@@ -101,37 +127,37 @@ func ParsePacketV4(ipLayer capture.IPLayer) (epHash capturetypes.EPHashV4, auxIn
 	}
 
 	// Parse IPv4 packet information
-	copy(epHash[0:4], ipLayer[12:16])
-	copy(epHash[6:10], ipLayer[16:20])
+	copy(epHash[capturetypes.EPHashV4SipStart:capturetypes.EPHashV4SipEnd], ipLayer[ipLayerV4SipStart:ipLayerV4SipEnd])
+	copy(epHash[capturetypes.EPHashV4DipStart:capturetypes.EPHashV4DipEnd], ipLayer[ipLayerV4DipStart:ipLayerV4DipEnd])
 
 	if protocol == capturetypes.TCP || protocol == capturetypes.UDP {
 
-		dport := ipLayer[ipv4.HeaderLen+2 : ipv4.HeaderLen+4]
-		sport := ipLayer[ipv4.HeaderLen : ipv4.HeaderLen+2]
+		dport := ipLayer[ipLayerV4DPortStart:ipLayerV4DPortEnd]
+		sport := ipLayer[ipLayerV4SPortStart:ipLayerV4SPortEnd]
 
 		// If session based traffic is observed, the source port is taken
 		// into account. A major exception is traffic over port 53 as
 		// considering every single DNS request/response would
 		// significantly fill up the flow map
 		if !isCommonPort(dport, protocol) {
-			copy(epHash[4:6], sport)
+			copy(epHash[capturetypes.EPHashV4SPortStart:capturetypes.EPHashV4SPortEnd], sport)
 		}
 		if !isCommonPort(sport, protocol) {
-			copy(epHash[10:12], dport)
+			copy(epHash[capturetypes.EPHashV4DPortStart:capturetypes.EPHashV4DPortEnd], dport)
 		}
 
 		if protocol == capturetypes.TCP {
-			if len(ipLayer) < ipv4.HeaderLen+13 {
+			if len(ipLayer) < ipLayerV4TCPFlagsPos {
 				errno = capturetypes.ErrnoPacketTruncated
 				return
 			}
-			auxInfo = ipLayer[ipv4.HeaderLen+13] // store TCP flags
+			auxInfo = ipLayer[ipLayerV4TCPFlagsPos] // store TCP flags
 		}
 	} else if protocol == capturetypes.ICMP {
 		auxInfo = ipLayer[ipv4.HeaderLen] // store ICMP type
 	}
 
-	epHash[12] = protocol
+	epHash[capturetypes.EPHashV4ProtocolPos] = protocol
 
 	errno = capturetypes.ErrnoOK
 	return
@@ -141,41 +167,41 @@ func ParsePacketV4(ipLayer capture.IPLayer) (epHash capturetypes.EPHashV4, auxIn
 // from a capture source and converts it to a hash and flags to be added to the flow map
 func ParsePacketV6(ipLayer capture.IPLayer) (epHash capturetypes.EPHashV6, auxInfo byte, errno capturetypes.ParsingErrno) {
 
-	_ = ipLayer[ipv6.HeaderLen-1] // bounds check hint to compiler
-	protocol := ipLayer[6]
+	_ = ipLayer[ipLayerV6BoundsLimit] // bounds check hint to compiler
+	protocol := ipLayer[ipLayerV6ProtoPos]
 
 	// Parse IPv6 packet information
-	copy(epHash[0:16], ipLayer[8:24])
-	copy(epHash[18:34], ipLayer[24:40])
+	copy(epHash[capturetypes.EPHashV6SipStart:capturetypes.EPHashV6SipEnd], ipLayer[ipLayerV6SipStart:ipLayerV6SipEnd])
+	copy(epHash[capturetypes.EPHashV6DipStart:capturetypes.EPHashV6DipEnd], ipLayer[ipLayerV6DipStart:ipLayerV6DipEnd])
 
 	if protocol == capturetypes.TCP || protocol == capturetypes.UDP {
 
-		dport := ipLayer[ipv6.HeaderLen+2 : ipv6.HeaderLen+4]
-		sport := ipLayer[ipv6.HeaderLen : ipv6.HeaderLen+2]
+		dport := ipLayer[ipLayerV6DPortStart:ipLayerV6DPortEnd]
+		sport := ipLayer[ipLayerV6SPortStart:ipLayerV6SPortEnd]
 
 		// If session based traffic is observed, the source port is taken
 		// into account. A major exception is traffic over port 53 as
 		// considering every single DNS request/response would
 		// significantly fill up the flow map
 		if !isCommonPort(dport, protocol) {
-			copy(epHash[16:18], sport)
+			copy(epHash[capturetypes.EPHashV6SPortStart:capturetypes.EPHashV6SPortEnd], sport)
 		}
 		if !isCommonPort(sport, protocol) {
-			copy(epHash[34:36], dport)
+			copy(epHash[capturetypes.EPHashV6DPortStart:capturetypes.EPHashV6DPortEnd], dport)
 		}
 
 		if protocol == capturetypes.TCP {
-			if len(ipLayer) < ipv6.HeaderLen+13 {
+			if len(ipLayer) < ipLayerV6TCPFlagsPos {
 				errno = capturetypes.ErrnoPacketTruncated
 				return
 			}
-			auxInfo = ipLayer[ipv6.HeaderLen+13] // store TCP flags
+			auxInfo = ipLayer[ipLayerV6TCPFlagsPos] // store TCP flags
 		}
 	} else if protocol == capturetypes.ICMPv6 {
 		auxInfo = ipLayer[ipv6.HeaderLen] // store ICMP type
 	}
 
-	epHash[36] = protocol
+	epHash[capturetypes.EPHashV6ProtocolPos] = protocol
 
 	errno = capturetypes.ErrnoOK
 	return
@@ -394,9 +420,11 @@ func (fs FlowInfos) TablePrint(w io.Writer) error {
 	return tw.Flush()
 }
 
+const commonPortsMaxTrackedFirstByte = 31
+
 // Byte-level lookup table for common ports (allows for constant-time lookup that is almost as
 // fast as a best case conditional logic)
-var commonPorts = [18][32][256]bool{
+var commonPorts = [18][commonPortsMaxTrackedFirstByte + 1][256]bool{
 
 	// TCP
 	6: {
@@ -427,7 +455,7 @@ var commonPorts = [18][32][256]bool{
 func isCommonPort(port []byte, proto byte) bool {
 
 	// Fast path for unsupported protocols / obvious cases
-	if port[0] > 31 || proto > capturetypes.UDP {
+	if port[0] > commonPortsMaxTrackedFirstByte || proto > capturetypes.UDP {
 		return false
 	}
 

@@ -281,13 +281,13 @@ func benchmarkRotation(b *testing.B, nIP uint32, nSPort, nDPort uint16) {
 				switch {
 
 				// If the destination port is a common one, we expect a non-reverse situation
-				case isCommonPort(epHash[10:12], 17):
+				case isCommonPort(epHash[capturetypes.EPHashV4DPortStart:capturetypes.EPHashV4DPortEnd], 17):
 					if epHash.IsProbablyReverse() {
 						b.Fatalf("unexpectedly detected probably reverse packet for %s", ipLayer.String())
 					}
 
 				// If the source port is a common one, we expect a reverse situation
-				case isCommonPort(epHash[4:6], 17):
+				case isCommonPort(epHash[capturetypes.EPHashV4SPortStart:capturetypes.EPHashV4SPortEnd], 17):
 					if !epHash.IsProbablyReverse() {
 						b.Fatalf("unexpectedly didn't detect probably reverse packet for %s", ipLayer.String())
 					}

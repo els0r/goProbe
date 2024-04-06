@@ -241,22 +241,22 @@ func (p testParams) genEPHash() (res []byte, IsIPv4 bool) {
 		epHash := capturetypes.EPHashV4{}
 
 		tmpSrc, tmpDst := src.As4(), dst.As4()
-		copy(epHash[0:], tmpSrc[:])
-		copy(epHash[6:], tmpDst[:])
-		binary.BigEndian.PutUint16(epHash[10:12], p.dport)
-		binary.BigEndian.PutUint16(epHash[4:6], p.sport)
-		epHash[12] = p.proto
+		copy(epHash[capturetypes.EPHashV4SipStart:], tmpSrc[:])
+		copy(epHash[capturetypes.EPHashV4DipStart:], tmpDst[:])
+		binary.BigEndian.PutUint16(epHash[capturetypes.EPHashV4DPortStart:capturetypes.EPHashV4DPortEnd], p.dport)
+		binary.BigEndian.PutUint16(epHash[capturetypes.EPHashV4SPortStart:capturetypes.EPHashV4SPortEnd], p.sport)
+		epHash[capturetypes.EPHashV4ProtocolPos] = p.proto
 
 		res = epHash[:]
 	} else {
 		epHash := capturetypes.EPHashV6{}
 
 		tmpSrc, tmpDst := src.As16(), dst.As16()
-		copy(epHash[0:], tmpSrc[:])
-		copy(epHash[18:], tmpDst[:])
-		binary.BigEndian.PutUint16(epHash[34:36], p.dport)
-		binary.BigEndian.PutUint16(epHash[16:18], p.sport)
-		epHash[36] = p.proto
+		copy(epHash[capturetypes.EPHashV6SipStart:], tmpSrc[:])
+		copy(epHash[capturetypes.EPHashV6DipStart:], tmpDst[:])
+		binary.BigEndian.PutUint16(epHash[capturetypes.EPHashV6DPortStart:capturetypes.EPHashV6DPortEnd], p.dport)
+		binary.BigEndian.PutUint16(epHash[capturetypes.EPHashV6SPortStart:capturetypes.EPHashV6SPortEnd], p.sport)
+		epHash[capturetypes.EPHashV6ProtocolPos] = p.proto
 
 		res = epHash[:]
 	}
@@ -272,21 +272,21 @@ func (p testParams) genDummyPacket(pktType capture.PacketType) capture.Packet {
 		epHash := capturetypes.EPHashV4(epHashData)
 
 		data[0] = (4 << 4)
-		data[9] = p.proto
-		copy(data[12:16], epHash[0:4])
-		copy(data[16:20], epHash[6:10])
-		copy(data[ipv4.HeaderLen:ipv4.HeaderLen+2], epHash[4:6])
-		copy(data[ipv4.HeaderLen+2:ipv4.HeaderLen+4], epHash[10:12])
+		data[ipLayerV4ProtoPos] = p.proto
+		copy(data[ipLayerV4SipStart:ipLayerV4SipEnd], epHash[capturetypes.EPHashV4SipStart:capturetypes.EPHashV4SipEnd])
+		copy(data[ipLayerV4DipStart:ipLayerV4DipEnd], epHash[capturetypes.EPHashV4DipStart:capturetypes.EPHashV4DipEnd])
+		copy(data[ipLayerV4SPortStart:ipLayerV4SPortEnd], epHash[capturetypes.EPHashV4SPortStart:capturetypes.EPHashV4SPortEnd])
+		copy(data[ipLayerV4DPortStart:ipLayerV4DPortEnd], epHash[capturetypes.EPHashV4DPortStart:capturetypes.EPHashV4DPortEnd])
 
 	} else {
 		epHash := capturetypes.EPHashV6(epHashData)
 
 		data[0] = (6 << 4)
-		data[6] = p.proto
-		copy(data[8:24], epHash[0:16])
-		copy(data[24:40], epHash[18:34])
-		copy(data[ipv6.HeaderLen:ipv6.HeaderLen+2], epHash[16:18])
-		copy(data[ipv6.HeaderLen+2:ipv6.HeaderLen+4], epHash[34:36])
+		data[ipLayerV6ProtoPos] = p.proto
+		copy(data[ipLayerV6SipStart:ipLayerV6SipEnd], epHash[capturetypes.EPHashV6SipStart:capturetypes.EPHashV6SipEnd])
+		copy(data[ipLayerV6DipStart:ipLayerV6DipEnd], epHash[capturetypes.EPHashV6DipStart:capturetypes.EPHashV6DipEnd])
+		copy(data[ipLayerV6SPortStart:ipLayerV6SPortEnd], epHash[capturetypes.EPHashV6SPortStart:capturetypes.EPHashV6SPortEnd])
+		copy(data[ipLayerV6DPortStart:ipLayerV6DPortEnd], epHash[capturetypes.EPHashV6DPortStart:capturetypes.EPHashV6DPortEnd])
 	}
 
 	return capture.NewIPPacket(nil, data, pktType, 128, 0)
