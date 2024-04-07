@@ -1,6 +1,6 @@
 module github.com/els0r/goProbe
 
-go 1.22
+go 1.22.1
 
 replace github.com/els0r/goProbe/plugins/contrib => ./plugins/contrib
 
