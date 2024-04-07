@@ -8,7 +8,7 @@ jobs:
   title-rules:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/github-script@v6
+      - uses: actions/github-script@v7
         with:
           script: |
             const REGEX = new RegExp('^(\\[(feature|bugfix|doc|security|trivial)\\])+ [A-Z].+'); // Title must match this regex
