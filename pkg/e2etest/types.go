@@ -25,10 +25,12 @@ import (
 )
 
 type mockTracking struct {
-	nRead       uint64
-	nProcessed  uint64
-	nErr        uint64
-	nErrTracked uint64
+	nRead           uint64
+	nProcessed      uint64
+	nParsed         uint64
+	nParsedOrFailed uint64
+	nErr            uint64
+	nErrTracked     uint64
 
 	done chan struct{}
 }
@@ -105,6 +107,24 @@ func (m mockIfaces) NProcessed() (res uint64) {
 	for _, v := range m {
 		v.RLock()
 		res += v.tracking.nProcessed
+		v.RUnlock()
+	}
+	return
+}
+
+func (m mockIfaces) NParsed() (res uint64) {
+	for _, v := range m {
+		v.RLock()
+		res += v.tracking.nParsed
+		v.RUnlock()
+	}
+	return
+}
+
+func (m mockIfaces) NParsedOrFailed() (res uint64) {
+	for _, v := range m {
+		v.RLock()
+		res += v.tracking.nParsedOrFailed
 		v.RUnlock()
 	}
 	return
@@ -234,11 +254,11 @@ func (m mockIfaces) KillGoProbeOnceDone(cm *capture.Manager, flows chan hashmap.
 
 		// Grab the number of overall received / processed packets in all captures and
 		// wait until they match the number of read packets
-		var nProcessed uint64
+		var nReceived uint64
 		for _, st := range cm.Status(ctx) {
-			nProcessed += st.ProcessedTotal
+			nReceived += st.ReceivedTotal
 		}
-		if nRead == 0 || nProcessed != nRead {
+		if nRead == 0 || nReceived != nRead {
 			continue
 		}
 

@@ -5,7 +5,7 @@ type ParsingErrno int8
 
 const (
 	// ErrnoOK : No Error
-	ErrnoOK ParsingErrno = iota - 2
+	ErrnoOK ParsingErrno = iota - 1
 
 	// ErrnoPacketFragmentIgnore : packet fragment does not carry relevant information
 	// (will be skipped as non-error)
@@ -23,6 +23,7 @@ const (
 
 // ParsingErrnoNames maps a ParsingErrno to a string
 var ParsingErrnoNames = [NumParsingErrors]string{
+	"packet fragmented",
 	"invalid IP header",
 	"packet truncated",
 }
@@ -41,8 +42,18 @@ func (e ParsingErrno) ParsingFailed() bool {
 // all available parsing error (errno) types
 type ParsingErrTracker [NumParsingErrors]int
 
-// Sum returns the sum of all errors currently tracked in the error table
+// Sum returns the sum of all errors (inclunding non-critical ones) currently tracked
+// in the error table
 func (e *ParsingErrTracker) Sum() (res int) {
+	for i := ErrnoPacketFragmentIgnore; i < NumParsingErrors; i++ {
+		res += e[i]
+	}
+	return
+}
+
+// SumFailed returns the sum of all errors (that prevent packet processing) currently tracked
+// in the error table
+func (e *ParsingErrTracker) SumFailed() (res int) {
 	for i := ErrnoInvalidIPHeader; i < NumParsingErrors; i++ {
 		res += e[i]
 	}
@@ -51,7 +62,7 @@ func (e *ParsingErrTracker) Sum() (res int) {
 
 // Reset resets all error counters in the error table (for reuse)
 func (e *ParsingErrTracker) Reset() {
-	for i := ErrnoInvalidIPHeader; i < NumParsingErrors; i++ {
+	for i := ErrnoPacketFragmentIgnore; i < NumParsingErrors; i++ {
 		e[i] = 0
 	}
 }
