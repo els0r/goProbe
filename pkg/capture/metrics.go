@@ -60,13 +60,13 @@ var promPacketsDropped = prometheus.NewCounterVec(prometheus.CounterOpts{
 },
 	[]string{"iface"},
 )
-var promCaptureErrors = prometheus.NewCounterVec(prometheus.CounterOpts{
+var promCaptureIssues = prometheus.NewCounterVec(prometheus.CounterOpts{
 	Namespace: config.ServiceName,
 	Subsystem: captureSubsystem,
-	Name:      "errors_total",
-	Help:      "Number of errors encountered during packet capture",
+	Name:      "capture_issues_total",
+	Help:      "Number of unexpected issues encountered during packet capture",
 },
-	[]string{"iface"},
+	[]string{"iface", "issue_type"},
 )
 
 var promInterfacesCapturing = prometheus.NewGauge(prometheus.GaugeOpts{
@@ -94,7 +94,7 @@ func init() {
 		promPackets,
 		promGlobalBufferUsage,
 		promNumFlows,
-		promCaptureErrors,
+		promCaptureIssues,
 		promInterfacesCapturing,
 		promRotationDuration,
 	)
@@ -115,5 +115,5 @@ func ResetCountersTestingOnly() {
 	promPackets.Reset()
 	promNumFlows.Reset()
 	promPacketsDropped.Reset()
-	promCaptureErrors.Reset()
+	promCaptureIssues.Reset()
 }

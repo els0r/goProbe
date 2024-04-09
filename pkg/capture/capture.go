@@ -292,17 +292,39 @@ func (c *Capture) process() <-chan error {
 				captureErrors <- fmt.Errorf("capture error: %w", err)
 				return
 			}
-			c.stats.Processed++
 
 			// Parse the packet, extract relevant data and add to the flow log
 			// Note: Since the compiler fails to inline this as a function, it is kept in the main loop
 			if iplayerType := ipLayer.Type(); iplayerType == ipLayerTypeV4 {
 				epHash, direction, errno := ParsePacketV4(ipLayer)
+
+				// Check for issues / errors during parsing (checked inline to avoid unnecessary function
+				// call to ParsePacket...())
+				// Note: c.stats.Processed can only be incremented _after_ this condition because
+				// we do not want to count packet fragments (expect for the first)
+				if errno > capturetypes.ErrnoOK {
+					c.updateParsingErrorCounters(errno)
+					continue
+				}
+
+				c.stats.Processed++
 				c.addToFlowLogV4(epHash, pktType, pktSize, direction, errno)
 			} else if iplayerType == ipLayerTypeV6 {
 				epHash, direction, errno := ParsePacketV6(ipLayer)
+
+				// Check for issues / errors during parsing (checked inline to avoid unnecessary function
+				// call to ParsePacket...())
+				// Note: c.stats.Processed can only be incremented _after_ this condition because
+				// we do not want to count packet fragments (expect for the first)
+				if errno > capturetypes.ErrnoOK {
+					c.updateParsingErrorCounters(errno)
+					continue
+				}
+
+				c.stats.Processed++
 				c.addToFlowLogV6(epHash, pktType, pktSize, direction, errno)
 			} else {
+				c.stats.Processed++
 				c.stats.ParsingErrors[capturetypes.ErrnoInvalidIPHeader]++
 			}
 		}
@@ -366,9 +388,9 @@ func (c *Capture) bufferPackets(buf *LocalBuffer, captureErrors chan error) erro
 				<-c.capLock.done // Consume the unlock request to continue normal processing
 				break
 			}
-		} else {
-			c.stats.ParsingErrors[capturetypes.ErrnoInvalidIPHeader]++
 		}
+		// We cannot track invalid IP header packets during buffering (because it would
+		// introduce a race condition or required cumbersome additional structures)
 	}
 
 	// Drain the buffer (if not empty)
@@ -376,6 +398,14 @@ func (c *Capture) bufferPackets(buf *LocalBuffer, captureErrors chan error) erro
 		epHash, pktType, pktSize, isIPv4, auxInfo, errno, ok := buf.Next()
 		if !ok {
 			break
+		}
+
+		// Check for issues / errors during parsing
+		// Note: c.stats.Processed can only be incremented _after_ this condition because
+		// we do not want to count packet fragments (expect for the first)
+		if errno > capturetypes.ErrnoOK {
+			c.updateParsingErrorCounters(errno)
+			continue
 		}
 		c.stats.Processed++
 
@@ -392,15 +422,18 @@ func (c *Capture) bufferPackets(buf *LocalBuffer, captureErrors chan error) erro
 	return nil
 }
 
-func (c *Capture) addToFlowLogV4(epHash capturetypes.EPHashV4, pktType byte, pktSize uint32, auxInfo byte, errno capturetypes.ParsingErrno) {
+func (c *Capture) updateParsingErrorCounters(errno capturetypes.ParsingErrno) {
 
-	// Parse / add the received data to the map of flows
-	if errno > capturetypes.ErrnoOK {
-		if errno.ParsingFailed() {
-			c.stats.ParsingErrors[errno]++
-		}
-		return
+	// Increment metrics / counter for the respective errno / type
+	c.stats.ParsingErrors[errno]++
+
+	// If the error is due to parsing issues, we still count the packet as processed
+	if errno.ParsingFailed() {
+		c.stats.Processed++
 	}
+}
+
+func (c *Capture) addToFlowLogV4(epHash capturetypes.EPHashV4, pktType byte, pktSize uint32, auxInfo byte, errno capturetypes.ParsingErrno) {
 
 	// Predict if the packet is most likely to trigger the reverse hash lookup and start with that flow then
 	if epHash.IsProbablyReverse() {
@@ -437,14 +470,6 @@ func (c *Capture) addToFlowLogV4(epHash capturetypes.EPHashV4, pktType byte, pkt
 }
 
 func (c *Capture) addToFlowLogV6(epHash capturetypes.EPHashV6, pktType byte, pktSize uint32, auxInfo byte, errno capturetypes.ParsingErrno) {
-
-	// Parse / add the received data to the map of flows
-	if errno > capturetypes.ErrnoOK {
-		if errno.ParsingFailed() {
-			c.stats.ParsingErrors[errno]++
-		}
-		return
-	}
 
 	// Predict if the packet is most likely to trigger the reverse hash lookup and start with that flow then
 	if epHash.IsProbablyReverse() {
@@ -491,16 +516,24 @@ func (c *Capture) status() (*capturetypes.CaptureStats, error) {
 	c.stats.ProcessedTotal += c.stats.Processed
 	c.stats.DroppedTotal += stats.PacketsDropped
 
-	// add exposed metrics
-	// we do this every 5 minutes only in order not to interfere with the
-	// main packet processing loop. If this counter moves slowly (as in gets
-	// gets an update only every 5 minutes) it's not an issue to understand
-	// processed data volumes across longer time frames
-	go func(iface string, processed, dropped, errors uint64) {
+	// Add exposed metrics
+	// We do this only upon rotation and / or explicit status call in order not to interfere
+	// with the main packet processing loop (or introduce race conditions). If this counter
+	// moves slowly (as in gets gets an update only every ~5 minutes) it's not an issue to
+	// understand processed data volumes across longer time frames
+	go func(iface string, processed, dropped uint64, captureIssues capturetypes.ParsingErrTracker) {
+
+		// Count total packet stats
 		promPacketsProcessed.WithLabelValues(iface).Add(float64(processed))
 		promPacketsDropped.WithLabelValues(iface).Add(float64(dropped))
-		promCaptureErrors.WithLabelValues(iface).Add(float64(errors))
-	}(c.iface, c.stats.Processed, stats.PacketsDropped, uint64(c.stats.ParsingErrors.Sum()))
+
+		// Count the individual packet parsing issues / errors (note that this operates on a copy
+		// of the provided ParsingErrTracker which is unaffected by the Reset() performed on the original
+		// array outside of this goroutine)
+		for i := capturetypes.ErrnoPacketFragmentIgnore; i < capturetypes.NumParsingErrors; i++ {
+			promCaptureIssues.WithLabelValues(iface, i.String()).Add(float64(captureIssues[i]))
+		}
+	}(c.iface, c.stats.Processed, stats.PacketsDropped, c.stats.ParsingErrors)
 
 	res := capturetypes.CaptureStats{
 		StartedAt:      c.startedAt,

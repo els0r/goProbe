@@ -313,8 +313,8 @@ func testE2E(t *testing.T, valFilterDescriptor int, datasets ...[]byte) {
 
 	// Counter consistency checks
 	if valFilterNode == nil {
-		require.Equalf(t, mockIfaces.NProcessed(), resGoQuery.Summary.Totals.PacketsRcvd, "expected: %d, actual %d", mockIfaces.NProcessed(), resGoQuery.Summary.Totals.PacketsRcvd)
-		require.Equalf(t, mockIfaces.NProcessed(), mockIfaces.NRead()-mockIfaces.NErr(), "expected: %d, actual %d - %d", mockIfaces.NProcessed(), mockIfaces.NRead(), mockIfaces.NErr())
+		require.EqualValuesf(t, mockIfaces.NParsed(), resGoQuery.Summary.Totals.PacketsRcvd, "expected: %d, actual %d", mockIfaces.NParsed(), resGoQuery.Summary.Totals.PacketsRcvd)
+		require.EqualValuesf(t, mockIfaces.NParsed(), mockIfaces.NRead()-mockIfaces.NErr(), "expected: %d, actual %d - %d", mockIfaces.NParsed(), mockIfaces.NRead(), mockIfaces.NErr())
 	}
 
 	// List target consistency check (do not fail yet to show details in the next check)
@@ -372,28 +372,51 @@ func validateMetrics(t *testing.T, mockIfaces mockIfaces) {
 	metrics, err := prometheus.DefaultGatherer.Gather()
 	require.Nil(t, err)
 
+	metricsValidated := 0
 	for _, metric := range metrics {
 		switch metric.GetName() {
-		case "packets_processed_total":
+		case "goprobe_capture_packets_processed_total":
 			var sum float64
 			for _, metricVal := range metric.Metric {
 				sum += metricVal.Counter.GetValue()
 			}
-			require.Equal(t, float64(mockIfaces.NProcessed()), sum)
-		case "goprobe_capture_errors_total":
-			var sum float64
+			require.Equal(t, float64(mockIfaces.NParsedOrFailed()), sum)
+			metricsValidated++
+		case "goprobe_capture_capture_issues_total":
+			var sum, sumTracked float64
 			for _, metricVal := range metric.Metric {
+
+				// We handle packet fragments different from actual parsing errors
+				labels := metricVal.GetLabel()
+				isParsingError := true
+				for _, label := range labels {
+					if label.GetName() == "issue_type" && label.GetValue() == capturetypes.ErrnoPacketFragmentIgnore.String() {
+						isParsingError = false
+						break
+					}
+				}
+
 				sum += metricVal.Counter.GetValue()
+				if isParsingError {
+					sumTracked += metricVal.Counter.GetValue()
+				}
 			}
-			require.Equal(t, float64(mockIfaces.NErrTracked()), sum)
-		case "packets_dropped_total":
+
+			require.Equal(t, float64(mockIfaces.NErr()), sum)
+			require.Equal(t, float64(mockIfaces.NErrTracked()), sumTracked)
+			metricsValidated++
+		case "goprobe_capture_packets_dropped_total":
 			var sum float64
 			for _, metricVal := range metric.Metric {
 				sum += metricVal.Counter.GetValue()
 			}
 			require.Zero(t, sum)
+			metricsValidated++
 		}
 	}
+
+	// Brute force cross-check that we actually validated all relevant metrics
+	require.Equal(t, 3, metricsValidated)
 
 	// Reset all Prometheus counters for the next E2E test to avoid double counting
 	capture.ResetCountersTestingOnly()
@@ -536,19 +559,21 @@ func newPcapSource(t testing.TB, name string, data []byte) (res *mockIface) {
 
 			pkt = slimcap.NewIPPacket(pkt, payload, pktType, int(totalLen), ipLayerOffset)
 			ipLayer := pkt.IPLayer()
+			res.tracking.nProcessed++
 
 			if ipLayerType := ipLayer.Type(); ipLayerType == 0x04 {
 				hash, auxInfo, errno := capture.ParsePacketV4(ipLayer)
 				if errno > capturetypes.ErrnoOK {
 					res.tracking.nErr++
 					if errno != capturetypes.ErrnoPacketFragmentIgnore {
+						res.tracking.nParsed++
+						res.tracking.nParsedOrFailed++
 						res.tracking.nErrTracked++
 					}
 					return
 				}
-				if errno != capturetypes.ErrnoPacketFragmentIgnore {
-					res.tracking.nProcessed++
-				}
+				res.tracking.nParsed++
+				res.tracking.nParsedOrFailed++
 
 				hashReverse := hash.Reverse()
 				if direction := capturetypes.ClassifyPacketDirectionV4(hash, auxInfo); direction != capturetypes.DirectionUnknown {
@@ -604,13 +629,14 @@ func newPcapSource(t testing.TB, name string, data []byte) (res *mockIface) {
 				if errno > capturetypes.ErrnoOK {
 					res.tracking.nErr++
 					if errno != capturetypes.ErrnoPacketFragmentIgnore {
+						res.tracking.nParsed++
+						res.tracking.nParsedOrFailed++
 						res.tracking.nErrTracked++
 					}
 					return
 				}
-				if errno != capturetypes.ErrnoPacketFragmentIgnore {
-					res.tracking.nProcessed++
-				}
+				res.tracking.nParsed++
+				res.tracking.nParsedOrFailed++
 
 				hashReverse := hash.Reverse()
 				if direction := capturetypes.ClassifyPacketDirectionV6(hash, auxInfo); direction != capturetypes.DirectionUnknown {
@@ -662,6 +688,7 @@ func newPcapSource(t testing.TB, name string, data []byte) (res *mockIface) {
 					}
 				}
 			} else {
+				res.tracking.nParsedOrFailed++
 				res.tracking.nErr++
 				res.tracking.nErrTracked++
 				// TODO: Handle capturetypes.ErrnoInvalidIPHeader which currently is in post-classification
