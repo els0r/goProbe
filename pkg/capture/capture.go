@@ -300,6 +300,8 @@ func (c *Capture) process() <-chan error {
 
 				// Check for issues / errors during parsing (checked inline to avoid unnecessary function
 				// call to ParsePacket...())
+				// Note: c.stats.Processed can only be incremented _after_ this condition because
+				// we do not want to count packet fragments (expect for the first)
 				if errno > capturetypes.ErrnoOK {
 					c.updateParsingErrorCounters(errno)
 					continue
@@ -312,6 +314,8 @@ func (c *Capture) process() <-chan error {
 
 				// Check for issues / errors during parsing (checked inline to avoid unnecessary function
 				// call to ParsePacket...())
+				// Note: c.stats.Processed can only be incremented _after_ this condition because
+				// we do not want to count packet fragments (expect for the first)
 				if errno > capturetypes.ErrnoOK {
 					c.updateParsingErrorCounters(errno)
 					continue
@@ -397,6 +401,8 @@ func (c *Capture) bufferPackets(buf *LocalBuffer, captureErrors chan error) erro
 		}
 
 		// Check for issues / errors during parsing
+		// Note: c.stats.Processed can only be incremented _after_ this condition because
+		// we do not want to count packet fragments (expect for the first)
 		if errno > capturetypes.ErrnoOK {
 			c.updateParsingErrorCounters(errno)
 			continue
