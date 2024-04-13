@@ -3,7 +3,6 @@ package query
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/els0r/goProbe/pkg/query/dns"
@@ -63,8 +62,7 @@ func (s *Statement) Print(ctx context.Context, result *results.Result) error {
 		result.Summary.Totals,
 		result.Summary.Hits.Total,
 		s.DNSResolution.Timeout,
-		s.QueryType,
-		strings.Join(s.Ifaces, ","),
+		// TODO: make this a printer config
 	)
 	if err != nil {
 		return err

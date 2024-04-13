@@ -294,8 +294,6 @@ type basePrinter struct {
 	// needed for computing percentages
 	totals types.Counters
 
-	ifaces string
-
 	cols []OutputColumn
 }
 
@@ -308,9 +306,8 @@ func newBasePrinter(
 	attributes []types.Attribute,
 	ips2domains map[string]string,
 	totals types.Counters,
-	ifaces string,
 ) basePrinter {
-	result := basePrinter{output, sort, selector, direction, attributes, ips2domains, totals, ifaces,
+	result := basePrinter{output, sort, selector, direction, attributes, ips2domains, totals,
 		columns(selector, attributes, direction),
 	}
 
@@ -342,10 +339,8 @@ func NewTablePrinter(output io.Writer, format string,
 	totals types.Counters,
 	numFlows int,
 	resolveTimeout time.Duration,
-	_ string,
-	ifaces string,
 	detailed bool) (TablePrinter, error) {
-	b := newBasePrinter(output, sort, labelSel, direction, attributes, ips2domains, totals, ifaces)
+	b := newBasePrinter(output, sort, labelSel, direction, attributes, ips2domains, totals)
 
 	var printer TablePrinter
 	switch format {
@@ -462,7 +457,7 @@ func (c *CSVTablePrinter) Footer(result *Result) error {
 	if err := c.writer.Write([]string{"Sorting and flow direction", describe(c.sort, c.direction)}); err != nil {
 		return err
 	}
-	return c.writer.Write([]string{"Interface", strings.Join(results.Summary.Ifaces, ",")})
+	return c.writer.Write([]string{"Interface", strings.Join(result.Summary.Interfaces, ",")})
 }
 
 // Print flushes the writer and actually prints out all CSV rows contained in the table printer
@@ -697,7 +692,7 @@ func (t *TextTablePrinter) Footer(result *Result) error {
 	}
 
 	// distributed query information
-	if len(results.HostsStatuses) > 1 {
+	if len(result.HostsStatuses) > 1 {
 		fmt.Fprintf(t.footwriter, "Hosts:\t%s\n", result.HostsStatuses.Summary())
 	}
 

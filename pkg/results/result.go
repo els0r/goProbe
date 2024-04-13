@@ -176,8 +176,8 @@ func (r *Result) End() {
 }
 
 // Summary returns a summary of the interfaces without listing them explicitly
-func (is Interface) Summary() string {
-	return fmt.Sprintr("%d", len(is))
+func (is Interfaces) Summary() string {
+	return fmt.Sprintf("%d", len(is))
 }
 
 // Print prints the sorted interface list in a table with numbered rows
@@ -208,7 +208,7 @@ type HostsStatuses map[string]Status
 // Summary returns a summary of the host statuses without going through the individual statuses
 func (hs HostsStatuses) Summary() string {
 	var ok, empty, withError int
-	for host, status := range hs {
+	for _, status := range hs {
 		switch status.Code {
 		case types.StatusOK:
 			ok++
@@ -228,7 +228,6 @@ func (hs HostsStatuses) Print(w io.Writer) error {
 		Status
 	}
 
-	var ok, empty, withError int
 	for host, status := range hs {
 		hosts = append(hosts, struct {
 			host string
