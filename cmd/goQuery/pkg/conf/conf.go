@@ -1,6 +1,6 @@
 package conf
 
-// Definnitions for command line parameters / arguments
+// Definitions for command line parameters / arguments
 const (
 	queryKey = "query"
 
@@ -34,6 +34,9 @@ const (
 	resultsKey    = "results"
 	ResultsFormat = resultsKey + ".format"
 	ResultsLimit  = resultsKey + ".limit"
+
+	summaryKey      = resultsKey + ".summary"
+	SummaryDetailed = summaryKey + ".detailed"
 
 	// Memory
 	memoryKey     = "memory"

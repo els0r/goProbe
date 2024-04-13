@@ -11,4 +11,4 @@ cmd/legacy/legacy
 .vscode/
 _build/
 go.work.sum
-
+.db/

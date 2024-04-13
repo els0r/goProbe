@@ -295,6 +295,8 @@ type basePrinter struct {
 	totals types.Counters
 
 	cols []OutputColumn
+
+	detailed bool
 }
 
 // newBasePrinter sets up the basic printing facilities
@@ -306,9 +308,10 @@ func newBasePrinter(
 	attributes []types.Attribute,
 	ips2domains map[string]string,
 	totals types.Counters,
+	detailed bool,
 ) basePrinter {
 	result := basePrinter{output, sort, selector, direction, attributes, ips2domains, totals,
-		columns(selector, attributes, direction),
+		columns(selector, attributes, direction), detailed,
 	}
 
 	return result
@@ -316,40 +319,48 @@ func newBasePrinter(
 
 // PrinterConfig configures printer behavior
 type PrinterConfig struct {
+	Format        string
 	SortOrder     SortOrder
 	LabelSelector types.LabelSelector
 	Direction     types.Direction
-
-	IPDomainMapping map[string]string
 
 	Attributes []types.Attribute
 	Totals     types.Counters
 	NumFlows   int
 
-	ResolutionTimeout time.Duration
+	resolutionTimeout time.Duration
+	ipDomainMapping   map[string]string
+	detailed          bool
+}
+
+// PrinterOption allows to configure the printer
+type PrinterOption func(*PrinterConfig)
+
+func WithDetailedSummary(b bool) PrinterOption {
+	return func(pc *PrinterConfig) {
+		pc.detailed = b
+	}
+}
+
+func WithIPDomainMapping(ipDomain map[string]string, resolutionTimeout time.Duration) PrinterOption {
+	return func(pc *PrinterConfig) {
+		pc.ipDomainMapping = ipDomain
+		pc.resolutionTimeout = resolutionTimeout
+	}
 }
 
 // NewTablePrinter instantiates a new table printer
-func NewTablePrinter(output io.Writer, format string,
-	sort SortOrder,
-	labelSel types.LabelSelector,
-	direction types.Direction,
-	attributes []types.Attribute,
-	ips2domains map[string]string,
-	totals types.Counters,
-	numFlows int,
-	resolveTimeout time.Duration,
-	detailed bool) (TablePrinter, error) {
-	b := newBasePrinter(output, sort, labelSel, direction, attributes, ips2domains, totals)
+func NewTablePrinter(output io.Writer, cfg *PrinterConfig) (TablePrinter, error) {
+	b := newBasePrinter(output, cfg.SortOrder, cfg.LabelSelector, cfg.Direction, cfg.Attributes, cfg.ipDomainMapping, cfg.Totals, cfg.detailed)
 
 	var printer TablePrinter
-	switch format {
+	switch cfg.Format {
 	case "txt":
-		printer = NewTextTablePrinter(b, numFlows, resolveTimeout).DetailedSummary(detailed)
+		printer = NewTextTablePrinter(b, cfg.NumFlows, cfg.resolutionTimeout)
 	case "csv":
 		printer = NewCSVTablePrinter(b)
 	default:
-		return nil, fmt.Errorf("unknown output format %s", format)
+		return nil, fmt.Errorf("unknown output format %s", cfg.Format)
 	}
 	return printer, nil
 }
@@ -654,10 +665,12 @@ func (t *TextTablePrinter) Footer(result *Result) error {
 	textFormatter := TextFormatter{}
 
 	// Summary
-	fmt.Fprintf(t.footwriter, "Timespan / Interface(s)\t: [%s, %s] (%s) / %s\n",
+	fmt.Fprintf(t.footwriter, "Timespan\t: [%s, %s] (%s)\n",
 		result.Summary.First.Format(types.DefaultTimeOutputFormat),
 		result.Summary.Last.Format(types.DefaultTimeOutputFormat),
 		formatting.Durationable(result.Summary.Last.Sub(result.Summary.First).Round(time.Minute)),
+	)
+	fmt.Fprintf(t.footwriter, "Interfaces\t: %s\n",
 		result.Summary.Interfaces.Summary(),
 	)
 	fmt.Fprintf(t.footwriter, "Sorted by\t: %s\n",
@@ -687,7 +700,7 @@ func (t *TextTablePrinter) Footer(result *Result) error {
 		hitsTotal,
 		textFormatter.Duration(result.Summary.Timings.QueryDuration))
 	if result.Query.Condition != "" {
-		fmt.Fprintf(t.footwriter, "Conditions:\t %s\n",
+		fmt.Fprintf(t.footwriter, "Conditions\t: %s\n",
 			result.Query.Condition)
 	}
 
@@ -712,7 +725,7 @@ func (t *TextTablePrinter) Print(result *Result) error {
 	fmt.Fprintln(t.output)
 
 	// print detailed information in case it was requested
-	if t.detailedSummary {
+	if t.detailed {
 		err := t.PrintDetailedSummary(result)
 		if err != nil {
 			return err
@@ -725,16 +738,19 @@ func (t *TextTablePrinter) Print(result *Result) error {
 // PrintDetailedSummary prints additional details in the summary, such as the full interface list or all host statuses
 func (t *TextTablePrinter) PrintDetailedSummary(result *Result) error {
 	// print the interface list
-	err := result.Interfaces.Print(t.output)
+	fmt.Fprintln(t.output, "Interfaces:")
+	err := result.Summary.Interfaces.Print(t.output)
 	if err != nil {
 		return err
 	}
 
 	// print the host list
 	if len(result.HostsStatuses) > 1 {
+		fmt.Fprintln(t.output, "Host Statuses:")
 		err = result.HostsStatuses.Print(t.output)
 		if err != nil {
 			return err
 		}
 	}
+	return nil
 }

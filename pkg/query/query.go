@@ -13,7 +13,7 @@ import (
 )
 
 // Print prints a statement to the result
-func (s *Statement) Print(ctx context.Context, result *results.Result) error {
+func (s *Statement) Print(ctx context.Context, result *results.Result, opts ...results.PrinterOption) error {
 	ctx, span := tracing.Start(ctx, "(*Statement).Print")
 	defer span.End()
 
@@ -48,22 +48,26 @@ func (s *Statement) Print(ctx context.Context, result *results.Result) error {
 		resolveStart := time.Now()
 		ips2domains = dns.TimedReverseLookup(ips, s.DNSResolution.Timeout)
 		result.Summary.Timings.ResolutionDuration = time.Since(resolveStart)
+
+		opts = append(opts, results.WithIPDomainMapping(ips2domains, s.DNSResolution.Timeout))
+	}
+
+	cfg := &results.PrinterConfig{
+		Format:        s.Format,
+		SortOrder:     s.SortBy,
+		LabelSelector: s.LabelSelector,
+		Direction:     s.Direction,
+		Attributes:    s.attributes,
+		Totals:        result.Summary.Totals,
+		NumFlows:      result.Summary.Hits.Total,
+	}
+
+	for _, opt := range opts {
+		opt(cfg)
 	}
 
 	// get the right printer
-	printer, err := results.NewTablePrinter(
-		s.Output,
-		s.Format,
-		s.SortBy,
-		s.LabelSelector,
-		s.Direction,
-		s.attributes,
-		ips2domains,
-		result.Summary.Totals,
-		result.Summary.Hits.Total,
-		s.DNSResolution.Timeout,
-		// TODO: make this a printer config
-	)
+	printer, err := results.NewTablePrinter(s.Output, cfg)
 	if err != nil {
 		return err
 	}
