@@ -77,13 +77,16 @@ type TimeRange struct {
 // Summary stores the total traffic volume and packets observed over the
 // queried range and the interfaces that were queried
 type Summary struct {
-	Interfaces []string `json:"interfaces"` // Interfaces: the interfaces that were queried
+	Interfaces Interfaces `json:"interfaces"` // Interfaces: the interfaces that were queried
 	TimeRange
 	Totals        types.Counters `json:"totals"`         // Totals: the total traffic volume and packets observed over the queried range
 	Timings       Timings        `json:"timings"`        // Timings: query runtime fields
 	Hits          Hits           `json:"hits"`           // Hits: how many flow records were returned in total and how many are returned in Rows
 	DataAvailable bool           `json:"data_available"` // DataAvailable: Was there any data available on disk or from a live query at all
 }
+
+// Interfaces collects all interface names
+type Interfaces []string
 
 // Status denotes the overall status of the result
 type Status struct {
@@ -172,16 +175,38 @@ func (r *Result) End() {
 	sort.Strings(r.Summary.Interfaces)
 }
 
+// Summary returns a summary of the interfaces without listing them explicitly
+func (is Interface) Summary() string {
+	return fmt.Sprintr("%d", len(is))
+}
+
+// Print prints the sorted interface list in a table with numbered rows
+func (is Interfaces) Print(w io.Writer) error {
+	sort.SliceStable(is, func(i, j int) bool {
+		return is[i] < is[j]
+	})
+
+	tw := tabwriter.NewWriter(w, 0, 0, 4, ' ', tabwriter.AlignRight)
+
+	sep := "\t"
+
+	header := []string{"#", "iface"}
+	fmtStr := sep + strings.Join([]string{"%d", "%s"}, sep) + sep + "\n"
+
+	fmt.Fprintln(tw, sep+strings.Join(header, sep)+sep)
+
+	for i, iface := range is {
+		fmt.Fprintf(tw, fmtStr, i+1, iface)
+	}
+
+	return tw.Flush()
+}
+
 // HostsStatuses captures the query status for every host queried
 type HostsStatuses map[string]Status
 
-// Print adds the status of all hosts to the output / writer
-func (hs HostsStatuses) Print(w io.Writer) error {
-	var hosts []struct {
-		host string
-		Status
-	}
-
+// Summary returns a summary of the host statuses without going through the individual statuses
+func (hs HostsStatuses) Summary() string {
 	var ok, empty, withError int
 	for host, status := range hs {
 		switch status.Code {
@@ -192,6 +217,19 @@ func (hs HostsStatuses) Print(w io.Writer) error {
 		case types.StatusError:
 			withError++
 		}
+	}
+	return fmt.Sprintf("%d total: %d ok / %d empty / %d error", len(hs), ok, empty, withError)
+}
+
+// Print adds the status of all hosts to the output / writer
+func (hs HostsStatuses) Print(w io.Writer) error {
+	var hosts []struct {
+		host string
+		Status
+	}
+
+	var ok, empty, withError int
+	for host, status := range hs {
 		hosts = append(hosts, struct {
 			host string
 			Status
@@ -201,8 +239,6 @@ func (hs HostsStatuses) Print(w io.Writer) error {
 		return hosts[i].host < hosts[j].host
 	})
 
-	fmt.Fprintf(w, "Hosts: %d ok / %d empty / %d error\n\n", ok, empty, withError)
-
 	tw := tabwriter.NewWriter(w, 0, 0, 4, ' ', tabwriter.AlignRight)
 
 	sep := "\t"
@@ -211,7 +247,6 @@ func (hs HostsStatuses) Print(w io.Writer) error {
 	fmtStr := sep + strings.Join([]string{"%d", "%s", "%s", "%s"}, sep) + sep + "\n"
 
 	fmt.Fprintln(tw, sep+strings.Join(header, sep)+sep)
-	// fmt.Fprintln(tw, sep+strings.Repeat(sep, len(header))+sep)
 
 	for i, host := range hosts {
 		fmt.Fprintf(tw, fmtStr, i+1, host.host, host.Code, host.Message)

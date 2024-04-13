@@ -317,6 +317,21 @@ func newBasePrinter(
 	return result
 }
 
+// PrinterConfig configures printer behavior
+type PrinterConfig struct {
+	SortOrder     SortOrder
+	LabelSelector types.LabelSelector
+	Direction     types.Direction
+
+	IPDomainMapping map[string]string
+
+	Attributes []types.Attribute
+	Totals     types.Counters
+	NumFlows   int
+
+	ResolutionTimeout time.Duration
+}
+
 // NewTablePrinter instantiates a new table printer
 func NewTablePrinter(output io.Writer, format string,
 	sort SortOrder,
@@ -328,13 +343,14 @@ func NewTablePrinter(output io.Writer, format string,
 	numFlows int,
 	resolveTimeout time.Duration,
 	_ string,
-	ifaces string) (TablePrinter, error) {
+	ifaces string,
+	detailed bool) (TablePrinter, error) {
 	b := newBasePrinter(output, sort, labelSel, direction, attributes, ips2domains, totals, ifaces)
 
 	var printer TablePrinter
 	switch format {
 	case "txt":
-		printer = NewTextTablePrinter(b, numFlows, resolveTimeout)
+		printer = NewTextTablePrinter(b, numFlows, resolveTimeout).DetailedSummary(detailed)
 	case "csv":
 		printer = NewCSVTablePrinter(b)
 	default:
@@ -424,7 +440,7 @@ func (c *CSVTablePrinter) AddRows(ctx context.Context, rows Rows) error {
 }
 
 // Footer appends the CSV footer to the CSVTablePrinter
-func (c *CSVTablePrinter) Footer(_ *Result) error {
+func (c *CSVTablePrinter) Footer(result *Result) error {
 	var summaryEntries [CountOutcol]string
 	summaryEntries[OutcolInPkts] = "Overall packets"
 	summaryEntries[OutcolInBytes] = "Overall data volume (bytes)"
@@ -446,7 +462,7 @@ func (c *CSVTablePrinter) Footer(_ *Result) error {
 	if err := c.writer.Write([]string{"Sorting and flow direction", describe(c.sort, c.direction)}); err != nil {
 		return err
 	}
-	return c.writer.Write([]string{"Interface", c.ifaces})
+	return c.writer.Write([]string{"Interface", strings.Join(results.Summary.Ifaces, ",")})
 }
 
 // Print flushes the writer and actually prints out all CSV rows contained in the table printer
@@ -553,6 +569,12 @@ func NewTextTablePrinter(b basePrinter, numFlows int, resolveTimeout time.Durati
 	return t
 }
 
+// Detailed sets the detailed flag for a more dtailed summary
+func (t *TextTablePrinter) DetailedSummary(b bool) *TextTablePrinter {
+	t.detailed = b
+	return t
+}
+
 func addRows(ctx context.Context, p TablePrinter, rows Rows) error {
 	for i, row := range rows {
 		select {
@@ -637,11 +659,12 @@ func (t *TextTablePrinter) Footer(result *Result) error {
 	textFormatter := TextFormatter{}
 
 	// Summary
-	fmt.Fprintf(t.footwriter, "Timespan / Interface\t: [%s, %s] (%s) / %s\n",
+	fmt.Fprintf(t.footwriter, "Timespan / Interface(s)\t: [%s, %s] (%s) / %s\n",
 		result.Summary.First.Format(types.DefaultTimeOutputFormat),
 		result.Summary.Last.Format(types.DefaultTimeOutputFormat),
 		formatting.Durationable(result.Summary.Last.Sub(result.Summary.First).Round(time.Minute)),
-		strings.Join(result.Summary.Interfaces, ","))
+		result.Summary.Interfaces.Summary(),
+	)
 	fmt.Fprintf(t.footwriter, "Sorted by\t: %s\n",
 		describe(t.sort, t.direction))
 	if result.Summary.Timings.ResolutionDuration > 0 {
@@ -669,8 +692,13 @@ func (t *TextTablePrinter) Footer(result *Result) error {
 		hitsTotal,
 		textFormatter.Duration(result.Summary.Timings.QueryDuration))
 	if result.Query.Condition != "" {
-		fmt.Fprintf(t.footwriter, "Conditions:\t: %s\n",
+		fmt.Fprintf(t.footwriter, "Conditions:\t %s\n",
 			result.Query.Condition)
+	}
+
+	// distributed query information
+	if len(results.HostsStatuses) > 1 {
+		fmt.Fprintf(t.footwriter, "Hosts:\t%s\n", result.HostsStatuses.Summary())
 	}
 
 	return nil
@@ -688,12 +716,30 @@ func (t *TextTablePrinter) Print(result *Result) error {
 	}
 	fmt.Fprintln(t.output)
 
-	// print the host list if it  isn't covered by the above already
-	if len(result.HostsStatuses) > 1 {
-		if err := result.HostsStatuses.Print(t.output); err != nil {
+	// print detailed information in case it was requested
+	if t.detailedSummary {
+		err := t.PrintDetailedSummary(result)
+		if err != nil {
 			return err
 		}
 		fmt.Fprintln(t.output)
 	}
 	return nil
+}
+
+// PrintDetailedSummary prints additional details in the summary, such as the full interface list or all host statuses
+func (t *TextTablePrinter) PrintDetailedSummary(result *Result) error {
+	// print the interface list
+	err := result.Interfaces.Print(t.output)
+	if err != nil {
+		return err
+	}
+
+	// print the host list
+	if len(result.HostsStatuses) > 1 {
+		err = result.HostsStatuses.Print(t.output)
+		if err != nil {
+			return err
+		}
+	}
 }

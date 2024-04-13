@@ -13,11 +13,6 @@ import (
 	"github.com/els0r/telemetry/tracing"
 )
 
-// log writes a json marshaled query statement to disk
-func (s *Statement) log() {
-	// TODO: use proper logger
-}
-
 // Print prints a statement to the result
 func (s *Statement) Print(ctx context.Context, result *results.Result) error {
 	ctx, span := tracing.Start(ctx, "(*Statement).Print")
