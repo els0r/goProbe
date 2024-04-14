@@ -1,5 +1,15 @@
 package cmd
 
+import (
+	"bytes"
+	"fmt"
+	"time"
+
+	"text/tabwriter"
+
+	"github.com/els0r/goProbe/pkg/query"
+)
+
 // TODO: This part is currently unused - cross check if that is intentional (in which case it can be removed)
 // var usageBase = fmt.Sprintf(`goQuery -i <interfaces> [-h] [-c <conditions>] [-s <column>] [-a] [--in|--out|--sum] [-n <max_n>]
 //   [-f|--%s <timestamp>] [-l|--%s <timestamp>] [-e|--%s txt|csv|json] %s
@@ -84,62 +94,7 @@ DEFAULTS
 
 ALLOWED FORMATS
 
-  1357800683                            EPOCH
-  Mon Jan _2 15:04:05 2006              ANSIC
-  Mon Jan 02 15:04:05 -0700 2006        RUBY DATE
-  02 Jan 06 15:04 -0700                 RFC822 with numeric zone
-  2006-01-02T15:04:05Z07:00             RFC3339
-  02 Jan 06 15:04 -0700                 RFC822 with numeric zone
-  Mon, 02 Jan 2006 15:04:05 -0700       RFC1123 with numeric zone
-
-  02.01.2006 15:04:05                   CUSTOM
-	2006-01-02 15:04:05 -0700
-	2006-01-02 15:04 -0700
-	2006-01-02 15:04
-	06-01-02 15:04:05 -0700
-	06-01-02 15:04 -0700
-	06-01-02 15:04:05
-	06-01-02 15:04
-	02-01-2006 15:04:05 -0700
-	02-01-2006 15:04 -0700
-	02-01-2006 15:04:05
-	02-01-2006 15:04
-	02-01-06 15:04:05 -0700
-	02-01-06 15:04 -0700
-	02-01-06 15:04:05
-	02-01-06 15:04
-	02.01.2006 15:04
-	02.01.2006 15:04 -0700
-	02.01.06 15:04
-	02.01.06 15:04 -0700
-	2.1.06 15:04:05
-	2.1.06 15:04:05 -0700
-	2.1.06 15:04
-	2.1.06 15:04 -0700
-	2.1.2006 15:04:05
-	2.1.2006 15:04:05 -0700
-	2.1.2006 15:04
-	2.1.2006 15:04 -0700
-	02.1.2006 15:04:05
-	02.1.2006 15:04:05 -0700
-	02.1.2006 15:04
-	02.1.2006 15:04 -0700
-	2.01.2006 15:04:05
-	2.01.2006 15:04:05 -0700
-	2.01.2006 15:04
-	2.01.2006 15:04 -0700
-	02.1.06 15:04:05
-	02.1.06 15:04:05 -0700
-	02.1.06 15:04
-	02.1.06 15:04 -0700
-	2.01.06 15:04:05
-	2.01.06 15:04:05 -0700
-	2.01.06 15:04
-	2.01.06 15:04 -0700
-
-  -15d:04h:05m                          RELATIVE
-  -15d4h5m
-
+` + buildTimestampHelpList(query.TimeFormatsDefault(), query.TimeFormatsCustom(), query.TimeFormatsRelative()) + `
 Relative time will be evaluated with respect to NOW. The call can
 be varied to include any (integer) combination of days (d), hours
 (h) and minutes (m), e.g.
@@ -325,4 +280,33 @@ with --in.
 `,
 	"Sum": `Sum incoming and outgoing data.
 `,
+}
+
+func buildTimestampHelpList(formatsDefault, formatsCustom, formatsRelative []query.TimeFormat) (help string) {
+
+	now := time.Now()
+	buf := bytes.NewBuffer(nil)
+	tw := tabwriter.NewWriter(buf, 0, 4, 4, tableSep, tabwriter.TabIndent)
+
+	for _, format := range formatsDefault {
+		fmt.Fprintf(tw, "  %s\t           %s\n", now.Format(format.Format), format.Name)
+	}
+	fmt.Fprintf(tw, "  %s\t           %s\n", "", "")
+
+	for _, format := range formatsCustom {
+		fmt.Fprintf(tw, "  %s\t           %s\n", now.Format(format.Format), format.Name)
+	}
+	fmt.Fprintf(tw, "  %s\t           %s\n", "", "")
+
+	for _, format := range formatsRelative {
+		fmt.Fprintf(tw, "  %s\t           %s\n", now.Format(format.Format), format.Name)
+	}
+
+	// Since we are dealing with a simple local buffer and more or less static content, this should
+	// never fail (see test)
+	if err := tw.Flush(); err != nil {
+		panic(err)
+	}
+
+	return buf.String()
 }

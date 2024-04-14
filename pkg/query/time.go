@@ -22,62 +22,90 @@ import (
 	"github.com/els0r/goProbe/pkg/types"
 )
 
-// TimeFormats stores all supported tie formats
-var timeFormats = []string{
-	time.RFC3339, // "2006-01-02T15:04:05Z07:00"
-	time.ANSIC,   // "Mon Jan _2 15:04:05 2006"
+// TimeFormat denotes a time format with an optional verbose name for display
+type TimeFormat struct {
+	Name   string
+	Format string
+}
 
-	time.RubyDate, // "Mon Jan 02 15:04:05 -0700 2006"
-	time.RFC822Z,  // "02 Jan 06 15:04 -0700" // RFC822 with numeric zone
-	time.RFC1123Z, // "Mon, 02 Jan 2006 15:04:05 -0700" // RFC1123 with numeric zone
+var (
+	timeFormatsDefault = []TimeFormat{
+		{"RFC3339", time.RFC3339},                    // "2006-01-02T15:04:05Z07:00"
+		{"ANSIC", time.ANSIC},                        // "Mon Jan _2 15:04:05 2006"
+		{"RUBY DATE", time.RubyDate},                 // "Mon Jan 02 15:04:05 -0700 2006"
+		{"RFC822 with numeric zone", time.RFC822Z},   // "02 Jan 06 15:04 -0700" // RFC822 with numeric zone
+		{"RFC1123 with numeric zone", time.RFC1123Z}, // "Mon, 02 Jan 2006 15:04:05 -0700" // RFC1123 with numeric zone
+	}
 
-	types.DefaultTimeOutputFormat,
+	timeFormatsCustom = []TimeFormat{
+		{"CUSTOM", types.DefaultTimeOutputFormat},
 
-	// custom additions
-	"2006-01-02 15:04:05 -0700",
-	"2006-01-02 15:04 -0700",
-	"2006-01-02 15:04:05",
-	"2006-01-02 15:04",
-	"06-01-02 15:04:05 -0700",
-	"06-01-02 15:04 -0700",
-	"06-01-02 15:04:05",
-	"06-01-02 15:04",
-	"02-01-2006 15:04:05 -0700",
-	"02-01-2006 15:04 -0700",
-	"02-01-2006 15:04:05",
-	"02-01-2006 15:04",
-	"02-01-06 15:04:05 -0700",
-	"02-01-06 15:04 -0700",
-	"02-01-06 15:04:05",
-	"02-01-06 15:04",
-	"02.01.2006 15:04",
-	"02.01.2006 15:04 -0700",
-	"02.01.06 15:04",
-	"02.01.06 15:04 -0700",
-	"2.1.06 15:04:05",
-	"2.1.06 15:04:05 -0700",
-	"2.1.06 15:04",
-	"2.1.06 15:04 -0700",
-	"2.1.2006 15:04:05",
-	"2.1.2006 15:04:05 -0700",
-	"2.1.2006 15:04",
-	"2.1.2006 15:04 -0700",
-	"02.1.2006 15:04:05",
-	"02.1.2006 15:04:05 -0700",
-	"02.1.2006 15:04",
-	"02.1.2006 15:04 -0700",
-	"2.01.2006 15:04:05",
-	"2.01.2006 15:04:05 -0700",
-	"2.01.2006 15:04",
-	"2.01.2006 15:04 -0700",
-	"02.1.06 15:04:05",
-	"02.1.06 15:04:05 -0700",
-	"02.1.06 15:04",
-	"02.1.06 15:04 -0700",
-	"2.01.06 15:04:05",
-	"2.01.06 15:04:05 -0700",
-	"2.01.06 15:04",
-	"2.01.06 15:04 -0700",
+		// unnamed additions
+		{"", "2006-01-02 15:04:05 -0700"},
+		{"", "2006-01-02 15:04 -0700"},
+		{"", "2006-01-02 15:04:05"},
+		{"", "2006-01-02 15:04"},
+		{"", "06-01-02 15:04:05 -0700"},
+		{"", "06-01-02 15:04 -0700"},
+		{"", "06-01-02 15:04:05"},
+		{"", "06-01-02 15:04"},
+		{"", "02-01-2006 15:04:05 -0700"},
+		{"", "02-01-2006 15:04 -0700"},
+		{"", "02-01-2006 15:04:05"},
+		{"", "02-01-2006 15:04"},
+		{"", "02-01-06 15:04:05 -0700"},
+		{"", "02-01-06 15:04 -0700"},
+		{"", "02-01-06 15:04:05"},
+		{"", "02-01-06 15:04"},
+		{"", "02.01.2006 15:04"},
+		{"", "02.01.2006 15:04 -0700"},
+		{"", "02.01.06 15:04"},
+		{"", "02.01.06 15:04 -0700"},
+		{"", "2.1.06 15:04:05"},
+		{"", "2.1.06 15:04:05 -0700"},
+		{"", "2.1.06 15:04"},
+		{"", "2.1.06 15:04 -0700"},
+		{"", "2.1.2006 15:04:05"},
+		{"", "2.1.2006 15:04:05 -0700"},
+		{"", "2.1.2006 15:04"},
+		{"", "2.1.2006 15:04 -0700"},
+		{"", "02.1.2006 15:04:05"},
+		{"", "02.1.2006 15:04:05 -0700"},
+		{"", "02.1.2006 15:04"},
+		{"", "02.1.2006 15:04 -0700"},
+		{"", "2.01.2006 15:04:05"},
+		{"", "2.01.2006 15:04:05 -0700"},
+		{"", "2.01.2006 15:04"},
+		{"", "2.01.2006 15:04 -0700"},
+		{"", "02.1.06 15:04:05"},
+		{"", "02.1.06 15:04:05 -0700"},
+		{"", "02.1.06 15:04"},
+		{"", "02.1.06 15:04 -0700"},
+		{"", "2.01.06 15:04:05"},
+		{"", "2.01.06 15:04:05 -0700"},
+		{"", "2.01.06 15:04"},
+		{"", "2.01.06 15:04 -0700"},
+	}
+
+	timeFormatsRelative = []TimeFormat{
+		{"RELATIVE", "-15d:04h:05m"},
+		{"", "-15d4h5m"},
+	}
+)
+
+// TimeFormatsDefault returns a list of all supported default time formats
+func TimeFormatsDefault() []TimeFormat {
+	return timeFormatsDefault
+}
+
+// TimeFormatsCustom returns a list of all supported custom time formats
+func TimeFormatsCustom() []TimeFormat {
+	return timeFormatsCustom
+}
+
+// TimeFormatsRelative returns a list of all supported relative time formats
+func TimeFormatsRelative() []TimeFormat {
+	return timeFormatsRelative
 }
 
 // function returning a UNIX timestamp relative to the current time
@@ -224,8 +252,8 @@ func ParseTimeArgument(timeString string) (int64, error) {
 	}
 
 	// then check other time formats
-	for _, tFormat := range timeFormats {
-		t, err = time.ParseInLocation(tFormat, timeString, loc)
+	for _, tFormat := range append(timeFormatsDefault, timeFormatsCustom...) {
+		t, err = time.ParseInLocation(tFormat.Format, timeString, loc)
 		if err == nil {
 			return t.Unix(), nil
 		}
