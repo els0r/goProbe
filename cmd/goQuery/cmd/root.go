@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/els0r/goProbe/cmd/goQuery/pkg/conf"
-	"github.com/els0r/goProbe/pkg/api/globalquery/client"
+	gqclient "github.com/els0r/goProbe/pkg/api/globalquery/client"
 	"github.com/els0r/goProbe/pkg/defaults"
 	"github.com/els0r/goProbe/pkg/goDB/engine"
 	"github.com/els0r/goProbe/pkg/query"
@@ -311,8 +311,6 @@ func entrypoint(cmd *cobra.Command, args []string) (err error) {
 		ctx = queryCtx
 	}
 
-	logger = logging.FromContext(ctx)
-
 	queryArgs.Caller = os.Args[0] // take the full path of called binary
 
 	// run the query
@@ -341,7 +339,7 @@ func entrypoint(cmd *cobra.Command, args []string) (err error) {
 		}
 
 		// query using query server
-		querier = client.New(viper.GetString(conf.QueryServerAddr))
+		querier = gqclient.New(viper.GetString(conf.QueryServerAddr))
 	} else {
 		// query using local goDB
 		querier = engine.NewQueryRunner(dbPathCfg)

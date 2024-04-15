@@ -83,8 +83,7 @@ func WithName(name string) Option {
 }
 
 const (
-	defaultRequestTimeout = 30 * time.Second
-	defaultClientName     = "default-client"
+	defaultClientName = "default-client"
 
 	unixIdent = "unix"
 )
@@ -95,7 +94,6 @@ func NewDefault(addr string, opts ...Option) *DefaultClient {
 		client:   http.DefaultClient,
 		scheme:   "http://",
 		hostAddr: addr,
-		timeout:  defaultRequestTimeout,
 		name:     defaultClientName,
 		retry:    true,
 		retryIntervals: httpc.Intervals{
