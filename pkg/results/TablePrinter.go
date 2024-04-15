@@ -23,6 +23,7 @@ import (
 	"github.com/els0r/goProbe/pkg/formatting"
 	"github.com/els0r/goProbe/pkg/goDB/protocols"
 	"github.com/els0r/goProbe/pkg/types"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // OutputColumn ranges over all possible output columns.
@@ -271,7 +272,7 @@ func describe(o SortOrder, d types.Direction) string {
 type TablePrinter interface {
 	AddRow(row Row) error
 	AddRows(ctx context.Context, rows Rows) error
-	Footer(result *Result) error
+	Footer(ctx context.Context, result *Result) error
 	Print(result *Result) error
 }
 
@@ -437,7 +438,7 @@ func (c *CSVTablePrinter) AddRows(ctx context.Context, rows Rows) error {
 }
 
 // Footer appends the CSV footer to the CSVTablePrinter
-func (c *CSVTablePrinter) Footer(result *Result) error {
+func (c *CSVTablePrinter) Footer(_ context.Context, result *Result) error {
 	var summaryEntries [CountOutcol]string
 	summaryEntries[OutcolInPkts] = "Overall packets"
 	summaryEntries[OutcolInBytes] = "Overall data volume (bytes)"
@@ -596,7 +597,7 @@ func (t *TextTablePrinter) AddRows(ctx context.Context, rows Rows) error {
 }
 
 // Footer appends the summary to the table printer
-func (t *TextTablePrinter) Footer(result *Result) error {
+func (t *TextTablePrinter) Footer(ctx context.Context, result *Result) error {
 	var isTotal [CountOutcol]bool
 	isTotal[OutcolInPkts] = true
 	isTotal[OutcolInBytes] = true
@@ -698,6 +699,12 @@ func (t *TextTablePrinter) Footer(result *Result) error {
 	// distributed query information
 	if len(result.HostsStatuses) > 1 {
 		result.HostsStatuses.PrintFooter(t.footerWriter)
+
+		// provide the trace ID in case it was provided in a distributed call
+		sc := trace.SpanFromContext(ctx).SpanContext()
+		if sc.HasTraceID() {
+			t.footerWriter.WriteEntry("Trace ID", sc.TraceID().String())
+		}
 	}
 
 	return nil

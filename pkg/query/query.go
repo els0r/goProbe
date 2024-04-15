@@ -46,7 +46,7 @@ func (s *Statement) Print(ctx context.Context, result *results.Result, opts ...r
 		}
 
 		resolveStart := time.Now()
-		ips2domains = dns.TimedReverseLookup(ips, s.DNSResolution.Timeout)
+		ips2domains = dns.TimedReverseLookup(ctx, ips, s.DNSResolution.Timeout)
 		result.Summary.Timings.ResolutionDuration = time.Since(resolveStart)
 
 		opts = append(opts, results.WithIPDomainMapping(ips2domains, s.DNSResolution.Timeout))
@@ -99,7 +99,7 @@ func (s *Statement) Print(ctx context.Context, result *results.Result, opts ...r
 		}
 		return err
 	}
-	err = printer.Footer(result)
+	err = printer.Footer(ctx, result)
 	if err != nil {
 		if memErr != nil {
 			return memErr

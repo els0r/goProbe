@@ -221,22 +221,35 @@ func (hs HostsStatuses) Summary() string {
 	return fmt.Sprintf("%d total: %d ok / %d empty / %d error", len(hs), ok, empty, withError)
 }
 
-// Print adds the status of all hosts to the output / writer
-func (hs HostsStatuses) Print(w io.Writer) error {
-	var hosts []struct {
-		host string
-		Status
-	}
+// HostStatus bundles the Hostname with the Status for that Hostname
+type HostStatus struct {
+	Hostname string
+	Status
+}
 
+// GetErrorStatuses returns all hosts which ran into an error during querying
+func (hs HostsStatuses) GetErrorStatuses() (errorHosts []HostStatus) {
+	for _, host := range hs.getSortedStatuses() {
+		if host.Code != types.StatusOK {
+			errorHosts = append(errorHosts, host)
+		}
+	}
+	return errorHosts
+}
+
+func (hs HostsStatuses) getSortedStatuses() (hosts []HostStatus) {
 	for host, status := range hs {
-		hosts = append(hosts, struct {
-			host string
-			Status
-		}{host: host, Status: status})
+		hosts = append(hosts, HostStatus{Hostname: host, Status: status})
 	}
 	sort.SliceStable(hosts, func(i, j int) bool {
-		return hosts[i].host < hosts[j].host
+		return hosts[i].Hostname < hosts[j].Hostname
 	})
+	return hosts
+}
+
+// Print adds the status of all hosts to the output / writer
+func (hs HostsStatuses) Print(w io.Writer) error {
+	hosts := hs.getSortedStatuses()
 
 	tw := tabwriter.NewWriter(w, 0, 0, 4, ' ', tabwriter.AlignRight)
 
@@ -248,7 +261,7 @@ func (hs HostsStatuses) Print(w io.Writer) error {
 	fmt.Fprintln(tw, sep+strings.Join(header, sep)+sep)
 
 	for i, host := range hosts {
-		fmt.Fprintf(tw, fmtStr, i+1, host.host, host.Code, host.Message)
+		fmt.Fprintf(tw, fmtStr, i+1, host.Hostname, host.Code, host.Message)
 	}
 
 	return tw.Flush()
