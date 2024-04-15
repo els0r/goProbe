@@ -295,8 +295,6 @@ type basePrinter struct {
 	totals types.Counters
 
 	cols []OutputColumn
-
-	detailed bool
 }
 
 // newBasePrinter sets up the basic printing facilities
@@ -308,10 +306,9 @@ func newBasePrinter(
 	attributes []types.Attribute,
 	ips2domains map[string]string,
 	totals types.Counters,
-	detailed bool,
 ) basePrinter {
 	result := basePrinter{output, sort, selector, direction, attributes, ips2domains, totals,
-		columns(selector, attributes, direction), detailed,
+		columns(selector, attributes, direction),
 	}
 
 	return result
@@ -330,18 +327,12 @@ type PrinterConfig struct {
 
 	resolutionTimeout time.Duration
 	ipDomainMapping   map[string]string
-	detailed          bool
 }
 
 // PrinterOption allows to configure the printer
 type PrinterOption func(*PrinterConfig)
 
-func WithDetailedSummary(b bool) PrinterOption {
-	return func(pc *PrinterConfig) {
-		pc.detailed = b
-	}
-}
-
+// WithIPDomainMapping adds DNS resolution capabilities to the printer
 func WithIPDomainMapping(ipDomain map[string]string, resolutionTimeout time.Duration) PrinterOption {
 	return func(pc *PrinterConfig) {
 		pc.ipDomainMapping = ipDomain
@@ -351,7 +342,7 @@ func WithIPDomainMapping(ipDomain map[string]string, resolutionTimeout time.Dura
 
 // NewTablePrinter instantiates a new table printer
 func NewTablePrinter(output io.Writer, cfg *PrinterConfig) (TablePrinter, error) {
-	b := newBasePrinter(output, cfg.SortOrder, cfg.LabelSelector, cfg.Direction, cfg.Attributes, cfg.ipDomainMapping, cfg.Totals, cfg.detailed)
+	b := newBasePrinter(output, cfg.SortOrder, cfg.LabelSelector, cfg.Direction, cfg.Attributes, cfg.ipDomainMapping, cfg.Totals)
 
 	var printer TablePrinter
 	switch cfg.Format {
@@ -523,7 +514,7 @@ func (TextFormatter) String(s string) string {
 type TextTablePrinter struct {
 	basePrinter
 	writer         *tabwriter.Writer
-	footwriter     *tabwriter.Writer
+	footerWriter   *FooterTabwriter
 	numFlows       int
 	resolveTimeout time.Duration
 	numPrinted     int
@@ -532,12 +523,11 @@ type TextTablePrinter struct {
 // NewTextTablePrinter creates a new table printer
 func NewTextTablePrinter(b basePrinter, numFlows int, resolveTimeout time.Duration) *TextTablePrinter {
 	var t = &TextTablePrinter{
-		b,
-		tabwriter.NewWriter(b.output, 0, 1, 2, ' ', tabwriter.AlignRight),
-		tabwriter.NewWriter(b.output, 0, 4, 1, ' ', 0),
-		numFlows,
-		resolveTimeout,
-		0,
+		basePrinter:    b,
+		writer:         tabwriter.NewWriter(b.output, 0, 1, 2, ' ', tabwriter.AlignRight),
+		footerWriter:   NewFooterTabwriter(b.output),
+		numFlows:       numFlows,
+		resolveTimeout: resolveTimeout,
 	}
 
 	var header1 [CountOutcol]string
@@ -572,12 +562,6 @@ func NewTextTablePrinter(b basePrinter, numFlows int, resolveTimeout time.Durati
 	}
 	fmt.Fprintln(t.writer)
 
-	return t
-}
-
-// Detailed sets the detailed flag for a more dtailed summary
-func (t *TextTablePrinter) DetailedSummary(b bool) *TextTablePrinter {
-	t.detailed = b
 	return t
 }
 
@@ -665,21 +649,30 @@ func (t *TextTablePrinter) Footer(result *Result) error {
 	textFormatter := TextFormatter{}
 
 	// Summary
-	fmt.Fprintf(t.footwriter, "Timespan\t: [%s, %s] (%s)\n",
-		result.Summary.First.Format(types.DefaultTimeOutputFormat),
-		result.Summary.Last.Format(types.DefaultTimeOutputFormat),
-		formatting.Durationable(result.Summary.Last.Sub(result.Summary.First).Round(time.Minute)),
-	)
-	fmt.Fprintf(t.footwriter, "Interfaces\t: %s\n",
-		result.Summary.Interfaces.Summary(),
-	)
-	fmt.Fprintf(t.footwriter, "Sorted by\t: %s\n",
-		describe(t.sort, t.direction))
+	result.Summary.TimeRange.PrintFooter(t.footerWriter)
 	if result.Summary.Timings.ResolutionDuration > 0 {
-		fmt.Fprintf(t.footwriter, "Reverse DNS stats\t: RDNS took %s, timeout was %s\n",
+		t.footerWriter.WriteEntry("Reverse DNS stats", "RDNS took %s, timeout was %s",
 			formatting.Durationable(result.Summary.Timings.ResolutionDuration),
-			formatting.Durationable(t.resolveTimeout))
+			formatting.Durationable(t.resolveTimeout),
+		)
 	}
+
+	// only print interface names if the attributes don't include the interface
+	var (
+		ifaceSummary string
+		ifaceKey     = "Interface"
+	)
+	if len(result.Summary.Interfaces) > 1 {
+		ifaceKey += "s"
+	}
+	if t.basePrinter.selector.Iface {
+		ifaceSummary = result.Summary.Interfaces.Summary() + " queried"
+	} else {
+		ifaceSummary = strings.Join(result.Summary.Interfaces, ",")
+	}
+	t.footerWriter.WriteEntry(ifaceKey, ifaceSummary)
+
+	t.footerWriter.WriteEntry("Sorted by", describe(t.sort, t.direction))
 
 	var hitsDisplayed string
 	if result.Summary.Hits.Displayed < 1000 {
@@ -695,18 +688,16 @@ func (t *TextTablePrinter) Footer(result *Result) error {
 		hitsTotal = strings.TrimSpace(textFormatter.Count(uint64(result.Summary.Hits.Total)))
 	}
 
-	fmt.Fprintf(t.footwriter, "Query stats\t: displayed top %s hits out of %s in %s\n",
+	t.footerWriter.WriteEntry("Query stats", "displayed top %s hits out of %s in %s",
 		hitsDisplayed,
 		hitsTotal,
-		textFormatter.Duration(result.Summary.Timings.QueryDuration))
-	if result.Query.Condition != "" {
-		fmt.Fprintf(t.footwriter, "Conditions\t: %s\n",
-			result.Query.Condition)
-	}
+		textFormatter.Duration(result.Summary.Timings.QueryDuration),
+	)
+	result.Query.PrintFooter(t.footerWriter)
 
 	// distributed query information
 	if len(result.HostsStatuses) > 1 {
-		fmt.Fprintf(t.footwriter, "Hosts:\t%s\n", result.HostsStatuses.Summary())
+		result.HostsStatuses.PrintFooter(t.footerWriter)
 	}
 
 	return nil
@@ -719,19 +710,10 @@ func (t *TextTablePrinter) Print(result *Result) error {
 		return err
 	}
 	fmt.Fprintln(t.output)
-	if err := t.footwriter.Flush(); err != nil {
+	if err := t.footerWriter.Flush(); err != nil {
 		return err
 	}
 	fmt.Fprintln(t.output)
-
-	// print detailed information in case it was requested
-	if t.detailed {
-		err := t.PrintDetailedSummary(result)
-		if err != nil {
-			return err
-		}
-		fmt.Fprintln(t.output)
-	}
 	return nil
 }
 

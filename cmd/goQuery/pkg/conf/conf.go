@@ -35,9 +35,6 @@ const (
 	ResultsFormat = resultsKey + ".format"
 	ResultsLimit  = resultsKey + ".limit"
 
-	summaryKey      = resultsKey + ".summary"
-	SummaryDetailed = summaryKey + ".detailed"
-
 	// Memory
 	memoryKey     = "memory"
 	MemoryMaxPct  = memoryKey + ".max-pct"

@@ -76,8 +76,7 @@ func Execute() {
 
 // globally accessible variable for other packages
 var (
-	cmdLineParams        = &query.Args{}
-	printDetailedSummary bool
+	cmdLineParams = &query.Args{}
 )
 
 func init() {
@@ -119,14 +118,6 @@ including the "time" field.
 		`Maximum number of final entries to show. Defaults to 95% of the overall
 data volume / number of packets (depending on the '-s' parameter).
 Ignored for queries including the "time" field.
-`,
-	)
-
-	// TODO: arguably a bit of a hack instead of going via the query.Args. Then again, I'm not sure
-	// if printing cosmetics should really live there
-	flags.BoolVar(&printDetailedSummary, conf.SummaryDetailed, false,
-		`Print details in the footer. This includes the full interface list upon a multi-interface
-query and the full host statuses table in case of a distributed query.
 `,
 	)
 
@@ -431,7 +422,7 @@ func entrypoint(cmd *cobra.Command, args []string) (err error) {
 		return nil
 	}
 
-	err = stmt.Print(ctx, result, results.WithDetailedSummary(printDetailedSummary))
+	err = stmt.Print(ctx, result)
 	if err != nil {
 		return fmt.Errorf("failed to print query result: %w", err)
 	}
