@@ -218,7 +218,7 @@ func (hs HostsStatuses) Summary() string {
 			withError++
 		}
 	}
-	return fmt.Sprintf("%d total: %d ok / %d empty / %d error", len(hs), ok, empty, withError)
+	return fmt.Sprintf("%d hosts: %d ok / %d empty / %d error", len(hs), ok, empty, withError)
 }
 
 // HostStatus bundles the Hostname with the Status for that Hostname
