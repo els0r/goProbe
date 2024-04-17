@@ -83,7 +83,10 @@ func WithName(name string) Option {
 }
 
 const (
-	defaultClientName = "default-client"
+	// large request timeout to prevent unbounded request times. In practice, there will
+	// likely be a request cancellation way before this timeout is hit
+	defaultRequestTimeout = 30 * time.Minute
+	defaultClientName     = "default-client"
 
 	unixIdent = "unix"
 )
@@ -92,7 +95,6 @@ const (
 func NewDefault(addr string, opts ...Option) *DefaultClient {
 	c := &DefaultClient{
 		client:   http.DefaultClient,
-		scheme:   "http://",
 		hostAddr: addr,
 		name:     defaultClientName,
 		retry:    true,
@@ -100,6 +102,8 @@ func NewDefault(addr string, opts ...Option) *DefaultClient {
 			// retry three times before giving up
 			1 * time.Second, 2 * time.Second, 4 * time.Second,
 		},
+		scheme:  "http://",
+		timeout: defaultRequestTimeout,
 	}
 	for _, opt := range opts {
 		opt(c)
