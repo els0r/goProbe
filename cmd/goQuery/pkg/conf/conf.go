@@ -1,6 +1,6 @@
 package conf
 
-// Definnitions for command line parameters / arguments
+// Definitions for command line parameters / arguments
 const (
 	queryKey = "query"
 

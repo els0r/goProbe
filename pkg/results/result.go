@@ -77,13 +77,16 @@ type TimeRange struct {
 // Summary stores the total traffic volume and packets observed over the
 // queried range and the interfaces that were queried
 type Summary struct {
-	Interfaces []string `json:"interfaces"` // Interfaces: the interfaces that were queried
+	Interfaces Interfaces `json:"interfaces"` // Interfaces: the interfaces that were queried
 	TimeRange
 	Totals        types.Counters `json:"totals"`         // Totals: the total traffic volume and packets observed over the queried range
 	Timings       Timings        `json:"timings"`        // Timings: query runtime fields
 	Hits          Hits           `json:"hits"`           // Hits: how many flow records were returned in total and how many are returned in Rows
 	DataAvailable bool           `json:"data_available"` // DataAvailable: Was there any data available on disk or from a live query at all
 }
+
+// Interfaces collects all interface names
+type Interfaces []string
 
 // Status denotes the overall status of the result
 type Status struct {
@@ -172,18 +175,40 @@ func (r *Result) End() {
 	sort.Strings(r.Summary.Interfaces)
 }
 
+// Summary returns a summary of the interfaces without listing them explicitly
+func (is Interfaces) Summary() string {
+	return fmt.Sprintf("%d", len(is))
+}
+
+// Print prints the sorted interface list in a table with numbered rows
+func (is Interfaces) Print(w io.Writer) error {
+	sort.SliceStable(is, func(i, j int) bool {
+		return is[i] < is[j]
+	})
+
+	tw := tabwriter.NewWriter(w, 0, 0, 4, ' ', tabwriter.AlignRight)
+
+	sep := "\t"
+
+	header := []string{"#", "iface"}
+	fmtStr := sep + strings.Join([]string{"%d", "%s"}, sep) + sep + "\n"
+
+	fmt.Fprintln(tw, sep+strings.Join(header, sep)+sep)
+
+	for i, iface := range is {
+		fmt.Fprintf(tw, fmtStr, i+1, iface)
+	}
+
+	return tw.Flush()
+}
+
 // HostsStatuses captures the query status for every host queried
 type HostsStatuses map[string]Status
 
-// Print adds the status of all hosts to the output / writer
-func (hs HostsStatuses) Print(w io.Writer) error {
-	var hosts []struct {
-		host string
-		Status
-	}
-
+// Summary returns a summary of the host statuses without going through the individual statuses
+func (hs HostsStatuses) Summary() string {
 	var ok, empty, withError int
-	for host, status := range hs {
+	for _, status := range hs {
 		switch status.Code {
 		case types.StatusOK:
 			ok++
@@ -192,16 +217,39 @@ func (hs HostsStatuses) Print(w io.Writer) error {
 		case types.StatusError:
 			withError++
 		}
-		hosts = append(hosts, struct {
-			host string
-			Status
-		}{host: host, Status: status})
+	}
+	return fmt.Sprintf("%d hosts: %d ok / %d empty / %d error", len(hs), ok, empty, withError)
+}
+
+// HostStatus bundles the Hostname with the Status for that Hostname
+type HostStatus struct {
+	Hostname string
+	Status
+}
+
+// GetErrorStatuses returns all hosts which ran into an error during querying
+func (hs HostsStatuses) GetErrorStatuses() (errorHosts []HostStatus) {
+	for _, host := range hs.getSortedStatuses() {
+		if host.Code != types.StatusOK {
+			errorHosts = append(errorHosts, host)
+		}
+	}
+	return errorHosts
+}
+
+func (hs HostsStatuses) getSortedStatuses() (hosts []HostStatus) {
+	for host, status := range hs {
+		hosts = append(hosts, HostStatus{Hostname: host, Status: status})
 	}
 	sort.SliceStable(hosts, func(i, j int) bool {
-		return hosts[i].host < hosts[j].host
+		return hosts[i].Hostname < hosts[j].Hostname
 	})
+	return hosts
+}
 
-	fmt.Fprintf(w, "Hosts: %d ok / %d empty / %d error\n\n", ok, empty, withError)
+// Print adds the status of all hosts to the output / writer
+func (hs HostsStatuses) Print(w io.Writer) error {
+	hosts := hs.getSortedStatuses()
 
 	tw := tabwriter.NewWriter(w, 0, 0, 4, ' ', tabwriter.AlignRight)
 
@@ -211,10 +259,9 @@ func (hs HostsStatuses) Print(w io.Writer) error {
 	fmtStr := sep + strings.Join([]string{"%d", "%s", "%s", "%s"}, sep) + sep + "\n"
 
 	fmt.Fprintln(tw, sep+strings.Join(header, sep)+sep)
-	// fmt.Fprintln(tw, sep+strings.Repeat(sep, len(header))+sep)
 
 	for i, host := range hosts {
-		fmt.Fprintf(tw, fmtStr, i+1, host.host, host.Code, host.Message)
+		fmt.Fprintf(tw, fmtStr, i+1, host.Hostname, host.Code, host.Message)
 	}
 
 	return tw.Flush()

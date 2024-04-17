@@ -54,8 +54,7 @@
         },
         "gopls": {
           "usePlaceholders": false,
-          "staticcheck": true,
-          "vulncheck": "Imports"
+          "staticcheck": true
         },
         "remote.extensionKind": {
           "ms-azuretools.vscode-docker": "workspace"

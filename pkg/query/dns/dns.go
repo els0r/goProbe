@@ -14,8 +14,11 @@
 package dns
 
 import (
+	"context"
 	"net"
 	"time"
+
+	"github.com/els0r/telemetry/tracing"
 )
 
 // LookupResult stores the result of a reverse DNS lookup
@@ -30,7 +33,10 @@ type LookupResult struct {
 // Returns a mapping IP => domain. If the lookup is aborted because of a timeout, the current mapping
 // is returned with the pending lookups missing. If there is no RDNS entry for an IP, the corresponding
 // key in the result will not be associated with any value (i.e. domain).
-func TimedReverseLookup(ips []string, timeout time.Duration) (ipToDomain map[string]string) {
+func TimedReverseLookup(ctx context.Context, ips []string, timeout time.Duration) (ipToDomain map[string]string) {
+	ctx, span := tracing.Start(ctx, "TimedReverseLookup")
+	defer span.End()
+
 	// Compute set of ips so we look up each unique IP exactly once
 	// This assumes that the ips are provided in a normalized format.
 	ipToDomain = make(map[string]string)
@@ -38,6 +44,9 @@ func TimedReverseLookup(ips []string, timeout time.Duration) (ipToDomain map[str
 	for _, ip := range ips {
 		ipset[ip] = struct{}{}
 	}
+
+	queryCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
 
 	lookupChannel := make(chan LookupResult, 1)
 	var pending int
@@ -68,7 +77,7 @@ func TimedReverseLookup(ips []string, timeout time.Duration) (ipToDomain map[str
 			if LookupResult.Success {
 				ipToDomain[LookupResult.IP] = LookupResult.Domain
 			}
-		case <-time.After(timeout):
+		case <-queryCtx.Done(): // timeout case
 			pending = 0
 		}
 	}

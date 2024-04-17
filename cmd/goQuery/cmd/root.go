@@ -420,6 +420,19 @@ func entrypoint(cmd *cobra.Command, args []string) (err error) {
 		return nil
 	}
 
+	// when running a distributed query, host status errors should be reported
+	if len(result.HostsStatuses) > 1 {
+		logger, err := logging.New(logging.LevelInfo, logging.EncodingPlain,
+			logging.WithOutput(stmt.Output),
+		)
+		if err != nil {
+			return err
+		}
+		for _, host := range result.HostsStatuses.GetErrorStatuses() {
+			logger.Errorf("Host %s returned with error %q: %s", host.Hostname, host.Code, host.Message)
+		}
+	}
+
 	err = stmt.Print(ctx, result)
 	if err != nil {
 		return fmt.Errorf("failed to print query result: %w", err)
