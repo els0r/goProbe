@@ -596,6 +596,15 @@ func (t *TextTablePrinter) AddRows(ctx context.Context, rows Rows) error {
 	return addRows(ctx, t, rows)
 }
 
+const (
+	hostsKey      = "Hosts"
+	ifaceKey      = "Interface"
+	queryStatsKey = "Query stats"
+	sortedByKey   = "Sorted by"
+	totalsKey     = "Totals"
+	traceIDKey    = "Trace ID"
+)
+
 // Footer appends the summary to the table printer
 func (t *TextTablePrinter) Footer(ctx context.Context, result *Result) error {
 	var isTotal [CountOutcol]bool
@@ -634,7 +643,7 @@ func (t *TextTablePrinter) Footer(ctx context.Context, result *Result) error {
 		}
 		fmt.Fprintln(t.writer)
 
-		fmt.Fprint(t.writer, "Totals:\t")
+		fmt.Fprint(t.writer, totalsKey+":\t")
 		for _, col := range t.cols[1:] {
 			if col == OutcolBothPktsSent {
 				fmt.Fprint(t.writer, TextFormatter{}.Count(t.totals.SumPackets()))
@@ -651,29 +660,28 @@ func (t *TextTablePrinter) Footer(ctx context.Context, result *Result) error {
 
 	// Summary
 	result.Summary.TimeRange.PrintFooter(t.footerWriter)
-	if result.Summary.Timings.ResolutionDuration > 0 {
-		t.footerWriter.WriteEntry("Reverse DNS stats", "RDNS took %s, timeout was %s",
-			formatting.Durationable(result.Summary.Timings.ResolutionDuration),
-			formatting.Durationable(t.resolveTimeout),
-		)
-	}
 
 	// only print interface names if the attributes don't include the interface
 	var (
 		ifaceSummary string
-		ifaceKey     = "Interface"
+		iKey = ifaceKey
 	)
 	if len(result.Summary.Interfaces) > 1 {
-		ifaceKey += "s"
+		iKey += "s"
 	}
 	if t.basePrinter.selector.Iface {
 		ifaceSummary = result.Summary.Interfaces.Summary() + " queried"
 	} else {
 		ifaceSummary = strings.Join(result.Summary.Interfaces, ",")
 	}
-	t.footerWriter.WriteEntry(ifaceKey, ifaceSummary)
+	// attach distributed query information from hosts if available
+	if len(result.HostsStatuses) > 1 {
+		t.footerWriter.WriteEntry(iKey+" / "+hostsKey, ifaceSummary+" on "+result.HostsStatuses.Summary())
+	} else {
+		t.footerWriter.WriteEntry(ifaceKey, ifaceSummary)
+	}
 
-	t.footerWriter.WriteEntry("Sorted by", describe(t.sort, t.direction))
+	t.footerWriter.WriteEntry(sortedByKey, describe(t.sort, t.direction))
 
 	var hitsDisplayed string
 	if result.Summary.Hits.Displayed < 1000 {
@@ -689,21 +697,18 @@ func (t *TextTablePrinter) Footer(ctx context.Context, result *Result) error {
 		hitsTotal = strings.TrimSpace(textFormatter.Count(uint64(result.Summary.Hits.Total)))
 	}
 
-	t.footerWriter.WriteEntry("Query stats", "displayed top %s hits out of %s in %s",
+	t.footerWriter.WriteEntry(queryStatsKey, "displayed top %s hits out of %s in %s",
 		hitsDisplayed,
 		hitsTotal,
 		textFormatter.Duration(result.Summary.Timings.QueryDuration),
 	)
 	result.Query.PrintFooter(t.footerWriter)
 
-	// distributed query information
+	// provide the trace ID in case it was provided in a distributed call
 	if len(result.HostsStatuses) > 1 {
-		result.HostsStatuses.PrintFooter(t.footerWriter)
-
-		// provide the trace ID in case it was provided in a distributed call
 		sc := trace.SpanFromContext(ctx).SpanContext()
 		if sc.HasTraceID() {
-			t.footerWriter.WriteEntry("Trace ID", sc.TraceID().String())
+			t.footerWriter.WriteEntry(traceIDKey, sc.TraceID().String())
 		}
 	}
 

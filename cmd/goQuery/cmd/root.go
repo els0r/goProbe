@@ -431,7 +431,7 @@ func entrypoint(cmd *cobra.Command, args []string) (err error) {
 			return err
 		}
 		for _, host := range result.HostsStatuses.GetErrorStatuses() {
-			logger.Errorf("Host %s returned with status %q: %s", host.Hostname, host.Code, host.Message)
+			logger.Errorf("Host %s returned with error %q: %s", host.Hostname, host.Code, host.Message)
 		}
 	}
 

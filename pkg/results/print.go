@@ -40,6 +40,7 @@ type FooterPrinter interface {
 
 /// FooterPrinter implementations
 
+// PrintFooter prints the timespan and duration covered
 func (tr TimeRange) PrintFooter(fw *FooterTabwriter) error {
 	return fw.WriteEntry("Timespan", "[%s, %s] (%s)",
 		tr.First.Format(types.DefaultTimeOutputFormat),
@@ -48,6 +49,7 @@ func (tr TimeRange) PrintFooter(fw *FooterTabwriter) error {
 	)
 }
 
+// PrintFooter prints the conditions of the query in case they are available
 func (q Query) PrintFooter(fw *FooterTabwriter) error {
 	if q.Condition == "" {
 		return nil
@@ -55,6 +57,7 @@ func (q Query) PrintFooter(fw *FooterTabwriter) error {
 	return fw.WriteEntry("Conditions", q.Condition)
 }
 
+// PrintFooter prints the queried hosts summary (total, ok, empty, error)
 func (hs HostsStatuses) PrintFooter(fw *FooterTabwriter) error {
 	return fw.WriteEntry("Hosts", hs.Summary())
 }
