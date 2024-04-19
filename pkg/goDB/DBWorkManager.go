@@ -580,9 +580,14 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workDir *gpfile.GPDir, enc encoder
 			// Read the block from the file
 			if blocks[colIdx], err = workDir.ReadBlockAtIndex(colIdx, b); err != nil {
 				blockBroken = true
-				logger.With("day", workDir, "block", block.Timestamp, "column", types.ColumnFileNames[colIdx]).Warnf("Failed to read column: %s", err)
+				logger.With("day", workDir.Path(), "block", block.Timestamp, "column", types.ColumnFileNames[colIdx]).Warnf("Failed to read column: %s", err)
 				break
 			}
+		}
+
+		// In case any error was observed during block access, skip this whole block
+		if blockBroken {
+			continue
 		}
 
 		// Check whether all blocks have matching number of entries

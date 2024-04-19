@@ -27,14 +27,12 @@ github.com/els0r/telemetry/metrics v0.0.0-20231115132112-88976d9255a2 h1:Y/FmxE8
 github.com/els0r/telemetry/metrics v0.0.0-20231115132112-88976d9255a2/go.mod h1:gUr4b0xsv04I3NRg0Dd5Rt019UQPb3elFNNprfUG6Ew=
 github.com/els0r/telemetry/tracing v0.0.0-20231115132112-88976d9255a2 h1:cnctcxrSG2+vevCZCbTPzzU+S8xB+m+W/gO8RVlK9x0=
 github.com/els0r/telemetry/tracing v0.0.0-20231115132112-88976d9255a2/go.mod h1:8Cl578dIQOTDB6DkPXFCOQ0Z5MQeXwhOzZB/mcCHDgA=
-github.com/fako1024/gotools/bitpack v0.0.0-20230905084243-56aa6a34fb53 h1:Kf7j7ErEycRvVPcwXAZ9GtQsyMEyS4ayjMom9N3aWSQ=
-github.com/fako1024/gotools/bitpack v0.0.0-20230905084243-56aa6a34fb53/go.mod h1:jIAeVjDhiPMpliXJ2IhbvoTCZb3eCxT4zIElDQXQEhc=
+github.com/fako1024/gotools/bitpack v0.0.0-20240419120819-e06ca9ce9e88 h1:nTZAuKai0dR/olhLiojPnF6dHA749iM/xr2Xg8mtnXo=
+github.com/fako1024/gotools/bitpack v0.0.0-20240419120819-e06ca9ce9e88/go.mod h1:4wD0uVvDrCUyQd0YxxugT1GYeGtiWVIZ5qhrCWSiH6I=
 github.com/fako1024/gotools/concurrency v0.0.0-20230905084243-56aa6a34fb53 h1:TUa4dGmK5t0ndG3sWocAN6+DIszheg9iHJSgb4P/dus=
 github.com/fako1024/gotools/concurrency v0.0.0-20230905084243-56aa6a34fb53/go.mod h1:4mhi2XPVVG6s5zDqL5brEXq2sVZSb4K96zKEJiWrSFs=
 github.com/fako1024/httpc v1.0.18 h1:8Eqd4dm1CL9v+y4nugFh9kC4DpvK3sA5NP0QzxA72dY=
 github.com/fako1024/httpc v1.0.18/go.mod h1:+blZZM7exFOh5xN5ej7YnLhSepVN4cvFLkTdt7M5d00=
-github.com/fako1024/slimcap v1.0.3 h1:JM+n6JWvErYEcaYyR7eHbJfryHT0g9i7M/0qThcTrfI=
-github.com/fako1024/slimcap v1.0.3/go.mod h1:q17iw6vfRS8x+O66fYPkrKApbCok+kYOxdMi3g17VL4=
 github.com/fako1024/slimcap v1.0.4 h1:guXJDSEw4rSfEMFGOFUrHZJGQmkeiABjWZDwHTWq7sU=
 github.com/fako1024/slimcap v1.0.4/go.mod h1:3f6pKKmXy1e7boFajvDg7gC/cnOfRPWbVnkU/iZnAkg=
 github.com/felixge/httpsnoop v1.0.4 h1:NFTV2Zj1bL4mc9sqWACXbQFVBBg2W3GPvqp8/ESS2Wg=
