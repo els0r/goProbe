@@ -3,6 +3,7 @@ package server
 import (
 	"fmt"
 
+	"github.com/danielgtaylor/huma/v2"
 	"github.com/els0r/goProbe/cmd/global-query/pkg/distributed"
 	"github.com/els0r/goProbe/cmd/global-query/pkg/hosts"
 	"github.com/els0r/goProbe/pkg/api"
@@ -25,8 +26,8 @@ func RegisterQueryHandler(engine *gin.Engine, route string, resolver hosts.Resol
 	queryGroup := engine.Group(route)
 	queryGroup.GET("/", handler)  // support for URL-encoded form data GET requests
 	queryGroup.POST("/", handler) // support for JSON or form-data body POST requests
+}
 
-	// validation
-	queryGroup.GET("/validate", api.ValidationHandler())
-	queryGroup.POST("/validate", api.ValidationHandler())
+func registerQueryValidationRoutes(a huma.API) {
+	huma.Register(a, api.GetValidationOperation(), api.GetValidationHandler())
 }

@@ -142,15 +142,20 @@ func (server *DefaultServer) Router() *gin.Engine {
 	return server.router
 }
 
+// API returns the huma API server which is used to register and document endpoints
+func (server *DefaultServer) API() huma.API {
+	return server.api
+}
+
 // QueryRateLimiter returns the global rate limiter, if enabled (if not it return nil and false)
 func (server *DefaultServer) QueryRateLimiter() (*rate.Limiter, bool) {
 	return server.queryRateLimiter, server.queryRateLimiter != nil
 }
 
 func (server *DefaultServer) registerInfoRoutes() {
-	huma.Register(server.api, api.GetHealthOperation, api.GetHealthHandler())
-	huma.Register(server.api, api.GetInfoOperation, api.GetServiceInfoHandler(server.serviceName))
-	huma.Register(server.api, api.GetReadyOperation, api.GetReadyHandler())
+	huma.Register(server.api, api.GetHealthOperation(), api.GetHealthHandler())
+	huma.Register(server.api, api.GetInfoOperation(), api.GetServiceInfoHandler(server.serviceName))
+	huma.Register(server.api, api.GetReadyOperation(), api.GetReadyHandler())
 }
 
 func (server *DefaultServer) registerMiddlewares() {

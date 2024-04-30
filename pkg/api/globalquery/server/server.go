@@ -31,4 +31,5 @@ func New(addr string, resolver hosts.Resolver, querier distributed.Querier, opts
 
 func (server *Server) registerRoutes() {
 	RegisterQueryHandler(server.Router(), api.QueryRoute, server.hostListResolver, server.querier)
+	registerQueryValidationRoutes(server.API())
 }

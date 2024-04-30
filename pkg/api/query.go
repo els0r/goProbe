@@ -6,12 +6,15 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/danielgtaylor/huma/v2"
 	"github.com/els0r/goProbe/pkg/query"
 	"github.com/els0r/telemetry/logging"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	jsoniter "github.com/json-iterator/go"
 )
+
+var queryTags = []string{"Query"}
 
 // LogAndAbort logs an error and the aborts further processing
 func LogAndAbort(ctx context.Context, c *gin.Context, code int, err error) {
@@ -61,47 +64,44 @@ func RunQuery(caller, sourceData string, querier query.Runner, c *gin.Context) {
 	c.JSON(http.StatusOK, result)
 }
 
-// ValidationHandler returns the query args validation handler
-func ValidationHandler() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		ctx := c.Request.Context()
-
-		queryArgs := new(query.Args)
-
-		// Attempt to parse args from request JSON body
-		if err := jsoniter.NewDecoder(c.Request.Body).Decode(queryArgs); err != nil {
-
-			// If that failed, attempt to bind the URL form data
-			if err = binding.Form.Bind(c.Request, queryArgs); err != nil {
-				LogAndAbort(ctx, c, http.StatusBadRequest, err)
-				return
-			}
-		}
-
-		logger := logging.FromContext(ctx).With("args", queryArgs)
-
-		logger.Debug("validating args")
-		_, err := queryArgs.Prepare()
-		if err != nil {
-			vr := &ValidationResponse{StatusCode: http.StatusBadRequest}
-
-			if !errors.As(err, &vr.ArgsError) {
-				LogAndAbort(ctx, c, http.StatusInternalServerError, err)
-				return
-			}
-
-			logger.With("error", vr.ArgsError).Error("invalid query args")
-
-			c.JSON(http.StatusBadRequest, vr)
-			return
-		}
-
-		c.JSON(http.StatusNoContent, "")
+func GetValidationOperation() huma.Operation {
+	return huma.Operation{
+		OperationID: "query-validate",
+		Method:      http.MethodPost,
+		Path:        ValidationRoute,
+		Summary:     "Validate query parameters",
+		Description: "Validates query parameters for (1) integrity (2) attempting to prepare a query statement from them",
+		Tags:        queryTags,
 	}
 }
 
-// ValidationResponse stores the response to a validation query
-type ValidationResponse struct {
-	StatusCode int `json:"status_code"` // StatusCode: stores the HTTP status code of the response. Example: 200
-	*query.ArgsError
+// ValidationInput stores the query args to be validated
+type ValidationInput struct {
+	Body struct {
+		*query.Args
+	}
+}
+
+// GetValidationHandler returns the query args validation handler
+func GetValidationHandler() func(context.Context, *ValidationInput) (*struct{}, error) {
+	return func(ctx context.Context, input *ValidationInput) (*struct{}, error) {
+		args := input.Body.Args
+
+		logger := logging.FromContext(ctx).With("args", args)
+		logger.Debug("validating args")
+
+		_, err := args.Prepare()
+		if err != nil {
+			var vr *query.ArgsError
+			if !errors.As(err, &vr) {
+				return nil, err
+			}
+
+			logger.With("error", err).Error("invalid query args")
+
+			return nil, huma.Error422UnprocessableEntity("stmt prepare: invalid query args", err)
+		}
+
+		return nil, nil
+	}
 }
