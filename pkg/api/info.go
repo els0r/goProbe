@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/danielgtaylor/huma/v2"
 	"github.com/els0r/goProbe/pkg/version"
 	"github.com/gin-gonic/gin"
 )
@@ -18,8 +19,25 @@ type ServiceInfo struct {
 	Pod     string `json:"pod,omitempty" doc:"Name of kubernetes pod (if available)"`                                     // Pod: name of kubernetes pod, if available
 }
 
+// GetInfoOutput is the output of the info request
+type GetInfoOutput struct {
+	Body struct {
+		*ServiceInfo
+	}
+}
+
+// GetInfoOperation is the operation for getting a greeting.
+var GetInfoOperation = huma.Operation{
+	OperationID: "get-info",
+	Method:      http.MethodGet,
+	Path:        InfoRoute,
+	Summary:     "Get application info",
+	Description: "Get runtime information about the application.",
+	Tags:        []string{"Info"},
+}
+
 // GetServiceInfoHandler returns a huma compatible handler that returns the service name, version, and commit
-func GetServiceInfoHandler(serviceName string) func(context.Context, *struct{}) (*ServiceInfo, error) {
+func GetServiceInfoHandler(serviceName string) func(context.Context, *struct{}) (*GetInfoOutput, error) {
 	info := &ServiceInfo{
 		Name:    serviceName,
 		Version: version.Short(),
@@ -35,8 +53,10 @@ func GetServiceInfoHandler(serviceName string) func(context.Context, *struct{}) 
 		}
 	}
 
-	return func(ctx context.Context, _ *struct{}) (*ServiceInfo, error) {
-		return info, nil
+	return func(ctx context.Context, _ *struct{}) (*GetInfoOutput, error) {
+		output := &GetInfoOutput{}
+		output.Body.ServiceInfo = info
+		return output, nil
 	}
 }
 
@@ -62,10 +82,62 @@ func ServiceInfoHandler(serviceName string) gin.HandlerFunc {
 	}
 }
 
+// HealthOutput returns the output of the health command
+type GetHealthOutput struct {
+	Body struct {
+		Status string `json:"status" doc:"Health status of application" example:"healthy"`
+	}
+}
+
+// GetHealthOperation is the operation for getting the health of the app
+var GetHealthOperation = huma.Operation{
+	OperationID: "get-health",
+	Method:      http.MethodGet,
+	Path:        HealthRoute,
+	Summary:     "Get application health",
+	Description: "Get info whether the application is running.",
+	Tags:        []string{"Info"},
+}
+
+// GetHealthHandler returns a handler that returns the application readiness state
+func GetHealthHandler() func(context.Context, *struct{}) (*GetHealthOutput, error) {
+	return func(ctx context.Context, _ *struct{}) (*GetHealthOutput, error) {
+		output := &GetHealthOutput{}
+		output.Body.Status = "healthy"
+		return output, nil
+	}
+}
+
 // HealthHandler returns a handler that returns a 200 OK response if the server is healthy
 func HealthHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.JSON(http.StatusOK, "healthy")
+	}
+}
+
+// GetReadyOutput returns the output of the ready command
+type GetReadyOutput struct {
+	Body struct {
+		Status string `json:"status" doc:"Ready status of application" example:"ready"`
+	}
+}
+
+// GetReadyOperation is the operation for getting the ready state
+var GetReadyOperation = huma.Operation{
+	OperationID: "get-ready",
+	Method:      http.MethodGet,
+	Path:        ReadyRoute,
+	Summary:     "Get application readiness",
+	Description: "Get info whether the application is ready.",
+	Tags:        []string{"Info"},
+}
+
+// GetReadyHandler returns a handler that returns the application readiness state
+func GetReadyHandler() func(context.Context, *struct{}) (*GetReadyOutput, error) {
+	return func(ctx context.Context, _ *struct{}) (*GetReadyOutput, error) {
+		output := &GetReadyOutput{}
+		output.Body.Status = "ready"
+		return output, nil
 	}
 }
 

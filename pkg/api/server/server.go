@@ -7,8 +7,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/danielgtaylor/huma/v2"
+	"github.com/danielgtaylor/huma/v2/adapters/humagin"
 	"github.com/els0r/goProbe/pkg/api"
 	"github.com/els0r/goProbe/pkg/goDB/info"
+	"github.com/els0r/goProbe/pkg/version"
 	"github.com/els0r/telemetry/metrics"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -51,6 +54,7 @@ type DefaultServer struct {
 
 	srv    *http.Server
 	router *gin.Engine
+	api    huma.API
 
 	unixSocketFile string
 }
@@ -121,6 +125,9 @@ func NewDefault(serviceName, addr string, opts ...Option) *DefaultServer {
 		opt(s)
 	}
 
+	// get a documented API
+	s.api = humagin.New(s.router, huma.DefaultConfig(serviceName, version.Short()))
+
 	// register info routes before any other middleware so they are exempt from logging
 	// and/or tracing
 	s.registerInfoRoutes()
@@ -141,10 +148,9 @@ func (server *DefaultServer) QueryRateLimiter() (*rate.Limiter, bool) {
 }
 
 func (server *DefaultServer) registerInfoRoutes() {
-	// make sure these endpoints don't interfere with the standard API path
-	server.router.GET(api.InfoRoute, api.ServiceInfoHandler(server.serviceName))
-	server.router.GET(api.HealthRoute, api.HealthHandler())
-	server.router.GET(api.ReadyRoute, api.ReadyHandler())
+	huma.Register(server.api, api.GetHealthOperation, api.GetHealthHandler())
+	huma.Register(server.api, api.GetInfoOperation, api.GetServiceInfoHandler(server.serviceName))
+	huma.Register(server.api, api.GetReadyOperation, api.GetReadyHandler())
 }
 
 func (server *DefaultServer) registerMiddlewares() {
