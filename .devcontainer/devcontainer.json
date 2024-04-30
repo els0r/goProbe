@@ -6,9 +6,11 @@
       "HTTP_PROXY": "${localEnv:HTTP_PROXY}",
       "HTTPS_PROXY": "${localEnv:HTTP_PROXY}",
       "http_proxy": "${localEnv:HTTP_PROXY}",
-      "https_proxy": "${localEnv:HTTP_PROXY}",
-      "GOWORK": "/workspaces/goProbe/go.work"
+      "https_proxy": "${localEnv:HTTP_PROXY}"
     }
+  },
+  "containerEnv": {
+    "GOWORK": "/workspaces/goProbe/go.work"
   },
   "customizations": {
     "vscode": {
