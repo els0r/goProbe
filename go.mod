@@ -5,6 +5,7 @@ go 1.22.1
 replace github.com/els0r/goProbe/plugins/contrib => ./plugins/contrib
 
 require (
+	github.com/danielgtaylor/huma/v2 v2.15.0
 	github.com/els0r/goProbe/plugins/contrib v0.0.0-00010101000000-000000000000
 	github.com/els0r/telemetry/logging v0.0.0-20231115132112-88976d9255a2
 	github.com/els0r/telemetry/metrics v0.0.0-20231115132112-88976d9255a2
