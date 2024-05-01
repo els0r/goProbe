@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/danielgtaylor/huma/v2"
 	"github.com/els0r/goProbe/pkg/goDB/conditions"
 	"github.com/els0r/goProbe/pkg/goDB/conditions/node"
 	"github.com/els0r/goProbe/pkg/query/dns"
@@ -379,7 +381,14 @@ const (
 
 // Prepare takes the query Arguments, validates them and creates an executable statement. Optionally, additional writers can be passed to route query results to different destinations.
 func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
-	var err error
+	var (
+		err      error
+		errModel = &huma.ErrorModel{
+			Title:  http.StatusText(http.StatusUnprocessableEntity),
+			Status: http.StatusUnprocessableEntity,
+			Detail: "stmt: prepare failed",
+		}
+	)
 
 	s := &Statement{
 		QueryType:     a.Query,
@@ -396,21 +405,23 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 	var selector types.LabelSelector
 	s.attributes, selector, err = types.ParseQueryType(a.Query)
 	if err != nil {
-		return s, newArgsError(
-			"query",
-			invalidQueryTypeMsg,
-			err,
-		)
+		// collect error
+		errModel.Errors = append(errModel.Errors, &huma.ErrorDetail{
+			Message:  fmt.Sprintf("%s: %s", invalidQueryTypeMsg, err),
+			Location: "query",
+			Value:    a.Query,
+		})
 	}
 
 	// verify config format
 	_, verifies := permittedFormats[a.Format]
 	if !verifies {
-		return s, newArgsError(
-			"format",
-			invalidFormatMsg,
-			types.NewUnsupportedError(a.Format, PermittedFormats()),
-		)
+		// collect error
+		errModel.Errors = append(errModel.Errors, &huma.ErrorDetail{
+			Message:  fmt.Sprintf("%s: %v", invalidFormatMsg, PermittedFormats()),
+			Location: "format",
+			Value:    a.Format,
+		})
 	}
 	s.Format = a.Format
 
@@ -422,32 +433,31 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 	// assign sort order and direction
 	s.SortBy, verifies = permittedSortBy[a.SortBy]
 	if !verifies {
-		return s, newArgsError(
-			"sort_by",
-			invalidSortByMsg,
-			types.NewUnsupportedError(a.SortBy, PermittedSortBy()),
-		)
-
+		// collect error
+		errModel.Errors = append(errModel.Errors, &huma.ErrorDetail{
+			Message:  fmt.Sprintf("%s: %v", invalidSortByMsg, PermittedFormats()),
+			Location: "sort_by",
+			Value:    a.Format,
+		})
 	}
 
 	// set and validate the interfaces
 	if a.Ifaces == "" {
-		err := newArgsError(
-			"iface",
-			emptyInterfaceMsg,
-			&types.ParseError{
-				Description: "empty input",
-			},
-		)
-		return s, err
+		// collect error
+		errModel.Errors = append(errModel.Errors, &huma.ErrorDetail{
+			Message:  emptyInterfaceMsg,
+			Location: "ifaces",
+			Value:    a.Ifaces,
+		})
 	}
 	s.Ifaces, err = types.ValidateIfaceNames(a.Ifaces)
 	if err != nil {
-		return s, newArgsError(
-			"iface",
-			invalidInterfaceMsg,
-			err,
-		)
+		// collect error
+		errModel.Errors = append(errModel.Errors, &huma.ErrorDetail{
+			Message:  fmt.Sprintf("%s: %s", invalidInterfaceMsg, err),
+			Location: "ifaces",
+			Value:    a.Ifaces,
+		})
 	}
 
 	// insert iface attribute here in case multiple interfaces where specified and the
@@ -466,13 +476,10 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 	}
 
 	// parse time bound
-	s.First, s.Last, err = ParseTimeRange(a.First, a.Last)
-	if err != nil {
-		return s, newArgsError(
-			"first/last",
-			invalidTimeRangeMsg,
-			err,
-		)
+	var timeRangeDetails []*huma.ErrorDetail
+	s.First, s.Last, timeRangeDetails = ParseTimeRangeCollectErrors(a.First, a.Last)
+	if len(timeRangeDetails) > 0 {
+		errModel.Errors = append(errModel.Errors, timeRangeDetails...)
 	}
 
 	switch {
@@ -491,13 +498,14 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 		// TODO: make this function available in the public domain or skip
 		err := dns.CheckDNS()
 		if err != nil {
+
 			return s, newArgsError(
 				"dns_resolution.enabled",
 				"DNS check failed",
 				err,
 			)
 		}
-		if !(0 < s.DNSResolution.Timeout) {
+		if 0 >= s.DNSResolution.Timeout {
 			return s, newArgsError(
 				"dns_resolution.timeout",
 				invalidDNSResolutionTimeoutMsg,
@@ -519,11 +527,17 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 	// build condition tree to check if there is a syntax error before starting processing
 	_, _, parseErr := node.ParseAndInstrument(s.Condition, s.DNSResolution.Timeout)
 	if parseErr != nil {
-		return s, newArgsError(
-			"condition",
-			invalidConditionMsg,
-			parseErr,
-		)
+		errMsg := parseErr.Error()
+		var p *types.ParseError
+		if errors.As(parseErr, &p) {
+			errMsg = p.Pretty()
+		}
+		// collect error
+		errModel.Errors = append(errModel.Errors, &huma.ErrorDetail{
+			Message:  fmt.Sprintf("%s: %s", invalidConditionMsg, errMsg),
+			Location: "condition",
+			Value:    s.Condition,
+		})
 	}
 
 	// if we got here, the condition can definitely be tokenized. This makes sure the canonical
@@ -533,37 +547,44 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 
 	// check memory flag
 	if !(0 < a.MaxMemPct && a.MaxMemPct <= 100) {
-		return s, newArgsError(
-			"max_mem_pct",
-			invalidMaxMemPctMsg,
-			types.NewRangeError(strconv.Itoa(a.MaxMemPct), "0", false, "100", true),
-		)
+		// collect error
+		errModel.Errors = append(errModel.Errors, &huma.ErrorDetail{
+			Message:  invalidMaxMemPctMsg,
+			Location: "max_mem_pct",
+			Value:    a.MaxMemPct,
+		})
 	}
 	s.MaxMemPct = a.MaxMemPct
 
 	// check limits flag
 	if a.NumResults <= 0 {
-		return s, newArgsError(
-			"num_results",
-			invalidRowLimitMsg,
-			types.NewMinBoundsError(strconv.Itoa(int(s.NumResults)), "0", false),
-		)
+		// collect error
+		errModel.Errors = append(errModel.Errors, &huma.ErrorDetail{
+			Message:  invalidMaxMemPctMsg,
+			Location: "num_results",
+			Value:    a.NumResults,
+		})
 	}
 	s.NumResults = a.NumResults
 
 	// check for consistent use of the live flag
 	if s.Live && s.Last != types.MaxTime.Unix() {
-		return s, newArgsError(
-			"live",
-			invalidLiveQueryMsg,
-			errors.New("last timestamp unsupported"),
-		)
+		// collect error
+		errModel.Errors = append(errModel.Errors, &huma.ErrorDetail{
+			Message:  fmt.Sprintf("%s: last timestamp unsupported", invalidLiveQueryMsg),
+			Location: "live",
+			Value:    s.Last,
+		})
 	}
 
 	// fan-out query results in case multiple writers were supplied
 	writers = append(writers, a.outputs...)
 	if len(writers) > 0 {
 		s.Output = io.MultiWriter(writers...)
+	}
+
+	if len(errModel.Errors) > 0 {
+		return s, errModel
 	}
 
 	return s, nil
