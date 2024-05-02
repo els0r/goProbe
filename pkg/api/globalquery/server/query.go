@@ -29,5 +29,5 @@ func RegisterQueryHandler(engine *gin.Engine, route string, resolver hosts.Resol
 }
 
 func registerQueryValidationRoutes(a huma.API) {
-	huma.Register(a, api.GetValidationOperation(), api.GetValidationHandler())
+	api.RegisterQueryAPI(a)
 }

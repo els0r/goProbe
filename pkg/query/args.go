@@ -38,19 +38,33 @@ func NewArgs(query, ifaces string, opts ...Option) *Args {
 // DefaultArgs creates a basic set of query arguments with only the
 // defaults being set
 func DefaultArgs() *Args {
-	return &Args{
-		First:      time.Now().AddDate(0, -1, 0).Format(time.ANSIC),
-		Format:     DefaultFormat,
-		In:         DefaultIn,
-		Last:       maxTimeStr,
-		MaxMemPct:  DefaultMaxMemPct,
-		NumResults: DefaultNumResults,
-		Out:        DefaultOut,
-		DNSResolution: DNSResolution{
+	args := &Args{}
+	args.SetDefaults()
+	return args
+}
+
+// SetDefaults sets the default values for all uninitialized fields in the arguments
+func (args *Args) SetDefaults() {
+	if args.First == "" {
+		args.First = time.Now().AddDate(0, -1, 0).Format(time.ANSIC)
+	}
+	if args.Last == "" {
+		args.Last = maxTimeStr
+	}
+	if args.MaxMemPct == 0 {
+		args.MaxMemPct = DefaultMaxMemPct
+	}
+	if args.NumResults == 0 {
+		args.NumResults = DefaultNumResults
+	}
+	if (args.DNSResolution == DNSResolution{}) {
+		args.DNSResolution = DNSResolution{
 			MaxRows: DefaultResolveRows,
 			Timeout: DefaultResolveTimeout,
-		},
-		SortBy: DefaultSortBy,
+		}
+	}
+	if args.SortBy == "" {
+		args.SortBy = DefaultSortBy
 	}
 }
 
@@ -58,51 +72,51 @@ func DefaultArgs() *Args {
 type Args struct {
 	// required
 	// Query: the query type
-	Query string `json:"query" yaml:"query" form:"query" doc:"Query type / Attributes to aggregate by" example:"sip,dip,dport,proto" minLength:"3"`
+	Query string `json:"query" yaml:"query" query:"query" doc:"Query type / Attributes to aggregate by" example:"sip,dip,dport,proto" minLength:"3"`
 	// Ifaces: the interfaces to query
-	Ifaces string `json:"ifaces" yaml:"ifaces" form:"ifaces" doc:"Interfaces to query" example:"eth0,eth1" minLength:"2"`
+	Ifaces string `json:"ifaces" yaml:"ifaces" query:"ifaces" doc:"Interfaces to query" example:"eth0,eth1" minLength:"2"`
 
 	// QueryHosts: the hosts for which data is queried (comma-separated list)
-	QueryHosts string `json:"query_hosts,omitempty" yaml:"query_hosts,omitempty" form:"query_hosts,omitempty" doc:"Hosts for which data is queried" example:"hostA,hostB,hostC"`
+	QueryHosts string `json:"query_hosts,omitempty" yaml:"query_hosts,omitempty" query:"query_hosts" required:"false" doc:"Hosts for which data is queried" example:"hostA,hostB,hostC"`
 
 	// Hostname: the hostname from which data is queried
-	Hostname string `json:"hostname,omitempty" yaml:"hostname,omitempty" form:"hostname,omitempty" doc:"Hostname from which data is queried" example:"hostA"`
+	Hostname string `json:"hostname,omitempty" yaml:"hostname,omitempty" query:"hostname" required:"false" doc:"Hostname from which data is queried" example:"hostA"`
 	// HostID: the host id from which data is queried
-	HostID uint `json:"host_id,omitempty" yaml:"host_id,omitempty" form:"host_id,omitempty" doc:"Host ID from which data is queried" example:"123456"`
+	HostID uint `json:"host_id,omitempty" yaml:"host_id,omitempty" query:"host_id" required:"false" doc:"Host ID from which data is queried" example:"123456"`
 
 	// data filtering
 	// Condition: the condition to filter data by
-	Condition string `json:"condition,omitempty" yaml:"condition,omitempty" form:"condition,omitempty" doc:"Condition to filter data by" example:"port=80 & proto=TCP"`
+	Condition string `json:"condition,omitempty" yaml:"condition,omitempty" query:"condition" required:"false" doc:"Condition to filter data by" example:"port=80 & proto=TCP"`
 
 	// counter addition
 	// In: only show incoming packets/bytes
-	In bool `json:"in,omitempty" yaml:"in,omitempty" form:"in,omitempty" doc:"Only show incoming packets/bytes" example:"false"`
+	In bool `json:"in,omitempty" yaml:"in,omitempty" query:"in" required:"false" doc:"Only show incoming packets/bytes" example:"false"`
 	// Out: only show outgoing packets/bytes
-	Out bool `json:"out,omitempty" yaml:"out,omitempty"  form:"out,omitempty" doc:"Only show outgoing packets/bytes" example:"false"`
+	Out bool `json:"out,omitempty" yaml:"out,omitempty"  query:"out" required:"false" doc:"Only show outgoing packets/bytes" example:"false"`
 	// Sum: show sum of incoming/outgoing packets/bytes
-	Sum bool `json:"sum,omitempty" yaml:"sum,omitempty" form:"sum,omitempty" doc:"Show sum of incoming/outgoing packets/bytes" example:"false"`
+	Sum bool `json:"sum,omitempty" yaml:"sum,omitempty" query:"sum" required:"false" doc:"Show sum of incoming/outgoing packets/bytes" example:"false"`
 
 	// time selection
 	// First: the first timestamp to query
-	First string `json:"first,omitempty" yaml:"first,omitempty" form:"first,omitempty" doc:"The first timestamp to query" example:"2020-08-12T09:47:00+02:00"`
+	First string `json:"first,omitempty" yaml:"first,omitempty" query:"first" required:"false" doc:"The first timestamp to query" example:"2020-08-12T09:47:00+02:00"`
 	// Last: the last timestamp to query
-	Last string `json:"last,omitempty" yaml:"last,omitempty" form:"last,omitempty" doc:"The last timestamp to query" example:"-24h"`
+	Last string `json:"last,omitempty" yaml:"last,omitempty" query:"last" required:"false" doc:"The last timestamp to query" example:"-24h"`
 
 	// formatting
 	// Format: the output format
-	Format string `json:"format,omitempty" yaml:"format,omitempty" form:"format,omitempty" doc:"Output format" enum:"json,table,csv" example:"json"`
+	Format string `json:"format,omitempty" yaml:"format,omitempty" query:"format" required:"false" doc:"Output format" enum:"json,txt,csv" example:"json"`
 	// SortBy: column to sort by
-	SortBy string `json:"sort_by,omitempty" yaml:"sort_by,omitempty" form:"sort_by,omitempty" doc:"Colum to sort by" enum:"bytes,packets" example:"packets" default:"bytes"`
+	SortBy string `json:"sort_by,omitempty" yaml:"sort_by,omitempty" query:"sort_by" required:"false" doc:"Colum to sort by" enum:"bytes,packets" example:"packets" default:"bytes"`
 	// NumResults: number of results to return/print
-	NumResults uint64 `json:"num_results,omitempty" yaml:"num_results,omitempty" form:"num_results,omitempty" doc:"Number of results to return/print" example:"25" minimum:"1" default:"1000"`
+	NumResults uint64 `json:"num_results,omitempty" yaml:"num_results,omitempty" query:"num_results" required:"false" doc:"Number of results to return/print" example:"25" minimum:"1" default:"1000"`
 	// SortAscending: sort ascending instead of the default descending
-	SortAscending bool `json:"sort_ascending,omitempty" yaml:"sort_ascending,omitempty" form:"sort_ascending,omitempty" doc:"Sort ascending instead of descending" example:"false"`
+	SortAscending bool `json:"sort_ascending,omitempty" yaml:"sort_ascending,omitempty" query:"sort_ascending" required:"false" doc:"Sort ascending instead of descending" example:"false"`
 
 	// do-and-exit arguments
 	// List: only list interfaces and return
-	List bool `json:"list,omitempty" yaml:"list,omitempty" form:"list,omitempty" hidden:"true"`
+	List bool `json:"list,omitempty" yaml:"list,omitempty" query:"list" required:"false" hidden:"true"`
 	// Version: only print version and return
-	Version bool `json:"version,omitempty" yaml:"version,omitempty" form:"version,omitempty" hidden:"true"`
+	Version bool `json:"version,omitempty" yaml:"version,omitempty" query:"version" required:"false" hidden:"true"`
 
 	// resolution
 	// Note: Nested structures are not supported for form data, see individual parameters in definition of DNSResolution
@@ -111,15 +125,15 @@ type Args struct {
 
 	// file system
 	// MaxMemPct: maximum percentage of available host memory to use for query processing
-	MaxMemPct int `json:"max_mem_pct,omitempty" yaml:"max_mem_pct,omitempty" form:"max_mem_pct,omitempty" doc:"Maximum percentage of available host memory to use for query processing" default:"60" example:"80" minimum:"1" maximum:"100"`
+	MaxMemPct int `json:"max_mem_pct,omitempty" yaml:"max_mem_pct,omitempty" query:"max_mem_pct" required:"false" doc:"Maximum percentage of available host memory to use for query processing" default:"60" example:"80" minimum:"1" maximum:"100"`
 	// LowMem: use less memory for query processing
-	LowMem bool `json:"low_mem,omitempty" yaml:"low_mem,omitempty" form:"low_mem,omitempty" doc:"Use less memory for query processing" example:"false"`
+	LowMem bool `json:"low_mem,omitempty" yaml:"low_mem,omitempty" query:"low_mem" required:"false" doc:"Use less memory for query processing" example:"false"`
 
 	// Caller stores who produced these args (caller)
-	Caller string `json:"caller,omitempty" yaml:"caller,omitempty" form:"caller,omitempty" doc:"Caller stores who produced the arguments" example:"goQuery"`
+	Caller string `json:"caller,omitempty" yaml:"caller,omitempty" query:"caller" required:"false" doc:"Caller stores who produced the arguments" example:"goQuery"`
 
 	// Live can be used to request live flow data (in addition to DB results)
-	Live bool `json:"live,omitempty" yaml:"live,omitempty" form:"live,omitempty" doc:"Live can be used to request live flow data (in addition to DB results)" example:"false"`
+	Live bool `json:"live,omitempty" yaml:"live,omitempty" query:"live" required:"false" doc:"Live can be used to request live flow data (in addition to DB results)" example:"false"`
 
 	// outputs is unexported
 	outputs []io.Writer
@@ -166,11 +180,11 @@ func (d *DetailError) Pretty() string {
 type DNSResolution struct {
 	_ struct{} `nullable:"true"`
 	// Enabled: enable reverse DNS lookups. Example: false
-	Enabled bool `json:"enabled" yaml:"enabled" form:"dns_enabled" doc:"Enable reverse DNS lookups" example:"false"`
+	Enabled bool `json:"enabled" yaml:"enabled" query:"dns_enabled" doc:"Enable reverse DNS lookups" example:"false"`
 	// Timeout: timeout for reverse DNS lookups
-	Timeout time.Duration `json:"timeout,omitempty" yaml:"timeout,omitempty" form:"dns_timeout,omitempty" doc:"Timeout for reverse DNS lookups" example:"2000000000" minimum:"0" default:"1000000000"`
+	Timeout time.Duration `json:"timeout,omitempty" yaml:"timeout,omitempty" query:"dns_timeout" required:"false" doc:"Timeout for reverse DNS lookups" example:"2000000000" minimum:"0" default:"1000000000"`
 	// MaxRows: maximum number of rows to resolve
-	MaxRows int `json:"max_rows,omitempty" yaml:"max_rows,omitempty" form:"dns_max_rows,omitempty" doc:"Maximum number of rows to resolve" minimum:"1" example:"25"`
+	MaxRows int `json:"max_rows,omitempty" yaml:"max_rows,omitempty" query:"dns_max_rows" required:"false" doc:"Maximum number of rows to resolve" minimum:"1" example:"25"`
 }
 
 // AddOutputs allows more control over to which outputs the
