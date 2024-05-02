@@ -233,7 +233,7 @@ func ParseTimeRangeCollectErrors(firstStr, lastStr string) (first, last int64, d
 		first, err = ParseTimeArgument(firstStr)
 		if err != nil {
 			details = append(details, &huma.ErrorDetail{
-				Location: "first",
+				Location: "body.first",
 				Message:  fmt.Sprintf("%s: %s", errorInvalidTimeFormat, err),
 				Value:    firstStr,
 			})
@@ -246,7 +246,7 @@ func ParseTimeRangeCollectErrors(firstStr, lastStr string) (first, last int64, d
 		last, err = ParseTimeArgument(lastStr)
 		if err != nil {
 			details = append(details, &huma.ErrorDetail{
-				Location: "last",
+				Location: "body.last",
 				Message:  fmt.Sprintf("%s: %s", errorInvalidTimeFormat, err),
 				Value:    lastStr,
 			})
@@ -255,7 +255,7 @@ func ParseTimeRangeCollectErrors(firstStr, lastStr string) (first, last int64, d
 
 	if first > last {
 		details = append(details, &huma.ErrorDetail{
-			Location: "last",
+			Location: "body.first",
 			Message:  fmt.Sprintf("%s: the lower time bound cannot be greater than the upper time bound", errorInvalidTimeInterval),
 			Value:    firstStr,
 		})

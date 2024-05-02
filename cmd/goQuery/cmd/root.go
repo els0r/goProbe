@@ -380,6 +380,7 @@ func entrypoint(cmd *cobra.Command, args []string) (err error) {
 	// convert the command line parameters
 	stmt, err := queryArgs.Prepare()
 	if err != nil {
+
 		// if there's an args error, try to print it in a user-friendly way
 		return types.ShouldPretty(err, queryPrepFailureMsg)
 	}

@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 
@@ -92,16 +91,12 @@ func GetValidationHandler() func(context.Context, *ValidationInput) (*struct{}, 
 
 		_, err := args.Prepare()
 		if err != nil {
-			var vr *query.ArgsError
-			if !errors.As(err, &vr) {
-				return nil, err
-			}
-
 			logger.With("error", err).Error("invalid query args")
-
-			return nil, huma.Error422UnprocessableEntity("stmt prepare: invalid query args", err)
+			// if it's a validation error 422 is returned automatically
+			return nil, err
 		}
 
+		// 204 No Content is added since no data is returned and no error is returned
 		return nil, nil
 	}
 }

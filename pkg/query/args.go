@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -61,7 +60,7 @@ type Args struct {
 	// Query: the query type
 	Query string `json:"query" yaml:"query" form:"query" doc:"Query type / Attributes to aggregate by" example:"sip,dip,dport,proto" minLength:"3"`
 	// Ifaces: the interfaces to query
-	Ifaces string `json:"ifaces" yaml:"ifaces" form:"ifaces" doc:"Interfaces to query" example:"eth0,eth1" minLength:"3"`
+	Ifaces string `json:"ifaces" yaml:"ifaces" form:"ifaces" doc:"Interfaces to query" example:"eth0,eth1" minLength:"2"`
 
 	// QueryHosts: the hosts for which data is queried (comma-separated list)
 	QueryHosts string `json:"query_hosts,omitempty" yaml:"query_hosts,omitempty" form:"query_hosts,omitempty" doc:"Hosts for which data is queried" example:"hostA,hostB,hostC"`
@@ -85,7 +84,7 @@ type Args struct {
 
 	// time selection
 	// First: the first timestamp to query
-	First string `json:"first,omitempty" yaml:"first,omitempty" form:"first,omitempty" doc:"The first timestamp to query" example:"2020-08-12T09:47:00+0200"`
+	First string `json:"first,omitempty" yaml:"first,omitempty" form:"first,omitempty" doc:"The first timestamp to query" example:"2020-08-12T09:47:00+02:00"`
 	// Last: the last timestamp to query
 	Last string `json:"last,omitempty" yaml:"last,omitempty" form:"last,omitempty" doc:"The last timestamp to query" example:"-24h"`
 
@@ -95,7 +94,7 @@ type Args struct {
 	// SortBy: column to sort by
 	SortBy string `json:"sort_by,omitempty" yaml:"sort_by,omitempty" form:"sort_by,omitempty" doc:"Colum to sort by" enum:"bytes,packets" example:"packets" default:"bytes"`
 	// NumResults: number of results to return/print
-	NumResults uint64 `json:"num_results,omitempty" yaml:"num_results,omitempty" form:"num_results,omitempty" doc:"Number of results to return/print" example:"25" min:"1" default:"1000"`
+	NumResults uint64 `json:"num_results,omitempty" yaml:"num_results,omitempty" form:"num_results,omitempty" doc:"Number of results to return/print" example:"25" minimum:"1" default:"1000"`
 	// SortAscending: sort ascending instead of the default descending
 	SortAscending bool `json:"sort_ascending,omitempty" yaml:"sort_ascending,omitempty" form:"sort_ascending,omitempty" doc:"Sort ascending instead of descending" example:"false"`
 
@@ -112,7 +111,7 @@ type Args struct {
 
 	// file system
 	// MaxMemPct: maximum percentage of available host memory to use for query processing
-	MaxMemPct int `json:"max_mem_pct,omitempty" yaml:"max_mem_pct,omitempty" form:"max_mem_pct,omitempty" doc:"Maximum percentage of available host memory to use for query processing" default:"60" example:"80" min:"1" max:"100"`
+	MaxMemPct int `json:"max_mem_pct,omitempty" yaml:"max_mem_pct,omitempty" form:"max_mem_pct,omitempty" doc:"Maximum percentage of available host memory to use for query processing" default:"60" example:"80" minimum:"1" maximum:"100"`
 	// LowMem: use less memory for query processing
 	LowMem bool `json:"low_mem,omitempty" yaml:"low_mem,omitempty" form:"low_mem,omitempty" doc:"Use less memory for query processing" example:"false"`
 
@@ -126,179 +125,41 @@ type Args struct {
 	outputs []io.Writer
 }
 
-// ArgsError provides a more detailed error description for invalid query args
-type ArgsError struct {
-	Field   string // Field: the string describing which field led to the error. It MUST match the json definition for a field. Example: condition
-	Type    string // Type: the type of the error. Example: *types.ParseError
-	Message string // Message: a human-readable, UI friendly description of the error. Example: Condition parsing failed
-	err     error  // Details: a specific error describing which part of the arguments is incorrect
-}
-
-func newArgsError(field string, msg string, err error) *ArgsError {
-	args := &ArgsError{
-		Field:   field,
-		Message: msg,
-		err:     err,
-	}
-	if err != nil {
-		args.Type = fmt.Sprintf("%T", err)
-
-		// make sure the type of the wrapped error is found out
-		e := errors.Unwrap(err)
-		if e != nil {
-			args.Type = fmt.Sprintf("%T", e)
-		}
-	}
-	return args
-}
-
-func (err *ArgsError) String() string {
-	return fmt.Sprintf("%s: %s: (%s: %s)", err.Field, err.Message, err.Type, err.err)
-}
-
-// Error implements the error interface
-func (err *ArgsError) Error() string {
-	return err.String()
-}
-
-// Unwrap makes the error wrappable
-func (err *ArgsError) Unwrap() error {
-	return err.err
-}
-
-// LogValue implements slog.LogValuer
-func (err *ArgsError) LogValue() slog.Value {
-	return slog.GroupValue(
-		slog.String("field", err.Field),
-		slog.String("type", string(err.Type)),
-		slog.String("message", err.Message),
-		slog.Any("details", err.err),
-	)
-}
-
-type marshallableError struct {
-	error
-}
-
-type marshalArgsError struct {
-	Field   string `json:"field"`
-	Type    string `json:"type,omitempty"`
-	Message string `json:"message"`
-	Details any    `json:"details,omitempty"`
-}
-
-func (m *marshallableError) MarshalJSON() ([]byte, error) {
-	return jsoniter.Marshal(m.Error())
-}
-
-func (err *ArgsError) MarshalJSON() ([]byte, error) {
-	var m = marshalArgsError{Field: err.Field, Type: err.Type, Message: err.Message}
-
-	if err.err == nil {
-		m.Details = nil
-		return jsoniter.Marshal(&m)
-	}
-
-	// check if the underlying error is a parse error
-	e := errors.Unwrap(err.err)
-	if e == nil {
-		e = err.err
-		m.Type = fmt.Sprintf("%T", e)
-	}
-
-	// need assertion because error doesn't know how to deal with marshalling
-	switch t := e.(type) {
-	case *types.ParseError,
-		*types.MinBoundsError,
-		*types.MaxBoundsError,
-		*types.RangeError,
-		*types.UnsupportedError:
-		m.Details = t
-	default:
-		m.Details = &marshallableError{e}
-	}
-
-	return jsoniter.Marshal(&m)
-}
-
-var (
-	maxBoundsErrorType   = fmt.Sprintf("%T", new(types.MaxBoundsError))
-	minBoundsErrorType   = fmt.Sprintf("%T", new(types.MinBoundsError))
-	parseErrorType       = fmt.Sprintf("%T", new(types.ParseError))
-	rangeErrorType       = fmt.Sprintf("%T", new(types.RangeError))
-	unsupportedErrorType = fmt.Sprintf("%T", new(types.UnsupportedError))
-)
-
-// UnmarshalJSON implements the json.Unmarshaler interface
-func (err *ArgsError) UnmarshalJSON(data []byte) error {
-	var m = new(marshalArgsError)
-	e := jsoniter.Unmarshal(data, m)
-	if e != nil {
-		return e
-	}
-	err.Field = m.Field
-	err.Message = m.Message
-	err.Type = m.Type
-
-	// re-create the specific error
-	var detailError error = nil
-	if m.Details == nil {
-		err.err = detailError
-		return nil
-	}
-
-	switch m.Type {
-	case parseErrorType:
-		m.Details = new(types.ParseError)
-	case minBoundsErrorType:
-		m.Details = new(types.MinBoundsError)
-	case maxBoundsErrorType:
-		m.Details = new(types.MaxBoundsError)
-	case rangeErrorType:
-		m.Details = new(types.RangeError)
-	case unsupportedErrorType:
-		m.Details = new(types.UnsupportedError)
-	default:
-		m.Details = ""
-	}
-
-	e = jsoniter.Unmarshal(data, m)
-	if e != nil {
-		return e
-	}
-
-	switch t := m.Details.(type) {
-	case *types.ParseError:
-		err.err = t
-	case *types.MinBoundsError:
-		err.err = t
-	case *types.MaxBoundsError:
-		err.err = t
-	case *types.RangeError:
-		err.err = t
-	case *types.UnsupportedError:
-		err.err = t
-	case error:
-		err.err = t
-	case string:
-		err.err = errors.New(t)
-	default:
-		return fmt.Errorf("unknown error type %v", t)
-	}
-
-	return nil
-}
-
 // Pretty implements the Prettier interface to represent the error in a human-readable way
-func (err *ArgsError) Pretty() string {
-	str := `
-  Field:   %s
-  Message: %s
-  Details: %s
-`
-	errStr := err.err.Error()
+// TODO: prettify huma details error
+// func (err *ArgsError) Pretty() string {
+// 	str := `
+//   Field:   %s
+//   Message: %s
+//   Details: %s
+// `
+// 	errStr := err.err.Error()
 
-	return fmt.Sprintf(str, err.Field, err.Message, errStr)
+//	return fmt.Sprintf(str, err.Field, err.Message, errStr)
+//
+// '}
+type DetailError struct {
+	huma.ErrorModel
+}
+
+// Pretty implements the prettier interface for a huma.ErrorModel
+func (d *DetailError) Pretty() string {
+	var details []string
+	for _, detail := range d.Errors {
+		heading := fmt.Sprintf("%s (value: %v)", strings.TrimLeft(detail.Location, "body."), detail.Value)
+		dashes := strings.Repeat("-", len(heading))
+
+		details = append(details,
+			fmt.Sprintf(`
+%s
+%s
+%s`,
+				heading, dashes, detail.Message,
+			),
+		)
+	}
+
+	return fmt.Sprintf("%s", strings.Join(details, "\n"))
 }
 
 // DNSResolution contains DNS query / resolution related config arguments / parameters
@@ -307,7 +168,7 @@ type DNSResolution struct {
 	// Enabled: enable reverse DNS lookups. Example: false
 	Enabled bool `json:"enabled" yaml:"enabled" form:"dns_enabled" doc:"Enable reverse DNS lookups" example:"false"`
 	// Timeout: timeout for reverse DNS lookups
-	Timeout time.Duration `json:"timeout,omitempty" yaml:"timeout,omitempty" form:"dns_timeout,omitempty" doc:"Timeout for reverse DNS lookups" example:"2000000000" default:"1000000000"`
+	Timeout time.Duration `json:"timeout,omitempty" yaml:"timeout,omitempty" form:"dns_timeout,omitempty" doc:"Timeout for reverse DNS lookups" example:"2000000000" minimum:"0" default:"1000000000"`
 	// MaxRows: maximum number of rows to resolve
 	MaxRows int `json:"max_rows,omitempty" yaml:"max_rows,omitempty" form:"dns_max_rows,omitempty" doc:"Maximum number of rows to resolve" minimum:"1" example:"25"`
 }
@@ -369,6 +230,7 @@ const (
 	invalidInterfaceMsg            = "invalid interface name"
 	invalidQueryTypeMsg            = "invalid query type"
 	invalidFormatMsg               = "unknown format"
+	invalidNumResults              = "invalid number of result rows"
 	invalidSortByMsg               = "unknown format"
 	invalidTimeRangeMsg            = "invalid time range"
 	invalidDNSResolutionTimeoutMsg = "invalid resolution timeout"
@@ -383,10 +245,12 @@ const (
 func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 	var (
 		err      error
-		errModel = &huma.ErrorModel{
-			Title:  http.StatusText(http.StatusUnprocessableEntity),
-			Status: http.StatusUnprocessableEntity,
-			Detail: "stmt: prepare failed",
+		errModel = &DetailError{
+			ErrorModel: huma.ErrorModel{
+				Title:  http.StatusText(http.StatusUnprocessableEntity),
+				Status: http.StatusUnprocessableEntity,
+				Detail: "query preparation failed",
+			},
 		}
 	)
 
@@ -405,10 +269,15 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 	var selector types.LabelSelector
 	s.attributes, selector, err = types.ParseQueryType(a.Query)
 	if err != nil {
+		errMsg := err.Error()
+		var p *types.ParseError
+		if errors.As(err, &p) {
+			errMsg = "\n" + p.Pretty()
+		}
 		// collect error
 		errModel.Errors = append(errModel.Errors, &huma.ErrorDetail{
-			Message:  fmt.Sprintf("%s: %s", invalidQueryTypeMsg, err),
-			Location: "query",
+			Message:  fmt.Sprintf("%s: %s", invalidQueryTypeMsg, errMsg),
+			Location: "body.query",
 			Value:    a.Query,
 		})
 	}
@@ -419,7 +288,7 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 		// collect error
 		errModel.Errors = append(errModel.Errors, &huma.ErrorDetail{
 			Message:  fmt.Sprintf("%s: %v", invalidFormatMsg, PermittedFormats()),
-			Location: "format",
+			Location: "body.format",
 			Value:    a.Format,
 		})
 	}
@@ -436,7 +305,7 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 		// collect error
 		errModel.Errors = append(errModel.Errors, &huma.ErrorDetail{
 			Message:  fmt.Sprintf("%s: %v", invalidSortByMsg, PermittedFormats()),
-			Location: "sort_by",
+			Location: "body.sort_by",
 			Value:    a.Format,
 		})
 	}
@@ -446,7 +315,7 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 		// collect error
 		errModel.Errors = append(errModel.Errors, &huma.ErrorDetail{
 			Message:  emptyInterfaceMsg,
-			Location: "ifaces",
+			Location: "body.ifaces",
 			Value:    a.Ifaces,
 		})
 	}
@@ -455,7 +324,7 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 		// collect error
 		errModel.Errors = append(errModel.Errors, &huma.ErrorDetail{
 			Message:  fmt.Sprintf("%s: %s", invalidInterfaceMsg, err),
-			Location: "ifaces",
+			Location: "body.ifaces",
 			Value:    a.Ifaces,
 		})
 	}
@@ -498,26 +367,28 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 		// TODO: make this function available in the public domain or skip
 		err := dns.CheckDNS()
 		if err != nil {
-
-			return s, newArgsError(
-				"dns_resolution.enabled",
-				"DNS check failed",
-				err,
-			)
+			// collect error
+			errModel.Errors = append(errModel.Errors, &huma.ErrorDetail{
+				Message:  fmt.Sprintf("DNS check failed: %s", err),
+				Location: "body.dns_resolution.enabled",
+				Value:    a.Ifaces,
+			})
 		}
 		if 0 >= s.DNSResolution.Timeout {
-			return s, newArgsError(
-				"dns_resolution.timeout",
-				invalidDNSResolutionTimeoutMsg,
-				types.NewMinBoundsError(strconv.Itoa(int(s.DNSResolution.Timeout)), "0", false),
-			)
+			// collect error
+			errModel.Errors = append(errModel.Errors, &huma.ErrorDetail{
+				Message:  invalidDNSResolutionTimeoutMsg,
+				Location: "body.dns_resolution.timeout",
+				Value:    s.DNSResolution.Timeout,
+			})
 		}
 		if !(0 < s.DNSResolution.MaxRows) {
-			return s, newArgsError(
-				"dns_resolution.max_rows",
-				invalidDNSResolutionRowsMsg,
-				types.NewMinBoundsError(strconv.Itoa(int(s.DNSResolution.MaxRows)), "0", false),
-			)
+			// collect error
+			errModel.Errors = append(errModel.Errors, &huma.ErrorDetail{
+				Message:  invalidDNSResolutionTimeoutMsg,
+				Location: "body.dns_resolution.max_rows",
+				Value:    s.DNSResolution.MaxRows,
+			})
 		}
 	}
 
@@ -530,12 +401,12 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 		errMsg := parseErr.Error()
 		var p *types.ParseError
 		if errors.As(parseErr, &p) {
-			errMsg = p.Pretty()
+			errMsg = "\n" + p.Pretty()
 		}
 		// collect error
 		errModel.Errors = append(errModel.Errors, &huma.ErrorDetail{
 			Message:  fmt.Sprintf("%s: %s", invalidConditionMsg, errMsg),
-			Location: "condition",
+			Location: "body.condition",
 			Value:    s.Condition,
 		})
 	}
@@ -549,8 +420,8 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 	if !(0 < a.MaxMemPct && a.MaxMemPct <= 100) {
 		// collect error
 		errModel.Errors = append(errModel.Errors, &huma.ErrorDetail{
-			Message:  invalidMaxMemPctMsg,
-			Location: "max_mem_pct",
+			Message:  fmt.Sprintf("%s: must be in (0, 100]", invalidMaxMemPctMsg),
+			Location: "body.max_mem_pct",
 			Value:    a.MaxMemPct,
 		})
 	}
@@ -560,8 +431,8 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 	if a.NumResults <= 0 {
 		// collect error
 		errModel.Errors = append(errModel.Errors, &huma.ErrorDetail{
-			Message:  invalidMaxMemPctMsg,
-			Location: "num_results",
+			Message:  fmt.Sprintf("%s: must be > 0", invalidNumResults),
+			Location: "body.num_results",
 			Value:    a.NumResults,
 		})
 	}
