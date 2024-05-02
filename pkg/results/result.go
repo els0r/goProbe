@@ -24,14 +24,20 @@ var (
 
 // Result bundles the data rows returned and the query meta information
 type Result struct {
-	Hostname string `json:"hostname,omitempty"` // Hostname: from which the result originated
+	// Hostname: from which the result originated
+	Hostname string `json:"hostname,omitempty" doc:"Hostname from which the result originated" example:"hostA"`
 
-	Status        Status        `json:"status"`         // Status: the overall status of the result
-	HostsStatuses HostsStatuses `json:"hosts_statuses"` // HostsStatuses: the status of all hosts queried
+	// Status: the overall status of the result
+	Status Status `json:"status" doc:"Status of the result"`
+	// HostsStatuses: the status of all hosts queried
+	HostsStatuses HostsStatuses `json:"hosts_statuses" doc:"Statuses of all hosts queried"`
 
-	Summary Summary `json:"summary"` // Summary: the total traffic volume and packets observed over the queried range and the interfaces that were queried
-	Query   Query   `json:"query"`   // Query: the kind of query that was run
-	Rows    Rows    `json:"rows"`    // Rows: the data rows returned
+	// Summary: the total traffic volume and packets observed over the queried range and the interfaces that were queried
+	Summary Summary `json:"summary" doc:"Traffic totals and query statistics"`
+	// Query: the kind of query that was run
+	Query Query `json:"query" doc:"Query which was run"`
+	// Rows: the data rows returned
+	Rows Rows `json:"rows" doc:"Data rows returned"`
 
 	// err is the error encountered when fetching result
 	err error `json:"-"`
@@ -62,27 +68,34 @@ func (r *Result) Err() error {
 
 // Query stores the kind of query that was run
 type Query struct {
-	Attributes []string `json:"attributes"`          // Attributes: the attributes that were queried. Example: [sip dip dport proto]
-	Condition  string   `json:"condition,omitempty"` // Condition: the condition that was provided. Example: port=80 && proto=TCP
+	// Attributes: the attributes that were queried
+	Attributes []string `json:"attributes" doc:"Attributes which were queried" example:"sip,dip,dport"`
+	// Condition: the condition that was provided
+	Condition string `json:"condition,omitempty" doc:"Condition which was provided" example:"port=80 && proto=TCP"`
 }
 
 // TimeRange describes the interval for which data is queried and presented
 type TimeRange struct {
 	// First is the start of the interval
-	First time.Time `json:"time_first"`
+	First time.Time `json:"time_first" doc:"Start of the queried interval" example:"2020-08-12T09:47:00+02:00"`
 	// Last is the end of the interval
-	Last time.Time `json:"time_last"`
+	Last time.Time `json:"time_last" doc:"End of the queried interval" example:"2024-04-12T09:47:00+02:00"`
 }
 
 // Summary stores the total traffic volume and packets observed over the
 // queried range and the interfaces that were queried
 type Summary struct {
-	Interfaces Interfaces `json:"interfaces"` // Interfaces: the interfaces that were queried
+	// Interfaces: the interfaces that were queried
+	Interfaces Interfaces `json:"interfaces" doc:"Interfaces which were queried" example:"eth0,eth1"`
 	TimeRange
-	Totals        types.Counters `json:"totals"`         // Totals: the total traffic volume and packets observed over the queried range
-	Timings       Timings        `json:"timings"`        // Timings: query runtime fields
-	Hits          Hits           `json:"hits"`           // Hits: how many flow records were returned in total and how many are returned in Rows
-	DataAvailable bool           `json:"data_available"` // DataAvailable: Was there any data available on disk or from a live query at all
+	// Totals: the total traffic volume and packets observed over the queried range
+	Totals types.Counters `json:"totals" doc:"Total traffic volume and packets observed over the queried time range"`
+	// Timings: query runtime fields
+	Timings Timings `json:"timings" doc:"Query runtime fields"`
+	// Hits: how many flow records were returned in total and how many are returned in Rows
+	Hits Hits `json:"hits" doc:"Flow records returned in total and records present in rows"`
+	// DataAvailable: Was there any data available on disk or from a live query at all
+	DataAvailable bool `json:"data_available" doc:"Was there any data available to query at all"`
 }
 
 // Interfaces collects all interface names
@@ -90,50 +103,60 @@ type Interfaces []string
 
 // Status denotes the overall status of the result
 type Status struct {
-	Code    types.Status `json:"code"`              // Code: the status code
-	Message string       `json:"message,omitempty"` // Message: an optional message
+	Code    types.Status `json:"code" doc:"Status code" enum:"empty,error,missing_data,ok" example:"empty"`            // Code: the status code
+	Message string       `json:"message,omitempty" doc:"An optional status description" example:"no results returned"` // Message: an optional message
 }
 
 // Timings summarizes query runtimes
 type Timings struct {
-	QueryStart         time.Time     `json:"query_start"`          // QueryStart: the time when the query started
-	QueryDuration      time.Duration `json:"query_duration_ns"`    // QueryDuration: the time it took to run the query in nanoseconds
-	ResolutionDuration time.Duration `json:"resolution,omitempty"` // ResolutionDuration: the time it took to resolve all IPs in nanoseconds
+	// QueryStart: the time when the query started
+	QueryStart time.Time `json:"query_start" doc:"Query start time"`
+	// QueryDuration: the time it took to run the query in nanoseconds
+	QueryDuration time.Duration `json:"query_duration_ns" doc:"Query runtime in nanoseconds" example:"235000000"`
+	// ResolutionDuration: the time it took to resolve all IPs in nanoseconds
+	ResolutionDuration time.Duration `json:"resolution,omitempty" doc:"DNS resolution time for all IPs in nanoseconds" example:"515000000"`
 }
 
 // Hits stores how many flow records were returned in total and how many are
 // returned in Rows
 type Hits struct {
-	Displayed int `json:"displayed"` // Displayed: how manyflow records were returned in Rows that are displayed
-	Total     int `json:"total"`     // Total: how many flow records matching the condition were found in total
+	// Displayed: how many flow records were returned in Rows that are displayed
+	Displayed int `json:"displayed" doc:"Number of flow records in Rows displayed/returned" example:"25"`
+	// Total: how many flow records matching the condition were found in total
+	Total int `json:"total" doc:"Total number of flow records matching the condition" example:"1034"`
 }
 
 // Row is a human-readable, aggregatable representation of goDB's data
 type Row struct {
 	// Labels are the partition Attributes
-	Labels Labels `json:"labels,omitempty"`
+	Labels Labels `json:"labels,omitempty" doc:"Labels / partitions the row belongs to"`
 
 	// Attributes which can be grouped by
-	Attributes Attributes `json:"attributes"`
+	Attributes Attributes `json:"attributes" doc:"Query attributes by which flows are grouped"`
 
 	// Counters for bytes/packets
-	Counters types.Counters `json:"counters"`
+	Counters types.Counters `json:"counters" doc:"Flow counters"`
 }
 
 // Labels hold labels by which the goDB database is partitioned
 type Labels struct {
-	Timestamp time.Time `json:"timestamp,omitempty"` // Timestamp: the timestamp of the 5-minute interval storing the flow record
-	Iface     string    `json:"iface,omitempty"`     // Iface: the interface on which the flow was observed
-	Hostname  string    `json:"host,omitempty"`      // Hostname: the hostname of the host on which the flow was observed
-	HostID    string    `json:"host_id,omitempty"`   // HostID: the host id of the host on which the flow was observed
+	// Timestamp: the timestamp of the 5-minute interval storing the flow record
+	Timestamp time.Time `json:"timestamp,omitempty" doc:"Timestamp (end) of the 5-minute interval storing the flow record" example:"2024-04-12T03:20:00+02:00"`
+	// Iface: the interface on which the flow was observed
+	Iface string `json:"iface,omitempty" doc:"Interface on which the flow was observed" example:"eth0"`
+	// Hostname: the hostname of the host on which the flow was observed
+	Hostname string `json:"host,omitempty" doc:"Hostname of the host on which the flow was observed" example:"hostA"`
+	// HostID: the host id of the host on which the flow was observed
+	HostID string `json:"host_id,omitempty" doc:"ID of the host on which the flow was observed" example:"123456"`
 }
 
 // Attributes are traffic attributes by which the goDB can be aggregated
 type Attributes struct {
-	SrcIP   netip.Addr `json:"sip,omitempty"`   // SrcIP: the source IP address
-	DstIP   netip.Addr `json:"dip,omitempty"`   // DstIP: the destination IP address
-	IPProto uint8      `json:"proto,omitempty"` // IPProto: the IP protocol number
-	DstPort uint16     `json:"dport,omitempty"` // DstPort: the destination port
+	// SrcIP: the source IP address
+	SrcIP   netip.Addr `json:"sip,omitempty" doc:"Source IP" example:"10.81.45.1"`
+	DstIP   netip.Addr `json:"dip,omitempty" doc:"Destination IP" example:"8.8.8.8"` // DstIP: the destination IP address
+	IPProto uint8      `json:"proto,omitempty" doc:"IP protocol number" example:"6"` // IPProto: the IP protocol number
+	DstPort uint16     `json:"dport,omitempty" doc:"Destination port" example:"80"`  // DstPort: the destination port
 }
 
 // New instantiates a new result
