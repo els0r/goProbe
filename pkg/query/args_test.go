@@ -2,7 +2,6 @@ package query
 
 import (
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"testing"
@@ -16,36 +15,20 @@ func TestPrepareArgs(t *testing.T) {
 	var tests = []struct {
 		name  string
 		input *Args
-		err   *ArgsError
+		err   *DetailError
 	}{
 		{"empty", &Args{},
-			&ArgsError{
-				Field:   "query",
-				Message: invalidQueryTypeMsg,
-				Type:    fmt.Sprintf("%T", &types.ParseError{}),
-			},
+			&DetailError{},
 		},
 		{"unsupported format", &Args{Query: "sip", Format: "exe"},
-			&ArgsError{
-				Field:   "format",
-				Message: invalidFormatMsg,
-				Type:    fmt.Sprintf("%T", &types.UnsupportedError{}),
-			},
+			&DetailError{},
 		},
 		{"wrong sort by", &Args{Query: "sip", Format: "json", SortBy: "biscuits"},
-			&ArgsError{
-				Field:   "sort_by",
-				Message: invalidSortByMsg,
-				Type:    fmt.Sprintf("%T", &types.UnsupportedError{}),
-			},
+			&DetailError{},
 		},
 		{"empty sort by, invalid time",
 			&Args{Query: "sip,time", Format: "json", First: "10:"},
-			&ArgsError{
-				Field:   "first/last",
-				Message: invalidTimeRangeMsg,
-				Type:    "*fmt.wrapErrors",
-			},
+			&DetailError{},
 		},
 		{"dns resolution, wrong timeout",
 			&Args{
@@ -55,11 +38,7 @@ func TestPrepareArgs(t *testing.T) {
 					Timeout: -1,
 				},
 			},
-			&ArgsError{
-				Field:   "dns_resolution.timeout",
-				Message: invalidDNSResolutionTimeoutMsg,
-				Type:    fmt.Sprintf("%T", &types.MinBoundsError{}),
-			},
+			&DetailError{},
 		},
 		{"dns resolution, wrong number of rows",
 			&Args{
@@ -70,43 +49,27 @@ func TestPrepareArgs(t *testing.T) {
 					MaxRows: -1,
 				},
 			},
-			&ArgsError{
-				Field:   "dns_resolution.max_rows",
-				Message: invalidDNSResolutionRowsMsg,
-				Type:    fmt.Sprintf("%T", &types.MinBoundsError{}),
-			},
+			&DetailError{},
 		},
 		{"incorrect condition",
 			&Args{
 				Query: "sip,time", Format: "json", First: "-7d",
 				Condition: "dipl = 0",
 			},
-			&ArgsError{
-				Field:   "condition",
-				Message: invalidConditionMsg,
-				Type:    fmt.Sprintf("%T", &types.ParseError{}),
-			},
+			&DetailError{},
 		},
 		{"incorrect mem percentage",
 			&Args{
 				Query: "sip,time", Format: "json", First: "-7d",
 			},
-			&ArgsError{
-				Field:   "max_mem_pct",
-				Message: invalidMaxMemPctMsg,
-				Type:    fmt.Sprintf("%T", &types.RangeError{}),
-			},
+			&DetailError{},
 		},
 		{"wrong number of results",
 			&Args{
 				Query: "sip,time", Format: "json", First: "-7d",
 				MaxMemPct: 20,
 			},
-			&ArgsError{
-				Field:   "num_results",
-				Message: invalidRowLimitMsg,
-				Type:    fmt.Sprintf("%T", &types.MinBoundsError{}),
-			},
+			&DetailError{},
 		},
 		{"invalid live mode",
 			&Args{
@@ -114,11 +77,7 @@ func TestPrepareArgs(t *testing.T) {
 				MaxMemPct: 20, NumResults: 20,
 				Live: true,
 			},
-			&ArgsError{
-				Field:   "live",
-				Message: invalidLiveQueryMsg,
-				Type:    "*errors.errorString",
-			},
+			&DetailError{},
 		},
 		{"valid query args",
 			&Args{
@@ -140,17 +99,8 @@ func TestPrepareArgs(t *testing.T) {
 				return
 			}
 
-			t.Logf("error:\n%v", err)
-
 			ok := errors.As(err, &test.err)
-			require.Truef(t, ok, "expected error to be of type %T", &ArgsError{})
-
-			// individually compare the struct fields. Why the detour? So we don't have
-			// to re-create (and test) errors that are caught by other packages (such as
-			// parsing errors)
-			require.Equal(t, test.err.Field, test.err.Field)
-			require.Equal(t, test.err.Type, test.err.Type)
-			require.Equal(t, test.err.Message, test.err.Message)
+			require.Truef(t, ok, "expected error to be of type %T", &DetailError{})
 		})
 	}
 }
@@ -160,7 +110,7 @@ func TestSelector(t *testing.T) {
 		name     string
 		input    *Args
 		selector types.LabelSelector
-		err      *ArgsError
+		err      *DetailError
 	}{
 		{
 			name: "empty interface",
@@ -170,11 +120,7 @@ func TestSelector(t *testing.T) {
 				outputs: []io.Writer{os.Stdout, os.Stderr},
 			},
 			selector: types.LabelSelector{},
-			err: &ArgsError{
-				Field:   "iface",
-				Message: emptyInterfaceMsg,
-				Type:    "*types.ParseError",
-			},
+			err:      &DetailError{},
 		},
 		{
 			name: "single interface",
@@ -206,11 +152,7 @@ func TestSelector(t *testing.T) {
 				MaxMemPct: 20, NumResults: 20,
 				outputs: []io.Writer{os.Stdout, os.Stderr},
 			},
-			err: &ArgsError{
-				Field:   "iface",
-				Message: invalidInterfaceMsg,
-				Type:    "*errors.errorString",
-			},
+			err: &DetailError{},
 		},
 	}
 
@@ -220,8 +162,6 @@ func TestSelector(t *testing.T) {
 			stmt, err := test.input.Prepare()
 			if test.err != nil {
 				require.ErrorAs(t, err, &test.err)
-				require.Equal(t, test.err.Field, test.err.Field)
-				require.Equal(t, test.err.Type, test.err.Type)
 
 				t.Log(err)
 				return
