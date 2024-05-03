@@ -93,8 +93,8 @@ func init() {
 	tracing.RegisterFlags(pflags)
 	flags.String(conf.Traceparent, "", "inject traceparent header")
 
-	flags.BoolVarP(&cmdLineParams.In, "in", "", query.DefaultIn, helpMap["In"])
-	flags.BoolVarP(&cmdLineParams.Out, "out", "", query.DefaultOut, helpMap["Out"])
+	flags.BoolVarP(&cmdLineParams.In, "in", "", false, helpMap["In"])
+	flags.BoolVarP(&cmdLineParams.Out, "out", "", false, helpMap["Out"])
 	flags.BoolVarP(&cmdLineParams.Sum, "sum", "", false, helpMap["Sum"])
 	flags.BoolVarP(&cmdLineParams.Version, "version", "v", false, "Print version information and exit\n")
 

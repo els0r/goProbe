@@ -137,11 +137,6 @@ func NewDefault(serviceName, addr string, opts ...Option) *DefaultServer {
 	return s
 }
 
-// Router returns the gin.Engine used by the DefaultServer
-func (server *DefaultServer) Router() *gin.Engine {
-	return server.router
-}
-
 // API returns the huma API server which is used to register and document endpoints
 func (server *DefaultServer) API() huma.API {
 	return server.api

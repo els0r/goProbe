@@ -152,8 +152,7 @@ type Labels struct {
 
 // Attributes are traffic attributes by which the goDB can be aggregated
 type Attributes struct {
-	// SrcIP: the source IP address
-	SrcIP   netip.Addr `json:"sip,omitempty" doc:"Source IP" example:"10.81.45.1"`
+	SrcIP   netip.Addr `json:"sip,omitempty" doc:"Source IP" example:"10.81.45.1"`   // SrcIP: the source IP address
 	DstIP   netip.Addr `json:"dip,omitempty" doc:"Destination IP" example:"8.8.8.8"` // DstIP: the destination IP address
 	IPProto uint8      `json:"proto,omitempty" doc:"IP protocol number" example:"6"` // IPProto: the IP protocol number
 	DstPort uint16     `json:"dport,omitempty" doc:"Destination port" example:"80"`  // DstPort: the destination port

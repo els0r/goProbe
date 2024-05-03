@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/danielgtaylor/huma/v2"
 	"github.com/els0r/telemetry/logging"
 	"github.com/gin-contrib/pprof"
 	"github.com/gin-gonic/gin"
@@ -75,13 +76,13 @@ func RequestLoggingMiddleware() gin.HandlerFunc {
 
 // RateLimitMiddleware creates a global rate limit for all requests, using a maximum of
 // r requests per second and a maximum burst rate of b tokens
-func RateLimitMiddleware(limiter *rate.Limiter) gin.HandlerFunc {
-	return func(c *gin.Context) {
+func RateLimitMiddleware(limiter *rate.Limiter) func(ctx huma.Context, next func(huma.Context)) {
+	return func(ctx huma.Context, next func(huma.Context)) {
 		if !limiter.Allow() {
-			c.AbortWithStatus(http.StatusTooManyRequests)
+			ctx.SetStatus(http.StatusTooManyRequests)
 			return
 		}
-		c.Next()
+		next(ctx)
 	}
 }
 
