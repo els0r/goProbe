@@ -85,7 +85,7 @@ func main() {
 		apiServer := gpserver.New("0.0.0.0:8145", nil, nil)
 
 		logger.With("path", openAPIfile).Info("writing OpenAPI spec only")
-		f, err := os.OpenFile(openAPIfile, os.O_CREATE|os.O_WRONLY, 755)
+		f, err := os.OpenFile(openAPIfile, os.O_CREATE|os.O_WRONLY, 0755)
 		if err != nil {
 			logger.Fatalf("failed to open OpenAPI spec file for writing: %v", err)
 		}
