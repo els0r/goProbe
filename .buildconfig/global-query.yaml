@@ -1,0 +1,4 @@
+logging:
+  level: debug
+  encoding: logfmt
+

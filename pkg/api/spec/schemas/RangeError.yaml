@@ -1,9 +1,0 @@
-type: object
-properties:
-  val:
-    type: string
-    example: "Value that doesn't fit into the range"
-  min:
-    $ref: './boundsError.yaml'
-  max:
-    $ref: './boundsError.yaml'

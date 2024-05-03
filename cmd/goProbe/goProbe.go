@@ -78,6 +78,24 @@ func main() {
 	logger := logging.Logger()
 	logger.Info("loaded configuration")
 
+	// write spec and exit
+	openAPIfile := flags.CmdLine.OpenAPI
+	if openAPIfile != "" {
+		// skeleton server just for route registration
+		apiServer := gpserver.New("0.0.0.0:8145", nil, nil)
+
+		logger.With("path", openAPIfile).Info("writing OpenAPI spec only")
+		f, err := os.OpenFile(openAPIfile, os.O_CREATE|os.O_WRONLY, 755)
+		if err != nil {
+			logger.Fatalf("failed to open OpenAPI spec file for writing: %v", err)
+		}
+		err = apiServer.OpenAPI(f)
+		if err != nil {
+			logger.Fatalf("failed to create OpenAPI spec: %v", err)
+		}
+		os.Exit(0)
+	}
+
 	// It doesn't make sense to monitor zero interfaces
 	if len(config.Interfaces) == 0 {
 		logger.Fatalf("no interfaces have been specified in the configuration file")
@@ -92,12 +110,6 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	defer stop()
 
-	// Create DB directory if it doesn't exist already.
-	// #nosec G301
-	if err := os.MkdirAll(filepath.Clean(config.DB.Path), 0755); err != nil {
-		logger.Fatalf("failed to create database directory: %v", err)
-	}
-
 	// Initialize packet logger
 	ifaces := make([]string, len(config.Interfaces))
 	i := 0
@@ -107,10 +119,15 @@ func main() {
 	}
 
 	// None of the initialization steps failed.
-	logger.Info("started goProbe")
 	captureManager, err := capture.InitManager(ctx, config)
 	if err != nil {
 		logger.Fatal(err)
+	}
+
+	// Create DB directory if it doesn't exist already.
+	// #nosec G301
+	if err := os.MkdirAll(filepath.Clean(config.DB.Path), 0755); err != nil {
+		logger.Fatalf("failed to create database directory: %v", err)
 	}
 
 	// Initialize constant monitoring / reloading of the config file
@@ -143,14 +160,19 @@ func main() {
 		apiServer = gpserver.New(config.API.Addr, captureManager, configMonitor, apiOptions...)
 		apiServer.SetDBPath(config.DB.Path)
 
-		logger.With("addr", config.API.Addr).Info("starting API server")
-		go func() {
-			err = apiServer.Serve()
-			if err != nil && !errors.Is(err, http.ErrServerClosed) {
-				logger.Fatalf("failed to spawn goProbe API server: %s", err)
-			}
-		}()
+		// serve API
+		if apiServer != nil {
+			go func() {
+				logger.With("addr", config.API.Addr).Info("starting API server")
+				err = apiServer.Serve()
+				if err != nil && !errors.Is(err, http.ErrServerClosed) {
+					logger.Fatalf("failed to spawn goProbe API server: %s", err)
+				}
+			}()
+		}
 	}
+
+	logger.Info("started goProbe")
 
 	// listen for the interrupt signal
 	<-ctx.Done()

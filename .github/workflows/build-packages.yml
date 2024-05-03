@@ -177,6 +177,12 @@ jobs:
           GOOS=linux GOARCH=amd64 go build -buildvcs=false -a -o gpctl -pgo=auto ./cmd/gpctl
           GOOS=linux GOARCH=amd64 go build -buildvcs=false -a -o goConvert ./cmd/goConvert
 
+
+      - name: Build single OpenAPI 3.0 spec file for all documented APIs
+        run: |
+          ./cmd/goProbe --config .buildconfig/goprobe.yaml --openapi ./goprobe_${{ env.RELEASE_VERSION }}_openapi.yaml
+          ./cmd/global-query --config .buildconfig/global-query.yaml --openapi ./global-query_${{ env.RELEASE_VERSION }}_openapi.yaml
+
       - name: Deploy artifacts
         run: |
           tar czf ./goprobe_${{ env.RELEASE_VERSION }}_alpine_x86_64.tar.gz goProbe global-query goQuery gpctl goConvert
@@ -205,10 +211,6 @@ jobs:
           run: |
             npm install -g @redocly/cli
 
-        - name: Build single OpenAPI 3.0 spec file for all documented APIs
-          run: |
-            redocly bundle --output ./goprobe_${{ env.RELEASE_VERSION }}_openapi.yaml ./pkg/api/goprobe/spec/openapi.yaml
-            redocly bundle --output ./global-query_${{ env.RELEASE_VERSION }}_openapi.yaml ./pkg/api/globalquery/spec/openapi.yaml
 
         - name: Store artifacts
           uses: actions/upload-artifact@v3

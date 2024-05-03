@@ -1,5 +1,0 @@
-type: array
-items:
-  type: integer
-  example: [23, 0]
-description: Table-based parsing error structure for counting all available parsing error (errno) types.

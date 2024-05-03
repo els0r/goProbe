@@ -1,3 +1,0 @@
-type: boolean
-example: false
-description: DataAvailable indicates if there was any data available on disk or from a live query at all

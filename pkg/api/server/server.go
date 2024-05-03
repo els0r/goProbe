@@ -2,6 +2,8 @@ package server
 
 import (
 	"context"
+	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"strings"
@@ -140,6 +142,16 @@ func NewDefault(serviceName, addr string, opts ...Option) *DefaultServer {
 // API returns the huma API server which is used to register and document endpoints
 func (server *DefaultServer) API() huma.API {
 	return server.api
+}
+
+// OpenAPI writes the full OpenAPI spec to the writer w
+func (server *DefaultServer) OpenAPI(w io.Writer) error {
+	b, err := server.api.OpenAPI().DowngradeYAML()
+	if err != nil {
+		return fmt.Errorf("failed to generate OpenAPI spec: %w", err)
+	}
+	_, err = w.Write(b)
+	return err
 }
 
 // QueryRateLimiter returns the global rate limiter, if enabled (if not it return nil and false)

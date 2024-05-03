@@ -1,5 +1,0 @@
-description: Successful query
-content:
-  application/json:
-    schema:
-      $ref: '../schemas/Result.yaml'

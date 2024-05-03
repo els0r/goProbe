@@ -30,6 +30,9 @@ const (
 	serverKey                 = "server"
 	ServerAddr                = serverKey + ".addr"
 	ServerShutdownGracePeriod = serverKey + ".shutdowngraceperiod"
+
+	openapiKey = "openapi"
+	OpenAPI    = openapiKey
 )
 
 // Global defaults for command line parameters / arguments
