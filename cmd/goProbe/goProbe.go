@@ -161,15 +161,13 @@ func main() {
 		apiServer.SetDBPath(config.DB.Path)
 
 		// serve API
-		if apiServer != nil {
-			go func() {
-				logger.With("addr", config.API.Addr).Info("starting API server")
-				err = apiServer.Serve()
-				if err != nil && !errors.Is(err, http.ErrServerClosed) {
-					logger.Fatalf("failed to spawn goProbe API server: %s", err)
-				}
-			}()
-		}
+		go func() {
+			logger.With("addr", config.API.Addr).Info("starting API server")
+			err = apiServer.Serve()
+			if err != nil && !errors.Is(err, http.ErrServerClosed) {
+				logger.Fatalf("failed to spawn goProbe API server: %s", err)
+			}
+		}()
 	}
 
 	logger.Info("started goProbe")
