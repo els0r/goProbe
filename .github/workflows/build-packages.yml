@@ -37,6 +37,8 @@ jobs:
           GOOS=linux GOARCH=amd64 go build -a -o gpctl -pgo=auto ./cmd/gpctl
           GOOS=linux GOARCH=amd64 go build -a -o goConvert ./cmd/goConvert
 
+
+
       - name: Deploy artifacts
         run: |
           mkdir -p .debpkg/usr/local/bin
@@ -178,11 +180,6 @@ jobs:
           GOOS=linux GOARCH=amd64 go build -buildvcs=false -a -o goConvert ./cmd/goConvert
 
 
-      - name: Build single OpenAPI 3.0 spec file for all documented APIs
-        run: |
-          ./cmd/goProbe --config .buildconfig/goprobe.yaml --openapi ./goprobe_${{ env.RELEASE_VERSION }}_openapi.yaml
-          ./cmd/global-query --config .buildconfig/global-query.yaml --openapi ./global-query_${{ env.RELEASE_VERSION }}_openapi.yaml
-
       - name: Deploy artifacts
         run: |
           tar czf ./goprobe_${{ env.RELEASE_VERSION }}_alpine_x86_64.tar.gz goProbe global-query goQuery gpctl goConvert
@@ -196,7 +193,7 @@ jobs:
 
   build-openapi-specs:
     runs-on: ubuntu-latest
-    container: node:20-alpine
+    container: golang:alpine
     steps:
         - name: Set environment
           run: |
@@ -207,10 +204,10 @@ jobs:
         - name: Check out code into the Go module directory
           uses: actions/checkout@v4
 
-        - name: Install redocly
+        - name: Build single OpenAPI 3.0 spec file for all documented APIs
           run: |
-            npm install -g @redocly/cli
-
+            go run ./cmd/goProbe/goProbe.go --config .buildconfig/goprobe.yaml --openapi ./goprobe_${{ env.RELEASE_VERSION }}_openapi.yaml
+            go run ./cmd/global-query/main.go --config .buildconfig/global-query.yaml --openapi ./global-query_${{ env.RELEASE_VERSION }}_openapi.yaml
 
         - name: Store artifacts
           uses: actions/upload-artifact@v3
