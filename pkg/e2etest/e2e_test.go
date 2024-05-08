@@ -247,6 +247,9 @@ func TestStartStop(t *testing.T) {
 
 func testE2E(t *testing.T, valFilterDescriptor int, datasets ...[]byte) {
 
+	// Reset all Prometheus counters for the next E2E test to avoid double counting
+	defer capture.ResetCountersTestingOnly()
+
 	// Setup a temporary directory for the test DB
 	tempDir, err := os.MkdirTemp(os.TempDir(), "goprobe_e2e")
 	if err != nil {
@@ -330,15 +333,20 @@ func testE2E(t *testing.T, valFilterDescriptor int, datasets ...[]byte) {
 	// Cross-check aggregated flow logs from the live capture with the respective mock interface flows
 	for _, mockIface := range mockIfaces {
 		aggMap := mockIface.aggregate()
-		require.Equal(t, aggMap.Len(), liveFlowResults[mockIface.name].Len())
+
+		liveResults, exists := liveFlowResults[mockIface.name]
+		if !exists {
+			liveResults = hashmap.NewAggFlowMapWithMetadata()
+		}
+		require.Equal(t, aggMap.Len(), liveResults.Len())
 
 		for it := aggMap.PrimaryMap.Iter(); it.Next(); {
-			compVal, exists := liveFlowResults[mockIface.name].PrimaryMap.Get(it.Key())
+			compVal, exists := liveResults.PrimaryMap.Get(it.Key())
 			require.True(t, exists)
 			require.EqualValues(t, it.Val(), compVal)
 		}
 		for j, it := 0, aggMap.SecondaryMap.Iter(); it.Next(); j++ {
-			compVal, exists := liveFlowResults[mockIface.name].SecondaryMap.Get(it.Key())
+			compVal, exists := liveResults.SecondaryMap.Get(it.Key())
 			require.True(t, exists)
 			require.EqualValues(t, it.Val(), compVal)
 		}
@@ -417,9 +425,6 @@ func validateMetrics(t *testing.T, mockIfaces mockIfaces) {
 
 	// Brute force cross-check that we actually validated all relevant metrics
 	require.Equal(t, 3, metricsValidated)
-
-	// Reset all Prometheus counters for the next E2E test to avoid double counting
-	capture.ResetCountersTestingOnly()
 }
 
 func runGoProbe(t *testing.T, testDir string, sourceInitFn func() (mockIfaces, func(c *capture.Capture) (capture.Source, error))) chan hashmap.AggFlowMapWithMetadata {
@@ -566,7 +571,6 @@ func newPcapSource(t testing.TB, name string, data []byte) (res *mockIface) {
 				if errno > capturetypes.ErrnoOK {
 					res.tracking.nErr++
 					if errno != capturetypes.ErrnoPacketFragmentIgnore {
-						res.tracking.nParsed++
 						res.tracking.nParsedOrFailed++
 						res.tracking.nErrTracked++
 					}
@@ -629,7 +633,6 @@ func newPcapSource(t testing.TB, name string, data []byte) (res *mockIface) {
 				if errno > capturetypes.ErrnoOK {
 					res.tracking.nErr++
 					if errno != capturetypes.ErrnoPacketFragmentIgnore {
-						res.tracking.nParsed++
 						res.tracking.nParsedOrFailed++
 						res.tracking.nErrTracked++
 					}
