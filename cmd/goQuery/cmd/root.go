@@ -237,10 +237,13 @@ func entrypoint(cmd *cobra.Command, args []string) (err error) {
 	// in the arguments
 	dbPathCfg := viper.GetString(conf.QueryDBPath)
 
+	queryCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
+	defer stop()
+
 	// run commands that don't require any argument
 	// handle list flag
 	if cmdLineParams.List {
-		err := listInterfaces(dbPathCfg)
+		err := listInterfaces(queryCtx, dbPathCfg)
 		if err != nil {
 			return fmt.Errorf("failed to retrieve list of available databases: %w", err)
 		}
@@ -287,9 +290,6 @@ func entrypoint(cmd *cobra.Command, args []string) (err error) {
 
 	// make sure there's protection against unbounded time intervals
 	queryArgs = setDefaultTimeRange(&queryArgs)
-
-	queryCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
-	defer stop()
 
 	// get logger
 	logger := logging.FromContext(queryCtx)
