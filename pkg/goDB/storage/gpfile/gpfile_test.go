@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -67,7 +68,7 @@ func TestDirPermissions(t *testing.T) {
 				perm = defaultPermissions
 			}
 
-			testDir := NewDir("/tmp/test_db", 1000, ModeWrite, opts...)
+			testDir := NewDirWriter("/tmp/test_db", 1000, opts...)
 			require.Nil(t, testDir.Open(), "error opening test dir for writing")
 			require.Nil(t, testDir.Close(), "error closing test dir")
 
@@ -75,7 +76,7 @@ func TestDirPermissions(t *testing.T) {
 			require.Nil(t, err, "failed to call Stat() on new GPDir")
 			require.Equal(t, stat.Mode().Perm(), calculateDirPerm(perm), stat.Mode().String())
 
-			stat, err = os.Stat(filepath.Join("/tmp/test_db/1970/01/0", metadataFileName))
+			stat, err = os.Stat(filepath.Join("/tmp/test_db/1970/01/0_0-0-0-0-0-0-0", metadataFileName))
 			require.Nil(t, err, "failed to call Stat() on block metadata file")
 			require.Equal(t, stat.Mode().Perm(), perm, stat.Mode().String())
 		})
@@ -223,7 +224,7 @@ func TestInvalidMetadata(t *testing.T) {
 	require.Nil(t, os.MkdirAll("/tmp/test_db/1970/01/0", 0750), "error creating test dir for reading")
 	require.Nil(t, os.WriteFile("/tmp/test_db/1970/01/0/.blockmeta", []byte{0x1}, 0600), "error creating test metdadata for reading")
 
-	testDir := NewDir("/tmp/test_db", 1000, ModeRead)
+	testDir := NewDirReader("/tmp/test_db", 1000, "")
 	require.ErrorIs(t, testDir.Open(), ErrInputSizeTooSmall)
 }
 
@@ -231,11 +232,11 @@ func TestEmptyMetadata(t *testing.T) {
 
 	require.Nil(t, os.RemoveAll("/tmp/test_db"))
 
-	testDir := NewDir("/tmp/test_db", 1000, ModeWrite)
+	testDir := NewDirWriter("/tmp/test_db", 1000)
 	require.Nil(t, testDir.Open(), "error opening test dir for writing")
 	require.Nil(t, testDir.Close(), "error writing test dir")
 
-	testDir = NewDir("/tmp/test_db", 1000, ModeRead)
+	testDir = NewDirReader("/tmp/test_db", 1000, "0-0-0-0-0-0-0")
 	require.Nil(t, testDir.Open(), "error opening test dir for reading")
 
 	for i := 0; i < int(types.ColIdxCount); i++ {
@@ -249,7 +250,7 @@ func TestMetadataRoundTrip(t *testing.T) {
 
 	require.Nil(t, os.RemoveAll("/tmp/test_db"))
 
-	testDir := NewDir("/tmp/test_db", 1000, ModeWrite)
+	testDir := NewDirWriter("/tmp/test_db", 1000)
 	require.Nil(t, testDir.Open(), "error opening test dir for writing")
 
 	for i := 0; i < int(types.ColIdxCount); i++ {
@@ -298,7 +299,11 @@ func TestMetadataRoundTrip(t *testing.T) {
 	require.Nil(t, jsoniter.NewDecoder(buf).Decode(&refMetadata), "error decoding reference data for later comparison")
 	require.Nil(t, testDir.Close(), "error writing test dir")
 
-	testDir = NewDir("/tmp/test_db", 1000, ModeRead)
+	_, fullPath := genWritePathForTimestamp("/tmp/test_db", 1000)
+	ts, suffix, err := ExtractTimestampMetadataSuffix(filepath.Base(fullPath))
+	require.Nil(t, err)
+
+	testDir = NewDirReader("/tmp/test_db", ts, suffix)
 	require.Nil(t, testDir.Open(), "error opening test dir for reading")
 
 	require.Equal(t, testDir.Metadata.BlockTraffic, refMetadata.BlockTraffic, "mismatched global block metadata")
@@ -324,7 +329,7 @@ func TestBrokenAccess(t *testing.T) {
 	require.Nil(t, os.RemoveAll("/tmp/test_db"))
 
 	// Write some blocks and flush the data to disk
-	testDir := NewDir("/tmp/test_db", 1000, ModeWrite)
+	testDir := NewDirWriter("/tmp/test_db", 1000)
 	require.Nil(t, testDir.Open(), "error opening test dir for writing")
 	require.Nil(t, writeDummyBlock(1, testDir, 1), "failed to write blocks")
 	require.Nil(t, writeDummyBlock(2, testDir, 2), "failed to write blocks")
@@ -332,7 +337,7 @@ func TestBrokenAccess(t *testing.T) {
 	require.Nil(t, testDir.Close(), "error writing test dir")
 
 	// Append another block, flush the GPFiles but "fail" to write the metadata
-	testDir = NewDir("/tmp/test_db", 1000, ModeWrite)
+	testDir = NewDirWriter("/tmp/test_db", 1000)
 	require.Nil(t, testDir.Open(), "error opening test dir for writing")
 	require.Nil(t, writeDummyBlock(3, testDir, 3), "failed to write blocks")
 	require.NotEqual(t, expectedOffset, testDir.BlockMetadata[0].CurrentOffset)
@@ -342,8 +347,12 @@ func TestBrokenAccess(t *testing.T) {
 		}
 	}
 
+	_, fullPath := genWritePathForTimestamp("/tmp/test_db", 1000)
+	ts, suffix, err := ExtractTimestampMetadataSuffix(filepath.Base(fullPath))
+	require.Nil(t, err)
+
 	// Read the directory and validate that we only "see" two blocks on metadata level
-	testDir = NewDir("/tmp/test_db", 1000, ModeRead)
+	testDir = NewDirReader("/tmp/test_db", ts, suffix)
 	require.Nil(t, testDir.Open(), "error opening test dir for reading")
 	require.Equal(t, expectedOffset, testDir.BlockMetadata[0].CurrentOffset)
 	require.Equal(t, testDir.BlockMetadata[0].NBlocks(), 2)
@@ -363,7 +372,7 @@ func TestBrokenAccess(t *testing.T) {
 	})
 
 	// Append another two blocks and write normally
-	testDir = NewDir("/tmp/test_db", 1000, ModeWrite)
+	testDir = NewDirWriter("/tmp/test_db", 1000)
 	require.Nil(t, testDir.Open(), "error opening test dir for writing")
 	require.Equal(t, expectedOffset, testDir.BlockMetadata[0].CurrentOffset)
 	require.Nil(t, writeDummyBlock(4, testDir, 4), "failed to write blocks")
@@ -372,8 +381,12 @@ func TestBrokenAccess(t *testing.T) {
 	require.Equal(t, testDir.BlockMetadata[0].NBlocks(), 4)
 	require.Nil(t, testDir.Close(), "error writing test dir")
 
+	_, fullPath = genWritePathForTimestamp("/tmp/test_db", 1000)
+	ts, suffix, err = ExtractTimestampMetadataSuffix(filepath.Base(fullPath))
+	require.Nil(t, err)
+
 	// Read the directory and validate that we only "see" four blocks on metadata level
-	testDir = NewDir("/tmp/test_db", 1000, ModeRead)
+	testDir = NewDirReader("/tmp/test_db", ts, suffix)
 	require.Nil(t, testDir.Open(), "error opening test dir for reading")
 	require.Equal(t, expectedOffset, testDir.BlockMetadata[0].CurrentOffset)
 	require.Equal(t, testDir.BlockMetadata[0].NBlocks(), 4)
@@ -403,11 +416,84 @@ func TestDailyDirectoryPathLayers(t *testing.T) {
 	for year := 1970; year < 2200; year++ {
 		for month := time.January; month <= time.December; month++ {
 			for day := 1; day <= time.Date(year, month+1, 0, 0, 0, 0, 0, time.UTC).Day(); day++ {
-				gpDir := NewDir("/tmp/test_db", time.Date(year, month, day, 0, 0, 0, 0, time.UTC).Unix(), ModeRead)
+				gpDir := NewDirReader("/tmp/test_db", time.Date(year, month, day, 0, 0, 0, 0, time.UTC).Unix(), "")
 				require.Equal(t, gpDir.dirPath, filepath.Join("/tmp/test_db", fmt.Sprintf("%d", year), fmt.Sprintf("%02d", month), fmt.Sprintf("%d", DirTimestamp(time.Date(year, month, day, 0, 0, 0, 0, time.UTC).Unix()))))
 			}
 		}
 	}
+}
+
+type testDirEntry string
+
+func (t testDirEntry) Name() string {
+	return string(t)
+}
+
+func (t testDirEntry) IsDir() bool {
+	return true
+}
+
+func (t testDirEntry) Type() fs.FileMode {
+	panic("not implemented") // TODO: Implement
+}
+
+func (t testDirEntry) Info() (fs.FileInfo, error) {
+	panic("not implemented") // TODO: Implement
+}
+
+func TestBinarySearchPrefix(t *testing.T) {
+
+	slice := []fs.DirEntry{
+		testDirEntry("apple"),
+		testDirEntry("banana"),
+		testDirEntry("cherry"),
+		testDirEntry("date"),
+		testDirEntry("grape"),
+		testDirEntry("kiwi"),
+		testDirEntry("mango"),
+		testDirEntry("orange"),
+		testDirEntry("pear"),
+		testDirEntry("pineapple"),
+		testDirEntry("strawberry"),
+		testDirEntry("blueberry"),
+		testDirEntry("watermelon"),
+		testDirEntry("raspberry"),
+		testDirEntry("blackberry"),
+		testDirEntry("pomegranate"),
+		testDirEntry("fig"),
+		testDirEntry("plum"),
+		testDirEntry("apricot")}
+
+	slices.SortFunc(slice, func(a, b fs.DirEntry) int {
+		if a.Name() == b.Name() {
+			return 0
+		}
+		if a.Name() < b.Name() {
+			return -1
+		}
+		return 1
+	})
+
+	for _, input := range slice {
+
+		// Validate that a full match returns the correct result
+		result, found := binarySearchPrefix(slice, input.Name())
+		require.True(t, found, input)
+		require.Equal(t, input.Name(), result)
+
+		// Validate that a prefix match returns the correct result
+		result, found = binarySearchPrefix(slice, input.Name()[:3])
+		require.True(t, found, input)
+		require.Equal(t, input.Name(), result)
+	}
+
+	result, found := binarySearchPrefix(slice, "idonotexist")
+	require.False(t, found)
+	require.Empty(t, result)
+
+	result, found = binarySearchPrefix(slice, "")
+	require.False(t, found)
+	require.Empty(t, result)
 }
 
 func (g *GPFile) validateBlocks(nExpected int) error {

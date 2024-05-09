@@ -7,7 +7,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -20,7 +19,8 @@ import (
 )
 
 var (
-	pathMetaFile string
+	pathMetaFile    string
+	rewriteMetadata bool
 )
 
 func main() {
@@ -35,21 +35,38 @@ func main() {
 	logger := logging.Logger()
 
 	flag.StringVar(&pathMetaFile, "path", "", "Path to meta file")
+	flag.BoolVar(&rewriteMetadata, "rewrite-metadata", false, "Rewrite metadata on disk")
 	flag.Parse()
 
 	pathMetaFile = filepath.Clean(pathMetaFile)
 	dirPath := filepath.Dir(pathMetaFile)
-	timestamp, err := strconv.ParseInt(filepath.Base(dirPath), 10, 64)
+
+	timestamp, suffix, err := gpfile.ExtractTimestampMetadataSuffix(filepath.Base(dirPath))
 	if err != nil {
 		logger.Fatalf("failed to extract timestamp: %s", err)
 	}
 	baseDirPath := filepath.Dir(filepath.Dir(filepath.Dir(dirPath)))
 
-	gpDir := gpfile.NewDir(baseDirPath, timestamp, gpfile.ModeRead)
+	if rewriteMetadata {
+		gpDir := gpfile.NewDirWriter(baseDirPath, timestamp)
+		if err := gpDir.Open(); err != nil {
+			logger.Fatalf("failed to open GPF dir: %v", err)
+		}
+		if err := gpDir.Close(); err != nil {
+			logger.Fatalf("failed to close GPF dir: %v", err)
+		}
+		return
+	}
+
+	gpDir := gpfile.NewDirReader(baseDirPath, timestamp, suffix)
 	if err := gpDir.Open(); err != nil {
 		logger.Fatalf("failed to open GPF dir: %v", err)
 	}
-	defer gpDir.Close()
+	defer func() {
+		if err := gpDir.Close(); err != nil {
+			logger.Fatalf("failed to close GPF dir: %v", err)
+		}
+	}()
 
 	for i := types.ColumnIndex(0); i < types.ColIdxCount; i++ {
 		err = PrintMetaTable(gpDir, i, os.Stdout)
@@ -59,6 +76,8 @@ func main() {
 	}
 }
 
+// PrintMetaTable displays a comprehensive table with all metadata information read from the
+// metadata file
 func PrintMetaTable(gpDir *gpfile.GPDir, column types.ColumnIndex, w io.Writer) error {
 
 	blockMetadata := gpDir.BlockMetadata[column]

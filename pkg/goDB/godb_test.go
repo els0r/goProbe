@@ -135,7 +135,7 @@ func populateTestDir(t *testing.T, basePath, iface string, timestamp time.Time) 
 
 	testPath := filepath.Join(basePath, iface)
 
-	f := gpfile.NewDir(testPath, timestamp.Unix(), gpfile.ModeWrite)
+	f := gpfile.NewDirWriter(testPath, timestamp.Unix())
 	require.Nil(t, f.Open())
 
 	data, update := dbData(generateFlows())

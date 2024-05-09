@@ -22,8 +22,7 @@ const (
 	// EpochDay is one day in seconds
 	EpochDay int64 = 86400
 
-	metadataFileName = ".blockmeta"
-	maxUint32        = 1<<32 - 1 // 4294967295
+	maxUint32 = 1<<32 - 1 // 4294967295
 )
 
 var (
@@ -40,106 +39,83 @@ var (
 
 	// ErrDirNotOpen denotes that a GPDir is not (yet) open or has been closed
 	ErrDirNotOpen = errors.New("GPDir not open, call Open() first")
+
+	// ErrInvalidDirName denotes that the provided name for the GPDir is invalid
+	ErrInvalidDirName = errors.New("invalid GPDir path / name")
 )
-
-// TrafficMetadata denotes a serializable set of metadata information about traffic stats
-type TrafficMetadata struct {
-	NumV4Entries uint64 `json:"num_v4_entries"`
-	NumV6Entries uint64 `json:"num_v6_entries"`
-	NumDrops     uint64 `json:"num_drops"`
-}
-
-// Stats denotes statistics for a GPDir instance
-type Stats struct {
-	Counts  types.Counters  `json:"counts"`
-	Traffic TrafficMetadata `json:"traffic"`
-}
-
-// NumFlows returns the total number of flows
-func (t TrafficMetadata) NumFlows() uint64 {
-	return t.NumV4Entries + t.NumV6Entries
-}
-
-// Add computes the sum of two sets of TrafficMetadata
-func (t TrafficMetadata) Add(t2 TrafficMetadata) TrafficMetadata {
-	t.NumDrops += t2.NumDrops
-	t.NumV4Entries += t2.NumV4Entries
-	t.NumV6Entries += t2.NumV6Entries
-	return t
-}
-
-// Sub computes the difference of two sets of TrafficMetadata
-func (t TrafficMetadata) Sub(t2 TrafficMetadata) TrafficMetadata {
-	t.NumDrops -= t2.NumDrops
-	t.NumV4Entries -= t2.NumV4Entries
-	t.NumV6Entries -= t2.NumV6Entries
-	return t
-}
-
-// Add computes the sum of all counters and traffic metadata for the stats
-func (s Stats) Add(s2 Stats) Stats {
-	s.Counts.Add(s2.Counts)
-	s.Traffic = s.Traffic.Add(s2.Traffic)
-	return s
-}
-
-// Sub computes the sum of all counters and traffic metadata for the stats
-func (s Stats) Sub(s2 Stats) Stats {
-	s.Counts.Sub(s2.Counts)
-	s.Traffic = s.Traffic.Sub(s2.Traffic)
-	return s
-}
-
-// Metadata denotes a serializable set of metadata (both globally and per-block)
-type Metadata struct {
-	BlockMetadata [types.ColIdxCount]*storage.BlockHeader
-	BlockTraffic  []TrafficMetadata
-
-	Stats
-	Version uint64
-}
-
-// newMetadata initializes a new Metadata set (internal / serialization use only)
-func newMetadata() *Metadata {
-	m := Metadata{
-		BlockTraffic: make([]TrafficMetadata, 0),
-		Version:      headerVersion,
-	}
-	for i := 0; i < int(types.ColIdxCount); i++ {
-		m.BlockMetadata[i] = &storage.BlockHeader{
-			CurrentOffset: 0,
-			BlockList:     make([]storage.BlockAtTime, 0),
-		}
-	}
-	return &m
-}
 
 // GPDir denotes a timestamped goDB directory (usually a daily set of blocks)
 type GPDir struct {
 	gpFiles [types.ColIdxCount]*GPFile // Set of GPFile (lazy-load)
 
-	options     []Option    // Options (forwarded to all GPFiles)
-	basePath    string      // goDB base path (up to interface)
-	dirPath     string      // GPDir path (up to GPDir timestanp)
-	metaPath    string      // Full path to GPDir metadata
-	accessMode  int         // Access mode (also forwarded to all GPFiles)
-	permissions os.FileMode // Permissions (also forwarded to all GPFiles)
+	options          []Option    // Options (forwarded to all GPFiles)
+	basePath         string      // goDB base path (up to interface)
+	dirTimestampPath string      // GPDir path (up to GPDir timestanp)
+	dirPath          string      // GPDir path (full path including GPDir timestanp and potential metadata suffix)
+	metaPath         string      // Full path to GPDir metadata
+	accessMode       int         // Access mode (also forwarded to all GPFiles)
+	permissions      os.FileMode // Permissions (also forwarded to all GPFiles)
 
 	isOpen bool
 	*Metadata
 }
 
-// NewDir instantiates a new directory (doesn't yet do anything)
-func NewDir(basePath string, timestamp int64, accessMode int, options ...Option) *GPDir {
+// SplitTimestampMetadataSuffix is a convenience function that performs timestamp (and potentially
+// metadata prefix) extraction for the GPDir path / directory name
+func ExtractTimestampMetadataSuffix(filename string) (timestamp int64, metadataSuffix string, err error) {
+
+	// Split by delimeter and perform minumum validation
+	splitName := strings.Split(filename, "_")
+	if len(splitName) == 0 {
+		err = ErrInvalidDirName
+		return
+	}
+
+	// Check if a suffix is present and extract it
+	if len(splitName) > 1 {
+		metadataSuffix = splitName[1]
+	}
+
+	// Parse timestamp from prefix
+	timestamp, err = strconv.ParseInt(splitName[0], 10, 64)
+
+	return
+}
+
+// NewDirWriter instantiates a new directory for writing
+func NewDirWriter(basePath string, timestamp int64, options ...Option) *GPDir {
 	obj := GPDir{
-		basePath:    filepath.Clean(strings.TrimSuffix(basePath, "/")),
-		accessMode:  accessMode,
+		basePath:    strings.TrimSuffix(basePath, "/"),
+		accessMode:  ModeWrite,
 		permissions: defaultPermissions,
 		options:     options,
 	}
 
-	obj.dirPath = GenPathForTimestamp(basePath, timestamp)
+	obj.dirTimestampPath, obj.dirPath = genWritePathForTimestamp(basePath, timestamp)
 	obj.metaPath = filepath.Join(obj.dirPath, metadataFileName)
+
+	return &obj
+}
+
+// NewDir instantiates a new directory (doesn't yet do anything except for potentially
+// reading / decoding a subset of the metadata from a provided string suffix)
+func NewDirReader(basePath string, timestamp int64, metadataSuffix string, options ...Option) *GPDir {
+	obj := GPDir{
+		basePath:    strings.TrimSuffix(basePath, "/"),
+		accessMode:  ModeRead,
+		permissions: defaultPermissions,
+		options:     options,
+	}
+
+	obj.dirPath = genReadPathForTimestamp(basePath, timestamp, metadataSuffix)
+	obj.metaPath = filepath.Join(obj.dirPath, metadataFileName)
+
+	// If metdadata was provided via a suffix, attempt to read / decode it and fall
+	// back to doing nothing in case it fails
+	if metadataSuffix != "" {
+		obj.setMetadataFromSuffix(metadataSuffix)
+	}
+
 	return &obj
 }
 
@@ -190,6 +166,11 @@ func (d *GPDir) Open(options ...Option) error {
 
 	d.isOpen = true
 	return nil
+}
+
+// IsOpen returns if the GPFile instance is currently opened
+func (d *GPDir) IsOpen() bool {
+	return d.isOpen
 }
 
 // NumIPv4EntriesAtIndex returns the number of IPv4 entries for a given block index
@@ -262,16 +243,12 @@ func (d *GPDir) Unmarshal(r concurrency.ReadWriteSeekCloser) error {
 	if err != nil {
 		return err
 	}
-	defer func() {
-		if cerr := memFile.Close(); cerr != nil && err == nil {
-			err = cerr
-		}
-	}()
 
 	data := memFile.Data()
-	if len(data) < 16 {
+	if len(data) < 73 {
 		return fmt.Errorf("%w (len: %d)", ErrInputSizeTooSmall, len(data))
 	}
+	_ = data[72] // Compiler hint
 
 	d.Metadata = newMetadata()
 
@@ -319,7 +296,7 @@ func (d *GPDir) Unmarshal(r concurrency.ReadWriteSeekCloser) error {
 		pos += 16
 	}
 
-	return nil
+	return memFile.Close()
 }
 
 // Marshal marshals and writes the metadata of the GPDir instance into serialized metadata set
@@ -417,7 +394,7 @@ func (d *GPDir) Marshal(w concurrency.ReadWriteSeekCloser) error {
 	return nil
 }
 
-// Path returns the path of the GPDir (up to the timestamp)
+// Path returns the path of the GPDir (up to the timestamp and including a potential metadata suffix)
 func (d *GPDir) Path() string {
 	return d.dirPath
 }
@@ -482,7 +459,7 @@ func (d *GPDir) Column(colIdx types.ColumnIndex) (*GPFile, error) {
 
 	if d.gpFiles[colIdx] == nil {
 		var err error
-		if d.gpFiles[colIdx], err = New(filepath.Join(d.Path(), types.ColumnFileNames[colIdx]+FileSuffix), d.BlockMetadata[colIdx], d.accessMode, d.options...); err != nil {
+		if d.gpFiles[colIdx], err = New(filepath.Join(d.dirPath, types.ColumnFileNames[colIdx]+FileSuffix), d.BlockMetadata[colIdx], d.accessMode, d.options...); err != nil {
 			return nil, err
 		}
 	}
@@ -522,25 +499,95 @@ func (d *GPDir) writeMetadataAtomic() error {
 	}
 
 	// Move the temporary file
-	return os.Rename(tempFile.Name(), d.MetadataPath())
+	if err = os.Rename(tempFile.Name(), d.metaPath); err != nil {
+		return err
+	}
+
+	// Move / rename the output directory (if suffix has changed)
+	if curDirPath, newDirPath := d.dirPath, d.dirTimestampPath+d.Metadata.MarshalString(); curDirPath != newDirPath {
+		return os.Rename(curDirPath, newDirPath)
+	}
+	return nil
 }
 
 func (d *GPDir) setPermissions(permissions fs.FileMode) {
 	d.permissions = permissions
 }
 
-// GenPathForTimestamp provides a unified generator method that allows to construct the path to
-// the data on disk based on a base path and a timestamp
-func GenPathForTimestamp(basePath string, timestamp int64) string {
-	dayTimestamp := DirTimestamp(timestamp)
-	dayUnix := time.Unix(dayTimestamp, 0)
-
-	return filepath.Join(basePath, strconv.Itoa(dayUnix.Year()), fmt.Sprintf("%02d", dayUnix.Month()), strconv.FormatInt(dayTimestamp, 10))
+func (d *GPDir) setMetadataFromSuffix(metadataSuffix string) {
+	meta := new(Metadata) // no need to use newMetadata() since no block information is used
+	if err := meta.UnmarshalString(metadataSuffix); err == nil {
+		d.Metadata = meta
+	}
 }
 
 // DirTimestamp returns timestamp rounded down to the nearest directory time frame (usually a day)
 func DirTimestamp(timestamp int64) int64 {
 	return (timestamp / EpochDay) * EpochDay
+}
+
+// FindDirForTimestamp finds the full path to a GPDir given a timestamp (if the metadata suffix is
+// not known).
+// Note: This is inherently slow due to the search, so it should not be used to determine directories
+// used for queries (currently only used in legacy DB conversion tool)
+// TODO: Remove once legacy tool has been purged
+func FindDirForTimestamp(basePath string, timestamp int64) (match string, found bool) {
+	dayTimestamp := DirTimestamp(timestamp)
+	dayUnix := time.Unix(dayTimestamp, 0)
+
+	monthDir := filepath.Join(basePath, strconv.Itoa(dayUnix.Year()), padNumber(int64(dayUnix.Month())))
+	dirents, err := os.ReadDir(monthDir)
+	if err != nil {
+		return
+	}
+
+	// Find a matching directory using prefix-based binary search
+	if match, found = binarySearchPrefix(dirents, strconv.FormatInt(dayTimestamp, 10)); found {
+		match = filepath.Join(monthDir, match)
+	}
+
+	return
+}
+
+func genWritePathForTimestamp(basePath string, timestamp int64) (string, string) {
+	dayTimestamp := DirTimestamp(timestamp)
+	dayUnix := time.Unix(dayTimestamp, 0)
+
+	searchPath := filepath.Join(basePath, strconv.Itoa(dayUnix.Year()), padNumber(int64(dayUnix.Month())))
+	prefix := strconv.FormatInt(dayTimestamp, 10)
+
+	initialDirPath := filepath.Join(searchPath, prefix)
+	dirents, err := os.ReadDir(searchPath)
+	if err != nil {
+		return initialDirPath, initialDirPath
+	}
+
+	// Find a matching directory using prefix-based binary search
+	if match, found := binarySearchPrefix(dirents, prefix); found {
+		return initialDirPath, filepath.Join(searchPath, match)
+	}
+
+	return initialDirPath, initialDirPath
+}
+
+// genReadPathForTimestamp provides a unified generator method that allows to construct the path to
+// the data on disk based on a base path, a timestamp and a metadata suffix
+func genReadPathForTimestamp(basePath string, timestamp int64, metadataSuffix string) string {
+	dayTimestamp := DirTimestamp(timestamp)
+	dayUnix := time.Unix(dayTimestamp, 0)
+
+	if metadataSuffix == "" {
+		return filepath.Join(basePath, strconv.Itoa(dayUnix.Year()), padNumber(int64(dayUnix.Month())), strconv.FormatInt(dayTimestamp, 10))
+	}
+
+	return filepath.Join(basePath, strconv.Itoa(dayUnix.Year()), padNumber(int64(dayUnix.Month())), strconv.FormatInt(dayTimestamp, 10)+"_"+metadataSuffix)
+}
+
+func padNumber(n int64) string {
+	if n < 10 {
+		return "0" + strconv.FormatInt(n, 10)
+	}
+	return strconv.FormatInt(n, 10)
 }
 
 func calculateDirPerm(filePerm os.FileMode) os.FileMode {
@@ -556,4 +603,30 @@ func calculateDirPerm(filePerm os.FileMode) os.FileMode {
 	}
 
 	return filePerm
+}
+
+// This method provides a simple & fast custom prefix-based binary search for a []fs.DirEntry slice
+// in order to avoid having to jump through hoops and take the performance penalty of using the
+// standard sort facilities for this custom type
+func binarySearchPrefix(slice []fs.DirEntry, prefix string) (match string, found bool) {
+
+	if prefix == "" {
+		return
+	}
+
+	low := 0
+	high := len(slice) - 1
+	for low <= high {
+		mid := (low + high) / 2
+		elem := slice[mid].Name()
+		if strings.HasPrefix(elem, prefix) {
+			return elem, true
+		} else if elem < prefix {
+			low = mid + 1
+		} else {
+			high = mid - 1
+		}
+	}
+
+	return
 }

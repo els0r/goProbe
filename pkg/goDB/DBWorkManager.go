@@ -16,6 +16,7 @@ package goDB
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -108,8 +109,8 @@ func (w *DBWorkManager) CreateWorkerJobs(tfirst int64, tlast int64) (nonempty bo
 	var curDir *gpfile.GPDir
 	workloadBulk := make([]*gpfile.GPDir, 0, WorkBulkSize)
 
-	walkFunc := func(numDirs int, dayTimestamp int64) error {
-		curDir = gpfile.NewDir(w.dbIfaceDir, dayTimestamp, gpfile.ModeRead)
+	walkFunc := func(numDirs int, dayTimestamp int64, suffix string) error {
+		curDir = gpfile.NewDirReader(w.dbIfaceDir, dayTimestamp, suffix)
 
 		// For the first and last item, check out the GPDir metadata for the actual first and
 		// last block timestamp to cover (and adapt variables accordingly)
@@ -169,11 +170,11 @@ func (w *DBWorkManager) CreateWorkerJobs(tfirst int64, tlast int64) (nonempty bo
 	return 0 < numDirs, nil
 }
 
-func skipNonMatching(isDir bool) bool {
-	return !isDir
+func skipNonMatchingDir(entry fs.DirEntry) bool {
+	return !entry.IsDir()
 }
 
-type dbWalkFunc func(numDirs int, dayTimestamp int64) error
+type dbWalkFunc func(numDirs int, dayTimestamp int64, suffix string) error
 
 func (w *DBWorkManager) walkDB(tfirst, tlast int64, fn dbWalkFunc) (numDirs int, err error) {
 	// Get list of years in main directory (ordered by directory name, i.e. time)
@@ -186,8 +187,8 @@ func (w *DBWorkManager) walkDB(tfirst, tlast int64, fn dbWalkFunc) (numDirs int,
 	var unixFirst, unixLast = time.Unix(tfirst, 0), time.Unix(tlast+DBWriteInterval, 0)
 	for _, year := range yearList {
 
-		// Skip obvious non-matching entries
-		if skipNonMatching(year.IsDir()) {
+		// Skip obvious non-matching entries (anything not a directory)
+		if skipNonMatchingDir(year) {
 			continue
 		}
 
@@ -206,8 +207,9 @@ func (w *DBWorkManager) walkDB(tfirst, tlast int64, fn dbWalkFunc) (numDirs int,
 			return numDirs, err
 		}
 		for _, month := range monthList {
-			// Skip obvious non-matching entries
-			if skipNonMatching(month.IsDir()) {
+
+			// Skip obvious non-matching entries (anything not a directory)
+			if skipNonMatchingDir(month) {
 				continue
 			}
 
@@ -227,19 +229,24 @@ func (w *DBWorkManager) walkDB(tfirst, tlast int64, fn dbWalkFunc) (numDirs int,
 				return numDirs, err
 			}
 
-			for _, file := range dirList {
-				if skipNonMatching(file.IsDir()) {
+			for _, timestamp := range dirList {
+
+				// Skip obvious non-matching entries (anything not a directory)
+				if skipNonMatchingDir(timestamp) {
 					continue
 				}
-				dayTimestamp, err := strconv.ParseInt(file.Name(), 10, 64)
+
+				// Extract the timestamp (and potentially metadata suffix) from the directory name
+				dayTimestamp, suffix, err := gpfile.ExtractTimestampMetadataSuffix(timestamp.Name())
 				if err != nil {
-					return numDirs, fmt.Errorf("failed to parse epoch timestamp from directory `%s`: %w", file.Name(), err)
+					return numDirs, fmt.Errorf("failed to parse timestamp / suffix from directory `%s`: %w", timestamp.Name(), err)
 				}
 
 				// check if the directory is within time frame of interest
 				if tfirst < dayTimestamp+gpfile.EpochDay && dayTimestamp < tlast+DBWriteInterval {
+
 					// actual processing upon a match
-					err := fn(numDirs, dayTimestamp)
+					err := fn(numDirs, dayTimestamp, suffix)
 					if err != nil {
 						return numDirs, err
 					}
@@ -267,17 +274,23 @@ func (w *DBWorkManager) ReadMetadata(tfirst int64, tlast int64) (*InterfaceMetad
 
 	// make sure to start with zero workloads as the number of assigned
 	// workloads depends on how many directories have to be read
-	var curDir *gpfile.GPDir
+	var (
+		curDir           *gpfile.GPDir
+		currentTimestamp int64
+		currentSuffix    string
+	)
 
-	var currentTimestamp int64
+	walkFunc := func(numDirs int, dayTimestamp int64, suffix string) error {
 
-	walkFunc := func(numDirs int, dayTimestamp int64) error {
-		currentTimestamp = dayTimestamp
-		curDir = gpfile.NewDir(w.dbIfaceDir, dayTimestamp, gpfile.ModeRead, gpFileOptions...)
+		var err error
+		currentTimestamp, currentSuffix = dayTimestamp, suffix
+		curDir = gpfile.NewDirReader(w.dbIfaceDir, dayTimestamp, suffix, gpFileOptions...)
 
-		err := curDir.Open()
-		if err != nil {
-			return fmt.Errorf("failed to open first GPDir %s to ascertain query block timing: %w", curDir.Path(), err)
+		if curDir.Metadata == nil {
+			err = curDir.Open()
+			if err != nil {
+				return fmt.Errorf("failed to open GPDir %s to ascertain query block timing: %w", curDir.Path(), err)
+			}
 		}
 
 		// do the metadata compuation based on the metadata
@@ -286,6 +299,14 @@ func (w *DBWorkManager) ReadMetadata(tfirst int64, tlast int64) (*InterfaceMetad
 		// compute the metadata for the first day. If a "first" time argument is given,
 		// the partial day has to be computed
 		if numDirs == 0 {
+
+			if !curDir.IsOpen() {
+				err = curDir.Open()
+				if err != nil {
+					return fmt.Errorf("failed to open GPDir %s to ascertain query block timing: %w", curDir.Path(), err)
+				}
+			}
+
 			dirFirst, _ := curDir.TimeRange()
 			if tfirst >= dirFirst {
 				// subtract all entries that are smaller than w.tFirstCovered because they were added in the day loop
@@ -313,8 +334,10 @@ func (w *DBWorkManager) ReadMetadata(tfirst int64, tlast int64) (*InterfaceMetad
 				w.tFirstCovered = dirFirst
 			}
 		}
-		if err := curDir.Close(); err != nil {
-			return fmt.Errorf("failed to close first GPDir %s after ascertaining query block timing: %w", curDir.Path(), err)
+		if curDir.IsOpen() {
+			if err := curDir.Close(); err != nil {
+				return fmt.Errorf("failed to close first GPDir %s after ascertaining query block timing: %w", curDir.Path(), err)
+			}
 		}
 		return nil
 	}
@@ -327,7 +350,7 @@ func (w *DBWorkManager) ReadMetadata(tfirst int64, tlast int64) (*InterfaceMetad
 	// compute the metadata for the last block. This will be partial if the last timestamp is smaller than the last
 	// block captured for the day
 	if curDir != nil {
-		curDir = gpfile.NewDir(w.dbIfaceDir, currentTimestamp, gpfile.ModeRead, gpFileOptions...)
+		curDir = gpfile.NewDirReader(w.dbIfaceDir, currentTimestamp, currentSuffix, gpFileOptions...)
 
 		if err := curDir.Open(); err != nil {
 			return nil, fmt.Errorf("failed to open last GPDir %s to ascertain query block timing: %w", curDir.Path(), err)

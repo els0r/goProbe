@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"flag"
 	"fmt"
 	"io/fs"
@@ -196,9 +195,9 @@ func main() {
 
 			// Skip input if output already exists (unless -overwrite is specified)
 			if !overwrite {
-				destPath := gpfile.GenPathForTimestamp(filepath.Join(outPath, iface), epochTS)
-				if _, err := os.Stat(destPath); !errors.Is(err, fs.ErrNotExist) {
-					logger.Debugf("skipping already converted dir %s", destPath)
+				match, exists := gpfile.FindDirForTimestamp(filepath.Join(outPath, iface), epochTS)
+				if exists {
+					logger.Debugf("skipping already converted dir %s", match)
 					continue
 				}
 			}
