@@ -343,12 +343,12 @@ func testE2E(t *testing.T, valFilterDescriptor int, datasets ...[]byte) {
 		for it := aggMap.PrimaryMap.Iter(); it.Next(); {
 			compVal, exists := liveResults.PrimaryMap.Get(it.Key())
 			require.True(t, exists)
-			require.EqualValues(t, it.Val(), compVal)
+			require.EqualValuesf(t, it.Val(), compVal, "mismatching key: %v", types.Key(it.Key()))
 		}
 		for j, it := 0, aggMap.SecondaryMap.Iter(); it.Next(); j++ {
 			compVal, exists := liveResults.SecondaryMap.Get(it.Key())
 			require.True(t, exists)
-			require.EqualValues(t, it.Val(), compVal)
+			require.EqualValuesf(t, it.Val(), compVal, "mismatching key: %v", types.Key(it.Key()))
 		}
 	}
 

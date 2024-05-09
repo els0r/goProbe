@@ -169,8 +169,8 @@ func ParsePacketV4(ipLayer capture.IPLayer) (epHash capturetypes.EPHashV4, auxIn
 		}
 
 		auxInfo = ipLayer[ipv4.HeaderLen] // store ICMP type
-		goto finalize
 	}
+	goto finalize
 
 ports:
 	dport = ipLayer[ipLayerV4DPortStart:ipLayerV4DPortEnd]
@@ -236,8 +236,8 @@ func ParsePacketV6(ipLayer capture.IPLayer) (epHash capturetypes.EPHashV6, auxIn
 		}
 
 		auxInfo = ipLayer[ipv6.HeaderLen] // store ICMP type
-		goto finalize
 	}
+	goto finalize
 
 ports:
 	dport = ipLayer[ipLayerV6DPortStart:ipLayerV6DPortEnd]
