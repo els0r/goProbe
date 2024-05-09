@@ -82,6 +82,31 @@ func TestPortMergeLogic(t *testing.T) {
 	}
 }
 
+func TestTruncatedPPackets(t *testing.T) {
+	for _, params := range []testParams{
+		{"10.0.0.1", "10.0.0.2", 10000, 80, capturetypes.TCP, 0x0, capturetypes.DirectionRemains},
+		{"10.0.0.1", "10.0.0.2", 10000, 53, capturetypes.UDP, 0x0, capturetypes.DirectionRemains},
+		{"10.0.0.1", "10.0.0.2", 0, 0, capturetypes.ICMP, 0x0, capturetypes.DirectionRemains},
+		{"2c04:4000::6ab", "2c01:2000::3", 10000, 80, capturetypes.TCP, 0x0, capturetypes.DirectionRemains},
+		{"2c04:4000::6ab", "2c01:2000::3", 10000, 53, capturetypes.UDP, 0x0, capturetypes.DirectionRemains},
+		{"2c04:4000::6ab", "2c01:2000::3", 0, 0, capturetypes.ICMPv6, 0x0, capturetypes.DirectionRemains},
+	} {
+		testPacket := params.genDummyPacket(0)
+		_, refIsIPv4 := params.genEPHash()
+
+		var croppedIPLayer capture.IPLayer
+		if refIsIPv4 {
+			croppedIPLayer = testPacket.IPLayer()[:ipv4.HeaderLen]
+			_, _, errno := ParsePacketV4(croppedIPLayer)
+			require.Equal(t, capturetypes.ErrnoPacketTruncated, errno, "population error")
+		} else {
+			croppedIPLayer = testPacket.IPLayer()[:ipv6.HeaderLen]
+			_, _, errno := ParsePacketV6(croppedIPLayer)
+			require.Equal(t, capturetypes.ErrnoPacketTruncated, errno, "population error")
+		}
+	}
+}
+
 func TestSmallInvalidIPPackets(t *testing.T) {
 	invalidProto := byte(0xF8)
 
