@@ -235,6 +235,11 @@ func (d *GPDir) TimeRange() (first int64, last int64) {
 		d.BlockMetadata[0].Blocks()[d.BlockMetadata[0].NBlocks()-1].Timestamp
 }
 
+const (
+	minMetadataFileSize    = 73
+	minMetadataFileSizePos = minMetadataFileSize - 1
+)
+
 // Unmarshal reads and unmarshals a serialized metadata set into the GPDir instance
 func (d *GPDir) Unmarshal(r concurrency.ReadWriteSeekCloser) error {
 
@@ -245,10 +250,10 @@ func (d *GPDir) Unmarshal(r concurrency.ReadWriteSeekCloser) error {
 	}
 
 	data := memFile.Data()
-	if len(data) < 73 {
+	if len(data) < minMetadataFileSize {
 		return fmt.Errorf("%w (len: %d)", ErrInputSizeTooSmall, len(data))
 	}
-	_ = data[72] // Compiler hint
+	_ = data[minMetadataFileSizePos] // Compiler hint
 
 	d.Metadata = newMetadata()
 
@@ -261,7 +266,7 @@ func (d *GPDir) Unmarshal(r concurrency.ReadWriteSeekCloser) error {
 	d.Metadata.Counts.BytesSent = binary.BigEndian.Uint64(data[48:56])     // Get global Counters (BytesSent)
 	d.Metadata.Counts.PacketsRcvd = binary.BigEndian.Uint64(data[56:64])   // Get global Counters (PacketsRcvd)
 	d.Metadata.Counts.PacketsSent = binary.BigEndian.Uint64(data[64:72])   // Get global Counters (PacketsSent)
-	pos := 72
+	pos := minMetadataFileSizePos
 
 	// Get block information
 	for i := 0; i < int(types.ColIdxCount); i++ {
@@ -337,7 +342,7 @@ func (d *GPDir) Marshal(w concurrency.ReadWriteSeekCloser) error {
 	binary.BigEndian.PutUint64(data[48:56], d.Metadata.Counts.BytesSent)     // Store global Counters (BytesSent)
 	binary.BigEndian.PutUint64(data[56:64], d.Metadata.Counts.PacketsRcvd)   // Store global Counters (PacketsRcvd)
 	binary.BigEndian.PutUint64(data[64:72], d.Metadata.Counts.PacketsSent)   // Store global Counters (PacketsSent)
-	pos := 72
+	pos := minMetadataFileSizePos
 
 	if nBlocks > 0 {
 

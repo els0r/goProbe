@@ -50,12 +50,12 @@ be broken up into IPv4 and IPv6 flows and the drops for that interface will be s
 }
 
 func listInterfacesEntrypoint(_ *cobra.Command, args []string) error {
-	return listInterfaces(context.Background(), viper.GetString(conf.QueryDBPath), args...)
+	return listInterfaces(context.Background(), viper.GetString(conf.QueryDBPath), viper.GetString(conf.QueryLog), args...)
 }
 
 // List interfaces for which data is available and show how many flows and
 // how much traffic was observed for each one.
-func listInterfaces(ctx context.Context, dbPath string, ifaces ...string) error {
+func listInterfaces(ctx context.Context, dbPath, queryLogFile string, ifaces ...string) error {
 	queryArgs := cmdLineParams
 
 	// TODO: consider making this configurable
@@ -65,7 +65,6 @@ func listInterfaces(ctx context.Context, dbPath string, ifaces ...string) error 
 	logger := logging.FromContext(ctx)
 
 	// create query logger
-	queryLogFile := viper.GetString(conf.QueryLog)
 	var qlogger *logging.L
 	if queryLogFile != "" {
 		var err error

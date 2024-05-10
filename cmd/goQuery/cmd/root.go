@@ -243,7 +243,7 @@ func entrypoint(cmd *cobra.Command, args []string) (err error) {
 	// run commands that don't require any argument
 	// handle list flag
 	if cmdLineParams.List {
-		err := listInterfaces(queryCtx, dbPathCfg)
+		err := listInterfaces(queryCtx, dbPathCfg, viper.GetString(conf.QueryLog))
 		if err != nil {
 			return fmt.Errorf("failed to retrieve list of available databases: %w", err)
 		}
