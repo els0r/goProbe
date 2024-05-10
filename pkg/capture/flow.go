@@ -32,7 +32,6 @@ const (
 	ipLayerTypeV4 = 0x04 // IPv4
 	ipLayerTypeV6 = 0x06 // IPv6
 
-	ipLayerV4BoundsLimit       = ipv4.HeaderLen - 1
 	ipLayerV4ProtoPos          = 9
 	ipLayerV4SipStart          = 12
 	ipLayerV4SipEnd            = 16
@@ -57,6 +56,14 @@ const (
 	ipLayerV6DPortStart  = ipv6.HeaderLen + 2
 	ipLayerV6DPortEnd    = ipv6.HeaderLen + 4
 	ipLayerV6TCPFlagsPos = ipv6.HeaderLen + 13
+
+	ipLayerV4BoundsLimit = ipv4.HeaderLen - 1
+	ipLayerV4TCPLimit    = ipLayerV4TCPFlagsPos + 1
+	ipLayerV4UDPLimit    = ipLayerV4DPortEnd
+	ipLayerV4ICMPLimit   = ipv4.HeaderLen + 1
+	ipLayerV6TCPLimit    = ipLayerV6TCPFlagsPos + 1
+	ipLayerV6UDPLimit    = ipLayerV6DPortEnd
+	ipLayerV6ICMPLimit   = ipv6.HeaderLen + 1
 )
 
 // FlowLog stores flows. It is NOT threadsafe.
@@ -126,37 +133,61 @@ func ParsePacketV4(ipLayer capture.IPLayer) (epHash capturetypes.EPHashV4, auxIn
 		}
 	}
 
-	// Parse IPv4 packet information
+	// Parse source / destination IPs
 	copy(epHash[capturetypes.EPHashV4SipStart:capturetypes.EPHashV4SipEnd], ipLayer[ipLayerV4SipStart:ipLayerV4SipEnd])
 	copy(epHash[capturetypes.EPHashV4DipStart:capturetypes.EPHashV4DipEnd], ipLayer[ipLayerV4DipStart:ipLayerV4DipEnd])
 
-	if protocol == capturetypes.TCP || protocol == capturetypes.UDP {
+	var dport, sport []byte
 
-		dport := ipLayer[ipLayerV4DPortStart:ipLayerV4DPortEnd]
-		sport := ipLayer[ipLayerV4SPortStart:ipLayerV4SPortEnd]
-
-		// If session based traffic is observed, the source port is taken
-		// into account. A major exception is traffic over port 53 as
-		// considering every single DNS request/response would
-		// significantly fill up the flow map
-		if !isCommonPort(dport, protocol) {
-			copy(epHash[capturetypes.EPHashV4SPortStart:capturetypes.EPHashV4SPortEnd], sport)
-		}
-		if !isCommonPort(sport, protocol) {
-			copy(epHash[capturetypes.EPHashV4DPortStart:capturetypes.EPHashV4DPortEnd], dport)
+	// Parse TCP protocol
+	if protocol == capturetypes.TCP {
+		if len(ipLayer) < ipLayerV4TCPLimit {
+			errno = capturetypes.ErrnoPacketTruncated
+			return
 		}
 
-		if protocol == capturetypes.TCP {
-			if len(ipLayer) < ipLayerV4TCPFlagsPos {
-				errno = capturetypes.ErrnoPacketTruncated
-				return
-			}
-			auxInfo = ipLayer[ipLayerV4TCPFlagsPos] // store TCP flags
-		}
-	} else if protocol == capturetypes.ICMP {
-		auxInfo = ipLayer[ipv4.HeaderLen] // store ICMP type
+		auxInfo = ipLayer[ipLayerV4TCPFlagsPos] // store TCP flags
+
+		goto ports
 	}
 
+	// Parse UDP protocol
+	if protocol == capturetypes.UDP {
+		if len(ipLayer) < ipLayerV4UDPLimit {
+			errno = capturetypes.ErrnoPacketTruncated
+			return
+		}
+
+		goto ports
+	}
+
+	// Parse ICMP protocol
+	if protocol == capturetypes.ICMP {
+		if len(ipLayer) < ipLayerV4ICMPLimit {
+			errno = capturetypes.ErrnoPacketTruncated
+			return
+		}
+
+		auxInfo = ipLayer[ipv4.HeaderLen] // store ICMP type
+	}
+	goto finalize
+
+ports:
+	dport = ipLayer[ipLayerV4DPortStart:ipLayerV4DPortEnd]
+	sport = ipLayer[ipLayerV4SPortStart:ipLayerV4SPortEnd]
+
+	// If session based traffic is observed, the source port is taken
+	// into account. A major exception is traffic over port 53 as
+	// considering every single DNS request/response would
+	// significantly fill up the flow map
+	if !isCommonPort(dport, protocol) {
+		copy(epHash[capturetypes.EPHashV4SPortStart:capturetypes.EPHashV4SPortEnd], sport)
+	}
+	if !isCommonPort(sport, protocol) {
+		copy(epHash[capturetypes.EPHashV4DPortStart:capturetypes.EPHashV4DPortEnd], dport)
+	}
+
+finalize:
 	epHash[capturetypes.EPHashV4ProtocolPos] = protocol
 
 	errno = capturetypes.ErrnoOK
@@ -170,37 +201,60 @@ func ParsePacketV6(ipLayer capture.IPLayer) (epHash capturetypes.EPHashV6, auxIn
 	_ = ipLayer[ipLayerV6BoundsLimit] // bounds check hint to compiler
 	protocol := ipLayer[ipLayerV6ProtoPos]
 
-	// Parse IPv6 packet information
+	// Parse source / destination IPs
 	copy(epHash[capturetypes.EPHashV6SipStart:capturetypes.EPHashV6SipEnd], ipLayer[ipLayerV6SipStart:ipLayerV6SipEnd])
 	copy(epHash[capturetypes.EPHashV6DipStart:capturetypes.EPHashV6DipEnd], ipLayer[ipLayerV6DipStart:ipLayerV6DipEnd])
 
-	if protocol == capturetypes.TCP || protocol == capturetypes.UDP {
+	var dport, sport []byte
 
-		dport := ipLayer[ipLayerV6DPortStart:ipLayerV6DPortEnd]
-		sport := ipLayer[ipLayerV6SPortStart:ipLayerV6SPortEnd]
+	// Parse TCP protocol
+	if protocol == capturetypes.TCP {
+		if len(ipLayer) < ipLayerV6TCPLimit {
+			errno = capturetypes.ErrnoPacketTruncated
+			return
+		}
+		auxInfo = ipLayer[ipLayerV6TCPFlagsPos] // store TCP flags
 
-		// If session based traffic is observed, the source port is taken
-		// into account. A major exception is traffic over port 53 as
-		// considering every single DNS request/response would
-		// significantly fill up the flow map
-		if !isCommonPort(dport, protocol) {
-			copy(epHash[capturetypes.EPHashV6SPortStart:capturetypes.EPHashV6SPortEnd], sport)
-		}
-		if !isCommonPort(sport, protocol) {
-			copy(epHash[capturetypes.EPHashV6DPortStart:capturetypes.EPHashV6DPortEnd], dport)
-		}
-
-		if protocol == capturetypes.TCP {
-			if len(ipLayer) < ipLayerV6TCPFlagsPos {
-				errno = capturetypes.ErrnoPacketTruncated
-				return
-			}
-			auxInfo = ipLayer[ipLayerV6TCPFlagsPos] // store TCP flags
-		}
-	} else if protocol == capturetypes.ICMPv6 {
-		auxInfo = ipLayer[ipv6.HeaderLen] // store ICMP type
+		goto ports
 	}
 
+	// Parse UDP protocol
+	if protocol == capturetypes.UDP {
+		if len(ipLayer) < ipLayerV6UDPLimit {
+			errno = capturetypes.ErrnoPacketTruncated
+			return
+		}
+
+		goto ports
+	}
+
+	// Parse ICMP protocol
+	if protocol == capturetypes.ICMPv6 {
+		if len(ipLayer) < ipLayerV6ICMPLimit {
+			errno = capturetypes.ErrnoPacketTruncated
+			return
+		}
+
+		auxInfo = ipLayer[ipv6.HeaderLen] // store ICMP type
+	}
+	goto finalize
+
+ports:
+	dport = ipLayer[ipLayerV6DPortStart:ipLayerV6DPortEnd]
+	sport = ipLayer[ipLayerV6SPortStart:ipLayerV6SPortEnd]
+
+	// If session based traffic is observed, the source port is taken
+	// into account. A major exception is traffic over port 53 as
+	// considering every single DNS request/response would
+	// significantly fill up the flow map
+	if !isCommonPort(dport, protocol) {
+		copy(epHash[capturetypes.EPHashV6SPortStart:capturetypes.EPHashV6SPortEnd], sport)
+	}
+	if !isCommonPort(sport, protocol) {
+		copy(epHash[capturetypes.EPHashV6DPortStart:capturetypes.EPHashV6DPortEnd], dport)
+	}
+
+finalize:
 	epHash[capturetypes.EPHashV6ProtocolPos] = protocol
 
 	errno = capturetypes.ErrnoOK
