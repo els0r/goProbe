@@ -1,9 +1,11 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"runtime"
 	"strings"
@@ -13,6 +15,7 @@ import (
 	"github.com/els0r/goProbe/pkg/goDB"
 	"github.com/els0r/goProbe/pkg/goDB/info"
 	"github.com/els0r/goProbe/pkg/query"
+	"github.com/els0r/telemetry/logging"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -47,16 +50,36 @@ be broken up into IPv4 and IPv6 flows and the drops for that interface will be s
 }
 
 func listInterfacesEntrypoint(_ *cobra.Command, args []string) error {
-	return listInterfaces(viper.GetString(conf.QueryDBPath), args...)
+	return listInterfaces(context.Background(), viper.GetString(conf.QueryDBPath), viper.GetString(conf.QueryLog), args...)
 }
 
 // List interfaces for which data is available and show how many flows and
 // how much traffic was observed for each one.
-func listInterfaces(dbPath string, ifaces ...string) error {
+func listInterfaces(ctx context.Context, dbPath, queryLogFile string, ifaces ...string) error {
 	queryArgs := cmdLineParams
 
 	// TODO: consider making this configurable
 	output := os.Stdout
+	var ifacesMetadata []*goDB.InterfaceMetadata
+
+	logger := logging.FromContext(ctx)
+
+	// create query logger
+	var qlogger *logging.L
+	if queryLogFile != "" {
+		var err error
+
+		logger := logger.With("file", queryLogFile)
+		logger.Debugf("logging interface list query")
+
+		qlogger, err = logging.New(slog.LevelInfo, logging.EncodingJSON, logging.WithFileOutput(queryLogFile))
+		if err != nil {
+			logger.Errorf("failed to initialize query logger: %v", err)
+		} else {
+			qlogger.With("args", queryArgs).Infof("preparing interface list query")
+			defer qlogger.Info("interface list query finished")
+		}
+	}
 
 	first, last, err := query.ParseTimeRange(queryArgs.First, queryArgs.Last)
 	if err != nil {
@@ -96,7 +119,7 @@ func listInterfaces(dbPath string, ifaces ...string) error {
 		dbWorkerManagers = append(dbWorkerManagers, wm)
 	}
 
-	var ifacesMetadata = make([]*goDB.InterfaceMetadata, 0, len(dbWorkerManagers))
+	ifacesMetadata = make([]*goDB.InterfaceMetadata, 0, len(dbWorkerManagers))
 	for _, manager := range dbWorkerManagers {
 		manager := manager
 

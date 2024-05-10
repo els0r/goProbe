@@ -66,7 +66,7 @@ func (w *DBWriter) Write(flowmap *hashmap.AggFlowMap, captureStats capturetypes.
 		err    error
 	)
 
-	dir := gpfile.NewDir(filepath.Join(w.dbpath, w.iface), timestamp, gpfile.ModeWrite, gpfile.WithPermissions(w.permissions), gpfile.WithEncoderTypeLevel(w.encoderType, w.encoderLevel))
+	dir := gpfile.NewDirWriter(filepath.Join(w.dbpath, w.iface), timestamp, gpfile.WithPermissions(w.permissions), gpfile.WithEncoderTypeLevel(w.encoderType, w.encoderLevel))
 	if err = dir.Open(); err != nil {
 		return fmt.Errorf("failed to create / open daily directory: %w", err)
 	}
@@ -97,7 +97,7 @@ func (w *DBWriter) WriteBulk(workloads []BulkWorkload, dirTimestamp int64) (err 
 		update gpfile.Stats
 	)
 
-	dir := gpfile.NewDir(filepath.Join(w.dbpath, w.iface), dirTimestamp, gpfile.ModeWrite, gpfile.WithPermissions(w.permissions), gpfile.WithEncoderTypeLevel(w.encoderType, w.encoderLevel))
+	dir := gpfile.NewDirWriter(filepath.Join(w.dbpath, w.iface), dirTimestamp, gpfile.WithPermissions(w.permissions), gpfile.WithEncoderTypeLevel(w.encoderType, w.encoderLevel))
 	if err = dir.Open(); err != nil {
 		return fmt.Errorf("failed to create / open daily directory: %w", err)
 	}
