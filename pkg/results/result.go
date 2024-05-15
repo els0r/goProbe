@@ -103,8 +103,8 @@ type Interfaces []string
 
 // Status denotes the overall status of the result
 type Status struct {
-	Code    types.Status `json:"code" doc:"Status code" enum:"empty,error,missing_data,ok" example:"empty"`            // Code: the status code
-	Message string       `json:"message,omitempty" doc:"An optional status description" example:"no results returned"` // Message: an optional message
+	Code    types.Status `json:"code" doc:"Status code" enum:"empty,error,missing_data,ok" example:"empty"`         // Code: the status code
+	Message string       `json:"message,omitempty" doc:"Optional status description" example:"no results returned"` // Message: an optional message
 }
 
 // Timings summarizes query runtimes

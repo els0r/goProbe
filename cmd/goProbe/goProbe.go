@@ -79,19 +79,12 @@ func main() {
 	logger.Info("loaded configuration")
 
 	// write spec and exit
-	openAPIfile := flags.CmdLine.OpenAPI
+	openAPIfile := flags.CmdLine.OpenAPISpecOutfile
 	if openAPIfile != "" {
 		// skeleton server just for route registration
-		apiServer := gpserver.New("0.0.0.0:8145", nil, nil)
-
-		logger.With("path", openAPIfile).Info("writing OpenAPI spec only")
-		f, err := os.OpenFile(openAPIfile, os.O_CREATE|os.O_WRONLY, 0755)
+		err := server.GenerateSpec(context.Background(), openAPIfile, gpserver.New("127.0.0.1:8145", nil, nil))
 		if err != nil {
-			logger.Fatalf("failed to open OpenAPI spec file for writing: %v", err)
-		}
-		err = apiServer.OpenAPI(f)
-		if err != nil {
-			logger.Fatalf("failed to create OpenAPI spec: %v", err)
+			logger.Fatal(err)
 		}
 		os.Exit(0)
 	}

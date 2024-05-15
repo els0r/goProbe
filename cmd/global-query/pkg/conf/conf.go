@@ -31,8 +31,8 @@ const (
 	ServerAddr                = serverKey + ".addr"
 	ServerShutdownGracePeriod = serverKey + ".shutdowngraceperiod"
 
-	openapiKey = "openapi"
-	OpenAPI    = openapiKey
+	openapiKey         = "openapi"
+	OpenAPISpecOutfile = openapiKey + ".spec-outfile"
 )
 
 // Global defaults for command line parameters / arguments

@@ -11,6 +11,15 @@ import (
 
 var infoTags = []string{"Info"}
 
+const (
+	healthy = "healthy"
+	ready   = "ready"
+
+	getHealthOpName = "get-health"
+	getInfoOpName   = "get-info"
+	getReadyOpName  = "get-ready"
+)
+
 // ServiceInfo summarizes the running service's name, version, and commit. If running in
 // kubernetes, it will also print the name of the pod which returned the API call
 type ServiceInfo struct {
@@ -30,7 +39,7 @@ type GetInfoOutput struct {
 // GetInfoOperation is the operation for getting a greeting.
 func GetInfoOperation() huma.Operation {
 	return huma.Operation{
-		OperationID: "get-info",
+		OperationID: getInfoOpName,
 		Method:      http.MethodGet,
 		Path:        InfoRoute,
 		Summary:     "Get application info",
@@ -73,7 +82,7 @@ type GetHealthOutput struct {
 // GetHealthOperation is the operation for getting the health of the app
 func GetHealthOperation() huma.Operation {
 	return huma.Operation{
-		OperationID: "get-health",
+		OperationID: getHealthOpName,
 		Method:      http.MethodGet,
 		Path:        HealthRoute,
 		Summary:     "Get application health",
@@ -86,7 +95,7 @@ func GetHealthOperation() huma.Operation {
 func GetHealthHandler() func(context.Context, *struct{}) (*GetHealthOutput, error) {
 	return func(ctx context.Context, _ *struct{}) (*GetHealthOutput, error) {
 		output := &GetHealthOutput{}
-		output.Body.Status = "healthy"
+		output.Body.Status = healthy
 		return output, nil
 	}
 }
@@ -101,7 +110,7 @@ type GetReadyOutput struct {
 // GetReadyOperation is the operation for getting the ready state
 func GetReadyOperation() huma.Operation {
 	return huma.Operation{
-		OperationID: "get-ready",
+		OperationID: getReadyOpName,
 		Method:      http.MethodGet,
 		Path:        ReadyRoute,
 		Summary:     "Get application readiness",
@@ -114,7 +123,7 @@ func GetReadyOperation() huma.Operation {
 func GetReadyHandler() func(context.Context, *struct{}) (*GetReadyOutput, error) {
 	return func(ctx context.Context, _ *struct{}) (*GetReadyOutput, error) {
 		output := &GetReadyOutput{}
-		output.Body.Status = "ready"
+		output.Body.Status = ready
 		return output, nil
 	}
 }

@@ -30,7 +30,7 @@ type CaptureStats struct {
 	// ReceivedTotal: denotes the number of packets received since the capture was started
 	ReceivedTotal uint64 `json:"received_total" doc:"Total number of packets received since capture was started" example:"69000"`
 	// Processed: denotes the number of packets processed by the capture
-	Processed uint64 `json:"processed" doc:"Packets processed by the capture" example:"70"`
+	Processed uint64 `json:"processed" doc:"Number of packets processed by the capture" example:"70"`
 	// ProcessedTotal denotes the number of packets processed since the capture was started
 	ProcessedTotal uint64 `json:"processed_total" doc:"Total number of packets processed since the capture was started" example:"70000"`
 	// Dropped: denotes the number of packets dropped

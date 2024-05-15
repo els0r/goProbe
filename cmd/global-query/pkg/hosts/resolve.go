@@ -13,7 +13,6 @@ type Hosts []string
 type ResolverType string
 
 const (
-
 	// StringResolverType denotes a simple string resolver type
 	StringResolverType ResolverType = "string"
 )

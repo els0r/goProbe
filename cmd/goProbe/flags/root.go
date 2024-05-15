@@ -8,9 +8,9 @@ import (
 
 // Flags stores goProbe's command line parameters
 type Flags struct {
-	Config  string
-	Version bool
-	OpenAPI string
+	Config             string
+	Version            bool
+	OpenAPISpecOutfile string
 }
 
 // CmdLine globally exposes the parsed flags
@@ -20,7 +20,7 @@ var CmdLine = &Flags{}
 func Read() error {
 	flag.StringVar(&CmdLine.Config, "config", "", "path to goProbe's configuration file (required)")
 	flag.BoolVar(&CmdLine.Version, "version", false, "print goProbe's version and exit")
-	flag.StringVar(&CmdLine.OpenAPI, "openapi", "", "write OpenAPI 3.0.3 spec to output file and exit")
+	flag.StringVar(&CmdLine.OpenAPISpecOutfile, "openapi.spec-outfile", "", "write OpenAPI 3.0.3 spec to output file and exit")
 
 	flag.Parse()
 

@@ -144,8 +144,9 @@ func (server *DefaultServer) API() huma.API {
 	return server.api
 }
 
-// OpenAPI writes the full OpenAPI spec to the writer w
-func (server *DefaultServer) OpenAPI(w io.Writer) error {
+// WriteOpenAPISpec writes the full OpenAPI spec to the writer w. It implements the
+// OpenAPISpecWriter interface
+func (server *DefaultServer) WriteOpenAPISpec(w io.Writer) error {
 	b, err := server.api.OpenAPI().DowngradeYAML()
 	if err != nil {
 		return fmt.Errorf("failed to generate OpenAPI spec: %w", err)
