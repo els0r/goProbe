@@ -4,9 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
 
-	"github.com/danielgtaylor/huma/v2"
 	"github.com/els0r/goProbe/cmd/global-query/pkg/hosts"
 	"github.com/els0r/goProbe/pkg/query"
 	"github.com/els0r/goProbe/pkg/results"
@@ -39,10 +37,6 @@ func NewQueryRunner(resolver hosts.Resolver, querier Querier, opts ...QueryOptio
 	return
 }
 
-const (
-	unboundedQuery = "unbounded query"
-)
-
 // Run executes / runs the query and creates the final result structure
 func (q *QueryRunner) Run(ctx context.Context, args *query.Args) (*results.Result, error) {
 	// use a copy of the arguments, since some fields are modified by the querier
@@ -62,27 +56,11 @@ func (q *QueryRunner) Run(ctx context.Context, args *query.Args) (*results.Resul
 		return nil, fmt.Errorf("failed to prepare query statement: %w", err)
 	}
 
-	// check for unbounded raw queries
-	if queryArgs.Condition == "" {
-		if queryArgs.Query == types.RawCompoundQuery {
-			return nil, &huma.ErrorModel{
-				Title:  http.StatusText(http.StatusUnprocessableEntity),
-				Status: http.StatusUnprocessableEntity,
-				Detail: "query safeguards violation",
-				Errors: []*huma.ErrorDetail{
-					{
-						Message:  fmt.Sprintf("%s. Hint: narrow down attributes", unboundedQuery),
-						Location: "body.query",
-						Value:    queryArgs.Query,
-					},
-					{
-						Message:  fmt.Sprintf("%s. Hint: supply condition to filter results", unboundedQuery),
-						Location: "body.condition",
-						Value:    queryArgs.Condition,
-					},
-				},
-			}
-		}
+	// safeguards against loading too much data, as in, dumping whole
+	// DBs via the network
+	err = queryArgs.CheckUnboundedQueries()
+	if err != nil {
+		return nil, err
 	}
 
 	hostList, err := q.prepareHostList(ctx, args.QueryHosts)
