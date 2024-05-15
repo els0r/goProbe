@@ -56,6 +56,13 @@ func (q *QueryRunner) Run(ctx context.Context, args *query.Args) (*results.Resul
 		return nil, fmt.Errorf("failed to prepare query statement: %w", err)
 	}
 
+	// safeguards against loading too much data, as in, dumping whole
+	// DBs via the network
+	err = queryArgs.CheckUnboundedQueries()
+	if err != nil {
+		return nil, err
+	}
+
 	hostList, err := q.prepareHostList(ctx, args.QueryHosts)
 	if err != nil {
 		return nil, err // prepareHostList() returns formatted error

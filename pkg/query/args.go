@@ -253,7 +253,39 @@ const (
 	invalidMaxMemPctMsg            = "invalid max memory percentage"
 	invalidRowLimitMsg             = "invalid row limit"
 	invalidLiveQueryMsg            = "query not possible"
+	unboundedQuery                 = "unbounded query"
 )
+
+// CheckUnboundedQueries qualifies whether a query will load too much data. At the
+// moment, this boils down to raw queries without a condition.
+//
+// Callers can use this function to protect against long-running queries in order to
+// preserve resources and bandwidth
+func (a *Args) CheckUnboundedQueries() error {
+	// check for unbounded raw queries
+	if a.Condition == "" {
+		if a.Query == types.RawCompoundQuery {
+			return &huma.ErrorModel{
+				Title:  http.StatusText(http.StatusBadRequest),
+				Status: http.StatusBadRequest,
+				Detail: "query safeguards violation",
+				Errors: []*huma.ErrorDetail{
+					{
+						Message:  fmt.Sprintf("%s. Hint: narrow down attributes", unboundedQuery),
+						Location: "body.query",
+						Value:    a.Query,
+					},
+					{
+						Message:  fmt.Sprintf("%s. Hint: supply condition to filter results", unboundedQuery),
+						Location: "body.condition",
+						Value:    a.Condition,
+					},
+				},
+			}
+		}
+	}
+	return nil
+}
 
 // Prepare takes the query Arguments, validates them and creates an executable statement. Optionally, additional writers can be passed to route query results to different destinations.
 func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
