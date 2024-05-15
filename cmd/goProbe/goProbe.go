@@ -111,16 +111,16 @@ func main() {
 		i++
 	}
 
-	// None of the initialization steps failed.
-	captureManager, err := capture.InitManager(ctx, config)
-	if err != nil {
-		logger.Fatal(err)
-	}
-
 	// Create DB directory if it doesn't exist already.
 	// #nosec G301
 	if err := os.MkdirAll(filepath.Clean(config.DB.Path), 0755); err != nil {
 		logger.Fatalf("failed to create database directory: %v", err)
+	}
+
+	// None of the initialization steps failed.
+	captureManager, err := capture.InitManager(ctx, config)
+	if err != nil {
+		logger.Fatal(err)
 	}
 
 	// Initialize constant monitoring / reloading of the config file
