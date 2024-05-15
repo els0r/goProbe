@@ -207,7 +207,7 @@ jobs:
         - name: Build single OpenAPI 3.0 spec file for all documented APIs
           run: |
             go run ./cmd/goProbe/goProbe.go -config .buildconfig/goprobe.yaml -openapi.spec-outfile ./goprobe_${{ env.RELEASE_VERSION }}_openapi.yaml
-            go run ./cmd/global-query/main.go --config .buildconfig/global-query.yaml --openapi.spec-outfile ./global-query_${{ env.RELEASE_VERSION }}_openapi.yaml
+            go run ./cmd/global-query/main.go --config .buildconfig/global-query.yaml server --openapi.spec-outfile ./global-query_${{ env.RELEASE_VERSION }}_openapi.yaml
 
         - name: Store artifacts
           uses: actions/upload-artifact@v3
