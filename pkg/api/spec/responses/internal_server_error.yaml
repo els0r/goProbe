@@ -1,6 +1,0 @@
-description: Internal Server Error
-content:
-  text/plain:
-    schema:
-      type: string
-      example: "Internal Server Error: localDB query failed"

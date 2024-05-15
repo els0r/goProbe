@@ -23,17 +23,23 @@ type InterfaceStats map[string]CaptureStats
 
 // CaptureStats stores the capture stores its statistics
 type CaptureStats struct {
-	StartedAt      time.Time `json:"started_at"`      // StartedAt: denotes the time when the capture was started. Example: "2021-01-01T00:00:00Z"
-	Received       uint64    `json:"received"`        // Received: denotes the number of packets received. Example: 69
-	ReceivedTotal  uint64    `json:"received_total"`  // ReceivedTotal: denotes the number of packets received since the capture was started. Example: 69000
-	Processed      uint64    `json:"processed"`       // Processed: denotes the number of packets processed by the capture. Example: 70
-	ProcessedTotal uint64    `json:"processed_total"` // ProcessedTotal denotes the number of packets processed since the capture was started. Example: 70000
-	Dropped        uint64    `json:"dropped"`         // Dropped: denotes the number of packets dropped. Example: 3
-	DroppedTotal   uint64    `json:"dropped_total"`   // DroppedTotal: denotes the number of packets dropped since the capture was started. Example: 20
+	// StartedAt: denotes the time when the capture was started
+	StartedAt time.Time `json:"started_at" doc:"Time when the capture was started" example:"2021-01-01T00:00:00Z"`
+	// Received: denotes the number of packets received
+	Received uint64 `json:"received" doc:"Number of packets received" example:"69"`
+	// ReceivedTotal: denotes the number of packets received since the capture was started
+	ReceivedTotal uint64 `json:"received_total" doc:"Total number of packets received since capture was started" example:"69000"`
+	// Processed: denotes the number of packets processed by the capture
+	Processed uint64 `json:"processed" doc:"Number of packets processed by the capture" example:"70"`
+	// ProcessedTotal denotes the number of packets processed since the capture was started
+	ProcessedTotal uint64 `json:"processed_total" doc:"Total number of packets processed since the capture was started" example:"70000"`
+	// Dropped: denotes the number of packets dropped
+	Dropped uint64 `json:"dropped" doc:"Number of packets dropped" example:"3"`
+	// DroppedTotal: denotes the number of packets dropped since the capture was started
+	DroppedTotal uint64 `json:"dropped_total" doc:"Number of packets dropped since the capture was started" example:"20"`
 
 	// ParsingErrors: denotes all packet parsing errors / failures encountered
-	// Example: [23, 0]
-	ParsingErrors ParsingErrTracker `json:"parsing_errors,omitempty"`
+	ParsingErrors ParsingErrTracker `json:"parsing_errors,omitempty" doc:"All packet parsing errors / failures" example:"[23,0]"`
 }
 
 // AddStats is a convenience method to total capture stats. This is relevant in the scope of

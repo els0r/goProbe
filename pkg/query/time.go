@@ -19,6 +19,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/danielgtaylor/huma/v2"
 	"github.com/els0r/goProbe/pkg/types"
 )
 
@@ -221,6 +222,45 @@ func ParseTimeRange(firstStr, lastStr string) (first, last int64, err error) {
 		return
 	}
 	return first, last, nil
+}
+
+// ParseTimeRangeCollectErrors will run ParseTimeArgument for a range and validate if the interval is
+// non-zero. It will append errors encountered during interval validation to the huma.ErrorDetail slice and
+// return them. The error condition will thus be len(details) > 0
+func ParseTimeRangeCollectErrors(firstStr, lastStr string) (first, last int64, details []*huma.ErrorDetail) {
+	var err error
+	if firstStr != "" {
+		first, err = ParseTimeArgument(firstStr)
+		if err != nil {
+			details = append(details, &huma.ErrorDetail{
+				Location: "body.first",
+				Message:  fmt.Sprintf("%s: %s", errorInvalidTimeFormat, err),
+				Value:    firstStr,
+			})
+		}
+	}
+
+	if lastStr == "" {
+		last = time.Now().Unix()
+	} else {
+		last, err = ParseTimeArgument(lastStr)
+		if err != nil {
+			details = append(details, &huma.ErrorDetail{
+				Location: "body.last",
+				Message:  fmt.Sprintf("%s: %s", errorInvalidTimeFormat, err),
+				Value:    lastStr,
+			})
+		}
+	}
+
+	if first > last {
+		details = append(details, &huma.ErrorDetail{
+			Location: "body.first",
+			Message:  fmt.Sprintf("%s: the lower time bound cannot be greater than the upper time bound", errorInvalidTimeInterval),
+			Value:    firstStr,
+		})
+	}
+	return first, last, details
 }
 
 // ParseTimeArgument is the entry point for external calls and converts valid formats to a unix timtestamp

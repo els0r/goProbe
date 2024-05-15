@@ -12,3 +12,5 @@ cmd/legacy/legacy
 _build/
 go.work.sum
 .db/
+tmp/
+bin/

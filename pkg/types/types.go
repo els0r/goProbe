@@ -201,7 +201,7 @@ type Prettier interface {
 func ShouldPretty(err error, msg string) error {
 	var prettyErr Prettier
 	if errors.As(err, &prettyErr) {
-		return fmt.Errorf("%s:\n%s", msg, prettyErr.Pretty())
+		return fmt.Errorf("%s:\n%s", msg, PrettyIndent(prettyErr, 4))
 	}
 	return fmt.Errorf("%s: %w", msg, err)
 }

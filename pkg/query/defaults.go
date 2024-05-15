@@ -12,10 +12,8 @@ import (
 var (
 	DefaultDBPath         = defaults.DBPath
 	DefaultFormat         = "txt"
-	DefaultIn             = false
 	DefaultMaxMemPct      = 60
 	DefaultNumResults     = uint64(1000)
-	DefaultOut            = false
 	DefaultResolveRows    = 25
 	DefaultResolveTimeout = 1 * time.Second
 	DefaultQueryTimeout   = defaults.QueryTimeout

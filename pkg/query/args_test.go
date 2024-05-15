@@ -2,153 +2,33 @@ package query
 
 import (
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"testing"
 	"time"
 
 	"github.com/els0r/goProbe/pkg/types"
-	jsoniter "github.com/json-iterator/go"
 	"github.com/stretchr/testify/require"
 )
-
-func TestMarshalArgsError(t *testing.T) {
-	var tests = []struct {
-		name     string
-		input    *ArgsError
-		expected []byte
-	}{
-		{"nil", nil, []byte("null")},
-		{"simple error, underlying error nil",
-			newArgsError(
-				"field",
-				"an error occurred",
-				nil,
-			),
-			[]byte(`{"field":"field","message":"an error occurred"}`),
-		},
-		{"simple error, underlying error set",
-			newArgsError(
-				"field",
-				"an error occurred",
-				errors.New("an error"),
-			),
-			[]byte(`{"field":"field","type":"*errors.errorString","message":"an error occurred","details":"an error"}`),
-		},
-		{"detailed parsing error",
-			newArgsError(
-				"condition",
-				"parsing failed",
-				types.NewParseError([]string{"sipl", "=", "192.168.1.1"}, 0, " ", "Expected attribute"),
-			),
-			[]byte(`{"field":"condition","type":"*types.ParseError","message":"parsing failed","details":{"tokens":["sipl","=","192.168.1.1"],"pos":0,"description":"Expected attribute","sep":" "}}`),
-		},
-		{"unsupported error",
-			newArgsError(
-				"sort_by",
-				"wrong sort by",
-				types.NewUnsupportedError("biscuits", []string{"a", "b"}),
-			),
-			[]byte(`{"field":"sort_by","type":"*types.UnsupportedError","message":"wrong sort by","details":{"val":"biscuits","valid":["a","b"]}}`),
-		},
-	}
-
-	for _, test := range tests {
-		test := test
-		t.Run(test.name, func(t *testing.T) {
-			b, err := jsoniter.Marshal(test.input)
-			require.Nil(t, err)
-			require.Equal(t, string(test.expected), string(b))
-		})
-	}
-}
-
-func TestMarshalUnmarshalArgsError(t *testing.T) {
-	var tests = []struct {
-		name  string
-		input *ArgsError
-	}{
-		{"simple error, underlying error nil",
-			newArgsError(
-				"field",
-				"an error occurred",
-				nil,
-			),
-		},
-		{"simple error, underlying error set",
-			newArgsError(
-				"field",
-				"an error occurred",
-				errors.New("an error"),
-			),
-		},
-		{"detailed parsing error",
-			newArgsError(
-				"condition",
-				"parsing failed",
-				types.NewParseError([]string{"sipl", "=", "192.168.1.1"}, 0, " ", "Expected attribute"),
-			),
-		},
-		{"unsupported error",
-			newArgsError(
-				"sort_by",
-				"wrong sort by",
-				types.NewUnsupportedError("biscuits", []string{"a", "b"}),
-			),
-		},
-	}
-
-	for _, test := range tests {
-		test := test
-		t.Run(test.name, func(t *testing.T) {
-			b, err := jsoniter.Marshal(test.input)
-			require.Nil(t, err)
-
-			var argsErr = new(ArgsError)
-			err = jsoniter.Unmarshal(b, argsErr)
-
-			require.Nil(t, err)
-
-			require.Equal(t, test.input, argsErr)
-		})
-	}
-}
 
 func TestPrepareArgs(t *testing.T) {
 	var tests = []struct {
 		name  string
 		input *Args
-		err   *ArgsError
+		err   *DetailError
 	}{
 		{"empty", &Args{},
-			&ArgsError{
-				Field:   "query",
-				Message: invalidQueryTypeMsg,
-				Type:    fmt.Sprintf("%T", &types.ParseError{}),
-			},
+			&DetailError{},
 		},
 		{"unsupported format", &Args{Query: "sip", Format: "exe"},
-			&ArgsError{
-				Field:   "format",
-				Message: invalidFormatMsg,
-				Type:    fmt.Sprintf("%T", &types.UnsupportedError{}),
-			},
+			&DetailError{},
 		},
 		{"wrong sort by", &Args{Query: "sip", Format: "json", SortBy: "biscuits"},
-			&ArgsError{
-				Field:   "sort_by",
-				Message: invalidSortByMsg,
-				Type:    fmt.Sprintf("%T", &types.UnsupportedError{}),
-			},
+			&DetailError{},
 		},
 		{"empty sort by, invalid time",
 			&Args{Query: "sip,time", Format: "json", First: "10:"},
-			&ArgsError{
-				Field:   "first/last",
-				Message: invalidTimeRangeMsg,
-				Type:    "*fmt.wrapErrors",
-			},
+			&DetailError{},
 		},
 		{"dns resolution, wrong timeout",
 			&Args{
@@ -158,11 +38,7 @@ func TestPrepareArgs(t *testing.T) {
 					Timeout: -1,
 				},
 			},
-			&ArgsError{
-				Field:   "dns_resolution.timeout",
-				Message: invalidDNSResolutionTimeoutMsg,
-				Type:    fmt.Sprintf("%T", &types.MinBoundsError{}),
-			},
+			&DetailError{},
 		},
 		{"dns resolution, wrong number of rows",
 			&Args{
@@ -173,43 +49,27 @@ func TestPrepareArgs(t *testing.T) {
 					MaxRows: -1,
 				},
 			},
-			&ArgsError{
-				Field:   "dns_resolution.max_rows",
-				Message: invalidDNSResolutionRowsMsg,
-				Type:    fmt.Sprintf("%T", &types.MinBoundsError{}),
-			},
+			&DetailError{},
 		},
 		{"incorrect condition",
 			&Args{
 				Query: "sip,time", Format: "json", First: "-7d",
 				Condition: "dipl = 0",
 			},
-			&ArgsError{
-				Field:   "condition",
-				Message: invalidConditionMsg,
-				Type:    fmt.Sprintf("%T", &types.ParseError{}),
-			},
+			&DetailError{},
 		},
 		{"incorrect mem percentage",
 			&Args{
 				Query: "sip,time", Format: "json", First: "-7d",
 			},
-			&ArgsError{
-				Field:   "max_mem_pct",
-				Message: invalidMaxMemPctMsg,
-				Type:    fmt.Sprintf("%T", &types.RangeError{}),
-			},
+			&DetailError{},
 		},
 		{"wrong number of results",
 			&Args{
 				Query: "sip,time", Format: "json", First: "-7d",
 				MaxMemPct: 20,
 			},
-			&ArgsError{
-				Field:   "num_results",
-				Message: invalidRowLimitMsg,
-				Type:    fmt.Sprintf("%T", &types.MinBoundsError{}),
-			},
+			&DetailError{},
 		},
 		{"invalid live mode",
 			&Args{
@@ -217,11 +77,7 @@ func TestPrepareArgs(t *testing.T) {
 				MaxMemPct: 20, NumResults: 20,
 				Live: true,
 			},
-			&ArgsError{
-				Field:   "live",
-				Message: invalidLiveQueryMsg,
-				Type:    "*errors.errorString",
-			},
+			&DetailError{},
 		},
 		{"valid query args",
 			&Args{
@@ -243,17 +99,8 @@ func TestPrepareArgs(t *testing.T) {
 				return
 			}
 
-			t.Logf("error:\n%v", err)
-
 			ok := errors.As(err, &test.err)
-			require.Truef(t, ok, "expected error to be of type %T", &ArgsError{})
-
-			// individually compare the struct fields. Why the detour? So we don't have
-			// to re-create (and test) errors that are caught by other packages (such as
-			// parsing errors)
-			require.Equal(t, test.err.Field, test.err.Field)
-			require.Equal(t, test.err.Type, test.err.Type)
-			require.Equal(t, test.err.Message, test.err.Message)
+			require.Truef(t, ok, "expected error to be of type %T", &DetailError{})
 		})
 	}
 }
@@ -263,7 +110,7 @@ func TestSelector(t *testing.T) {
 		name     string
 		input    *Args
 		selector types.LabelSelector
-		err      *ArgsError
+		err      *DetailError
 	}{
 		{
 			name: "empty interface",
@@ -273,11 +120,7 @@ func TestSelector(t *testing.T) {
 				outputs: []io.Writer{os.Stdout, os.Stderr},
 			},
 			selector: types.LabelSelector{},
-			err: &ArgsError{
-				Field:   "iface",
-				Message: emptyInterfaceMsg,
-				Type:    "*types.ParseError",
-			},
+			err:      &DetailError{},
 		},
 		{
 			name: "single interface",
@@ -309,11 +152,7 @@ func TestSelector(t *testing.T) {
 				MaxMemPct: 20, NumResults: 20,
 				outputs: []io.Writer{os.Stdout, os.Stderr},
 			},
-			err: &ArgsError{
-				Field:   "iface",
-				Message: invalidInterfaceMsg,
-				Type:    "*errors.errorString",
-			},
+			err: &DetailError{},
 		},
 	}
 
@@ -323,8 +162,6 @@ func TestSelector(t *testing.T) {
 			stmt, err := test.input.Prepare()
 			if test.err != nil {
 				require.ErrorAs(t, err, &test.err)
-				require.Equal(t, test.err.Field, test.err.Field)
-				require.Equal(t, test.err.Type, test.err.Type)
 
 				t.Log(err)
 				return

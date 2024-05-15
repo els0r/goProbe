@@ -9,6 +9,9 @@
       "https_proxy": "${localEnv:HTTP_PROXY}"
     }
   },
+  "containerEnv": {
+    "GOWORK": "/workspaces/goProbe/go.work"
+  },
   "customizations": {
     "vscode": {
       "extensions": [

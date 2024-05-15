@@ -1,0 +1,4 @@
+hostA:
+  addr: "localhost:8145"
+  timeout: 15s
+  log: true

@@ -1,0 +1,6 @@
+server:
+  # addr defines under which address goProbe's API server is reachable. For unix sockets,
+  # the prefix unix: is required
+  addr: "localhost:8145"
+# timeout specifies the timeout for calls to goProbe's API server. This is used for all requests
+timeout: 30s

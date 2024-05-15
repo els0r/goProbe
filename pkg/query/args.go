@@ -5,11 +5,12 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
+	"github.com/danielgtaylor/huma/v2"
 	"github.com/els0r/goProbe/pkg/goDB/conditions"
 	"github.com/els0r/goProbe/pkg/goDB/conditions/node"
 	"github.com/els0r/goProbe/pkg/query/dns"
@@ -37,253 +38,153 @@ func NewArgs(query, ifaces string, opts ...Option) *Args {
 // DefaultArgs creates a basic set of query arguments with only the
 // defaults being set
 func DefaultArgs() *Args {
-	return &Args{
-		First:      time.Now().AddDate(0, -1, 0).Format(time.ANSIC),
-		Format:     DefaultFormat,
-		In:         DefaultIn,
-		Last:       maxTimeStr,
-		MaxMemPct:  DefaultMaxMemPct,
-		NumResults: DefaultNumResults,
-		Out:        DefaultOut,
-		DNSResolution: DNSResolution{
+	args := &Args{}
+	args.SetDefaults()
+	return args
+}
+
+// SetDefaults sets the default values for all uninitialized fields in the arguments
+func (args *Args) SetDefaults() {
+	if args.First == "" {
+		args.First = time.Now().AddDate(0, -1, 0).Format(time.ANSIC)
+	}
+	if args.Last == "" {
+		args.Last = maxTimeStr
+	}
+	if args.MaxMemPct == 0 {
+		args.MaxMemPct = DefaultMaxMemPct
+	}
+	if args.NumResults == 0 {
+		args.NumResults = DefaultNumResults
+	}
+	if (args.DNSResolution == DNSResolution{}) {
+		args.DNSResolution = DNSResolution{
 			MaxRows: DefaultResolveRows,
 			Timeout: DefaultResolveTimeout,
-		},
-		SortBy: DefaultSortBy,
+		}
+	}
+	if args.SortBy == "" {
+		args.SortBy = DefaultSortBy
 	}
 }
 
 // Args bundles the command line/HTTP parameters required to prepare a query statement
 type Args struct {
 	// required
-	Query  string `json:"query" yaml:"query" form:"query"`    // Query: the query type. Example: sip,dip,dport,proto
-	Ifaces string `json:"ifaces" yaml:"ifaces" form:"ifaces"` // Ifaces: the interfaces to query. Example: eth0,eth1
+	// Query: the query type
+	Query string `json:"query" yaml:"query" query:"query" doc:"Query type / Attributes to aggregate by" example:"sip,dip,dport,proto" minLength:"3"`
+	// Ifaces: the interfaces to query
+	Ifaces string `json:"ifaces" yaml:"ifaces" query:"ifaces" doc:"Interfaces to query" example:"eth0,eth1" minLength:"2"`
 
-	QueryHosts string `json:"query_hosts,omitempty" yaml:"query_hosts,omitempty" form:"query_hosts,omitempty"` // QueryHosts: the hosts for which data is queried (comma-separated list). Example: hostA,hostB,hostC
+	// QueryHosts: the hosts for which data is queried (comma-separated list)
+	QueryHosts string `json:"query_hosts,omitempty" yaml:"query_hosts,omitempty" query:"query_hosts" required:"false" doc:"Hosts for which data is queried" example:"hostA,hostB,hostC"`
 
-	Hostname string `json:"hostname,omitempty" yaml:"hostname,omitempty" form:"hostname,omitempty"` // Hostname: the hostname from which data is queried. Example: localhost
-	HostID   uint   `json:"host_id,omitempty" yaml:"host_id,omitempty" form:"host_id,omitempty"`    // HostID: the host id from which data is queried. Example: 123456
+	// Hostname: the hostname from which data is queried
+	Hostname string `json:"hostname,omitempty" yaml:"hostname,omitempty" query:"hostname" required:"false" doc:"Hostname from which data is queried" example:"hostA"`
+	// HostID: the host id from which data is queried
+	HostID uint `json:"host_id,omitempty" yaml:"host_id,omitempty" query:"host_id" required:"false" doc:"Host ID from which data is queried" example:"123456"`
 
 	// data filtering
-	Condition string `json:"condition,omitempty" yaml:"condition,omitempty" form:"condition,omitempty"` // Condition: the condition to filter data by. Example: port=80 && proto=TCP
+	// Condition: the condition to filter data by
+	Condition string `json:"condition,omitempty" yaml:"condition,omitempty" query:"condition" required:"false" doc:"Condition to filter data by" example:"port=80 & proto=TCP"`
 
 	// counter addition
-	In  bool `json:"in,omitempty" yaml:"in,omitempty" form:"in,omitempty"`     // In: only show incoming packets/bytes. Example: false
-	Out bool `json:"out,omitempty" yaml:"out,omitempty"  form:"out,omitempty"` // Out: only show outgoing packets/bytes. Example: false
-	Sum bool `json:"sum,omitempty" yaml:"sum,omitempty" form:"sum,omitempty"`  // Sum: show sum of incoming/outgoing packets/bytes. Example: false
+	// In: only show incoming packets/bytes
+	In bool `json:"in,omitempty" yaml:"in,omitempty" query:"in" required:"false" doc:"Only show incoming packets/bytes" example:"false"`
+	// Out: only show outgoing packets/bytes
+	Out bool `json:"out,omitempty" yaml:"out,omitempty"  query:"out" required:"false" doc:"Only show outgoing packets/bytes" example:"false"`
+	// Sum: show sum of incoming/outgoing packets/bytes
+	Sum bool `json:"sum,omitempty" yaml:"sum,omitempty" query:"sum" required:"false" doc:"Show sum of incoming/outgoing packets/bytes" example:"false"`
 
 	// time selection
-	First string `json:"first,omitempty" yaml:"first,omitempty" form:"first,omitempty"` // First: the first timestamp to query. Example: 2020-08-12T09:47:00+0200
-	Last  string `json:"last,omitempty" yaml:"last,omitempty" form:"last,omitempty"`    // Last: the last timestamp to query. Example: -24h
+	// First: the first timestamp to query
+	First string `json:"first,omitempty" yaml:"first,omitempty" query:"first" required:"false" doc:"The first timestamp to query" example:"2020-08-12T09:47:00+02:00"`
+	// Last: the last timestamp to query
+	Last string `json:"last,omitempty" yaml:"last,omitempty" query:"last" required:"false" doc:"The last timestamp to query" example:"-24h"`
 
 	// formatting
-	Format        string `json:"format,omitempty" yaml:"format,omitempty" form:"format,omitempty"`                         // Format: the output format. Enum: [json, csv, table]. Example: json
-	SortBy        string `json:"sort_by,omitempty" yaml:"sort_by,omitempty" form:"sort_by,omitempty"`                      // SortBy: column to sort by. Enum: [packets, bytes]. Example: bytes
-	NumResults    uint64 `json:"num_results,omitempty" yaml:"num_results,omitempty" form:"num_results,omitempty"`          // NumResults: number of results to return/print. Example: 25
-	SortAscending bool   `json:"sort_ascending,omitempty" yaml:"sort_ascending,omitempty" form:"sort_ascending,omitempty"` // SortAscending: sort ascending instead of the default descending. Example: false
+	// Format: the output format
+	Format string `json:"format,omitempty" yaml:"format,omitempty" query:"format" required:"false" doc:"Output format" enum:"json,txt,csv" example:"json"`
+	// SortBy: column to sort by
+	SortBy string `json:"sort_by,omitempty" yaml:"sort_by,omitempty" query:"sort_by" required:"false" doc:"Colum to sort by" enum:"bytes,packets" example:"packets" default:"bytes"`
+	// NumResults: number of results to return/print
+	NumResults uint64 `json:"num_results,omitempty" yaml:"num_results,omitempty" query:"num_results" required:"false" doc:"Number of results to return/print" example:"25" minimum:"1" default:"1000"`
+	// SortAscending: sort ascending instead of the default descending
+	SortAscending bool `json:"sort_ascending,omitempty" yaml:"sort_ascending,omitempty" query:"sort_ascending" required:"false" doc:"Sort ascending instead of descending" example:"false"`
 
 	// do-and-exit arguments
-	List    bool `json:"list,omitempty" yaml:"list,omitempty" form:"list,omitempty"`          // List: only list interfaces and return. Example: false
-	Version bool `json:"version,omitempty" yaml:"version,omitempty" form:"version,omitempty"` // Version: only print version and return. Example: false
+	// List: only list interfaces and return
+	List bool `json:"list,omitempty" yaml:"list,omitempty" query:"list" required:"false" hidden:"true"`
+	// Version: only print version and return
+	Version bool `json:"version,omitempty" yaml:"version,omitempty" query:"version" required:"false" hidden:"true"`
 
 	// resolution
 	// Note: Nested structures are not supported for form data, see individual parameters in definition of DNSResolution
-	DNSResolution DNSResolution `json:"dns_resolution,omitempty" yaml:"dns_resolution,omitempty"` // DNSResolution: guide reverse DNS resolution of sip,dip results
+	// DNSResolution: guide reverse DNS resolution of sip,dip results
+	DNSResolution DNSResolution `json:"dns_resolution,omitempty" yaml:"dns_resolution,omitempty" doc:"Configures DNS resolution of sip,dip results"`
 
 	// file system
-	MaxMemPct int  `json:"max_mem_pct,omitempty" yaml:"max_mem_pct,omitempty" form:"max_mem_pct,omitempty"` // MaxMemPct: maximum percentage of available host memory to use for query processing. Example: 80
-	LowMem    bool `json:"low_mem,omitempty" yaml:"low_mem,omitempty" form:"low_mem,omitempty"`             // LowMem: use less memory for query processing. Example: false
+	// MaxMemPct: maximum percentage of available host memory to use for query processing
+	MaxMemPct int `json:"max_mem_pct,omitempty" yaml:"max_mem_pct,omitempty" query:"max_mem_pct" required:"false" doc:"Maximum percentage of available host memory to use for query processing" default:"60" example:"80" minimum:"1" maximum:"100"`
+	// LowMem: use less memory for query processing
+	LowMem bool `json:"low_mem,omitempty" yaml:"low_mem,omitempty" query:"low_mem" required:"false" doc:"Use less memory for query processing" example:"false"`
 
-	// Caller stores who produced these args (caller). Example: goQuery. Example: goQuery. Example: goQuery. Example: goQuery
-	Caller string `json:"caller,omitempty" yaml:"caller,omitempty" form:"caller,omitempty"`
+	// Caller stores who produced these args (caller)
+	Caller string `json:"caller,omitempty" yaml:"caller,omitempty" query:"caller" required:"false" doc:"Caller stores who produced the arguments" example:"goQuery"`
 
-	// Live can be used to request live flow data (in addition to DB results). Example: false
-	Live bool `json:"live,omitempty" yaml:"live,omitempty" form:"live,omitempty"`
+	// Live can be used to request live flow data (in addition to DB results)
+	Live bool `json:"live,omitempty" yaml:"live,omitempty" query:"live" required:"false" doc:"Live can be used to request live flow data (in addition to DB results)" example:"false"`
 
 	// outputs is unexported
 	outputs []io.Writer
 }
 
-// ArgsError provides a more detailed error description for invalid query args
-type ArgsError struct {
-	Field   string // Field: the string describing which field led to the error. It MUST match the json definition for a field. Example: condition
-	Type    string // Type: the type of the error. Example: *types.ParseError
-	Message string // Message: a human-readable, UI friendly description of the error. Example: Condition parsing failed
-	err     error  // Details: a specific error describing which part of the arguments is incorrect
-}
-
-func newArgsError(field string, msg string, err error) *ArgsError {
-	args := &ArgsError{
-		Field:   field,
-		Message: msg,
-		err:     err,
-	}
-	if err != nil {
-		args.Type = fmt.Sprintf("%T", err)
-
-		// make sure the type of the wrapped error is found out
-		e := errors.Unwrap(err)
-		if e != nil {
-			args.Type = fmt.Sprintf("%T", e)
-		}
-	}
-	return args
-}
-
-func (err *ArgsError) String() string {
-	return fmt.Sprintf("%s: %s: (%s: %s)", err.Field, err.Message, err.Type, err.err)
-}
-
-// Error implements the error interface
-func (err *ArgsError) Error() string {
-	return err.String()
-}
-
-// Unwrap makes the error wrappable
-func (err *ArgsError) Unwrap() error {
-	return err.err
-}
-
-// LogValue implements slog.LogValuer
-func (err *ArgsError) LogValue() slog.Value {
-	return slog.GroupValue(
-		slog.String("field", err.Field),
-		slog.String("type", string(err.Type)),
-		slog.String("message", err.Message),
-		slog.Any("details", err.err),
-	)
-}
-
-type marshallableError struct {
-	error
-}
-
-type marshalArgsError struct {
-	Field   string `json:"field"`
-	Type    string `json:"type,omitempty"`
-	Message string `json:"message"`
-	Details any    `json:"details,omitempty"`
-}
-
-func (m *marshallableError) MarshalJSON() ([]byte, error) {
-	return jsoniter.Marshal(m.Error())
-}
-
-func (err *ArgsError) MarshalJSON() ([]byte, error) {
-	var m = marshalArgsError{Field: err.Field, Type: err.Type, Message: err.Message}
-
-	if err.err == nil {
-		m.Details = nil
-		return jsoniter.Marshal(&m)
-	}
-
-	// check if the underlying error is a parse error
-	e := errors.Unwrap(err.err)
-	if e == nil {
-		e = err.err
-		m.Type = fmt.Sprintf("%T", e)
-	}
-
-	// need assertion because error doesn't know how to deal with marshalling
-	switch t := e.(type) {
-	case *types.ParseError,
-		*types.MinBoundsError,
-		*types.MaxBoundsError,
-		*types.RangeError,
-		*types.UnsupportedError:
-		m.Details = t
-	default:
-		m.Details = &marshallableError{e}
-	}
-
-	return jsoniter.Marshal(&m)
-}
-
-var (
-	maxBoundsErrorType   = fmt.Sprintf("%T", new(types.MaxBoundsError))
-	minBoundsErrorType   = fmt.Sprintf("%T", new(types.MinBoundsError))
-	parseErrorType       = fmt.Sprintf("%T", new(types.ParseError))
-	rangeErrorType       = fmt.Sprintf("%T", new(types.RangeError))
-	unsupportedErrorType = fmt.Sprintf("%T", new(types.UnsupportedError))
-)
-
-// UnmarshalJSON implements the json.Unmarshaler interface
-func (err *ArgsError) UnmarshalJSON(data []byte) error {
-	var m = new(marshalArgsError)
-	e := jsoniter.Unmarshal(data, m)
-	if e != nil {
-		return e
-	}
-	err.Field = m.Field
-	err.Message = m.Message
-	err.Type = m.Type
-
-	// re-create the specific error
-	var detailError error = nil
-	if m.Details == nil {
-		err.err = detailError
-		return nil
-	}
-
-	switch m.Type {
-	case parseErrorType:
-		m.Details = new(types.ParseError)
-	case minBoundsErrorType:
-		m.Details = new(types.MinBoundsError)
-	case maxBoundsErrorType:
-		m.Details = new(types.MaxBoundsError)
-	case rangeErrorType:
-		m.Details = new(types.RangeError)
-	case unsupportedErrorType:
-		m.Details = new(types.UnsupportedError)
-	default:
-		m.Details = ""
-	}
-
-	e = jsoniter.Unmarshal(data, m)
-	if e != nil {
-		return e
-	}
-
-	switch t := m.Details.(type) {
-	case *types.ParseError:
-		err.err = t
-	case *types.MinBoundsError:
-		err.err = t
-	case *types.MaxBoundsError:
-		err.err = t
-	case *types.RangeError:
-		err.err = t
-	case *types.UnsupportedError:
-		err.err = t
-	case error:
-		err.err = t
-	case string:
-		err.err = errors.New(t)
-	default:
-		return fmt.Errorf("unknown error type %v", t)
-	}
-
-	return nil
-}
-
 // Pretty implements the Prettier interface to represent the error in a human-readable way
-func (err *ArgsError) Pretty() string {
-	str := `
-  Field:   %s
-  Message: %s
-  Details: %s
-`
-	errStr := err.err.Error()
+// TODO: prettify huma details error
+// func (err *ArgsError) Pretty() string {
+// 	str := `
+//   Field:   %s
+//   Message: %s
+//   Details: %s
+// `
+// 	errStr := err.err.Error()
 
-	return fmt.Sprintf(str, err.Field, err.Message, errStr)
+//	return fmt.Sprintf(str, err.Field, err.Message, errStr)
+//
+// '}
+type DetailError struct {
+	huma.ErrorModel
+}
+
+// Pretty implements the prettier interface for a huma.ErrorModel
+func (d *DetailError) Pretty() string {
+	var details []string
+	for _, detail := range d.Errors {
+		heading := fmt.Sprintf("%s (value: %v)", strings.TrimLeft(detail.Location, "body."), detail.Value)
+		dashes := strings.Repeat("-", len(heading))
+
+		details = append(details,
+			fmt.Sprintf(`
+%s
+%s
+%s`,
+				heading, dashes, detail.Message,
+			),
+		)
+	}
+
+	return fmt.Sprintf("%s", strings.Join(details, "\n"))
 }
 
 // DNSResolution contains DNS query / resolution related config arguments / parameters
 type DNSResolution struct {
-	Enabled bool          `json:"enabled" yaml:"enabled" form:"dns_enabled"`                                  // Enabled: enable reverse DNS lookups. Example: false
-	Timeout time.Duration `json:"timeout,omitempty" yaml:"timeout,omitempty" form:"dns_timeout,omitempty"`    // Timeout: timeout for reverse DNS lookups. Example: 2s
-	MaxRows int           `json:"max_rows,omitempty" yaml:"max_rows,omitempty" form:"dns_max_rows,omitempty"` // MaxRows: maximum number of rows to resolve. Example: 100
+	_ struct{} `nullable:"true"`
+	// Enabled: enable reverse DNS lookups. Example: false
+	Enabled bool `json:"enabled" yaml:"enabled" query:"dns_enabled" doc:"Enable reverse DNS lookups" example:"false"`
+	// Timeout: timeout for reverse DNS lookups
+	Timeout time.Duration `json:"timeout,omitempty" yaml:"timeout,omitempty" query:"dns_timeout" required:"false" doc:"Timeout for reverse DNS lookups" example:"2000000000" minimum:"0" default:"1000000000"`
+	// MaxRows: maximum number of rows to resolve
+	MaxRows int `json:"max_rows,omitempty" yaml:"max_rows,omitempty" query:"dns_max_rows" required:"false" doc:"Maximum number of rows to resolve" minimum:"1" example:"25"`
 }
 
 // AddOutputs allows more control over to which outputs the
@@ -343,6 +244,7 @@ const (
 	invalidInterfaceMsg            = "invalid interface name"
 	invalidQueryTypeMsg            = "invalid query type"
 	invalidFormatMsg               = "unknown format"
+	invalidNumResults              = "invalid number of result rows"
 	invalidSortByMsg               = "unknown format"
 	invalidTimeRangeMsg            = "invalid time range"
 	invalidDNSResolutionTimeoutMsg = "invalid resolution timeout"
@@ -355,7 +257,16 @@ const (
 
 // Prepare takes the query Arguments, validates them and creates an executable statement. Optionally, additional writers can be passed to route query results to different destinations.
 func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
-	var err error
+	var (
+		err      error
+		errModel = &DetailError{
+			ErrorModel: huma.ErrorModel{
+				Title:  http.StatusText(http.StatusUnprocessableEntity),
+				Status: http.StatusUnprocessableEntity,
+				Detail: "query preparation failed",
+			},
+		}
+	)
 
 	s := &Statement{
 		QueryType:     a.Query,
@@ -372,21 +283,28 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 	var selector types.LabelSelector
 	s.attributes, selector, err = types.ParseQueryType(a.Query)
 	if err != nil {
-		return s, newArgsError(
-			"query",
-			invalidQueryTypeMsg,
-			err,
-		)
+		errMsg := err.Error()
+		var p *types.ParseError
+		if errors.As(err, &p) {
+			errMsg = "\n" + p.Pretty()
+		}
+		// collect error
+		errModel.Errors = append(errModel.Errors, &huma.ErrorDetail{
+			Message:  fmt.Sprintf("%s: %s", invalidQueryTypeMsg, errMsg),
+			Location: "body.query",
+			Value:    a.Query,
+		})
 	}
 
 	// verify config format
 	_, verifies := permittedFormats[a.Format]
 	if !verifies {
-		return s, newArgsError(
-			"format",
-			invalidFormatMsg,
-			types.NewUnsupportedError(a.Format, PermittedFormats()),
-		)
+		// collect error
+		errModel.Errors = append(errModel.Errors, &huma.ErrorDetail{
+			Message:  fmt.Sprintf("%s: %v", invalidFormatMsg, PermittedFormats()),
+			Location: "body.format",
+			Value:    a.Format,
+		})
 	}
 	s.Format = a.Format
 
@@ -398,32 +316,31 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 	// assign sort order and direction
 	s.SortBy, verifies = permittedSortBy[a.SortBy]
 	if !verifies {
-		return s, newArgsError(
-			"sort_by",
-			invalidSortByMsg,
-			types.NewUnsupportedError(a.SortBy, PermittedSortBy()),
-		)
-
+		// collect error
+		errModel.Errors = append(errModel.Errors, &huma.ErrorDetail{
+			Message:  fmt.Sprintf("%s: %v", invalidSortByMsg, PermittedFormats()),
+			Location: "body.sort_by",
+			Value:    a.Format,
+		})
 	}
 
 	// set and validate the interfaces
 	if a.Ifaces == "" {
-		err := newArgsError(
-			"iface",
-			emptyInterfaceMsg,
-			&types.ParseError{
-				Description: "empty input",
-			},
-		)
-		return s, err
+		// collect error
+		errModel.Errors = append(errModel.Errors, &huma.ErrorDetail{
+			Message:  emptyInterfaceMsg,
+			Location: "body.ifaces",
+			Value:    a.Ifaces,
+		})
 	}
 	s.Ifaces, err = types.ValidateIfaceNames(a.Ifaces)
 	if err != nil {
-		return s, newArgsError(
-			"iface",
-			invalidInterfaceMsg,
-			err,
-		)
+		// collect error
+		errModel.Errors = append(errModel.Errors, &huma.ErrorDetail{
+			Message:  fmt.Sprintf("%s: %s", invalidInterfaceMsg, err),
+			Location: "body.ifaces",
+			Value:    a.Ifaces,
+		})
 	}
 
 	// insert iface attribute here in case multiple interfaces where specified and the
@@ -442,13 +359,10 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 	}
 
 	// parse time bound
-	s.First, s.Last, err = ParseTimeRange(a.First, a.Last)
-	if err != nil {
-		return s, newArgsError(
-			"first/last",
-			invalidTimeRangeMsg,
-			err,
-		)
+	var timeRangeDetails []*huma.ErrorDetail
+	s.First, s.Last, timeRangeDetails = ParseTimeRangeCollectErrors(a.First, a.Last)
+	if len(timeRangeDetails) > 0 {
+		errModel.Errors = append(errModel.Errors, timeRangeDetails...)
 	}
 
 	switch {
@@ -467,25 +381,28 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 		// TODO: make this function available in the public domain or skip
 		err := dns.CheckDNS()
 		if err != nil {
-			return s, newArgsError(
-				"dns_resolution.enabled",
-				"DNS check failed",
-				err,
-			)
+			// collect error
+			errModel.Errors = append(errModel.Errors, &huma.ErrorDetail{
+				Message:  fmt.Sprintf("DNS check failed: %s", err),
+				Location: "body.dns_resolution.enabled",
+				Value:    a.Ifaces,
+			})
 		}
-		if !(0 < s.DNSResolution.Timeout) {
-			return s, newArgsError(
-				"dns_resolution.timeout",
-				invalidDNSResolutionTimeoutMsg,
-				types.NewMinBoundsError(strconv.Itoa(int(s.DNSResolution.Timeout)), "0", false),
-			)
+		if 0 >= s.DNSResolution.Timeout {
+			// collect error
+			errModel.Errors = append(errModel.Errors, &huma.ErrorDetail{
+				Message:  invalidDNSResolutionTimeoutMsg,
+				Location: "body.dns_resolution.timeout",
+				Value:    s.DNSResolution.Timeout,
+			})
 		}
 		if !(0 < s.DNSResolution.MaxRows) {
-			return s, newArgsError(
-				"dns_resolution.max_rows",
-				invalidDNSResolutionRowsMsg,
-				types.NewMinBoundsError(strconv.Itoa(int(s.DNSResolution.MaxRows)), "0", false),
-			)
+			// collect error
+			errModel.Errors = append(errModel.Errors, &huma.ErrorDetail{
+				Message:  invalidDNSResolutionTimeoutMsg,
+				Location: "body.dns_resolution.max_rows",
+				Value:    s.DNSResolution.MaxRows,
+			})
 		}
 	}
 
@@ -495,11 +412,17 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 	// build condition tree to check if there is a syntax error before starting processing
 	_, _, parseErr := node.ParseAndInstrument(s.Condition, s.DNSResolution.Timeout)
 	if parseErr != nil {
-		return s, newArgsError(
-			"condition",
-			invalidConditionMsg,
-			parseErr,
-		)
+		errMsg := parseErr.Error()
+		var p *types.ParseError
+		if errors.As(parseErr, &p) {
+			errMsg = "\n" + p.Pretty()
+		}
+		// collect error
+		errModel.Errors = append(errModel.Errors, &huma.ErrorDetail{
+			Message:  fmt.Sprintf("%s: %s", invalidConditionMsg, errMsg),
+			Location: "body.condition",
+			Value:    s.Condition,
+		})
 	}
 
 	// if we got here, the condition can definitely be tokenized. This makes sure the canonical
@@ -509,37 +432,44 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 
 	// check memory flag
 	if !(0 < a.MaxMemPct && a.MaxMemPct <= 100) {
-		return s, newArgsError(
-			"max_mem_pct",
-			invalidMaxMemPctMsg,
-			types.NewRangeError(strconv.Itoa(a.MaxMemPct), "0", false, "100", true),
-		)
+		// collect error
+		errModel.Errors = append(errModel.Errors, &huma.ErrorDetail{
+			Message:  fmt.Sprintf("%s: must be in (0, 100]", invalidMaxMemPctMsg),
+			Location: "body.max_mem_pct",
+			Value:    a.MaxMemPct,
+		})
 	}
 	s.MaxMemPct = a.MaxMemPct
 
 	// check limits flag
 	if a.NumResults <= 0 {
-		return s, newArgsError(
-			"num_results",
-			invalidRowLimitMsg,
-			types.NewMinBoundsError(strconv.Itoa(int(s.NumResults)), "0", false),
-		)
+		// collect error
+		errModel.Errors = append(errModel.Errors, &huma.ErrorDetail{
+			Message:  fmt.Sprintf("%s: must be > 0", invalidNumResults),
+			Location: "body.num_results",
+			Value:    a.NumResults,
+		})
 	}
 	s.NumResults = a.NumResults
 
 	// check for consistent use of the live flag
 	if s.Live && s.Last != types.MaxTime.Unix() {
-		return s, newArgsError(
-			"live",
-			invalidLiveQueryMsg,
-			errors.New("last timestamp unsupported"),
-		)
+		// collect error
+		errModel.Errors = append(errModel.Errors, &huma.ErrorDetail{
+			Message:  fmt.Sprintf("%s: last timestamp unsupported", invalidLiveQueryMsg),
+			Location: "live",
+			Value:    s.Last,
+		})
 	}
 
 	// fan-out query results in case multiple writers were supplied
 	writers = append(writers, a.outputs...)
 	if len(writers) > 0 {
 		s.Output = io.MultiWriter(writers...)
+	}
+
+	if len(errModel.Errors) > 0 {
+		return s, errModel
 	}
 
 	return s, nil

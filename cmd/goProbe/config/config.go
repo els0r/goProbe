@@ -67,13 +67,14 @@ type DBConfig struct {
 
 // CaptureConfig stores the capture / buffer related configuration for an individual interface
 type CaptureConfig struct {
-	Promisc    bool              `json:"promisc" yaml:"promisc"`         // Promisc: enables / disables promiscuous capture mode. Example: true
-	RingBuffer *RingBufferConfig `json:"ring_buffer" yaml:"ring_buffer"` // RingBuffer: denotes the kernel ring buffer configuration of this interface
+	// Promisc: enables / disables promiscuous capture mode
+	Promisc bool `json:"promisc" yaml:"promisc" doc:"Enables / disables promiscuous capture mode on interface" example:"true"`
+	// RingBuffer: denotes the kernel ring buffer configuration of this interface
+	RingBuffer *RingBufferConfig `json:"ring_buffer" yaml:"ring_buffer" doc:"Kernel ring buffer configuration for interface"`
 }
 
 // LocalBufferConfig stores the shared local in-memory buffer configuration
 type LocalBufferConfig struct {
-
 	// SizeLimit denotes the maximum size of the local buffers (globally)
 	// used to continue capturing while the capture is (b)locked
 	SizeLimit int `json:"size_limit" yaml:"size_limit"`
@@ -85,14 +86,11 @@ type LocalBufferConfig struct {
 
 // RingBufferConfig stores the kernel ring buffer related configuration for an individual interface
 type RingBufferConfig struct {
-	// BlockSize: specifies the size of a block, which defines, how many packets
-	// can be held within a block
-	// Example: 1048576
-	BlockSize int `json:"block_size" yaml:"block_size"`
+	// BlockSize: specifies the size of a block, which defines how many packets can be held within a block
+	BlockSize int `json:"block_size" yaml:"block_size" doc:"Size of a block, which defines how many packets can be held within a block" example:"1048576" minimum:"1"`
 
 	// NumBlocks: guides how many blocks are part of the ring buffer
-	// Example: 4
-	NumBlocks int `json:"num_blocks" yaml:"num_blocks"`
+	NumBlocks int `json:"num_blocks" yaml:"num_blocks" doc:"Guides how many blocks are part of the ring buffer" example:"4" minimum:"1"`
 }
 
 const (

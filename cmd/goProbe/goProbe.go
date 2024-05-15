@@ -78,6 +78,17 @@ func main() {
 	logger := logging.Logger()
 	logger.Info("loaded configuration")
 
+	// write spec and exit
+	openAPIfile := flags.CmdLine.OpenAPISpecOutfile
+	if openAPIfile != "" {
+		// skeleton server just for route registration
+		err := server.GenerateSpec(context.Background(), openAPIfile, gpserver.New("127.0.0.1:8145", nil, nil))
+		if err != nil {
+			logger.Fatal(err)
+		}
+		os.Exit(0)
+	}
+
 	// It doesn't make sense to monitor zero interfaces
 	if len(config.Interfaces) == 0 {
 		logger.Fatalf("no interfaces have been specified in the configuration file")
@@ -92,12 +103,6 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	defer stop()
 
-	// Create DB directory if it doesn't exist already.
-	// #nosec G301
-	if err := os.MkdirAll(filepath.Clean(config.DB.Path), 0755); err != nil {
-		logger.Fatalf("failed to create database directory: %v", err)
-	}
-
 	// Initialize packet logger
 	ifaces := make([]string, len(config.Interfaces))
 	i := 0
@@ -106,8 +111,13 @@ func main() {
 		i++
 	}
 
+	// Create DB directory if it doesn't exist already.
+	// #nosec G301
+	if err := os.MkdirAll(filepath.Clean(config.DB.Path), 0755); err != nil {
+		logger.Fatalf("failed to create database directory: %v", err)
+	}
+
 	// None of the initialization steps failed.
-	logger.Info("started goProbe")
 	captureManager, err := capture.InitManager(ctx, config)
 	if err != nil {
 		logger.Fatal(err)
@@ -143,14 +153,17 @@ func main() {
 		apiServer = gpserver.New(config.API.Addr, captureManager, configMonitor, apiOptions...)
 		apiServer.SetDBPath(config.DB.Path)
 
-		logger.With("addr", config.API.Addr).Info("starting API server")
+		// serve API
 		go func() {
+			logger.With("addr", config.API.Addr).Info("starting API server")
 			err = apiServer.Serve()
 			if err != nil && !errors.Is(err, http.ErrServerClosed) {
 				logger.Fatalf("failed to spawn goProbe API server: %s", err)
 			}
 		}()
 	}
+
+	logger.Info("started goProbe")
 
 	// listen for the interrupt signal
 	<-ctx.Done()

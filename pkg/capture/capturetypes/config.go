@@ -1,9 +1,21 @@
 package capturetypes
 
+import "log/slog"
+
 // IfaceChange denotes the result from a config update / reload of an interface
 type IfaceChange struct {
-	Name    string // Name: the name of the interface. Example: "eth0"
-	Success bool   // Success: the config update / reload operation(s) succeeded. Example: true
+	// Name: the name of the interface
+	Name string `json:"name" doc:"Name of the interface" example:"eth0"`
+	// Success: the config update / reload operation(s) succeeded
+	Success bool `json:"success" doc:"The config update / reload operation(s) suceeded" example:"true"`
+}
+
+// LogValue implements the LogValuer interface
+func (ic IfaceChange) LogValue() slog.Value {
+	return slog.GroupValue(
+		slog.String("name", ic.Name),
+		slog.Bool("success", ic.Success),
+	)
 }
 
 // IfaceChanges denotes a list of IfaceChange instances

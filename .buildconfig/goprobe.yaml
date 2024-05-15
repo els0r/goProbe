@@ -1,0 +1,10 @@
+---
+interfaces:
+  lo:
+    promisc: false
+    ring_buffer:
+      num_blocks: 4
+      block_size: 1048576
+logging:
+  level: debug
+  encoding: logfmt

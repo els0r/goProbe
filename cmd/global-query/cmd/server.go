@@ -36,6 +36,8 @@ func init() {
 	pflags.String(conf.ServerAddr, conf.DefaultServerAddr, "address to which the server binds")
 	pflags.Duration(conf.ServerShutdownGracePeriod, conf.DefaultServerShutdownGracePeriod, "duration the server will wait during shutdown before forcing shutdown")
 
+	pflags.String(conf.OpenAPISpecOutfile, "", "write OpenAPI 3.0.3 spec to output file and exit")
+
 	// telemetry
 	pflags.Bool(conf.ProfilingEnabled, false, "enable profiling endpoints")
 
@@ -47,6 +49,12 @@ func serverEntrypoint(cmd *cobra.Command, args []string) error {
 	defer stop()
 
 	logger := logging.FromContext(ctx)
+
+	// print OpenAPI spec and exit if output file is provided
+	openAPIfile := viper.GetString(conf.OpenAPISpecOutfile)
+	if openAPIfile != "" {
+		return server.GenerateSpec(ctx, openAPIfile, gqserver.New("127.0.0.1:8146", nil, nil))
+	}
 
 	shutdownTracing, err := tracing.InitFromFlags(ctx)
 	if err != nil {

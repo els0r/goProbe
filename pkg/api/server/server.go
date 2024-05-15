@@ -2,13 +2,18 @@ package server
 
 import (
 	"context"
+	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/danielgtaylor/huma/v2"
+	"github.com/danielgtaylor/huma/v2/adapters/humagin"
 	"github.com/els0r/goProbe/pkg/api"
 	"github.com/els0r/goProbe/pkg/goDB/info"
+	"github.com/els0r/goProbe/pkg/version"
 	"github.com/els0r/telemetry/metrics"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -51,6 +56,7 @@ type DefaultServer struct {
 
 	srv    *http.Server
 	router *gin.Engine
+	api    huma.API
 
 	unixSocketFile string
 }
@@ -121,6 +127,9 @@ func NewDefault(serviceName, addr string, opts ...Option) *DefaultServer {
 		opt(s)
 	}
 
+	// get a documented API
+	s.api = humagin.New(s.router, huma.DefaultConfig(serviceName, version.Short()))
+
 	// register info routes before any other middleware so they are exempt from logging
 	// and/or tracing
 	s.registerInfoRoutes()
@@ -130,9 +139,20 @@ func NewDefault(serviceName, addr string, opts ...Option) *DefaultServer {
 	return s
 }
 
-// Router returns the gin.Engine used by the DefaultServer
-func (server *DefaultServer) Router() *gin.Engine {
-	return server.router
+// API returns the huma API server which is used to register and document endpoints
+func (server *DefaultServer) API() huma.API {
+	return server.api
+}
+
+// WriteOpenAPISpec writes the full OpenAPI spec to the writer w. It implements the
+// OpenAPISpecWriter interface
+func (server *DefaultServer) WriteOpenAPISpec(w io.Writer) error {
+	b, err := server.api.OpenAPI().DowngradeYAML()
+	if err != nil {
+		return fmt.Errorf("failed to generate OpenAPI spec: %w", err)
+	}
+	_, err = w.Write(b)
+	return err
 }
 
 // QueryRateLimiter returns the global rate limiter, if enabled (if not it return nil and false)
@@ -141,10 +161,9 @@ func (server *DefaultServer) QueryRateLimiter() (*rate.Limiter, bool) {
 }
 
 func (server *DefaultServer) registerInfoRoutes() {
-	// make sure these endpoints don't interfere with the standard API path
-	server.router.GET(api.InfoRoute, api.ServiceInfoHandler(server.serviceName))
-	server.router.GET(api.HealthRoute, api.HealthHandler())
-	server.router.GET(api.ReadyRoute, api.ReadyHandler())
+	huma.Register(server.api, api.GetHealthOperation(), api.GetHealthHandler())
+	huma.Register(server.api, api.GetInfoOperation(), api.GetServiceInfoHandler(server.serviceName))
+	huma.Register(server.api, api.GetReadyOperation(), api.GetReadyHandler())
 }
 
 func (server *DefaultServer) registerMiddlewares() {

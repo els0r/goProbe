@@ -1,7 +1,0 @@
-type: object
-properties:
-  val:
-    type: string
-    example: "Value that is above the upper bounds"
-  max:
-    $ref: './boundsError.yaml'

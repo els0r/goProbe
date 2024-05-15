@@ -1,103 +1,103 @@
 package server
 
 import (
+	"context"
 	"net/http"
-	"net/url"
-	"strings"
 
-	"github.com/els0r/goProbe/cmd/goProbe/config"
+	"github.com/danielgtaylor/huma/v2"
 	gpapi "github.com/els0r/goProbe/pkg/api/goprobe"
-	"github.com/gin-gonic/gin"
 )
 
-func (server *Server) getConfig(c *gin.Context) {
-	iface := c.Param(ifaceKey)
-	ifaces := c.Request.URL.Query().Get(gpapi.IfacesQueryParam)
+func (server *Server) getIfaceConfigHandler() func(ctx context.Context, input *GetIfaceConfigInput) (*GetConfigOutput, error) {
+	return func(ctx context.Context, input *GetIfaceConfigInput) (*GetConfigOutput, error) {
+		output := &GetConfigOutput{}
+		resp := &gpapi.ConfigResponse{}
+		output.Body = resp
 
-	resp := &gpapi.ConfigResponse{}
-	resp.StatusCode = http.StatusOK
+		resp.StatusCode = http.StatusOK
 
-	var err error
-	ifaces, err = url.QueryUnescape(ifaces)
-	if err != nil {
-		resp.StatusCode = http.StatusBadRequest
-		resp.Error = err.Error()
+		// query single interface if path parameter was supplied
+		if input.Iface != "" {
+			resp.Ifaces = server.captureManager.Config(input.Iface)
+		}
+		if len(resp.Ifaces) == 0 {
+			resp.StatusCode = http.StatusNoContent
+		}
 
-		c.AbortWithStatusJSON(resp.StatusCode, resp)
-		return
+		output.Status = resp.StatusCode
+
+		return output, nil
 	}
+}
 
-	if iface != "" {
-		resp.Ifaces = server.captureManager.Config(iface)
-	} else {
-		if ifaces != "" {
-			// fetch all specified
-			resp.Ifaces = server.captureManager.Config(strings.Split(ifaces, ",")...)
+func (server *Server) getIfacesConfigHandler() func(ctx context.Context, input *GetIfacesConfigInput) (*GetConfigOutput, error) {
+	return func(ctx context.Context, input *GetIfacesConfigInput) (*GetConfigOutput, error) {
+		output := &GetConfigOutput{}
+		resp := &gpapi.ConfigResponse{}
+		output.Body = resp
+
+		resp.StatusCode = http.StatusOK
+
+		// query multiple if supplied in query parameters
+		if len(input.Ifaces) > 0 {
+			resp.Ifaces = server.captureManager.Config(input.Ifaces...)
 		} else {
-			// otherwise, fetch all
+			// fetch all
 			resp.Ifaces = server.captureManager.Config()
 		}
-	}
+		if len(resp.Ifaces) == 0 {
+			resp.StatusCode = http.StatusNoContent
+		}
 
-	if len(resp.Ifaces) == 0 {
-		resp.StatusCode = http.StatusNoContent
-	}
+		output.Status = resp.StatusCode
 
-	c.JSON(resp.StatusCode, resp)
+		return output, nil
+	}
 }
 
-func (server *Server) putConfig(c *gin.Context) {
-	resp := &gpapi.ConfigUpdateResponse{}
-	resp.StatusCode = http.StatusOK
+func (server *Server) putConfigHandler() func(context.Context, *PutConfigInput) (*ConfigUpdateOutput, error) {
+	return func(ctx context.Context, input *PutConfigInput) (*ConfigUpdateOutput, error) {
+		output := &ConfigUpdateOutput{}
+		resp := &gpapi.ConfigUpdateResponse{}
+		output.Body = resp
 
-	// de-serialize the configuration
-	var ifaceConfigs config.Ifaces
+		resp.StatusCode = http.StatusOK
 
-	err := c.BindJSON(&ifaceConfigs)
-	if err != nil {
-		resp.StatusCode = http.StatusBadRequest
-		resp.Error = err.Error()
+		err := input.Body.Validate()
+		if err != nil {
+			return output, huma.Error422UnprocessableEntity("config validation failed", err)
+		}
 
-		c.AbortWithStatusJSON(resp.StatusCode, resp)
-		return
+		server.configMonitor.PutIfaceConfig(input.Body)
+		resp.Enabled, resp.Updated, resp.Disabled, err = server.configMonitor.Apply(ctx, server.captureManager.Update)
+		if err != nil {
+			resp.StatusCode = http.StatusBadRequest
+			resp.Error = err.Error()
+
+			return output, huma.Error400BadRequest("config update failed", err)
+		}
+
+		return output, nil
 	}
-
-	// validate config before processing it
-	err = ifaceConfigs.Validate()
-	if err != nil {
-		resp.StatusCode = http.StatusBadRequest
-		resp.Error = err.Error()
-
-		c.AbortWithStatusJSON(resp.StatusCode, resp)
-		return
-	}
-
-	// update the captures
-	server.configMonitor.PutIfaceConfig(ifaceConfigs)
-	if resp.Enabled, resp.Updated, resp.Disabled, err = server.configMonitor.Apply(c.Request.Context(), server.captureManager.Update); err != nil {
-		resp.StatusCode = http.StatusBadRequest
-		resp.Error = err.Error()
-
-		c.AbortWithStatusJSON(resp.StatusCode, resp)
-		return
-	}
-
-	c.JSON(resp.StatusCode, resp)
 }
 
-func (server *Server) reloadConfig(c *gin.Context) {
-	resp := &gpapi.ConfigUpdateResponse{}
-	resp.StatusCode = http.StatusOK
+func (server *Server) reloadConfigHandler() func(context.Context, *struct{}) (*ConfigUpdateOutput, error) {
+	return func(ctx context.Context, _ *struct{}) (*ConfigUpdateOutput, error) {
+		output := &ConfigUpdateOutput{}
+		resp := &gpapi.ConfigUpdateResponse{}
+		output.Body = resp
 
-	// Reload the configuration and trigger an update for the CaptureManager
-	var err error
-	if resp.Enabled, resp.Updated, resp.Disabled, err = server.configMonitor.Reload(c.Request.Context(), server.captureManager.Update); err != nil {
-		resp.StatusCode = http.StatusInternalServerError
-		resp.Error = err.Error()
+		resp.StatusCode = http.StatusOK
 
-		c.AbortWithStatusJSON(resp.StatusCode, resp)
-		return
+		var err error
+		resp.Enabled, resp.Updated, resp.Disabled, err = server.configMonitor.Reload(ctx, server.captureManager.Update)
+		if err != nil {
+			resp.StatusCode = http.StatusInternalServerError
+			resp.Error = err.Error()
+
+			return output, huma.Error500InternalServerError("config update failed", err)
+		}
+
+		return output, nil
 	}
-
-	c.JSON(resp.StatusCode, resp)
 }
