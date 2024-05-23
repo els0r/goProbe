@@ -23,7 +23,7 @@ var (
 	initialBufferSize = unix.Getpagesize()
 
 	// Global (limited) memory pool used to minimize allocations
-	memPool       = concurrency.NewMemPool(config.DefaultLocalBufferNumBuffers)
+	memPool       = concurrency.NewMemPoolLimitUnique(config.DefaultLocalBufferNumBuffers, initialBufferSize)
 	maxBufferSize = config.DefaultLocalBufferSizeLimit
 )
 
@@ -40,17 +40,15 @@ func (l *LocalBuffer) Assign(data []byte) {
 	l.data = data
 
 	// Ascertain the current size of the underlying data slice and grow if required
-	if len(l.data) == 0 {
-		l.data = make([]byte, initialBufferSize)
+	if len(l.data) < initialBufferSize {
+		l.data = memPool.Resize(l.data, initialBufferSize)
 	}
 }
 
-// Release returns the data slice to the memory pool and resets the buffer position
-func (l *LocalBuffer) Release() {
-	memPool.Put(l.data)
+// Reset resets the buffer position
+func (l *LocalBuffer) Reset() {
 	l.writeBufPos = 0
 	l.readBufPos = 0
-	l.data = nil
 }
 
 // Usage return the relative fraction of the buffer capacity in use (i.e. written to, independent of
@@ -149,14 +147,12 @@ func setLocalBuffers(nBuffers, sizeLimit int) error {
 	if memPool != nil {
 		memPool.Clear()
 	}
-	memPool = concurrency.NewMemPool(nBuffers)
+	memPool = concurrency.NewMemPoolLimitUnique(nBuffers, initialBufferSize)
 	maxBufferSize = sizeLimit
 
 	return nil
 }
 
 func (l *LocalBuffer) grow(newSize int) {
-	newData := make([]byte, newSize)
-	copy(newData, l.data)
-	l.data = newData
+	l.data = memPool.Resize(l.data, newSize)
 }

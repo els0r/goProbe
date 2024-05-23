@@ -12,6 +12,7 @@ import (
 	"github.com/els0r/goProbe/pkg/types"
 	"github.com/els0r/goProbe/pkg/types/hashmap"
 	"github.com/els0r/telemetry/logging"
+	"github.com/fako1024/gotools/concurrency"
 	"github.com/fako1024/slimcap/capture"
 	"github.com/fako1024/slimcap/capture/afpacket/afring"
 	"github.com/fako1024/slimcap/link"
@@ -21,6 +22,8 @@ const (
 
 	// MaxIfaces is the maximum number of interfaces we can monitor
 	MaxIfaces = 1024
+
+	captureLockTimeout = 30 * time.Second // Timeout for the three-point lock mechanism
 )
 
 var (
@@ -110,7 +113,7 @@ type Capture struct {
 	stats capturetypes.CaptureStats
 
 	// Rotation state synchronization
-	capLock *captureLock
+	capLock *concurrency.ThreePointLock
 
 	// Logged flows since creation of the capture (note that some
 	// flows are retained even after Rotate has been called)
@@ -135,7 +138,6 @@ func newCapture(iface string, config config.CaptureConfig) *Capture {
 	return &Capture{
 		iface:        iface,
 		config:       config,
-		capLock:      newCaptureLock(),
 		flowLog:      NewFlowLog(),
 		sourceInitFn: defaultSourceInitFn,
 	}
@@ -159,6 +161,13 @@ func (c *Capture) run() (err error) {
 	if err != nil {
 		return fmt.Errorf("failed to initialize capture: %w", err)
 	}
+
+	c.capLock = concurrency.NewThreePointLock(
+		concurrency.WithMemPool(memPool),
+		concurrency.WithTimeout(captureLockTimeout),
+		concurrency.WithLockRequestFn(c.captureHandle.Unblock),
+		concurrency.WithUnlockRequestFn(c.captureHandle.Unblock),
+	)
 
 	// make sure to store when the capture started
 	c.startedAt = time.Now()
@@ -258,13 +267,13 @@ func (c *Capture) process() <-chan error {
 			// that there is a request on the channel that can be read on the next line.
 			// This logic may be slightly more contrived than a select{} statement but it increases
 			// packet throughput by several percent points
-			if len(c.capLock.request) > 0 {
-				buf := <-c.capLock.request      // Consume the lock request
-				c.capLock.confirm <- struct{}{} // Confirm that process() is not processing
+			if c.capLock.HasLockRequest() {
+
+				c.capLock.ConfirmLockRequest() // Confirm that process() is not processing
 
 				// Claim / assign the shared data from the memory pool for / to this buffer
 				// Release is handled in bufferPackets()
-				localBuf.Assign(buf)
+				localBuf.Assign(c.capLock.ConsumeLockRequest())
 
 				// Continue fetching packets and add them to the local buffer - if the method
 				// returns with a non-nil error, it means that graceful termination has been requested
@@ -336,12 +345,15 @@ func (c *Capture) process() <-chan error {
 func (c *Capture) bufferPackets(buf *LocalBuffer, captureErrors chan error) error {
 
 	// Ensure that the buffer is released at the end of the method
-	defer buf.Release()
+	defer func() {
+		buf.Reset()
+		c.capLock.Release(buf.data)
+	}()
 
 	// Populate the buffer
 	for {
-		if len(c.capLock.done) > 0 {
-			<-c.capLock.done // Consume the unlock request to continue normal processing
+		if c.capLock.HasUnlockRequest() {
+			c.capLock.ConsumeUnlockRequest()
 			break
 		}
 
@@ -375,7 +387,7 @@ func (c *Capture) bufferPackets(buf *LocalBuffer, captureErrors chan error) erro
 			// wait for the unlock request
 			if !buf.Add(epHash[:], pktType, pktSize, true, auxInfo, errno) {
 				captureErrors <- ErrLocalBufferOverflow
-				<-c.capLock.done // Consume the unlock request to continue normal processing
+				c.capLock.ConsumeUnlockRequest() // Consume the unlock request to continue normal processing
 				break
 			}
 		} else if iplayerType == ipLayerTypeV6 {
@@ -385,7 +397,7 @@ func (c *Capture) bufferPackets(buf *LocalBuffer, captureErrors chan error) erro
 			// wait for the unlock request
 			if !buf.Add(epHash[:], pktType, pktSize, true, auxInfo, errno) {
 				captureErrors <- ErrLocalBufferOverflow
-				<-c.capLock.done // Consume the unlock request to continue normal processing
+				c.capLock.ConsumeUnlockRequest() // Consume the unlock request to continue normal processing
 				break
 			}
 		}
@@ -569,50 +581,4 @@ func (c *Capture) fetchStatusInBackground(ctx context.Context) (res chan *captur
 	}()
 
 	return
-}
-
-func (c *Capture) lock() {
-
-	// Fetch data from the pool for the local buffer. Tis will wait until it is actually
-	// available, allowing us to use a single buffer for all interfaces
-	buf := memPool.Get(0)
-
-	// Notify the capture that a locked interaction is about to begin, then
-	// unblock the capture potentially being in a blocking PPOLL syscall
-	// Channel has a depth of one and hence this push is non-blocking. Since
-	// we wait for confirmation there is no possibility of repeated attempts
-	// or race conditions
-	c.capLock.request <- buf
-	if err := c.captureHandle.Unblock(); err != nil {
-		panic(fmt.Sprintf("unexpectedly failed to unblock capture handle, deadlock inevitable: %s", err))
-	}
-
-	// Wait for confirmation of reception from the processing routine
-	<-c.capLock.confirm
-}
-
-func (c *Capture) unlock() {
-
-	// Signal that the rotation is complete, releasing the processing routine
-	// Since the done channel has a depth of one an Unblock() event needs to be
-	// sent to ensure that a capture currently waiting for packets in the buffering
-	// state continues to the next iteration in order to observe the unlock request
-	c.capLock.done <- struct{}{}
-	if err := c.captureHandle.Unblock(); err != nil {
-		panic(fmt.Sprintf("unexpectedly failed to unblock capture handle, deadlock inevitable: %s", err))
-	}
-}
-
-type captureLock struct {
-	request chan []byte
-	confirm chan struct{}
-	done    chan struct{}
-}
-
-func newCaptureLock() *captureLock {
-	return &captureLock{
-		request: make(chan []byte, 1),
-		confirm: make(chan struct{}),
-		done:    make(chan struct{}, 1),
-	}
 }
