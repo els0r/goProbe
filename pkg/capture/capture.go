@@ -22,6 +22,8 @@ const (
 
 	// MaxIfaces is the maximum number of interfaces we can monitor
 	MaxIfaces = 1024
+
+	captureLockTimeout = 30 * time.Second // Timeout for the three-point lock mechanism
 )
 
 var (
@@ -162,7 +164,7 @@ func (c *Capture) run() (err error) {
 
 	c.capLock = concurrency.NewThreePointLock(
 		concurrency.WithMemPool(memPool),
-		concurrency.WithTimeout(30*time.Second),
+		concurrency.WithTimeout(captureLockTimeout),
 		concurrency.WithLockRequestFn(c.captureHandle.Unblock),
 		concurrency.WithUnlockRequestFn(c.captureHandle.Unblock),
 	)
