@@ -57,8 +57,8 @@ const (
 type DBWorkload struct {
 	workDirs []*gpfile.GPDir
 
-	stats          *WorkloadStats
-	statsCallbacks StatsCallbacks
+	stats      *WorkloadStats
+	statsFuncs StatsFuncs
 }
 
 func newDBWorkload(workDirs []*gpfile.GPDir) DBWorkload {
@@ -81,43 +81,41 @@ type DBWorkManager struct {
 
 	keepAlive      time.Duration
 	stats          *WorkloadStats
-	statsCallbacks StatsCallbacks
+	statsCallbacks StatsFuncs
 }
 
-// StatsCallback is a function which can be used to communicate running workload statistics
-type StatsCallback func(stats *WorkloadStats) error
+// StatsFunc is a function which can be used to communicate running workload statistics
+type StatsFunc func(stats *WorkloadStats)
 
-// StatsCallbaacks is a list of StatsCallbacks
-type StatsCallbacks []StatsCallback
+// StatsCallbaacks is a list of StatsFuncs
+type StatsFuncs []StatsFunc
+
+func (sfc StatsFuncs) append(fn StatsFunc) StatsFuncs {
+	return append(sfc, fn)
+}
 
 // Execute runs all callbacks
-func (scs StatsCallbacks) Execute(stats *WorkloadStats) error {
-	for _, cb := range scs {
-		err := cb(stats)
-		if err != nil {
-			return err
-		}
+func (scf StatsFuncs) Execute(stats *WorkloadStats) {
+	for _, fn := range scf {
+		fn(stats)
 	}
-	return nil
 }
 
 // WorkManagerOption configures the DBWorkManager
-type WorkManagerOption func(*DBWorkManager) error
+type WorkManagerOption func(*DBWorkManager)
 
 // WithKeepAlive adds a logging callback to the StatsCallbacks
 func WithKeepAlive(interval time.Duration) WorkManagerOption {
-	return func(w *DBWorkManager) error {
+	return func(w *DBWorkManager) {
 		w.keepAlive = interval
-		return nil
 	}
 }
 
 // WithStatsCallbacks configures the DBWorkManager to emit feedback on query processing. They will be called in
 // the order they are provided
-func WithStatsCallbacks(callbacks ...StatsCallback) WorkManagerOption {
-	return func(w *DBWorkManager) error {
+func WithStatsCallbacks(callbacks ...StatsFunc) WorkManagerOption {
+	return func(w *DBWorkManager) {
 		w.statsCallbacks = callbacks
-		return nil
 	}
 }
 
@@ -160,7 +158,6 @@ func (s *WorkloadStats) Add(stats *WorkloadStats) {
 
 // NewDBWorkManager sets up a new work manager for executing queries
 func NewDBWorkManager(query *Query, dbpath string, iface string, numProcessingUnits int, opts ...WorkManagerOption) (*DBWorkManager, error) {
-
 	// Explicitly handle invalid number of processing units (to avoid deadlock)
 	if numProcessingUnits <= 0 {
 		return nil, fmt.Errorf("invalid number of processing units: %d", numProcessingUnits)
@@ -176,10 +173,7 @@ func NewDBWorkManager(query *Query, dbpath string, iface string, numProcessingUn
 	}
 
 	for _, opt := range opts {
-		err := opt(w)
-		if err != nil {
-			return nil, err
-		}
+		opt(w)
 	}
 	return w, nil
 }
@@ -582,7 +576,7 @@ func (w *DBWorkManager) grabAndProcessWorkload(ctx context.Context, id int, wg *
 	go func() {
 		defer wg.Done()
 
-		logger := logging.FromContext(ctx)
+		logger := logging.FromContext(ctx).With("worker.id", id, "iface", w.iface)
 
 		enc, err := encoder.New(defaultEncoderType)
 		if err != nil {
@@ -603,25 +597,11 @@ func (w *DBWorkManager) grabAndProcessWorkload(ctx context.Context, id int, wg *
 			}
 		}()
 
-		var lastStatsUpdate time.Time
+		lastStatsUpdate := time.Now()
 		for workload := range workloadChan {
-			var stats = new(WorkloadStats)
+			stats := new(WorkloadStats)
 			resultMap := hashmap.NewAggFlowMapWithMetadata()
 			for _, workDir := range workload.workDirs {
-				// printing of status information
-				if w.keepAlive > 0 {
-					workload.statsCallbacks = StatsCallbacks{
-						func(s *WorkloadStats) error {
-							logWorkloadStats(
-								logger.With("worker.id", id, "iface", w.iface, "dir", workDir.Path()),
-								"processed work dir",
-								s,
-							)
-							return nil
-						},
-					}
-				}
-
 				select {
 				case <-ctx.Done():
 					// query was cancelled, exit
@@ -630,7 +610,6 @@ func (w *DBWorkManager) grabAndProcessWorkload(ctx context.Context, id int, wg *
 					w.stats.Unlock()
 					return
 				default:
-
 					// check if a memory pool is available
 					if memPool != nil {
 						workDir.SetMemPool(memPool)
@@ -648,7 +627,10 @@ func (w *DBWorkManager) grabAndProcessWorkload(ctx context.Context, id int, wg *
 				workload.stats.Add(stats)
 				if w.keepAlive > 0 {
 					if time.Since(lastStatsUpdate) > w.keepAlive {
-						workload.statsCallbacks.Execute(workload.stats)
+						statsFuncs := workload.statsFuncs.append(func(s *WorkloadStats) {
+							logWorkloadStats(logger.With("dir", workDir.Path()), "processed directory", s)
+						})
+						statsFuncs.Execute(workload.stats)
 						lastStatsUpdate = time.Now()
 					}
 				}
@@ -660,11 +642,7 @@ func (w *DBWorkManager) grabAndProcessWorkload(ctx context.Context, id int, wg *
 			w.stats.Unlock()
 			if resultMap.Len() > 0 {
 				if w.keepAlive > 0 {
-					logWorkloadStats(
-						logger.With("iface", w.iface, "dir", w.dbIfaceDir),
-						"processed workload",
-						w.stats,
-					)
+					logWorkloadStats(logger, "processed workload", w.stats)
 				}
 				mapChan <- resultMap
 			}
