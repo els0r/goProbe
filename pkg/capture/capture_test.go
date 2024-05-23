@@ -23,6 +23,7 @@ import (
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 	"github.com/els0r/goProbe/pkg/goprobe/writeout"
 	"github.com/els0r/telemetry/logging"
+	"github.com/fako1024/gotools/concurrency"
 	"github.com/fako1024/slimcap/capture"
 	"github.com/fako1024/slimcap/capture/afpacket/afring"
 	"github.com/fako1024/slimcap/link"
@@ -62,6 +63,51 @@ func (t testMockSrcs) Wait() error {
 	return nil
 }
 
+// func TestInterfaceChanges(t *testing.T) {
+
+// 	require.Nil(t, logging.Init(logging.LevelError, logging.EncodingLogfmt,
+// 		logging.WithOutput(os.Stdout),
+// 		logging.WithErrorOutput(os.Stderr),
+// 	))
+
+// 	captureManager, ifaceConfigs, testMockSrcs := setupInterfaces(t, defaultMockIfaceConfig, 10)
+
+// 	time.Sleep(time.Second)
+
+// 	ctx := context.Background()
+// 	for i := 0; i < 10; i++ {
+// 		fmt.Println("ITERATION")
+// 		newIfaceConfigs := config.Ifaces{}
+// 		for k, iface := range ifaceConfigs {
+// 			if rand.Float64() < 0.5 {
+// 				newIfaceConfigs[k] = iface
+// 			}
+// 		}
+
+// 		_, _, _, err := captureManager.Update(ctx, newIfaceConfigs)
+// 		if len(newIfaceConfigs) == 0 {
+// 			require.NotNil(t, err)
+// 		} else {
+// 			require.Nil(t, err)
+// 		}
+
+// 	}
+
+// 	time.Sleep(time.Second)
+// 	fmt.Println("HERE")
+// 	_, _, _, err := captureManager.Update(ctx, ifaceConfigs)
+// 	require.Nil(t, err)
+
+// 	st := captureManager.Status(ctx)
+// 	fmt.Println(st)
+
+// 	// require.Zero(t, atomic.LoadUint64(&errCount))
+// 	testMockSrcs.Done()
+// 	require.Nil(t, testMockSrcs.Wait())
+
+// 	captureManager.Close(context.Background())
+// }
+
 func TestConcurrentMethodAccess(t *testing.T) {
 
 	require.Nil(t, logging.Init(logging.LevelWarn, logging.EncodingLogfmt,
@@ -71,7 +117,7 @@ func TestConcurrentMethodAccess(t *testing.T) {
 
 	for _, i := range []int{1, 2, 3, 10} {
 		t.Run(fmt.Sprintf("%d ifaces", i), func(t *testing.T) {
-			testConcurrentMethodAccess(t, i, 1000)
+			testConcurrentMethodAccess(t, i, 10000)
 		})
 	}
 }
@@ -209,7 +255,7 @@ func TestMockPacketCapturePerformance(t *testing.T) {
 	mockSrc.Done()
 	<-errChan
 
-	mockC.lock()
+	require.Nil(t, mockC.capLock.Lock())
 	flowsV4, flowsV6 := mockC.flowLog.FlowsV4(), mockC.flowLog.FlowsV6()
 	for _, v := range flowsV4 {
 		fmt.Printf("IPv4 Packets processed after %v: %d (%v/pkt)\n", runtime, v.PacketsSent, runtime/time.Duration(v.PacketsSent))
@@ -217,7 +263,7 @@ func TestMockPacketCapturePerformance(t *testing.T) {
 	for _, v := range flowsV6 {
 		fmt.Printf("IPv6 Packets processed after %v: %d (%v/pkt)\n", runtime, v.PacketsSent, runtime/time.Duration(v.PacketsSent))
 	}
-	mockC.unlock()
+	require.Nil(t, mockC.capLock.Unlock())
 
 	require.Nil(t, mockC.close())
 }
@@ -442,9 +488,9 @@ func testDeadlockLowTraffic(t *testing.T, maxPkts int) {
 
 		t.Logf("starting roation loops after %v", time.Since(start))
 		for i := 0; i < 20; i++ {
-			mockC.lock()
+			require.Nil(t, mockC.capLock.Lock())
 			mockC.rotate(ctx)
-			mockC.unlock()
+			require.Nil(t, mockC.capLock.Unlock())
 			time.Sleep(10 * time.Millisecond)
 		}
 		t.Logf("roation loops done after %v", time.Since(start))
@@ -492,9 +538,9 @@ func testDeadlockHighTraffic(t *testing.T) {
 
 		t.Logf("starting roation loops after %v", time.Since(start))
 		for i := 0; i < 20; i++ {
-			mockC.lock()
+			require.Nil(t, mockC.capLock.Lock())
 			mockC.rotate(ctx)
-			mockC.unlock()
+			require.Nil(t, mockC.capLock.Unlock())
 			time.Sleep(10 * time.Millisecond)
 		}
 		mockSrc.Done()
@@ -519,8 +565,13 @@ func testDeadlockHighTraffic(t *testing.T) {
 
 func newMockCapture(src capture.SourceZeroCopy) *Capture {
 	return &Capture{
-		iface:         src.Link().Name,
-		capLock:       newCaptureLock(),
+		iface: src.Link().Name,
+		capLock: concurrency.NewThreePointLock(
+			concurrency.WithLockRequestFn(src.Unblock),
+			concurrency.WithUnlockRequestFn(src.Unblock),
+			concurrency.WithMemPool(memPool),
+			concurrency.WithTimeout(time.Second),
+		),
 		flowLog:       NewFlowLog(),
 		captureHandle: src,
 	}
