@@ -41,8 +41,7 @@ func (i internalError) Error() string {
 // Then send aggregation result over resultChan.
 // If an error occurs, aggregate may return prematurely.
 // Closes resultChan on termination.
-func aggregate(mapChan <-chan hashmap.AggFlowMapWithMetadata, ifaces []string, isLowMem bool) chan aggregateResult {
-
+func (qr *QueryRunner) aggregate(mapChan <-chan hashmap.AggFlowMapWithMetadata, ifaces []string, isLowMem bool) chan aggregateResult {
 	// create channel that returns the final aggregate result
 	resultChan := make(chan aggregateResult, 1)
 

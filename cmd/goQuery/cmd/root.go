@@ -185,6 +185,7 @@ goProbe.
 	pflags.String(conf.StoredQuery, "", "Load JSON serialized query arguments from disk and run them\n")
 	pflags.Duration(conf.QueryTimeout, query.DefaultQueryTimeout, "Abort query processing after timeout expires\n")
 	pflags.String(conf.QueryLog, "", "Log query invocations to file\n")
+	pflags.DurationP(conf.QueryKeepAlive, "k", 0, "Interval to emit log messages showing that query processing is still ongoing\n")
 
 	pflags.String(conf.LogLevel, logging.LevelWarn.String(), "log level (debug, info, warn, error, fatal, panic)")
 
@@ -194,13 +195,29 @@ goProbe.
 }
 
 func initLogger() {
+	format := logging.EncodingLogfmt
+
 	// since this is a command line tool, only warnings and errors should be printed and they
-	// shouldn't go to a dedicated file
-	err := logging.Init(logging.LevelFromString(viper.GetString(conf.LogLevel)), logging.EncodingLogfmt,
+	// shouldn't go to a dedicated file unless json output is requested
+	opts := []logging.Option{
 		logging.WithVersion(version.Short()),
-		logging.WithOutput(os.Stdout),
-		logging.WithErrorOutput(os.Stderr),
-	)
+	}
+	if cmdLineParams.Format == "json" {
+		format = logging.EncodingJSON
+
+		// if there is a query log, write log lines to that
+		queryLog := viper.GetString(conf.QueryLog)
+		if queryLog != "" {
+			opts = append(opts, logging.WithFileOutput(queryLog))
+		} else {
+			// log to stderr so the json output can be parsed from stdout
+			opts = append(opts, logging.WithOutput(os.Stderr))
+		}
+	} else {
+		opts = append(opts, logging.WithOutput(os.Stdout), logging.WithErrorOutput(os.Stderr))
+	}
+
+	err := logging.Init(logging.LevelFromString(viper.GetString(conf.LogLevel)), format, opts...)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to initialize logger: %v\n", err)
 		os.Exit(1)
@@ -297,7 +314,7 @@ func entrypoint(cmd *cobra.Command, args []string) (err error) {
 	// initialize tracing
 	shutdown, err := tracing.InitFromFlags(queryCtx)
 	if err != nil {
-		logger.Error("failed to set up tracing", "error", err)
+		logger.With("error", err).Error("failed to set up tracing")
 	}
 	defer shutdown(context.Background())
 
@@ -311,7 +328,9 @@ func entrypoint(cmd *cobra.Command, args []string) (err error) {
 		ctx = queryCtx
 	}
 
-	queryArgs.Caller = os.Args[0] // take the full path of called binary
+	if queryArgs.Caller == "" {
+		queryArgs.Caller = os.Args[0] // take the full path of called binary
+	}
 
 	// run the query
 	var result *results.Result
@@ -342,7 +361,7 @@ func entrypoint(cmd *cobra.Command, args []string) (err error) {
 		querier = gqclient.New(viper.GetString(conf.QueryServerAddr))
 	} else {
 		// query using local goDB
-		querier = engine.NewQueryRunner(dbPathCfg)
+		querier = engine.NewQueryRunner(dbPathCfg, engine.WithKeepAlive(viper.GetDuration(conf.QueryKeepAlive)))
 	}
 
 	// check if the traceparent is set
@@ -380,7 +399,6 @@ func entrypoint(cmd *cobra.Command, args []string) (err error) {
 	// convert the command line parameters
 	stmt, err := queryArgs.Prepare()
 	if err != nil {
-
 		// if there's an args error, try to print it in a user-friendly way
 		return types.ShouldPretty(err, queryPrepFailureMsg)
 	}

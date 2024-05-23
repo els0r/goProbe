@@ -9,6 +9,7 @@ const (
 	QueryTimeout         = queryKey + ".timeout"
 	QueryHostsResolution = queryKey + ".hosts-resolution"
 	QueryLog             = queryKey + ".log"
+	QueryKeepAlive       = queryKey + ".keepalive"
 
 	dbKey       = "db"
 	QueryDBPath = dbKey + ".path"
