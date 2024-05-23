@@ -126,11 +126,11 @@ type WorkloadStats struct {
 	sync.RWMutex
 
 	BytesLoaded          uint64 `json:"bytes_loaded" doc:"Bytes loaded from disk"`
-	BytesDecompressed    uint64 `json:"bytes_decompressed,omitempty" doc:"Effective block size after decompression"`
-	BlocksProcessed      uint64 `json:"blocks_processed,omitempty" doc:"Number of blocks loaded from disk"`
-	BlocksCorrupted      uint64 `json:"blocks_corrupted,omitempty" doc:"Blocks which could not be loaded or processed"`
-	DirectoriesProcessed uint64 `json:"directories_processed,omitempty" doc:"Number of directories processed"`
-	Workloads            uint64 `json:"workloads,omitempty" doc:"Total number of workloads to be processed"`
+	BytesDecompressed    uint64 `json:"bytes_decompressed" doc:"Effective block size after decompression"`
+	BlocksProcessed      uint64 `json:"blocks_processed" doc:"Number of blocks loaded from disk"`
+	BlocksCorrupted      uint64 `json:"blocks_corrupted" doc:"Blocks which could not be loaded or processed"`
+	DirectoriesProcessed uint64 `json:"directories_processed" doc:"Number of directories processed"`
+	Workloads            uint64 `json:"workloads" doc:"Total number of workloads to be processed"`
 }
 
 // LogValue implements the slog.LogValuer interface
