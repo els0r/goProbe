@@ -6,9 +6,13 @@ import (
 
 // Block denotes a block of goprobe data
 type Block struct {
-	Offset      uint64
-	Len         uint32
-	RawLen      uint32
+	// Offset is the position within the .gpf file
+	Offset uint64
+	// Len is the length of data as it is on disk
+	Len uint32
+	// RawLen is the original (uncompressed) length of data
+	RawLen uint32
+	// EncoderType is the type of encoder which was used to compress data
 	EncoderType encoders.Type
 }
 

@@ -32,16 +32,43 @@ type QueryRunner struct {
 	query          *goDB.Query
 	captureManager *capture.Manager
 	dbPath         string
+	keepAlive      time.Duration
 }
 
-// NewQueryRunner creates a new query runner
-func NewQueryRunner(dbPath string) *QueryRunner {
-	return &QueryRunner{
-		dbPath: dbPath,
+// RunnerOption allows to configure the query runner
+type RunnerOption func(*QueryRunner)
+
+// WithLiveData adds a capture manager which allows to query live data in addition to the data
+// fetched from the DB
+func WithLiveData(captureManager *capture.Manager) RunnerOption {
+	return func(qr *QueryRunner) {
+		qr.captureManager = captureManager
 	}
 }
 
+// WithKeepAlive toggles keep-alive messages emitted by the runner. It's meant to signal to a
+// calling process that a query is still being processed
+func WithKeepAlive(interval time.Duration) RunnerOption {
+	return func(qr *QueryRunner) {
+		qr.keepAlive = interval
+	}
+}
+
+// NewQueryRunner creates a new query runner
+func NewQueryRunner(dbPath string, opts ...RunnerOption) *QueryRunner {
+	qr := &QueryRunner{
+		dbPath: dbPath,
+	}
+
+	for _, opt := range opts {
+		opt(qr)
+	}
+	return qr
+}
+
 // NewQueryRunnerWithLiveData creates a new query runner that acts on both DB and live data
+//
+// DEPRECATED: use NewQueryrunner(dbPath, WithLiveData(captureManager)) instead
 func NewQueryRunnerWithLiveData(dbPath string, captureManager *capture.Manager) *QueryRunner {
 	return &QueryRunner{
 		dbPath:         dbPath,
@@ -136,7 +163,7 @@ func (qr *QueryRunner) RunStatement(ctx context.Context, stmt *query.Statement) 
 
 	// Channel for handling of returned maps
 	mapChan := make(chan hashmap.AggFlowMapWithMetadata, 1024)
-	aggregateChan := aggregate(mapChan, stmt.Ifaces, stmt.LowMem)
+	aggregateChan := qr.aggregate(mapChan, stmt.Ifaces, stmt.LowMem)
 
 	go func() {
 		select {
@@ -162,10 +189,14 @@ func (qr *QueryRunner) RunStatement(ctx context.Context, stmt *query.Statement) 
 		}
 	}()
 
+	var opts = []goDB.WorkManagerOption{
+		goDB.WithKeepAlive(qr.keepAlive),
+	}
+
 	// create work managers
 	workManagers := map[string]*goDB.DBWorkManager{} // map interfaces to workManagers
 	for _, iface := range stmt.Ifaces {
-		wm, nonempty, err := createWorkManager(qr.dbPath, iface, stmt.First, stmt.Last, qr.query, numProcessingUnits)
+		wm, nonempty, err := createWorkManager(qr.dbPath, iface, stmt.First, stmt.Last, qr.query, numProcessingUnits, opts...)
 		if err != nil {
 			return res, err
 		}
@@ -339,8 +370,8 @@ func (qr *QueryRunner) runLiveQuery(ctx context.Context, mapChan chan hashmap.Ag
 	return
 }
 
-func createWorkManager(dbPath string, iface string, tfirst, tlast int64, query *goDB.Query, numProcessingUnits int) (workManager *goDB.DBWorkManager, nonempty bool, err error) {
-	workManager, err = goDB.NewDBWorkManager(query, dbPath, iface, numProcessingUnits)
+func createWorkManager(dbPath string, iface string, tfirst, tlast int64, query *goDB.Query, numProcessingUnits int, opts ...goDB.WorkManagerOption) (workManager *goDB.DBWorkManager, nonempty bool, err error) {
+	workManager, err = goDB.NewDBWorkManager(query, dbPath, iface, numProcessingUnits, opts...)
 	if err != nil {
 		return nil, false, fmt.Errorf("could not initialize query work manager for interface '%s': %w", iface, err)
 	}

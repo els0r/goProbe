@@ -17,11 +17,11 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strconv"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/els0r/goProbe/pkg/goDB/encoder"
@@ -49,11 +49,23 @@ const (
 
 	// defaultEncoderType denotes the default encoder / compressor
 	defaultEncoderType = encoders.EncoderTypeLZ4
+
+	keepAliveInterval = 5 * time.Second
 )
 
 // DBWorkload stores all relevant parameters to load a block and execute a query on it
 type DBWorkload struct {
 	workDirs []*gpfile.GPDir
+
+	stats          *WorkloadStats
+	statsCallbacks StatsCallbacks
+}
+
+func newDBWorkload(workDirs []*gpfile.GPDir) DBWorkload {
+	return DBWorkload{
+		workDirs: workDirs,
+		stats:    &WorkloadStats{Workloads: 1},
+	}
 }
 
 // DBWorkManager schedules parallel processing of blocks relevant for a query
@@ -65,26 +77,111 @@ type DBWorkManager struct {
 	numProcessingUnits int
 
 	tFirstCovered, tLastCovered int64
+	nWorkloads                  uint64
 
-	nWorkloads          uint64
-	nWorkloadsProcessed atomic.Uint64
+	keepAlive      time.Duration
+	stats          *WorkloadStats
+	statsCallbacks StatsCallbacks
+}
+
+// StatsCallback is a function which can be used to communicate running workload statistics
+type StatsCallback func(stats *WorkloadStats) error
+
+// StatsCallbaacks is a list of StatsCallbacks
+type StatsCallbacks []StatsCallback
+
+// Execute runs all callbacks
+func (scs StatsCallbacks) Execute(stats *WorkloadStats) error {
+	for _, cb := range scs {
+		err := cb(stats)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// WorkManagerOption configures the DBWorkManager
+type WorkManagerOption func(*DBWorkManager) error
+
+// WithKeepAlive adds a logging callback to the StatsCallbacks
+func WithKeepAlive(interval time.Duration) WorkManagerOption {
+	return func(w *DBWorkManager) error {
+		w.keepAlive = interval
+		return nil
+	}
+}
+
+// WithStatsCallbacks configures the DBWorkManager to emit feedback on query processing. They will be called in
+// the order they are provided
+func WithStatsCallbacks(callbacks ...StatsCallback) WorkManagerOption {
+	return func(w *DBWorkManager) error {
+		w.statsCallbacks = callbacks
+		return nil
+	}
+}
+
+// WorkloadStats tracks interactions with the underlying DB data
+type WorkloadStats struct {
+	sync.RWMutex
+
+	BytesLoaded          uint64 `json:"bytes_loaded" doc:"Bytes loaded from disk"`
+	BytesDecompressed    uint64 `json:"bytes_decompressed,omitempty" doc:"Effective block size after decompression"`
+	BlocksProcessed      uint64 `json:"blocks_processed,omitempty" doc:"Number of blocks loaded from disk"`
+	BlocksCorrupted      uint64 `json:"blocks_corrupted,omitempty" doc:"Blocks which could not be loaded or processed"`
+	DirectoriesProcessed uint64 `json:"directories_processed,omitempty" doc:"Number of directories processed"`
+	Workloads            uint64 `json:"workloads,omitempty" doc:"Total number of workloads to be processed"`
+}
+
+// LogValue implements the slog.LogValuer interface
+func (s *WorkloadStats) LogValue() slog.Value {
+	return slog.GroupValue(
+		slog.Uint64("bytes_loaded", s.BytesLoaded),
+		slog.Uint64("bytes_decompressed", s.BytesDecompressed),
+		slog.Uint64("blocks_processed", s.BlocksProcessed),
+		slog.Uint64("blocks_corrupted", s.BlocksCorrupted),
+		slog.Uint64("directories_processed", s.DirectoriesProcessed),
+		slog.Uint64("workloads", s.Workloads),
+	)
+}
+
+// Add adds the values of stats to s
+func (s *WorkloadStats) Add(stats *WorkloadStats) {
+	if stats == nil {
+		return
+	}
+	s.BlocksProcessed += stats.BlocksProcessed
+	s.BytesDecompressed += stats.BytesDecompressed
+	s.BlocksProcessed += stats.BlocksProcessed
+	s.BlocksCorrupted += stats.BlocksCorrupted
+	s.DirectoriesProcessed += stats.DirectoriesProcessed
+	s.Workloads += stats.Workloads
 }
 
 // NewDBWorkManager sets up a new work manager for executing queries
-func NewDBWorkManager(query *Query, dbpath string, iface string, numProcessingUnits int) (*DBWorkManager, error) {
+func NewDBWorkManager(query *Query, dbpath string, iface string, numProcessingUnits int, opts ...WorkManagerOption) (*DBWorkManager, error) {
 
 	// Explicitly handle invalid number of processing units (to avoid deadlock)
 	if numProcessingUnits <= 0 {
 		return nil, fmt.Errorf("invalid number of processing units: %d", numProcessingUnits)
 	}
 
-	return &DBWorkManager{
+	w := &DBWorkManager{
 		query:              query,
 		dbIfaceDir:         filepath.Clean(filepath.Join(dbpath, iface)),
 		iface:              iface,
 		workloadChan:       make(chan DBWorkload, numProcessingUnits*64), // 64 is relatively arbitrary (but we're just sending quite basic objects)
 		numProcessingUnits: numProcessingUnits,
-	}, nil
+		stats:              &WorkloadStats{},
+	}
+
+	for _, opt := range opts {
+		err := opt(w)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return w, nil
 }
 
 // GetNumWorkers returns the number of workloads available to the outside world for loop bounds etc.
@@ -132,7 +229,7 @@ func (w *DBWorkManager) CreateWorkerJobs(tfirst int64, tlast int64) (nonempty bo
 		// create new workload for the directory
 		workloadBulk = append(workloadBulk, curDir)
 		if len(workloadBulk) == WorkBulkSize {
-			w.workloadChan <- DBWorkload{workDirs: workloadBulk}
+			w.workloadChan <- newDBWorkload(workloadBulk)
 			w.nWorkloads++
 			workloadBulk = make([]*gpfile.GPDir, 0, WorkBulkSize)
 		}
@@ -145,7 +242,7 @@ func (w *DBWorkManager) CreateWorkerJobs(tfirst int64, tlast int64) (nonempty bo
 
 	// Flush any remaining work
 	if len(workloadBulk) > 0 {
-		w.workloadChan <- DBWorkload{workDirs: workloadBulk}
+		w.workloadChan <- newDBWorkload(workloadBulk)
 		w.nWorkloads++
 	}
 
@@ -473,8 +570,15 @@ func (w *DBWorkManager) readMetadataAndEvaluate(workDir *gpfile.GPDir, blocks []
 	return aggMetadata, nil
 }
 
+func logWorkloadStats(logger *logging.L, msg string, stats *WorkloadStats) {
+	if stats == nil {
+		return
+	}
+	logger.With("stats", stats).Info(msg)
+}
+
 // main query processing
-func (w *DBWorkManager) grabAndProcessWorkload(ctx context.Context, wg *sync.WaitGroup, workloadChan <-chan DBWorkload, mapChan chan hashmap.AggFlowMapWithMetadata) {
+func (w *DBWorkManager) grabAndProcessWorkload(ctx context.Context, id int, wg *sync.WaitGroup, workloadChan <-chan DBWorkload, mapChan chan hashmap.AggFlowMapWithMetadata) {
 	go func() {
 		defer wg.Done()
 
@@ -499,14 +603,31 @@ func (w *DBWorkManager) grabAndProcessWorkload(ctx context.Context, wg *sync.Wai
 			}
 		}()
 
+		var lastStatsUpdate time.Time
 		for workload := range workloadChan {
+			var stats = new(WorkloadStats)
 			resultMap := hashmap.NewAggFlowMapWithMetadata()
 			for _, workDir := range workload.workDirs {
+				// printing of status information
+				if w.keepAlive > 0 {
+					workload.statsCallbacks = StatsCallbacks{
+						func(s *WorkloadStats) error {
+							logWorkloadStats(
+								logger.With("worker.id", id, "iface", w.iface, "dir", workDir.Path()),
+								"processed work dir",
+								s,
+							)
+							return nil
+						},
+					}
+				}
+
 				select {
 				case <-ctx.Done():
-
 					// query was cancelled, exit
-					logger.Infof("query cancelled (workload %d / %d)...", w.nWorkloadsProcessed.Load(), w.nWorkloads)
+					w.stats.Lock()
+					logger.Infof("query cancelled (workload %d / %d)...", w.stats.DirectoriesProcessed, w.nWorkloads)
+					w.stats.Unlock()
 					return
 				default:
 
@@ -516,18 +637,35 @@ func (w *DBWorkManager) grabAndProcessWorkload(ctx context.Context, wg *sync.Wai
 					}
 
 					// if there is an error during one of the read jobs, throw a syslog message and terminate
-					err := w.readBlocksAndEvaluate(workDir, enc, &resultMap)
+					stats, err = w.readBlocksAndEvaluate(workDir, enc, &resultMap)
 					if err != nil {
 						logger.Error(err)
 						mapChan <- hashmap.NilAggFlowMapWithMetadata
 						return
 					}
 				}
+
+				workload.stats.Add(stats)
+				if w.keepAlive > 0 {
+					if time.Since(lastStatsUpdate) > w.keepAlive {
+						workload.statsCallbacks.Execute(workload.stats)
+						lastStatsUpdate = time.Now()
+					}
+				}
 			}
 
 			// Workload is counted, but we only add it to the final result if we got any entries
-			w.nWorkloadsProcessed.Add(1)
+			w.stats.Lock()
+			w.stats.Add(workload.stats)
+			w.stats.Unlock()
 			if resultMap.Len() > 0 {
+				if w.keepAlive > 0 {
+					logWorkloadStats(
+						logger.With("iface", w.iface, "dir", w.dbIfaceDir),
+						"processed workload",
+						w.stats,
+					)
+				}
 				mapChan <- resultMap
 			}
 		}
@@ -548,7 +686,7 @@ func (w *DBWorkManager) ExecuteWorkerReadJobs(ctx context.Context, mapChan chan 
 	wg.Add(w.numProcessingUnits)
 	for i := 0; i < w.numProcessingUnits; i++ {
 		// start worker up
-		w.grabAndProcessWorkload(ctx, wg, w.workloadChan, mapChan)
+		w.grabAndProcessWorkload(ctx, i, wg, w.workloadChan, mapChan)
 	}
 
 	// check if all workers are done
@@ -557,7 +695,7 @@ func (w *DBWorkManager) ExecuteWorkerReadJobs(ctx context.Context, mapChan chan 
 
 // Block evaluation and aggregation -----------------------------------------------------
 // this is where the actual reading and aggregation magic happens
-func (w *DBWorkManager) readBlocksAndEvaluate(workDir *gpfile.GPDir, enc encoder.Encoder, resultMap *hashmap.AggFlowMapWithMetadata) (err error) {
+func (w *DBWorkManager) readBlocksAndEvaluate(workDir *gpfile.GPDir, enc encoder.Encoder, resultMap *hashmap.AggFlowMapWithMetadata) (stats *WorkloadStats, err error) {
 	logger := logging.Logger()
 
 	var (
@@ -568,7 +706,7 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workDir *gpfile.GPDir, enc encoder
 
 	// Open GPDir (reading metadata in the process)
 	if err := workDir.Open(gpfile.WithEncoder(enc)); err != nil {
-		return err
+		return stats, err
 	}
 	defer func() {
 		if cerr := workDir.Close(); cerr != nil && err == nil {
@@ -580,7 +718,11 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workDir *gpfile.GPDir, enc encoder
 	if resultMap.Interface == "" {
 		resultMap.Interface = w.iface
 	} else if resultMap.Interface != w.iface {
-		return fmt.Errorf("discovered invalid workload for mismatching interfaces, want `%s`, have `%s`", resultMap.Interface, w.iface)
+		return stats, fmt.Errorf("discovered invalid workload for mismatching interfaces, want `%s`, have `%s`", resultMap.Interface, w.iface)
+	}
+
+	stats = &WorkloadStats{
+		DirectoriesProcessed: 1,
 	}
 
 	// Process the workload, looping over all blocks in this directory
@@ -597,19 +739,24 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workDir *gpfile.GPDir, enc encoder
 			blockBroken bool
 		)
 
+		stats.BytesLoaded += uint64(block.Len)
+
 		// Read the blocks from their files
 		for _, colIdx := range w.query.columnIndices {
-
 			// Read the block from the file
-			if blocks[colIdx], err = workDir.ReadBlockAtIndex(colIdx, b); err != nil {
+			blocks[colIdx], err = workDir.ReadBlockAtIndex(colIdx, b)
+			if err != nil {
 				blockBroken = true
 				logger.With("day", workDir.Path(), "block", block.Timestamp, "column", types.ColumnFileNames[colIdx]).Warnf("Failed to read column: %s", err)
 				break
 			}
 		}
 
+		stats.BlocksProcessed++
+
 		// In case any error was observed during block access, skip this whole block
 		if blockBroken {
+			stats.BlocksCorrupted++
 			continue
 		}
 
@@ -618,6 +765,8 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workDir *gpfile.GPDir, enc encoder
 		numEntries := bitpack.Len(blocks[types.BytesRcvdColIdx])
 		for _, colIdx := range w.query.columnIndices {
 			l := len(blocks[colIdx])
+			stats.BytesDecompressed += uint64(l)
+
 			if colIdx.IsCounterCol() {
 				if bitpack.Len(blocks[colIdx]) != numEntries {
 					blockBroken = true
@@ -648,6 +797,7 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workDir *gpfile.GPDir, enc encoder
 
 		// In case any error was observed during above sanity checks, skip this whole block
 		if blockBroken {
+			stats.BlocksCorrupted++
 			continue
 		}
 
@@ -759,7 +909,7 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workDir *gpfile.GPDir, enc encoder
 		}
 	}
 
-	return nil
+	return stats, nil
 }
 
 // Close releases all resources claimed by the DBWorkManager
