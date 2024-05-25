@@ -14,6 +14,7 @@ import (
 	"github.com/els0r/goProbe/pkg/goprobe/writeout"
 	"github.com/els0r/goProbe/pkg/types/hashmap"
 	"github.com/els0r/telemetry/logging"
+	"github.com/fako1024/gotools/concurrency"
 )
 
 const allowedWriteoutDurationFraction = 0.1
@@ -33,6 +34,8 @@ type Manager struct {
 	startedAt    time.Time
 
 	skipWriteoutSchedule bool
+
+	localBufferPool *LocalBufferPool
 }
 
 // InitManager initializes a CaptureManager and the underlying writeout logic
@@ -49,13 +52,6 @@ func InitManager(ctx context.Context, config *config.Config, opts ...ManagerOpti
 		dbPermissions = config.DB.Permissions
 	}
 
-	// If a local buffer config exists, set the values accordingly (before initializing the manager)
-	if config.LocalBuffers != nil {
-		if err := setLocalBuffers(config.LocalBuffers.NumBuffers, config.LocalBuffers.SizeLimit); err != nil {
-			return nil, fmt.Errorf("failed to set local buffers: %w", err)
-		}
-	}
-
 	// Initialize the DB writeout handler
 	writeoutHandler := writeout.NewGoDBHandler(config.DB.Path, encoderType).
 		WithSyslogWriting(config.SyslogFlows).
@@ -63,6 +59,11 @@ func InitManager(ctx context.Context, config *config.Config, opts ...ManagerOpti
 
 	// Initialize the CaptureManager
 	captureManager := NewManager(writeoutHandler, opts...)
+
+	// Initialize local buffer
+	if err := captureManager.setLocalBuffers(); err != nil {
+		return nil, fmt.Errorf("failed to set local buffer(s): %w", err)
+	}
 
 	// Update (i.e. start) all capture routines (implicitly by reloading all configurations) and schedule
 	// DB writeouts
@@ -87,10 +88,16 @@ func NewManager(writeoutHandler writeout.Handler, opts ...ManagerOption) *Manage
 		captures:        newCaptures(),
 		writeoutHandler: writeoutHandler,
 		sourceInitFn:    defaultSourceInitFn,
+		localBufferPool: &LocalBufferPool{
+			NBuffers:      1,
+			MaxBufferSize: config.DefaultLocalBufferSizeLimit,
+			MemPool:       concurrency.NewMemPoolLimitUnique(1, initialBufferSize),
+		}, // This is explicit here to ensure that each manager by default has its own memory pool (unless injected)
 	}
 	for _, opt := range opts {
 		opt(captureManager)
 	}
+
 	return captureManager
 }
 
@@ -183,6 +190,14 @@ func WithSourceInitFn(fn sourceInitFn) ManagerOption {
 func WithSkipWriteoutSchedule(skip bool) ManagerOption {
 	return func(cm *Manager) {
 		cm.skipWriteoutSchedule = skip
+	}
+}
+
+// WithLocalBuffers sets one or multiple local buffers for the capture manager
+func WithLocalBuffers(nBuffers, sizeLimit int) ManagerOption {
+	return func(cm *Manager) {
+		cm.localBufferPool.NBuffers = nBuffers
+		cm.localBufferPool.MaxBufferSize = sizeLimit
 	}
 }
 
@@ -378,7 +393,7 @@ func (cm *Manager) update(ctx context.Context, ifaces config.Ifaces, enable, dis
 			logger.Info("initializing capture / running packet processing")
 
 			newCap := newCapture(iface.Name, ifaces[iface.Name]).SetSourceInitFn(cm.sourceInitFn)
-			if err := newCap.run(); err != nil {
+			if err := newCap.run(cm.localBufferPool); err != nil {
 				logger.Errorf("failed to start capture: %s", err)
 				return
 			}
@@ -575,4 +590,19 @@ func (cm *Manager) performWriteout(ctx context.Context, timestamp time.Time, ifa
 	cm.Lock()
 	cm.lastRotation = timestamp
 	cm.Unlock()
+}
+
+func (cm *Manager) setLocalBuffers() error {
+
+	// Guard against invalid (i.e. zero) buffer size / limits
+	if cm.localBufferPool.NBuffers == 0 || cm.localBufferPool.MaxBufferSize == 0 {
+		return fmt.Errorf("invalid number of local buffers (%d) / size limit (%d) specified", cm.localBufferPool.NBuffers, cm.localBufferPool.MaxBufferSize)
+	}
+
+	if cm.localBufferPool.MemPool != nil {
+		cm.localBufferPool.MemPool.Clear()
+	}
+	cm.localBufferPool.MemPool = concurrency.NewMemPoolLimitUnique(cm.localBufferPool.NBuffers, initialBufferSize)
+
+	return nil
 }

@@ -11,7 +11,7 @@ import (
 
 func TestBuffer(t *testing.T) {
 
-	localBuf := new(LocalBuffer)
+	localBuf := NewLocalBuffer(testLocalBufferPool)
 	data := make([]byte, 128*1024*1024)
 	localBuf.Assign(data)
 
