@@ -41,8 +41,6 @@ var defaultMockIfaceConfig = config.CaptureConfig{
 	},
 }
 
-var testLocalBufferPool = NewLocalBufferPool(1, config.DefaultLocalBufferSizeLimit)
-
 type testMockSrc struct {
 	src     *afring.MockSourceNoDrain
 	errChan <-chan error
