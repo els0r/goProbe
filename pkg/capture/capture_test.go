@@ -41,11 +41,7 @@ var defaultMockIfaceConfig = config.CaptureConfig{
 	},
 }
 
-var testLocalBufferPool = &LocalBufferPool{
-	NBuffers:      1,
-	MaxBufferSize: config.DefaultLocalBufferSizeLimit,
-	MemPool:       concurrency.NewMemPoolLimitUnique(config.DefaultLocalBufferNumBuffers, initialBufferSize),
-}
+var testLocalBufferPool = NewLocalBufferPool(1, config.DefaultLocalBufferSizeLimit)
 
 type testMockSrc struct {
 	src     *afring.MockSourceNoDrain
@@ -581,7 +577,7 @@ func newMockCapture(src capture.SourceZeroCopy) *Capture {
 		capLock: concurrency.NewThreePointLock(
 			concurrency.WithLockRequestFn(src.Unblock),
 			concurrency.WithUnlockRequestFn(src.Unblock),
-			concurrency.WithMemPool(testLocalBufferPool.MemPool),
+			concurrency.WithMemPool(testLocalBufferPool.MemPoolLimitUnique),
 			concurrency.WithTimeout(time.Second),
 		),
 		flowLog:       NewFlowLog(),

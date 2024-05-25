@@ -88,11 +88,9 @@ func NewManager(writeoutHandler writeout.Handler, opts ...ManagerOption) *Manage
 		captures:        newCaptures(),
 		writeoutHandler: writeoutHandler,
 		sourceInitFn:    defaultSourceInitFn,
-		localBufferPool: &LocalBufferPool{
-			NBuffers:      1,
-			MaxBufferSize: config.DefaultLocalBufferSizeLimit,
-			MemPool:       concurrency.NewMemPoolLimitUnique(1, initialBufferSize),
-		}, // This is explicit here to ensure that each manager by default has its own memory pool (unless injected)
+
+		// This is explicit here to ensure that each manager by default has its own memory pool (unless injected)
+		localBufferPool: NewLocalBufferPool(1, config.DefaultLocalBufferSizeLimit),
 	}
 	for _, opt := range opts {
 		opt(captureManager)
@@ -599,10 +597,10 @@ func (cm *Manager) setLocalBuffers() error {
 		return fmt.Errorf("invalid number of local buffers (%d) / size limit (%d) specified", cm.localBufferPool.NBuffers, cm.localBufferPool.MaxBufferSize)
 	}
 
-	if cm.localBufferPool.MemPool != nil {
-		cm.localBufferPool.MemPool.Clear()
+	if cm.localBufferPool != nil {
+		cm.localBufferPool.Clear()
 	}
-	cm.localBufferPool.MemPool = concurrency.NewMemPoolLimitUnique(cm.localBufferPool.NBuffers, initialBufferSize)
+	cm.localBufferPool.MemPoolLimitUnique = concurrency.NewMemPoolLimitUnique(cm.localBufferPool.NBuffers, initialBufferSize)
 
 	return nil
 }

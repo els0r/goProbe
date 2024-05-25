@@ -25,7 +25,16 @@ var (
 type LocalBufferPool struct {
 	NBuffers      int
 	MaxBufferSize int
-	MemPool       *concurrency.MemPoolLimitUnique
+	*concurrency.MemPoolLimitUnique
+}
+
+// NewLocalBufferPool initializes a new local buffer pool
+func NewLocalBufferPool(nBuffers, maxBufferSize int) *LocalBufferPool {
+	return &LocalBufferPool{
+		NBuffers:           nBuffers,
+		MaxBufferSize:      maxBufferSize,
+		MemPoolLimitUnique: concurrency.NewMemPoolLimitUnique(nBuffers, initialBufferSize),
+	}
 }
 
 // LocalBuffer denotes a local packet buffer used to temporarily capture packets
@@ -51,7 +60,7 @@ func (l *LocalBuffer) Assign(data []byte) {
 
 	// Ascertain the current size of the underlying data slice and grow if required
 	if len(l.data) < initialBufferSize {
-		l.data = l.memPool.MemPool.Resize(l.data, initialBufferSize)
+		l.data = l.memPool.Resize(l.data, initialBufferSize)
 	}
 }
 
@@ -144,5 +153,5 @@ func (l *LocalBuffer) Next() ([]byte, byte, uint32, bool, byte, capturetypes.Par
 }
 
 func (l *LocalBuffer) grow(newSize int) {
-	l.data = l.memPool.MemPool.Resize(l.data, newSize)
+	l.data = l.memPool.Resize(l.data, newSize)
 }

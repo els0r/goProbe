@@ -164,7 +164,7 @@ func (c *Capture) run(memPool *LocalBufferPool) (err error) {
 
 	c.memPool = memPool
 	c.capLock = concurrency.NewThreePointLock(
-		concurrency.WithMemPool(memPool.MemPool),
+		concurrency.WithMemPool(memPool.MemPoolLimitUnique),
 		concurrency.WithTimeout(captureLockTimeout),
 		concurrency.WithLockRequestFn(c.captureHandle.Unblock),
 		concurrency.WithUnlockRequestFn(c.captureHandle.Unblock),
