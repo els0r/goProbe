@@ -4,14 +4,17 @@ import (
 	"net"
 	"testing"
 
+	"github.com/els0r/goProbe/cmd/goProbe/config"
 	"github.com/els0r/goProbe/pkg/capture/capturetypes"
 	"github.com/fako1024/slimcap/capture"
 	"github.com/stretchr/testify/require"
 )
 
+var testLocalBufferPool = NewLocalBufferPool(1, config.DefaultLocalBufferSizeLimit)
+
 func TestBuffer(t *testing.T) {
 
-	localBuf := new(LocalBuffer)
+	localBuf := NewLocalBuffer(testLocalBufferPool)
 	data := make([]byte, 128*1024*1024)
 	localBuf.Assign(data)
 

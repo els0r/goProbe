@@ -123,8 +123,8 @@ type Capture struct {
 	captureHandle Source
 	sourceInitFn  sourceInitFn
 
-	// Error tracking (type / errno specific)
-	// parsingErrors ParsingErrTracker
+	// Memory buffer pool
+	memPool *LocalBufferPool
 
 	// WaitGroup tracking active processing
 	wgProc sync.WaitGroup
@@ -154,7 +154,7 @@ func (c *Capture) Iface() string {
 	return c.iface
 }
 
-func (c *Capture) run() (err error) {
+func (c *Capture) run(memPool *LocalBufferPool) (err error) {
 
 	// Set up the packet source and capturing
 	c.captureHandle, err = c.sourceInitFn(c)
@@ -162,8 +162,9 @@ func (c *Capture) run() (err error) {
 		return fmt.Errorf("failed to initialize capture: %w", err)
 	}
 
+	c.memPool = memPool
 	c.capLock = concurrency.NewThreePointLock(
-		concurrency.WithMemPool(memPool),
+		concurrency.WithMemPool(memPool.MemPoolLimitUnique),
 		concurrency.WithTimeout(captureLockTimeout),
 		concurrency.WithLockRequestFn(c.captureHandle.Unblock),
 		concurrency.WithUnlockRequestFn(c.captureHandle.Unblock),
@@ -255,7 +256,7 @@ func (c *Capture) process() <-chan error {
 		// Iniitalize a new local buffer for this interface - this is kept local to avoid
 		// any possibility of escaping to the heap and / or accidental misuse of the underlying
 		// memory area
-		localBuf := new(LocalBuffer)
+		localBuf := NewLocalBuffer(c.memPool)
 
 		// Main packet capture loop which an interface should be in most of the time
 		for {

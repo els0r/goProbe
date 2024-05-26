@@ -126,8 +126,6 @@ func testConcurrentMethodAccess(t *testing.T, nIfaces, nIterations int) {
 
 	captureManager, ifaceConfigs, testMockSrcs := setupInterfaces(t, defaultMockIfaceConfig, nIfaces)
 
-	time.Sleep(time.Second)
-
 	wg := sync.WaitGroup{}
 	wg.Add(3)
 
@@ -208,7 +206,14 @@ func setupInterfaces(t *testing.T, cfg config.CaptureConfig, nIfaces int) (*Mana
 
 			return src.src, nil
 		}),
+		WithLocalBuffers(1, config.DefaultLocalBufferSizeLimit),
 	)
+
+	// If a local buffer config exists, set the values accordingly (before initializing the manager)
+	if captureManager.localBufferPool.NBuffers > 0 {
+		require.Nil(t, captureManager.setLocalBuffers())
+	}
+
 	_, _, _, err = captureManager.Update(context.Background(), ifaceConfigs)
 	require.Nil(t, err)
 
@@ -565,11 +570,12 @@ func testDeadlockHighTraffic(t *testing.T) {
 
 func newMockCapture(src capture.SourceZeroCopy) *Capture {
 	return &Capture{
-		iface: src.Link().Name,
+		iface:   src.Link().Name,
+		memPool: testLocalBufferPool,
 		capLock: concurrency.NewThreePointLock(
 			concurrency.WithLockRequestFn(src.Unblock),
 			concurrency.WithUnlockRequestFn(src.Unblock),
-			concurrency.WithMemPool(memPool),
+			concurrency.WithMemPool(testLocalBufferPool.MemPoolLimitUnique),
 			concurrency.WithTimeout(time.Second),
 		),
 		flowLog:       NewFlowLog(),

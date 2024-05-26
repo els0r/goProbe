@@ -1,10 +1,8 @@
 package capture
 
 import (
-	"fmt"
 	"unsafe"
 
-	"github.com/els0r/goProbe/cmd/goProbe/config"
 	"github.com/els0r/goProbe/pkg/capture/capturetypes"
 	"github.com/fako1024/gotools/concurrency"
 	"golang.org/x/sys/unix"
@@ -21,11 +19,23 @@ var (
 
 	// Initial size of a buffer
 	initialBufferSize = unix.Getpagesize()
-
-	// Global (limited) memory pool used to minimize allocations
-	memPool       = concurrency.NewMemPoolLimitUnique(config.DefaultLocalBufferNumBuffers, initialBufferSize)
-	maxBufferSize = config.DefaultLocalBufferSizeLimit
 )
+
+// LocalBufferPool provides a wrapper around a MemPoolLimitUnique with a maximum size
+type LocalBufferPool struct {
+	NBuffers      int
+	MaxBufferSize int
+	*concurrency.MemPoolLimitUnique
+}
+
+// NewLocalBufferPool initializes a new local buffer pool
+func NewLocalBufferPool(nBuffers, maxBufferSize int) *LocalBufferPool {
+	return &LocalBufferPool{
+		NBuffers:           nBuffers,
+		MaxBufferSize:      maxBufferSize,
+		MemPoolLimitUnique: concurrency.NewMemPoolLimitUnique(nBuffers, initialBufferSize),
+	}
+}
 
 // LocalBuffer denotes a local packet buffer used to temporarily capture packets
 // from the source (e.g. during rotation) to avoid a ring / kernel buffer overflow
@@ -33,6 +43,15 @@ type LocalBuffer struct {
 	data        []byte // continuous buffer slice
 	writeBufPos int    // current position in buffer slice
 	readBufPos  int    // current position in buffer slice
+
+	memPool *LocalBufferPool
+}
+
+// NewLocalBuffer initializes a new local buffer using a global memory pool and a maximum buffer size
+func NewLocalBuffer(memPool *LocalBufferPool) *LocalBuffer {
+	return &LocalBuffer{
+		memPool: memPool,
+	}
 }
 
 // Assign sets the actual underlying data slice (obtained from a memory pool) of this buffer
@@ -41,7 +60,7 @@ func (l *LocalBuffer) Assign(data []byte) {
 
 	// Ascertain the current size of the underlying data slice and grow if required
 	if len(l.data) < initialBufferSize {
-		l.data = memPool.Resize(l.data, initialBufferSize)
+		l.data = l.memPool.Resize(l.data, initialBufferSize)
 	}
 }
 
@@ -56,7 +75,7 @@ func (l *LocalBuffer) Reset() {
 func (l *LocalBuffer) Usage() float64 {
 
 	// Note: maxBufferSize is guarded against zero in setLocalBuffers(), so this cannot cause division by zero
-	return float64(l.writeBufPos) / float64(maxBufferSize)
+	return float64(l.writeBufPos) / float64(l.memPool.MaxBufferSize)
 }
 
 // Add adds an element to the buffer, returning ok = true if successful
@@ -67,11 +86,11 @@ func (l *LocalBuffer) Add(epHash []byte, pktType byte, pktSize uint32, isIPv4 bo
 	if l.writeBufPos+len(epHash)+bufElementAddSize >= len(l.data) {
 
 		// If the buffer size is already at its limit, reject the new element
-		if len(l.data) >= maxBufferSize {
+		if len(l.data) >= l.memPool.MaxBufferSize {
 			return false
 		}
 
-		l.grow(min(maxBufferSize, 2*len(l.data)))
+		l.grow(min(l.memPool.MaxBufferSize, 2*len(l.data)))
 	}
 
 	// Transfer data to the buffer
@@ -133,26 +152,6 @@ func (l *LocalBuffer) Next() ([]byte, byte, uint32, bool, byte, capturetypes.Par
 		true
 }
 
-///////////////////////////////////////////////////////////////////////////////////
-
-// setLocalBuffers sets the number of (and hence the maximum concurrency for Status() calls) and
-// maximum size of the local memory buffers (globally, not per interface)
-func setLocalBuffers(nBuffers, sizeLimit int) error {
-
-	// Guard against invalid (i.e. zero) buffer size / limits
-	if nBuffers == 0 || sizeLimit == 0 {
-		return fmt.Errorf("invalid number of local buffers (%d) / size limit (%d) specified", nBuffers, sizeLimit)
-	}
-
-	if memPool != nil {
-		memPool.Clear()
-	}
-	memPool = concurrency.NewMemPoolLimitUnique(nBuffers, initialBufferSize)
-	maxBufferSize = sizeLimit
-
-	return nil
-}
-
 func (l *LocalBuffer) grow(newSize int) {
-	l.data = memPool.Resize(l.data, newSize)
+	l.data = l.memPool.Resize(l.data, newSize)
 }
