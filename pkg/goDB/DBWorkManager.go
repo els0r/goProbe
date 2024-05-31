@@ -526,6 +526,11 @@ func (w *DBWorkManager) readMetadataAndEvaluate(workDir *gpfile.GPDir, blocks []
 		numEntries := bitpack.Len(colBlocks[types.BytesRcvdColIdx])
 		for _, colIdx := range w.query.columnIndices {
 			if colIdx.IsCounterCol() {
+				if len(colBlocks[colIdx]) == 0 {
+					blockBroken = true
+					logger.With("block", ind, "column", types.ColumnFileNames[colIdx]).Warn("Invalid (empty) Bitpack slice found")
+					break
+				}
 				if bitpack.Len(colBlocks[colIdx]) != numEntries {
 					blockBroken = true
 					logger.With(
@@ -746,6 +751,11 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workDir *gpfile.GPDir, enc encoder
 			stats.BytesDecompressed += uint64(l)
 
 			if colIdx.IsCounterCol() {
+				if len(blocks[colIdx]) == 0 {
+					blockBroken = true
+					logger.With("block", b, "column", types.ColumnFileNames[colIdx]).Warn("Invalid (empty) Bitpack slice found")
+					break
+				}
 				if bitpack.Len(blocks[colIdx]) != numEntries {
 					blockBroken = true
 					logger.With("block", b, "column", types.ColumnFileNames[colIdx]).Warnf("Incorrect number of entries in column file. Expected %d, found %d", numEntries, bitpack.Len(blocks[colIdx]))
