@@ -156,7 +156,7 @@ func main() {
 		// serve API
 		go func() {
 			logger.With("addr", config.API.Addr).Info("starting API server")
-			err = apiServer.Serve()
+			err := apiServer.Serve()
 			if err != nil && !errors.Is(err, http.ErrServerClosed) {
 				logger.Fatalf("failed to spawn goProbe API server: %s", err)
 			}
@@ -179,7 +179,10 @@ func main() {
 
 	// shut down running server resources, forcibly if need be
 	if config.API != nil {
-		err = apiServer.Shutdown(fallbackCtx)
+		// TODO: Technically this is a race condition (as detected by the race detector) because it accesses the
+		// underlying server being accessed in the (blocking) call to apiServer.Serve() - This is kind of by design
+		// but maybe there are ways to clean it up (not urgent, just a bit "unclean")
+		err := apiServer.Shutdown(fallbackCtx)
 		if err != nil {
 			logger.Errorf("forced shut down of goProbe API server: %v", err)
 		}

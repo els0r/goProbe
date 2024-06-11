@@ -181,8 +181,9 @@ func (c *Capture) close() error {
 		return err
 	}
 
-	// Wait until processing has concluded
+	// Wait until processing has concluded, then close the capture lock
 	c.wgProc.Wait()
+	c.capLock.Close()
 
 	// Setting the handle to nil isn't stricly necessary, but it's an additional
 	// guard against races (because it allows the race detector to pick up more
@@ -354,7 +355,7 @@ func (c *Capture) bufferPackets(buf *LocalBuffer, captureErrors chan error) erro
 	// Populate the buffer
 	for {
 		if c.capLock.HasUnlockRequest() {
-			c.capLock.ConsumeUnlockRequest()
+			c.capLock.ConsumeUnlockRequest() // Consume the unlock request to continue normal processing
 			break
 		}
 
@@ -366,6 +367,8 @@ func (c *Capture) bufferPackets(buf *LocalBuffer, captureErrors chan error) erro
 			if errors.Is(err, capture.ErrCaptureUnblocked) { // capture unblocked (during lock)
 				continue
 			}
+
+			c.capLock.ConsumeUnlockRequest()               // Consume the unlock request to continue normal processing
 			if errors.Is(err, capture.ErrCaptureStopped) { // capture stopped gracefully
 
 				// This is the only error we return in order to react with graceful termination
@@ -374,7 +377,6 @@ func (c *Capture) bufferPackets(buf *LocalBuffer, captureErrors chan error) erro
 			}
 
 			captureErrors <- fmt.Errorf("capture error while buffering: %w", err)
-
 			break
 		}
 
