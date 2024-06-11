@@ -348,7 +348,6 @@ func (c *Capture) bufferPackets(buf *LocalBuffer, captureErrors chan error) erro
 
 	// Ensure that the buffer is released at the end of the method
 	defer func() {
-		c.capLock.ConsumeUnlockRequest() // Consume the unlock request to continue normal processing
 		buf.Reset()
 		c.capLock.Release(buf.data)
 	}()
@@ -356,6 +355,7 @@ func (c *Capture) bufferPackets(buf *LocalBuffer, captureErrors chan error) erro
 	// Populate the buffer
 	for {
 		if c.capLock.HasUnlockRequest() {
+			c.capLock.ConsumeUnlockRequest() // Consume the unlock request to continue normal processing
 			break
 		}
 
@@ -367,6 +367,8 @@ func (c *Capture) bufferPackets(buf *LocalBuffer, captureErrors chan error) erro
 			if errors.Is(err, capture.ErrCaptureUnblocked) { // capture unblocked (during lock)
 				continue
 			}
+
+			c.capLock.ConsumeUnlockRequest()               // Consume the unlock request to continue normal processing
 			if errors.Is(err, capture.ErrCaptureStopped) { // capture stopped gracefully
 
 				// This is the only error we return in order to react with graceful termination
@@ -388,6 +390,7 @@ func (c *Capture) bufferPackets(buf *LocalBuffer, captureErrors chan error) erro
 			// wait for the unlock request
 			if !buf.Add(epHash[:], pktType, pktSize, true, auxInfo, errno) {
 				captureErrors <- ErrLocalBufferOverflow
+				c.capLock.ConsumeUnlockRequest() // Consume the unlock request to continue normal processing
 				break
 			}
 		} else if iplayerType == ipLayerTypeV6 {
@@ -397,6 +400,7 @@ func (c *Capture) bufferPackets(buf *LocalBuffer, captureErrors chan error) erro
 			// wait for the unlock request
 			if !buf.Add(epHash[:], pktType, pktSize, true, auxInfo, errno) {
 				captureErrors <- ErrLocalBufferOverflow
+				c.capLock.ConsumeUnlockRequest() // Consume the unlock request to continue normal processing
 				break
 			}
 		}
