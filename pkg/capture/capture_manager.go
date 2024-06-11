@@ -227,6 +227,9 @@ func (cm *Manager) Status(ctx context.Context, ifaces ...string) (statusmap capt
 
 	statusmap = make(capturetypes.InterfaceStats)
 
+	cm.Lock()
+	defer cm.Unlock()
+
 	// Build list of interfaces to process (either from all interfaces or from explicit list)
 	// If none are provided / are available, return empty map
 	if ifaces = cm.captures.Ifaces(ifaces...); len(ifaces) == 0 {
@@ -332,7 +335,7 @@ func (cm *Manager) Update(ctx context.Context, ifaces config.Ifaces) (enabled, u
 			"updated", updateIfaces,
 			"removed", disableIfaces,
 		),
-	).Debug("updated interface configuration")
+	).Info("updated interface configuration")
 
 	return enableIfaces, updateIfaces, disableIfaces, nil
 
@@ -482,7 +485,7 @@ func (cm *Manager) Close(ctx context.Context, ifaces ...string) {
 	logger.With(
 		"elapsed", time.Since(t0).Round(time.Millisecond).String(),
 		"ifaces", ifaces,
-	).Debug("closed interfaces")
+	).Info("closed interfaces")
 }
 
 func withIfaceContext(ctx context.Context, iface string) context.Context {
@@ -498,6 +501,10 @@ func (cm *Manager) rotate(ctx context.Context, writeoutChan chan<- capturetypes.
 	if ifaces = cm.captures.Ifaces(ifaces...); len(ifaces) == 0 {
 		return
 	}
+
+	logger.With(
+		"ifaces", ifaces,
+	).Info("rotating interfaces")
 
 	// Iteratively rotate all interfaces. Since the rotation results are put on the writeoutChan for
 	// writeout by the DBWriter (which is sequential and certainly slower than the actual in-memory rotation)
@@ -543,7 +550,7 @@ func (cm *Manager) rotate(ctx context.Context, writeoutChan chan<- capturetypes.
 	logger.With(
 		"elapsed", t1.Round(time.Microsecond).String(),
 		"ifaces", ifaces,
-	).Debug("rotated interfaces")
+	).Info("rotated interfaces")
 }
 
 func (cm *Manager) logErrors(ctx context.Context, iface string, errsChan <-chan error) {
@@ -580,12 +587,12 @@ func (cm *Manager) performWriteout(ctx context.Context, timestamp time.Time, ifa
 	writeoutChan := make(chan capturetypes.TaggedAggFlowMap, writeout.WriteoutsChanDepth)
 	doneChan := cm.writeoutHandler.HandleWriteout(ctx, timestamp, writeoutChan)
 
+	cm.Lock()
 	cm.rotate(ctx, writeoutChan, ifaces...)
-	close(writeoutChan)
 
+	close(writeoutChan)
 	<-doneChan
 
-	cm.Lock()
 	cm.lastRotation = timestamp
 	cm.Unlock()
 }

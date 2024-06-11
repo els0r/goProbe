@@ -181,8 +181,9 @@ func (c *Capture) close() error {
 		return err
 	}
 
-	// Wait until processing has concluded
+	// Wait until processing has concluded, then close the capture lock
 	c.wgProc.Wait()
+	c.capLock.Close()
 
 	// Setting the handle to nil isn't stricly necessary, but it's an additional
 	// guard against races (because it allows the race detector to pick up more
@@ -347,6 +348,7 @@ func (c *Capture) bufferPackets(buf *LocalBuffer, captureErrors chan error) erro
 
 	// Ensure that the buffer is released at the end of the method
 	defer func() {
+		c.capLock.ConsumeUnlockRequest() // Consume the unlock request to continue normal processing
 		buf.Reset()
 		c.capLock.Release(buf.data)
 	}()
@@ -354,7 +356,6 @@ func (c *Capture) bufferPackets(buf *LocalBuffer, captureErrors chan error) erro
 	// Populate the buffer
 	for {
 		if c.capLock.HasUnlockRequest() {
-			c.capLock.ConsumeUnlockRequest()
 			break
 		}
 
@@ -374,7 +375,6 @@ func (c *Capture) bufferPackets(buf *LocalBuffer, captureErrors chan error) erro
 			}
 
 			captureErrors <- fmt.Errorf("capture error while buffering: %w", err)
-
 			break
 		}
 
@@ -388,7 +388,6 @@ func (c *Capture) bufferPackets(buf *LocalBuffer, captureErrors chan error) erro
 			// wait for the unlock request
 			if !buf.Add(epHash[:], pktType, pktSize, true, auxInfo, errno) {
 				captureErrors <- ErrLocalBufferOverflow
-				c.capLock.ConsumeUnlockRequest() // Consume the unlock request to continue normal processing
 				break
 			}
 		} else if iplayerType == ipLayerTypeV6 {
@@ -398,7 +397,6 @@ func (c *Capture) bufferPackets(buf *LocalBuffer, captureErrors chan error) erro
 			// wait for the unlock request
 			if !buf.Add(epHash[:], pktType, pktSize, true, auxInfo, errno) {
 				captureErrors <- ErrLocalBufferOverflow
-				c.capLock.ConsumeUnlockRequest() // Consume the unlock request to continue normal processing
 				break
 			}
 		}

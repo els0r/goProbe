@@ -11,7 +11,7 @@ require (
 	github.com/els0r/telemetry/metrics v0.0.0-20231115132112-88976d9255a2
 	github.com/els0r/telemetry/tracing v0.0.0-20231115132112-88976d9255a2
 	github.com/fako1024/gotools/bitpack v0.0.0-20240429125115-3a9469ff8610
-	github.com/fako1024/gotools/concurrency v0.0.0-20240523083903-164d4b679dd4
+	github.com/fako1024/gotools/concurrency v0.0.0-20240611104736-1c5ad479f084
 	github.com/fako1024/httpc v1.0.18
 	github.com/fako1024/slimcap v1.0.5
 	github.com/gin-contrib/cors v1.7.1
