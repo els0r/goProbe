@@ -81,7 +81,7 @@ func (qr *QueryRunner) aggregate(ctx context.Context, mapChan <-chan hashmap.Agg
 			finalMap.Stats.Add(item.Stats)
 
 			// the processing stats have been processed. Skip to next item in case there's no flow data to process. This
-			// is relevant for cases where no flow records are return as a result of conditions not matching
+			// is relevant for cases where no flow records are returned as a result of conditions not matching
 			if item.Len() == 0 {
 				continue
 			}
