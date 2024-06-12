@@ -53,7 +53,7 @@ const (
 // Below enumerate the data type names used across goProbe
 const (
 	TimeName     = "time"
-	HostnameName = "hostname"
+	HostnameName = "host"
 	HostIDName   = "hostid"
 	IfaceName    = "iface"
 
@@ -321,7 +321,7 @@ func ParseQueryType(queryType string) (attributes []Attribute, selector LabelSel
 		case IfaceName:
 			selector.Iface = true
 			continue
-		case HostnameName:
+		case HostnameName, "hostname": // NOTE: the "hostname" alias is here specifically for backwards compatibility in v4
 			selector.Hostname = true
 			continue
 		case HostIDName:
