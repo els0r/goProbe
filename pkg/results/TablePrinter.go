@@ -695,24 +695,10 @@ func (t *TextTablePrinter) Footer(ctx context.Context, result *Result) error {
 
 	t.footerWriter.WriteEntry(sortedByKey, describe(t.sort, t.direction))
 
-	var hitsDisplayed string
-	if result.Summary.Hits.Displayed < 1000 {
-		hitsDisplayed = fmt.Sprintf("%d", result.Summary.Hits.Displayed)
-	} else {
-		hitsDisplayed = strings.TrimSpace(textFormatter.Count(uint64(result.Summary.Hits.Displayed)))
-	}
-
-	var hitsTotal string
-	if result.Summary.Hits.Total < 1000 {
-		hitsTotal = fmt.Sprintf("%d", result.Summary.Hits.Total)
-	} else {
-		hitsTotal = strings.TrimSpace(textFormatter.Count(uint64(result.Summary.Hits.Total)))
-	}
-
 	result.Query.PrintFooter(t.footerWriter)
 	t.footerWriter.WriteEntry(queryStatsKey, "displayed top %s hits out of %s in %s",
-		hitsDisplayed,
-		hitsTotal,
+		formatting.CountSmall(uint64(result.Summary.Hits.Displayed)),
+		formatting.CountSmall(uint64(result.Summary.Hits.Total)),
 		textFormatter.Duration(result.Summary.Timings.QueryDuration),
 	)
 
@@ -720,22 +706,22 @@ func (t *TextTablePrinter) Footer(ctx context.Context, result *Result) error {
 		stats := result.Summary.Stats
 		// we leave the key empty on purpose since the displayed info constitutes query statistics
 		t.footerWriter.WriteEntry("Bytes loaded", "%s",
-			textFormatter.Size(stats.BytesLoaded),
+			formatting.SizeSmall(stats.BytesLoaded),
 		)
 		t.footerWriter.WriteEntry("Bytes decompressed", "%s",
-			textFormatter.Size(stats.BytesDecompressed),
+			formatting.SizeSmall(stats.BytesDecompressed),
 		)
 		t.footerWriter.WriteEntry("Blocks processed", "%s",
-			textFormatter.Count(stats.BlocksProcessed),
+			formatting.Count(stats.BlocksProcessed),
 		)
 		t.footerWriter.WriteEntry("Blocks corrupted", "%s",
-			textFormatter.Count(stats.BlocksCorrupted),
+			formatting.CountSmall(stats.BlocksCorrupted),
 		)
 		t.footerWriter.WriteEntry("Directories processed", "%s",
-			textFormatter.Count(stats.DirectoriesProcessed),
+			formatting.CountSmall(stats.DirectoriesProcessed),
 		)
 		t.footerWriter.WriteEntry("Workloads", "%s",
-			textFormatter.Count(stats.Workloads),
+			formatting.CountSmall(stats.Workloads),
 		)
 	}
 
