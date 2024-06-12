@@ -326,6 +326,7 @@ func testE2E(t *testing.T, valFilterDescriptor int, datasets ...[]byte) {
 	}
 
 	// Hack: make the deep equal disregard the DB load stats until we know exactly how they should look like
+	// TODO: go through all pcaps and calculate these stats
 	resGoQuery.Summary.Stats = nil
 	resReference.Summary.Stats = nil
 
