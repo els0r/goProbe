@@ -1,6 +1,9 @@
 package hashmap
 
-import "github.com/els0r/goProbe/pkg/types"
+import (
+	"github.com/els0r/goProbe/pkg/types"
+	"github.com/els0r/goProbe/pkg/types/workload"
+)
 
 // Type definitions for easy modification
 type (
@@ -58,6 +61,8 @@ type AggFlowMapWithMetadata struct {
 	*AggFlowMap
 
 	Interface string `json:"iface"`
+
+	Stats *workload.Stats
 }
 
 // NamedAggFlowMapWithMetadata provides wrapper around a map of AggFlowMapWithMetadata
@@ -86,6 +91,7 @@ func (n NamedAggFlowMapWithMetadata) Len() (l int) {
 // Clear frees as many resources as possible by making them eligible for GC
 func (n NamedAggFlowMapWithMetadata) Clear() {
 	for k, v := range n {
+		v.Stats = nil
 		v.Clear()
 		delete(n, k)
 	}
@@ -107,6 +113,7 @@ func NewAggFlowMapWithMetadata(n ...int) AggFlowMapWithMetadata {
 			PrimaryMap:   New(n...),
 			SecondaryMap: New(n...),
 		},
+		Stats: &workload.Stats{},
 	}
 }
 

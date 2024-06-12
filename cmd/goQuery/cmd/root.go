@@ -186,6 +186,7 @@ goProbe.
 	pflags.Duration(conf.QueryTimeout, query.DefaultQueryTimeout, "Abort query processing after timeout expires\n")
 	pflags.String(conf.QueryLog, "", "Log query invocations to file\n")
 	pflags.DurationP(conf.QueryKeepAlive, "k", 0, "Interval to emit log messages showing that query processing is still ongoing\n")
+	pflags.Bool(conf.QueryStats, false, "Print query DB interaction statistics\n")
 
 	pflags.String(conf.LogLevel, logging.LevelWarn.String(), "log level (debug, info, warn, error, fatal, panic)")
 
@@ -204,18 +205,8 @@ func initLogger() {
 	}
 	if cmdLineParams.Format == "json" {
 		format = logging.EncodingJSON
-
-		// if there is a query log, write log lines to that
-		queryLog := viper.GetString(conf.QueryLog)
-		if queryLog != "" {
-			opts = append(opts, logging.WithFileOutput(queryLog))
-		} else {
-			// log to stderr so the json output can be parsed from stdout
-			opts = append(opts, logging.WithOutput(os.Stderr))
-		}
-	} else {
-		opts = append(opts, logging.WithOutput(os.Stdout), logging.WithErrorOutput(os.Stderr))
 	}
+	opts = append(opts, logging.WithOutput(os.Stdout), logging.WithErrorOutput(os.Stderr))
 
 	err := logging.Init(logging.LevelFromString(viper.GetString(conf.LogLevel)), format, opts...)
 	if err != nil {
@@ -452,7 +443,7 @@ func entrypoint(cmd *cobra.Command, args []string) (err error) {
 		}
 	}
 
-	err = stmt.Print(ctx, result)
+	err = stmt.Print(ctx, result, results.WithQueryStats(viper.GetBool(conf.QueryStats)))
 	if err != nil {
 		return fmt.Errorf("failed to print query result: %w", err)
 	}

@@ -10,6 +10,7 @@ const (
 	QueryHostsResolution = queryKey + ".hosts-resolution"
 	QueryLog             = queryKey + ".log"
 	QueryKeepAlive       = queryKey + ".keepalive"
+	QueryStats           = queryKey + ".stats"
 
 	dbKey       = "db"
 	QueryDBPath = dbKey + ".path"

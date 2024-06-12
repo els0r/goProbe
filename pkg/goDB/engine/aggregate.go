@@ -1,11 +1,15 @@
 package engine
 
 import (
+	"context"
 	"fmt"
 	"runtime"
+	"time"
 
 	"github.com/els0r/goProbe/pkg/types"
 	"github.com/els0r/goProbe/pkg/types/hashmap"
+	"github.com/els0r/goProbe/pkg/types/workload"
+	"github.com/els0r/telemetry/logging"
 )
 
 type aggregateResult struct {
@@ -37,13 +41,21 @@ func (i internalError) Error() string {
 	return fmt.Sprintf("(!(internalError: %d))", i)
 }
 
+func logWorkloadStats(logger *logging.L, msg string, stats *workload.Stats) {
+	if stats == nil {
+		return
+	}
+	logger.With("stats", stats).Info(msg)
+}
+
 // receive maps on mapChan until mapChan gets closed.
 // Then send aggregation result over resultChan.
 // If an error occurs, aggregate may return prematurely.
 // Closes resultChan on termination.
-func (qr *QueryRunner) aggregate(mapChan <-chan hashmap.AggFlowMapWithMetadata, ifaces []string, isLowMem bool) chan aggregateResult {
+func (qr *QueryRunner) aggregate(ctx context.Context, mapChan <-chan hashmap.AggFlowMapWithMetadata, ifaces []string, isLowMem bool) chan aggregateResult {
 	// create channel that returns the final aggregate result
 	resultChan := make(chan aggregateResult, 1)
+	logger := logging.FromContext(ctx)
 
 	go func() {
 		defer close(resultChan)
@@ -58,6 +70,7 @@ func (qr *QueryRunner) aggregate(mapChan <-chan hashmap.AggFlowMapWithMetadata, 
 			finalMaps = hashmap.NewNamedAggFlowMapWithMetadata(ifaces)
 		)
 
+		tLastStatsUpdate := time.Now()
 		for item := range mapChan {
 			if item.IsNil() || item.Interface == "" {
 				resultChan <- aggregateResult{err: errorInternalProcessing}
@@ -65,10 +78,25 @@ func (qr *QueryRunner) aggregate(mapChan <-chan hashmap.AggFlowMapWithMetadata, 
 			}
 
 			finalMap := finalMaps[item.Interface]
+			finalMap.Stats.Add(item.Stats)
+
+			// the processing stats have been processed. Skip to next item in case there's no flow data to process. This
+			// is relevant for cases where no flow records are returned as a result of conditions not matching
+			if item.Len() == 0 {
+				continue
+			}
 
 			// Merge the item into the final map for this interface
 			finalMap.Merge(item)
 			nAgg[item.Interface] = nAgg[item.Interface] + 1
+
+			// keep-alive updating of queries
+			if qr.keepAlive > 0 {
+				if time.Since(tLastStatsUpdate) > qr.keepAlive {
+					tLastStatsUpdate = time.Now()
+					logWorkloadStats(logger.With("iface", item.Interface), "processing stats update", finalMap.Stats)
+				}
+			}
 
 			// Cleanup the now unused item / map
 			if isLowMem {

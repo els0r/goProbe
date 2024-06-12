@@ -49,6 +49,14 @@ func Count(val uint64) string {
 	return fmt.Sprintf("%.2f %s", valF, units[count])
 }
 
+// CountSmall is like Count, but formats numbers smaller than 1000 as integers
+func CountSmall(val uint64) string {
+	if val >= 1000 {
+		return Count(val)
+	}
+	return fmt.Sprintf("%d", val)
+}
+
 // Size prints out size in a human-readable format (e.g. 10 MB)
 func Size(size uint64) string {
 	count := 0
@@ -66,6 +74,15 @@ func Size(size uint64) string {
 	}
 
 	return fmt.Sprintf("%.2f %s", sizeF, units[count])
+}
+
+// SizeSmall prints out size in a human-readable format (e.g. 10 MB) just like Size,
+// but makes sure that sizes under 1024 Byte are formatted as integers
+func SizeSmall(size uint64) string {
+	if size > 1024 {
+		return Size(size)
+	}
+	return fmt.Sprintf("%d %s", size, "B")
 }
 
 // Duration prints out d in a human-readable duration format

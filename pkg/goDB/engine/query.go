@@ -20,6 +20,7 @@ import (
 	"github.com/els0r/goProbe/pkg/results"
 	"github.com/els0r/goProbe/pkg/types"
 	"github.com/els0r/goProbe/pkg/types/hashmap"
+	"github.com/els0r/goProbe/pkg/types/workload"
 	"github.com/els0r/telemetry/tracing"
 	jsoniter "github.com/json-iterator/go"
 	"go.opentelemetry.io/otel/attribute"
@@ -32,7 +33,10 @@ type QueryRunner struct {
 	query          *goDB.Query
 	captureManager *capture.Manager
 	dbPath         string
+
 	keepAlive      time.Duration
+	stats          *workload.Stats
+	statsCallbacks workload.StatsFuncs
 }
 
 // RunnerOption allows to configure the query runner
@@ -51,6 +55,14 @@ func WithLiveData(captureManager *capture.Manager) RunnerOption {
 func WithKeepAlive(interval time.Duration) RunnerOption {
 	return func(qr *QueryRunner) {
 		qr.keepAlive = interval
+	}
+}
+
+// WithStatsCallbacks configures the DBWorkManager to emit feedback on query processing. They will be called in
+// the order they are provided
+func WithStatsCallbacks(callbacks ...workload.StatsFunc) RunnerOption {
+	return func(qr *QueryRunner) {
+		qr.statsCallbacks = callbacks
 	}
 }
 
@@ -163,7 +175,7 @@ func (qr *QueryRunner) RunStatement(ctx context.Context, stmt *query.Statement) 
 
 	// Channel for handling of returned maps
 	mapChan := make(chan hashmap.AggFlowMapWithMetadata, 1024)
-	aggregateChan := qr.aggregate(mapChan, stmt.Ifaces, stmt.LowMem)
+	aggregateChan := qr.aggregate(ctx, mapChan, stmt.Ifaces, stmt.LowMem)
 
 	go func() {
 		select {
@@ -189,9 +201,7 @@ func (qr *QueryRunner) RunStatement(ctx context.Context, stmt *query.Statement) 
 		}
 	}()
 
-	var opts = []goDB.WorkManagerOption{
-		goDB.WithKeepAlive(qr.keepAlive),
-	}
+	var opts = []goDB.WorkManagerOption{}
 
 	// create work managers
 	workManagers := map[string]*goDB.DBWorkManager{} // map interfaces to workManagers
@@ -319,6 +329,9 @@ func (qr *QueryRunner) RunStatement(ctx context.Context, stmt *query.Statement) 
 			rs[count].Counters.Add(val)
 			count++
 		}
+
+		// add statistics to final result
+		result.Summary.Stats.Add(aggMap.Stats)
 
 		// Now is a good time to release memory one last time for the final processing step
 		if qr.query.IsLowMem() {
