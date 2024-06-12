@@ -113,6 +113,7 @@ func NewAggFlowMapWithMetadata(n ...int) AggFlowMapWithMetadata {
 			PrimaryMap:   New(n...),
 			SecondaryMap: New(n...),
 		},
+		Stats: &workload.Stats{},
 	}
 }
 

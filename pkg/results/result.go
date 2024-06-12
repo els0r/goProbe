@@ -177,6 +177,7 @@ func (r *Result) Start() {
 		Timings: Timings{
 			QueryStart: time.Now(),
 		},
+		Stats: &workload.Stats{},
 	}
 	r.HostsStatuses = make(HostsStatuses)
 }

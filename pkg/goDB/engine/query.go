@@ -128,7 +128,6 @@ func (qr *QueryRunner) RunStatement(ctx context.Context, stmt *query.Statement) 
 		return stmt.Ifaces[i] < stmt.Ifaces[j]
 	})
 	result.Summary.Interfaces = stmt.Ifaces
-	result.Summary.Stats = &workload.Stats{}
 
 	// parse query
 	queryAttributes, _, err := types.ParseQueryType(stmt.QueryType)
@@ -332,7 +331,7 @@ func (qr *QueryRunner) RunStatement(ctx context.Context, stmt *query.Statement) 
 		}
 
 		// add statistics to final result
-		res.Summary.Stats.Add(aggMap.Stats)
+		result.Summary.Stats.Add(aggMap.Stats)
 
 		// Now is a good time to release memory one last time for the final processing step
 		if qr.query.IsLowMem() {
