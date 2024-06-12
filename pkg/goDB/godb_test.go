@@ -205,7 +205,7 @@ func testWorkload(t *testing.T, c testCase, dryRun bool) {
 			var numDirs int
 			for i := uint64(0); i < workMgr.nWorkloads; i++ {
 				workload := <-workMgr.workloadChan
-				numDirs += len(workload.workDirs)
+				numDirs += len(workload.WorkDirs())
 			}
 			require.Equal(t, c.nExpectedDays, numDirs)
 		} else {

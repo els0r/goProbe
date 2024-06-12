@@ -1,11 +1,15 @@
 package engine
 
 import (
+	"context"
 	"fmt"
 	"runtime"
+	"time"
 
 	"github.com/els0r/goProbe/pkg/types"
 	"github.com/els0r/goProbe/pkg/types/hashmap"
+	"github.com/els0r/goProbe/pkg/types/workload"
+	"github.com/els0r/telemetry/logging"
 )
 
 type aggregateResult struct {
@@ -37,13 +41,21 @@ func (i internalError) Error() string {
 	return fmt.Sprintf("(!(internalError: %d))", i)
 }
 
+func logWorkloadStats(logger *logging.L, msg string, stats *workload.Stats) {
+	if stats == nil {
+		return
+	}
+	logger.With("stats", stats).Info(msg)
+}
+
 // receive maps on mapChan until mapChan gets closed.
 // Then send aggregation result over resultChan.
 // If an error occurs, aggregate may return prematurely.
 // Closes resultChan on termination.
-func (qr *QueryRunner) aggregate(mapChan <-chan hashmap.AggFlowMapWithMetadata, ifaces []string, isLowMem bool) chan aggregateResult {
+func (qr *QueryRunner) aggregate(ctx context.Context, mapChan <-chan hashmap.AggFlowMapWithMetadata, ifaces []string, isLowMem bool) chan aggregateResult {
 	// create channel that returns the final aggregate result
 	resultChan := make(chan aggregateResult, 1)
+	logger := logging.FromContext(ctx)
 
 	go func() {
 		defer close(resultChan)
@@ -58,10 +70,16 @@ func (qr *QueryRunner) aggregate(mapChan <-chan hashmap.AggFlowMapWithMetadata, 
 			finalMaps = hashmap.NewNamedAggFlowMapWithMetadata(ifaces)
 		)
 
+		tLastStatsUpdate := time.Now()
 		for item := range mapChan {
 			if item.IsNil() || item.Interface == "" {
 				resultChan <- aggregateResult{err: errorInternalProcessing}
 				return
+			}
+
+			// keep-alive updating of queries
+			if time.Since(tLastStatsUpdate) > qr.keepAlive {
+				logWorkloadStats(logger, "processing stats update", item.Stats)
 			}
 
 			finalMap := finalMaps[item.Interface]

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/els0r/goProbe/pkg/types"
+	"github.com/els0r/goProbe/pkg/types/workload"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -96,6 +97,8 @@ type Summary struct {
 	Hits Hits `json:"hits" doc:"Flow records returned in total and records present in rows"`
 	// DataAvailable: Was there any data available on disk or from a live query at all
 	DataAvailable bool `json:"data_available" doc:"Was there any data available to query at all"`
+	// Stats tracks interactions with the underlying DB data
+	Stats *workload.Stats `json:"stats,omitempty" doc:"Stats tracks interactions with the underlying DB data"`
 }
 
 // Interfaces collects all interface names
