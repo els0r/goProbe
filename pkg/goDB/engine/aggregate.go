@@ -79,7 +79,8 @@ func (qr *QueryRunner) aggregate(ctx context.Context, mapChan <-chan hashmap.Agg
 
 			// keep-alive updating of queries
 			if time.Since(tLastStatsUpdate) > qr.keepAlive {
-				logWorkloadStats(logger, "processing stats update", item.Stats)
+				tLastStatsUpdate = time.Now()
+				logWorkloadStats(logger.With("iface", item.Interface), "processing stats update", item.Stats)
 			}
 
 			finalMap := finalMaps[item.Interface]

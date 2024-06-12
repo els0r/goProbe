@@ -204,18 +204,8 @@ func initLogger() {
 	}
 	if cmdLineParams.Format == "json" {
 		format = logging.EncodingJSON
-
-		// if there is a query log, write log lines to that
-		queryLog := viper.GetString(conf.QueryLog)
-		if queryLog != "" {
-			opts = append(opts, logging.WithFileOutput(queryLog))
-		} else {
-			// log to stderr so the json output can be parsed from stdout
-			opts = append(opts, logging.WithOutput(os.Stderr))
-		}
-	} else {
-		opts = append(opts, logging.WithOutput(os.Stdout), logging.WithErrorOutput(os.Stderr))
 	}
+	opts = append(opts, logging.WithOutput(os.Stdout), logging.WithErrorOutput(os.Stderr))
 
 	err := logging.Init(logging.LevelFromString(viper.GetString(conf.LogLevel)), format, opts...)
 	if err != nil {
