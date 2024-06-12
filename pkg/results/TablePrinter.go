@@ -489,7 +489,7 @@ func NewTextFormatter() TextFormatter {
 
 // Size prints out size in a human-readable format (e.g. 10 MB)
 func (TextFormatter) Size(size uint64) string {
-	return formatting.Size(size)
+	return formatting.SizeSmall(size, true)
 }
 
 // Duration prints out d in a human-readable duration format
@@ -499,13 +499,13 @@ func (TextFormatter) Duration(d time.Duration) string {
 
 // Count prints val in concise human-readable form (e.g. 1 K instead of 1000)
 func (TextFormatter) Count(val uint64) string {
-	return formatting.Count(val)
+	return formatting.CountSmall(val, true)
 }
 
 // Float prints f rounded to two decimals
 func (TextFormatter) Float(f float64) string {
 	if f == 0 {
-		return fmt.Sprintf("%.2f", f)
+		return fmt.Sprintf("%d", int(f))
 	}
 	return fmt.Sprintf("%.2f", f)
 }
@@ -697,8 +697,8 @@ func (t *TextTablePrinter) Footer(ctx context.Context, result *Result) error {
 
 	result.Query.PrintFooter(t.footerWriter)
 	t.footerWriter.WriteEntry(queryStatsKey, "displayed top %s hits out of %s in %s",
-		formatting.CountSmall(uint64(result.Summary.Hits.Displayed)),
-		formatting.CountSmall(uint64(result.Summary.Hits.Total)),
+		formatting.CountSmall(uint64(result.Summary.Hits.Displayed), false),
+		formatting.CountSmall(uint64(result.Summary.Hits.Total), false),
 		textFormatter.Duration(result.Summary.Timings.QueryDuration),
 	)
 
@@ -706,22 +706,22 @@ func (t *TextTablePrinter) Footer(ctx context.Context, result *Result) error {
 		stats := result.Summary.Stats
 		// we leave the key empty on purpose since the displayed info constitutes query statistics
 		t.footerWriter.WriteEntry("Bytes loaded", "%s",
-			formatting.SizeSmall(stats.BytesLoaded),
+			formatting.SizeSmall(stats.BytesLoaded, false),
 		)
 		t.footerWriter.WriteEntry("Bytes decompressed", "%s",
-			formatting.SizeSmall(stats.BytesDecompressed),
+			formatting.SizeSmall(stats.BytesDecompressed, false),
 		)
 		t.footerWriter.WriteEntry("Blocks processed", "%s",
 			formatting.Count(stats.BlocksProcessed),
 		)
 		t.footerWriter.WriteEntry("Blocks corrupted", "%s",
-			formatting.CountSmall(stats.BlocksCorrupted),
+			formatting.CountSmall(stats.BlocksCorrupted, false),
 		)
 		t.footerWriter.WriteEntry("Directories processed", "%s",
-			formatting.CountSmall(stats.DirectoriesProcessed),
+			formatting.CountSmall(stats.DirectoriesProcessed, false),
 		)
 		t.footerWriter.WriteEntry("Workloads", "%s",
-			formatting.CountSmall(stats.Workloads),
+			formatting.CountSmall(stats.Workloads, false),
 		)
 	}
 
