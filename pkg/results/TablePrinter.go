@@ -328,6 +328,8 @@ type PrinterConfig struct {
 
 	resolutionTimeout time.Duration
 	ipDomainMapping   map[string]string
+
+	printQueryStats bool
 }
 
 // PrinterOption allows to configure the printer
@@ -341,6 +343,13 @@ func WithIPDomainMapping(ipDomain map[string]string, resolutionTimeout time.Dura
 	}
 }
 
+// WithQueryStats sets whether detailed query statistics should be printed in footer
+func WithQueryStats(b bool) PrinterOption {
+	return func(pc *PrinterConfig) {
+		pc.printQueryStats = b
+	}
+}
+
 // NewTablePrinter instantiates a new table printer
 func NewTablePrinter(output io.Writer, cfg *PrinterConfig) (TablePrinter, error) {
 	b := newBasePrinter(output, cfg.SortOrder, cfg.LabelSelector, cfg.Direction, cfg.Attributes, cfg.ipDomainMapping, cfg.Totals)
@@ -348,7 +357,7 @@ func NewTablePrinter(output io.Writer, cfg *PrinterConfig) (TablePrinter, error)
 	var printer TablePrinter
 	switch cfg.Format {
 	case "txt":
-		printer = NewTextTablePrinter(b, cfg.NumFlows, cfg.resolutionTimeout)
+		printer = NewTextTablePrinter(b, cfg.NumFlows, cfg.resolutionTimeout, cfg.printQueryStats)
 	case "csv":
 		printer = NewCSVTablePrinter(b)
 	default:
@@ -519,16 +528,19 @@ type TextTablePrinter struct {
 	numFlows       int
 	resolveTimeout time.Duration
 	numPrinted     int
+
+	printQueryStats bool
 }
 
 // NewTextTablePrinter creates a new table printer
-func NewTextTablePrinter(b basePrinter, numFlows int, resolveTimeout time.Duration) *TextTablePrinter {
+func NewTextTablePrinter(b basePrinter, numFlows int, resolveTimeout time.Duration, printQueryStats bool) *TextTablePrinter {
 	var t = &TextTablePrinter{
-		basePrinter:    b,
-		writer:         tabwriter.NewWriter(b.output, 0, 1, 2, ' ', tabwriter.AlignRight),
-		footerWriter:   NewFooterTabwriter(b.output),
-		numFlows:       numFlows,
-		resolveTimeout: resolveTimeout,
+		basePrinter:     b,
+		writer:          tabwriter.NewWriter(b.output, 0, 1, 2, ' ', tabwriter.AlignRight),
+		footerWriter:    NewFooterTabwriter(b.output),
+		numFlows:        numFlows,
+		resolveTimeout:  resolveTimeout,
+		printQueryStats: printQueryStats,
 	}
 
 	var header1 [CountOutcol]string
@@ -664,7 +676,7 @@ func (t *TextTablePrinter) Footer(ctx context.Context, result *Result) error {
 	// only print interface names if the attributes don't include the interface
 	var (
 		ifaceSummary string
-		iKey = ifaceKey
+		iKey         = ifaceKey
 	)
 	if len(result.Summary.Interfaces) > 1 {
 		iKey += "s"
@@ -697,12 +709,35 @@ func (t *TextTablePrinter) Footer(ctx context.Context, result *Result) error {
 		hitsTotal = strings.TrimSpace(textFormatter.Count(uint64(result.Summary.Hits.Total)))
 	}
 
+	result.Query.PrintFooter(t.footerWriter)
 	t.footerWriter.WriteEntry(queryStatsKey, "displayed top %s hits out of %s in %s",
 		hitsDisplayed,
 		hitsTotal,
 		textFormatter.Duration(result.Summary.Timings.QueryDuration),
 	)
-	result.Query.PrintFooter(t.footerWriter)
+
+	if t.printQueryStats {
+		stats := result.Summary.Stats
+		// we leave the key empty on purpose since the displayed info constitutes query statistics
+		t.footerWriter.WriteEntry("Bytes loaded", "%s",
+			textFormatter.Size(stats.BytesLoaded),
+		)
+		t.footerWriter.WriteEntry("Bytes decompressed", "%s",
+			textFormatter.Size(stats.BytesDecompressed),
+		)
+		t.footerWriter.WriteEntry("Blocks processed", "%s",
+			textFormatter.Count(stats.BlocksProcessed),
+		)
+		t.footerWriter.WriteEntry("Blocks corrupted", "%s",
+			textFormatter.Count(stats.BlocksCorrupted),
+		)
+		t.footerWriter.WriteEntry("Directories processed", "%s",
+			textFormatter.Count(stats.DirectoriesProcessed),
+		)
+		t.footerWriter.WriteEntry("Workloads", "%s",
+			textFormatter.Count(stats.Workloads),
+		)
+	}
 
 	// provide the trace ID in case it was provided in a distributed call
 	if len(result.HostsStatuses) > 1 {

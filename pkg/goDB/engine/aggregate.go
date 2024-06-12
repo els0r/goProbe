@@ -77,17 +77,26 @@ func (qr *QueryRunner) aggregate(ctx context.Context, mapChan <-chan hashmap.Agg
 				return
 			}
 
-			// keep-alive updating of queries
-			if time.Since(tLastStatsUpdate) > qr.keepAlive {
-				tLastStatsUpdate = time.Now()
-				logWorkloadStats(logger.With("iface", item.Interface), "processing stats update", item.Stats)
-			}
-
 			finalMap := finalMaps[item.Interface]
+			finalMap.Stats.Add(item.Stats)
+
+			// the processing stats have been processed. Skip to next item in case there's no flow data to process. This
+			// is relevant for cases where no flow records are return as a result of conditions not matching
+			if item.Len() == 0 {
+				continue
+			}
 
 			// Merge the item into the final map for this interface
 			finalMap.Merge(item)
 			nAgg[item.Interface] = nAgg[item.Interface] + 1
+
+			// keep-alive updating of queries
+			if qr.keepAlive > 0 {
+				if time.Since(tLastStatsUpdate) > qr.keepAlive {
+					tLastStatsUpdate = time.Now()
+					logWorkloadStats(logger.With("iface", item.Interface), "processing stats update", finalMap.Stats)
+				}
+			}
 
 			// Cleanup the now unused item / map
 			if isLowMem {

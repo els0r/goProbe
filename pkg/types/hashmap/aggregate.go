@@ -170,7 +170,6 @@ func (a AggFlowMap) Merge(b AggFlowMap) {
 func (a AggFlowMapWithMetadata) Merge(b AggFlowMapWithMetadata) {
 	a.PrimaryMap.Merge(b.PrimaryMap)
 	a.SecondaryMap.Merge(b.SecondaryMap)
-	a.Stats.Add(b.Stats)
 }
 
 // Clear frees as many resources as possible by making them eligible for GC

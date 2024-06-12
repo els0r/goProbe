@@ -535,11 +535,9 @@ func (w *DBWorkManager) grabAndProcessWorkload(ctx context.Context, id int, wg *
 				wl.AddStats(stats)
 			}
 
-			// Workload is counted, but we only add it to the final result if we got any entries
-			if resultMap.Len() > 0 {
-				resultMap.Stats = wl.Stats()
-				mapChan <- resultMap
-			}
+			// we always send the map, even if the resultMap is empty. Filtering is left to the aggregate method
+			resultMap.Stats = wl.Stats()
+			mapChan <- resultMap
 		}
 	}()
 }
