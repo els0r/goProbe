@@ -3,6 +3,8 @@ package api
 import (
 	"context"
 
+	"github.com/danielgtaylor/huma/v2/sse"
+	"github.com/els0r/goProbe/cmd/global-query/pkg/distributed"
 	"github.com/els0r/goProbe/pkg/query"
 	"github.com/els0r/goProbe/pkg/results"
 	"github.com/els0r/telemetry/logging"
@@ -19,6 +21,21 @@ func getBodyQueryRunnerHandler(caller string, querier query.Runner) func(context
 		output.Body = res
 
 		return output, nil
+	}
+}
+
+func getSSEBodyQueryRunnerHandler(caller string, querier *distributed.QueryRunner) func(context.Context, *ArgsInput, sse.Sender) {
+	return func(ctx context.Context, input *ArgsInput, send sse.Sender) {
+		querier.SetResultReceivedFn(func(res *results.Result) error {
+			return send.Data(&PartialResult{res})
+		})
+
+		res, err := runQuery(ctx, caller, input.Body, querier)
+		if err != nil {
+			send.Data(err)
+			return
+		}
+		_ = send.Data(&FinalResult{res})
 	}
 }
 

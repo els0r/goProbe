@@ -20,6 +20,8 @@ import (
 type QueryRunner struct {
 	resolver hosts.Resolver
 	querier  Querier
+
+	onResult func(*results.Result) error
 }
 
 // QueryOption configures the query runner
@@ -35,6 +37,18 @@ func NewQueryRunner(resolver hosts.Resolver, querier Querier, opts ...QueryOptio
 		opt(qr)
 	}
 	return
+}
+
+// SetResultReceivedFn registers a callback to be executed for every results that is
+// read off the results channel
+func (q *QueryRunner) SetResultReceivedFn(f func(*results.Result) error) *QueryRunner {
+	q.onResult = f
+	return q
+}
+
+// ResultReceived calls the result callback with res and
+func (q *QueryRunner) ResultReceived(res *results.Result) error {
+	return q.onResult(res)
 }
 
 // Run executes / runs the query and creates the final result structure
@@ -74,7 +88,7 @@ func (q *QueryRunner) Run(ctx context.Context, args *query.Args) (*results.Resul
 	logger.Info("reading query results from querier")
 
 	finalResult := aggregateResults(ctx, stmt,
-		q.querier.Query(ctx, hostList, &queryArgs),
+		q.querier.Query(ctx, hostList, &queryArgs), q.onResult,
 	)
 
 	finalResult.End()
@@ -115,7 +129,7 @@ func (q *QueryRunner) prepareHostList(ctx context.Context, queryHosts string) (h
 
 // aggregateResults takes finished query workloads from the workloads channel, aggregates the result by merging the rows and summaries,
 // and returns the final result. The `tracker` variable provides information about potential Run failures for individual hosts
-func aggregateResults(ctx context.Context, stmt *query.Statement, queryResults <-chan *results.Result) (finalResult *results.Result) {
+func aggregateResults(ctx context.Context, stmt *query.Statement, queryResults <-chan *results.Result, onResult func(*results.Result) error) (finalResult *results.Result) {
 	ctx, span := tracing.Start(ctx, "aggregateResults")
 	defer span.End()
 
@@ -193,6 +207,11 @@ func aggregateResults(ctx context.Context, stmt *query.Statement, queryResults <
 			// take the total from the query result. Since there may be overlap between the queries of two
 			// different systems, the overlap has to be deducted from the total
 			finalResult.Summary.Hits.Total += res.Summary.Hits.Total - merged
+
+			err := onResult(finalResult)
+			if err != nil {
+				logger.With("error", err).Error("failed to call results callback")
+			}
 		}
 	}
 }

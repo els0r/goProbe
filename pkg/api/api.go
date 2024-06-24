@@ -17,4 +17,7 @@ const (
 
 	// ValidationRoute is the route to validate a goquery query
 	ValidationRoute = QueryRoute + "/validate"
+
+	// SSEQueryRoute runs a goquery query with a return channel for partial results
+	SSEQueryRoute = QueryRoute + "/sse"
 )
