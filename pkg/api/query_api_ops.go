@@ -70,13 +70,23 @@ func registerDistributedQueryAPI(a huma.API, caller string, qr *distributed.Quer
 			Tags:        queryTags,
 		},
 		map[string]any{
-			"queryError":    &query.DetailError{},
-			"partialResult": &PartialResult{},
-			"finalResult":   &FinalResult{},
+			string(StreamEventQueryError):    &query.DetailError{},
+			string(StreamEventPartialResult): &PartialResult{},
+			string(StreamEventFinalResult):   &FinalResult{},
 		},
 		getSSEBodyQueryRunnerHandler(caller, qr),
 	)
 }
+
+// StreamEventType describes the type of server sent event
+type StreamEventType string
+
+// Different event types that the query server sends
+const (
+	StreamEventQueryError    StreamEventType = "queryError"
+	StreamEventPartialResult StreamEventType = "partialResult"
+	StreamEventFinalResult   StreamEventType = "finalResult"
+)
 
 // ArgsBodyInput stores the query args to be validated in the body
 type ArgsInput struct {
