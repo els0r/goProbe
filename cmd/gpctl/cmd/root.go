@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -15,6 +16,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
+
+const defaultCfgFile = "~/.gpctl.yaml"
 
 var cfgFile string
 
@@ -48,7 +51,7 @@ func init() {
 	cobra.OnInitialize(initConfig)
 	cobra.OnInitialize(initLogger)
 
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.gpctl.yaml)")
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", defaultCfgFile, "config file")
 
 	rootCmd.PersistentFlags().StringP(conf.GoProbeServerAddr, "s", "", "server address of goProbe API")
 	rootCmd.PersistentFlags().DurationP(conf.RequestTimeout, "t", defaultRequestTimeout, "request timeout / deadline for goProbe API")
@@ -81,7 +84,11 @@ func initConfig() {
 
 		// If a config file is found, read it in.
 		if err := viper.ReadInConfig(); err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to read in config: %v\n", err)
+			// If no non-default config file was set and it doesn't exist, silently exit and proceed
+			if cfgFile == defaultCfgFile && errors.Is(err, os.ErrNotExist) {
+				return
+			}
+			fmt.Fprintf(os.Stderr, "failed to read config from file %s: %v\n", viper.GetViper().ConfigFileUsed(), err)
 			os.Exit(1)
 		}
 	}
