@@ -132,11 +132,11 @@ func (c *Capture) run(memPool *LocalBufferPool) (err error) {
 
 func (c *Capture) close() error {
 
-	// Lock the whole capture to pretect against duplicate close() calls
+	// Lock the whole capture to protect against duplicate close() calls
 	c.Lock()
 	defer c.Unlock()
 
-	// in case the captureHandle is already closed, return without action
+	// In case the captureHandle is already closed, return without action
 	if c.captureHandle == nil {
 		return nil
 	}
