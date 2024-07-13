@@ -27,6 +27,9 @@ func getBodyQueryRunnerHandler(caller string, querier query.Runner) func(context
 func getSSEBodyQueryRunnerHandler(caller string, querier *distributed.QueryRunner) func(context.Context, *ArgsInput, sse.Sender) {
 	return func(ctx context.Context, input *ArgsInput, send sse.Sender) {
 		querier.SetResultReceivedFn(func(res *results.Result) error {
+			if res == nil {
+				return nil
+			}
 			return send.Data(&PartialResult{res})
 		})
 

@@ -187,6 +187,7 @@ goProbe.
 	pflags.String(conf.QueryLog, "", "Log query invocations to file\n")
 	pflags.DurationP(conf.QueryKeepAlive, "k", 0, "Interval to emit log messages showing that query processing is still ongoing\n")
 	pflags.Bool(conf.QueryStats, false, "Print query DB interaction statistics\n")
+	pflags.Bool(conf.QueryStreaming, false, "Stream results instead of waiting for the final result from a distributed query\n")
 
 	pflags.String(conf.LogLevel, logging.LevelWarn.String(), "log level (debug, info, warn, error, fatal, panic)")
 
@@ -349,7 +350,25 @@ func entrypoint(cmd *cobra.Command, args []string) (err error) {
 		}
 
 		// query using query server
-		querier = gqclient.New(viper.GetString(conf.QueryServerAddr))
+		if viper.GetBool(conf.QueryStreaming) {
+			querier = gqclient.NewSSE(viper.GetString(conf.QueryServerAddr),
+				func(ctx context.Context, r *results.Result) error {
+					if r == nil {
+						return nil
+					}
+					all := len(r.HostsStatuses)
+					errs := len(r.HostsStatuses.GetErrorStatuses())
+
+					logger := logging.FromContext(ctx)
+					logger.Infof("received update: %d total / %d done / %d errors", all, all-errs, errs)
+
+					return nil
+				},
+				func(ctx context.Context, r *results.Result) error { return nil },
+			)
+		} else {
+			querier = gqclient.New(viper.GetString(conf.QueryServerAddr))
+		}
 	} else {
 		// query using local goDB
 		querier = engine.NewQueryRunner(dbPathCfg, engine.WithKeepAlive(viper.GetDuration(conf.QueryKeepAlive)))

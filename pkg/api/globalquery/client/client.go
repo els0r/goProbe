@@ -22,12 +22,31 @@ type Client struct {
 	*client.DefaultClient
 }
 
+// SSEClient is a global query client capable of streaming updates
+type SSEClient struct {
+	onUpdate StreamingUpdate
+	onFinish StreamingUpdate
+
+	*client.DefaultClient
+}
+
+// StreamingUpdate is a function which operates on a received result
+type StreamingUpdate func(context.Context, *results.Result) error
+
 const (
 	clientName = "global-query-client"
 )
 
 // New creates a new client for the global-query API
 func New(addr string, opts ...client.Option) *Client {
+	opts = append(opts, client.WithName(clientName))
+	return &Client{
+		DefaultClient: client.NewDefault(addr, opts...),
+	}
+}
+
+// NewSSE creates a new streaming client for the global-query API
+func NewSSE(addr string, onUpdate, onFinish StreamingUpdate, opts ...client.Option) *Client {
 	opts = append(opts, client.WithName(clientName))
 	return &Client{
 		DefaultClient: client.NewDefault(addr, opts...),
@@ -67,9 +86,13 @@ func (c *Client) Query(ctx context.Context, args *query.Args) (*results.Result, 
 	return res, nil
 }
 
-// QuerySSE performs the global query and returns its result, while consuming updates to partial results
-func (c *Client) QuerySSE(ctx context.Context, args *query.Args, onUpdate, onFinish func(context.Context, *results.Result) error) (*results.Result, error) {
+// Query performs the global query and returns its result, while consuming updates to partial results
+func (sse *SSEClient) Query(ctx context.Context, args *query.Args) (*results.Result, error) {
 	logger := logging.FromContext(ctx)
+
+	if sse.onFinish == nil || sse.onUpdate == nil {
+		return nil, errors.New("no event callbacks provided (onUpdate, onFinish)")
+	}
 
 	// use a copy of the arguments, since some fields are modified by the client
 	queryArgs := *args
@@ -90,15 +113,17 @@ func (c *Client) QuerySSE(ctx context.Context, args *query.Args, onUpdate, onFin
 		return nil, err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.NewURL(api.SSEQueryRoute), buf)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, sse.NewURL(api.SSEQueryRoute), buf)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Cache-Control", "no-cache")
-	req.Header.Set("Accept", "text/event-stream")
+	req.Header.Set("Accept", "text/event-stream, application/problem+json")
+	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Connection", "keep-alive")
 
-	resp, err := c.Client().Do(req)
+	resp, err := sse.Client().Do(req)
+	fmt.Println(resp, err)
 	if err != nil {
 		return nil, err
 	}
@@ -119,6 +144,7 @@ func (c *Client) QuerySSE(ctx context.Context, args *query.Args, onUpdate, onFin
 			return res, nil
 		default:
 			line, err := reader.ReadBytes('\n')
+			fmt.Println(string(line))
 			if err != nil {
 				return nil, fmt.Errorf("failed to read SSE stream: %w", err)
 			}
@@ -168,10 +194,10 @@ func (c *Client) QuerySSE(ctx context.Context, args *query.Args, onUpdate, onFin
 
 					// exit streaming if this is the final result
 					if eventType == api.StreamEventFinalResult {
-						return res, onFinish(ctx, res)
+						return res, sse.onFinish(ctx, res)
 					}
 
-					if err := onUpdate(ctx, res); err != nil {
+					if err := sse.onUpdate(ctx, res); err != nil {
 						logger.Error("failed to call update callback", "error", err)
 					}
 				default:
@@ -182,8 +208,6 @@ func (c *Client) QuerySSE(ctx context.Context, args *query.Args, onUpdate, onFin
 			}
 		}
 	}
-
-	return res, nil
 }
 
 var (
