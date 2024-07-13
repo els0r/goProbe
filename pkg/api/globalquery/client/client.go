@@ -1,14 +1,18 @@
 package client
 
 import (
+	"bufio"
 	"bytes"
 	"context"
+	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/els0r/goProbe/pkg/api"
 	"github.com/els0r/goProbe/pkg/api/client"
 	"github.com/els0r/goProbe/pkg/query"
 	"github.com/els0r/goProbe/pkg/results"
+	"github.com/els0r/telemetry/logging"
 	"github.com/fako1024/httpc"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -63,9 +67,10 @@ func (c *Client) Query(ctx context.Context, args *query.Args) (*results.Result, 
 	return res, nil
 }
 
-// QuerySSE performs the global query and returns its result, while consuming updates
-// to partial results
-func (c *Client) QuerySSE(ctx context.Context, args *query.Args, onUpdate, onFinish func(*results.Result) error) (*results.Result, error) {
+// QuerySSE performs the global query and returns its result, while consuming updates to partial results
+func (c *Client) QuerySSE(ctx context.Context, args *query.Args, onUpdate, onFinish func(context.Context, *results.Result) error) (*results.Result, error) {
+	logger := logging.FromContext(ctx)
+
 	// use a copy of the arguments, since some fields are modified by the client
 	queryArgs := *args
 
@@ -85,9 +90,6 @@ func (c *Client) QuerySSE(ctx context.Context, args *query.Args, onUpdate, onFin
 		return nil, err
 	}
 
-	streamCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.NewURL(api.SSEQueryRoute), buf)
 	if err != nil {
 		return nil, err
@@ -100,8 +102,95 @@ func (c *Client) QuerySSE(ctx context.Context, args *query.Args, onUpdate, onFin
 	if err != nil {
 		return nil, err
 	}
+	if resp.Body == nil {
+		return nil, errors.New("no response received")
+	}
+	defer resp.Body.Close()
 
 	// parse events
+	var eventType api.StreamEventType
+	var eventsReceived int
+
+	reader := bufio.NewReader(resp.Body)
+	for {
+		select {
+		case <-ctx.Done():
+			logger.Info("request cancelled")
+			return res, nil
+		default:
+			line, err := reader.ReadBytes('\n')
+			if err != nil {
+				return nil, fmt.Errorf("failed to read SSE stream: %w", err)
+			}
+
+			if len(line) == 0 || string(line) == "\n" {
+				continue
+			}
+
+			switch {
+			case bytes.HasPrefix(line, eventPrefix):
+				bytesSpl := bytes.Split(line, eventPrefix)
+				if len(bytesSpl) < 2 {
+					continue
+				}
+				data := bytesSpl[1]
+
+				switch {
+				case bytes.Equal(data, queryError):
+					eventType = api.StreamEventQueryError
+				case bytes.Equal(data, partialResult):
+					eventType = api.StreamEventPartialResult
+				case bytes.Equal(data, finalResult):
+					eventType = api.StreamEventFinalResult
+				}
+				eventsReceived++
+
+				logger.With("event_type", eventType, "events_received", eventsReceived).Debug("received event")
+				// get to the data
+				continue
+			case bytes.HasPrefix(line, dataPrefix):
+				bytesSpl := bytes.Split(line, dataPrefix)
+				if len(bytesSpl) < 2 {
+					continue
+				}
+				data := bytesSpl[1]
+
+				switch eventType {
+				case api.StreamEventQueryError:
+					return nil, errors.New(string(data))
+				case api.StreamEventPartialResult, api.StreamEventFinalResult:
+					// parse the results data
+					var res = new(results.Result)
+					if err := jsoniter.Unmarshal(data, res); err != nil {
+						logger.Error("failed to parse JSON", "error", err)
+						continue
+					}
+
+					// exit streaming if this is the final result
+					if eventType == api.StreamEventFinalResult {
+						return res, onFinish(ctx, res)
+					}
+
+					if err := onUpdate(ctx, res); err != nil {
+						logger.Error("failed to call update callback", "error", err)
+					}
+				default:
+					continue
+				}
+			default:
+				continue
+			}
+		}
+	}
 
 	return res, nil
 }
+
+var (
+	eventPrefix = []byte("event:")
+	dataPrefix  = []byte("data:")
+
+	queryError    = []byte(api.StreamEventQueryError)
+	partialResult = []byte(api.StreamEventPartialResult)
+	finalResult   = []byte(api.StreamEventFinalResult)
+)
