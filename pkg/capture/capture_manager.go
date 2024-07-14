@@ -236,8 +236,12 @@ func (cm *Manager) Status(ctx context.Context, ifaces ...string) (statusmap capt
 		return
 	}
 
+	// Lock the captures as a whole to protect against conflicting interactions
+	cm.captures.Lock()
+	defer cm.captures.Unlock()
+
 	for _, iface := range ifaces {
-		mc, exists := cm.captures.Get(iface)
+		mc, exists := cm.captures.GetNoLock(iface)
 		if !exists {
 			continue
 		}
@@ -251,7 +255,7 @@ func (cm *Manager) Status(ctx context.Context, ifaces ...string) (statusmap capt
 			if err := mc.close(); err != nil {
 				logger.Errorf("failed to close capture after failed three-point lock: %s", err)
 			}
-			cm.captures.Delete(mc.iface)
+			cm.captures.DeleteNoLock(mc.iface)
 
 			return
 		}
@@ -265,7 +269,7 @@ func (cm *Manager) Status(ctx context.Context, ifaces ...string) (statusmap capt
 			if err := mc.close(); err != nil {
 				logger.Errorf("failed to close capture after failed three-point lock: %s", err)
 			}
-			cm.captures.Delete(mc.iface)
+			cm.captures.DeleteNoLock(mc.iface)
 		}
 
 		if err != nil {
@@ -515,6 +519,10 @@ func (cm *Manager) rotate(ctx context.Context, writeoutChan chan<- capturetypes.
 			// Lock the running capture in order to safely perform rotation tasks
 			if err := mc.capLock.Lock(); err != nil {
 				logger.Errorf("failed to establish rotation three-point lock: %s", err)
+				if err := mc.close(); err != nil {
+					logger.Errorf("failed to close capture after failed three-point lock: %s", err)
+				}
+				cm.captures.Delete(mc.iface)
 				continue
 			}
 
@@ -527,6 +535,10 @@ func (cm *Manager) rotate(ctx context.Context, writeoutChan chan<- capturetypes.
 			stats := <-statsRes
 			if err := mc.capLock.Unlock(); err != nil {
 				logger.Errorf("failed to release rotation three-point lock: %s", err)
+				if err := mc.close(); err != nil {
+					logger.Errorf("failed to close capture after failed three-point lock: %s", err)
+				}
+				cm.captures.Delete(mc.iface)
 			}
 			logger.With("elapsed", time.Since(lockStart).Round(time.Microsecond).String()).Debug("interface lock-cycle complete")
 
@@ -560,17 +572,17 @@ func (cm *Manager) logErrors(ctx context.Context, iface string, errsChan <-chan 
 
 				// Ensure there is no conflict with calls to update() that might already be
 				// taking down this interface
-				cm.Lock()
-				defer cm.Unlock()
+				cm.captures.Lock()
+				defer cm.captures.Unlock()
 
 				// If the error channel was closed prematurely, we have to assume there was
 				// a critical processing error and tear down the interface
-				if mc, exists := cm.captures.Get(iface); exists {
+				if mc, exists := cm.captures.GetNoLock(iface); exists {
 					logger.Info("closing capture / stopping packet processing")
 					if err := mc.close(); err != nil {
 						logger.Warnf("failed to close capture in logging routine (might be expected): %s", err)
 					}
-					cm.captures.Delete(mc.iface)
+					cm.captures.DeleteNoLock(mc.iface)
 				}
 				return
 			}
