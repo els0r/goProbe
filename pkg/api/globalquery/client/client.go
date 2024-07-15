@@ -137,12 +137,3 @@ func (sse *SSEClient) Query(ctx context.Context, args *query.Args) (*results.Res
 	// parse events
 	return sse.readEventStream(ctx, resp.Body)
 }
-
-var (
-	eventPrefix = []byte("event: ")
-	dataPrefix  = []byte("data: ")
-
-	queryError    = []byte(api.StreamEventQueryError)
-	partialResult = []byte(api.StreamEventPartialResult)
-	finalResult   = []byte(api.StreamEventFinalResult)
-)

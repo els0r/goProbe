@@ -9,6 +9,7 @@ import (
 	"io"
 
 	"github.com/els0r/goProbe/pkg/api"
+	"github.com/els0r/goProbe/pkg/query"
 	"github.com/els0r/goProbe/pkg/results"
 	"github.com/els0r/telemetry/logging"
 	jsoniter "github.com/json-iterator/go"
@@ -46,7 +47,13 @@ func (sse *SSEClient) readEventStream(ctx context.Context, r io.Reader) (res *re
 
 			switch event.streamType {
 			case api.StreamEventQueryError:
-				return nil, errors.New(string(event.data))
+				// we know that this is a query.DetailError
+				var qe = &query.DetailError{}
+				if err := jsoniter.Unmarshal(event.data, qe); err != nil {
+					// if the detail error couldn't be parsed, return error as is
+					return nil, errors.New(string(event.data))
+				}
+				return nil, qe
 			case api.StreamEventPartialResult, api.StreamEventFinalResult:
 				if err := jsoniter.Unmarshal(event.data, res); err != nil {
 					logger.With("error", err).Error("failed to parse JSON")
@@ -111,3 +118,12 @@ func readEvent(r *bufio.Reader) (*event, error) {
 
 	return event, nil
 }
+
+var (
+	eventPrefix = []byte("event: ")
+	dataPrefix  = []byte("data: ")
+
+	queryError    = []byte(api.StreamEventQueryError)
+	partialResult = []byte(api.StreamEventPartialResult)
+	finalResult   = []byte(api.StreamEventFinalResult)
+)
