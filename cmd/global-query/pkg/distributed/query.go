@@ -208,9 +208,15 @@ func aggregateResults(ctx context.Context, stmt *query.Statement, queryResults <
 			// different systems, the overlap has to be deducted from the total
 			finalResult.Summary.Hits.Total += res.Summary.Hits.Total - merged
 
-			err := onResult(finalResult)
-			if err != nil {
-				logger.With("error", err).Error("failed to call results callback")
+			if onResult != nil {
+				// make sure the rows are set for the results callback
+				if len(rowMap) > 0 {
+					finalResult.Rows = rowMap.ToRowsSorted(results.By(stmt.SortBy, stmt.Direction, stmt.SortAscending))
+				}
+				err := onResult(finalResult)
+				if err != nil {
+					logger.With("error", err).Error("failed to call results callback")
+				}
 			}
 		}
 	}

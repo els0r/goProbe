@@ -351,7 +351,10 @@ func entrypoint(cmd *cobra.Command, args []string) (err error) {
 
 		// query using query server
 		if viper.GetBool(conf.QueryStreaming) {
+			logger.Info("calling streaming API")
+
 			querier = gqclient.NewSSE(viper.GetString(conf.QueryServerAddr),
+				// this will become more informational in the future as in: printing partial results, etc.
 				func(ctx context.Context, r *results.Result) error {
 					if r == nil {
 						return nil

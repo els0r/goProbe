@@ -1,11 +1,9 @@
 package client
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 
 	"github.com/els0r/goProbe/pkg/api"
@@ -46,9 +44,11 @@ func New(addr string, opts ...client.Option) *Client {
 }
 
 // NewSSE creates a new streaming client for the global-query API
-func NewSSE(addr string, onUpdate, onFinish StreamingUpdate, opts ...client.Option) *Client {
+func NewSSE(addr string, onUpdate, onFinish StreamingUpdate, opts ...client.Option) *SSEClient {
 	opts = append(opts, client.WithName(clientName))
-	return &Client{
+	return &SSEClient{
+		onUpdate:      onUpdate,
+		onFinish:      onFinish,
 		DefaultClient: client.NewDefault(addr, opts...),
 	}
 }
@@ -56,6 +56,11 @@ func NewSSE(addr string, onUpdate, onFinish StreamingUpdate, opts ...client.Opti
 // Run implements the query.Runner interface
 func (c *Client) Run(ctx context.Context, args *query.Args) (*results.Result, error) {
 	return c.Query(ctx, args)
+}
+
+// Run implements the query.Runner interface
+func (sse *SSEClient) Run(ctx context.Context, args *query.Args) (*results.Result, error) {
+	return sse.Query(ctx, args)
 }
 
 // Query performs the global query and returns its result
@@ -104,8 +109,6 @@ func (sse *SSEClient) Query(ctx context.Context, args *query.Args) (*results.Res
 		queryArgs.Caller = clientName
 	}
 
-	var res = new(results.Result)
-
 	buf := &bytes.Buffer{}
 
 	err := jsoniter.NewEncoder(buf).Encode(queryArgs)
@@ -113,17 +116,16 @@ func (sse *SSEClient) Query(ctx context.Context, args *query.Args) (*results.Res
 		return nil, err
 	}
 
+	logger.Info("calling SSE route")
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, sse.NewURL(api.SSEQueryRoute), buf)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Cache-Control", "no-cache")
 	req.Header.Set("Accept", "text/event-stream, application/problem+json")
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Connection", "keep-alive")
 
 	resp, err := sse.Client().Do(req)
-	fmt.Println(resp, err)
 	if err != nil {
 		return nil, err
 	}
@@ -133,86 +135,12 @@ func (sse *SSEClient) Query(ctx context.Context, args *query.Args) (*results.Res
 	defer resp.Body.Close()
 
 	// parse events
-	var eventType api.StreamEventType
-	var eventsReceived int
-
-	reader := bufio.NewReader(resp.Body)
-	for {
-		select {
-		case <-ctx.Done():
-			logger.Info("request cancelled")
-			return res, nil
-		default:
-			line, err := reader.ReadBytes('\n')
-			fmt.Println(string(line))
-			if err != nil {
-				return nil, fmt.Errorf("failed to read SSE stream: %w", err)
-			}
-
-			if len(line) == 0 || string(line) == "\n" {
-				continue
-			}
-
-			switch {
-			case bytes.HasPrefix(line, eventPrefix):
-				bytesSpl := bytes.Split(line, eventPrefix)
-				if len(bytesSpl) < 2 {
-					continue
-				}
-				data := bytesSpl[1]
-
-				switch {
-				case bytes.Equal(data, queryError):
-					eventType = api.StreamEventQueryError
-				case bytes.Equal(data, partialResult):
-					eventType = api.StreamEventPartialResult
-				case bytes.Equal(data, finalResult):
-					eventType = api.StreamEventFinalResult
-				}
-				eventsReceived++
-
-				logger.With("event_type", eventType, "events_received", eventsReceived).Debug("received event")
-				// get to the data
-				continue
-			case bytes.HasPrefix(line, dataPrefix):
-				bytesSpl := bytes.Split(line, dataPrefix)
-				if len(bytesSpl) < 2 {
-					continue
-				}
-				data := bytesSpl[1]
-
-				switch eventType {
-				case api.StreamEventQueryError:
-					return nil, errors.New(string(data))
-				case api.StreamEventPartialResult, api.StreamEventFinalResult:
-					// parse the results data
-					var res = new(results.Result)
-					if err := jsoniter.Unmarshal(data, res); err != nil {
-						logger.Error("failed to parse JSON", "error", err)
-						continue
-					}
-
-					// exit streaming if this is the final result
-					if eventType == api.StreamEventFinalResult {
-						return res, sse.onFinish(ctx, res)
-					}
-
-					if err := sse.onUpdate(ctx, res); err != nil {
-						logger.Error("failed to call update callback", "error", err)
-					}
-				default:
-					continue
-				}
-			default:
-				continue
-			}
-		}
-	}
+	return sse.readEventStream(ctx, resp.Body)
 }
 
 var (
-	eventPrefix = []byte("event:")
-	dataPrefix  = []byte("data:")
+	eventPrefix = []byte("event: ")
+	dataPrefix  = []byte("data: ")
 
 	queryError    = []byte(api.StreamEventQueryError)
 	partialResult = []byte(api.StreamEventPartialResult)
