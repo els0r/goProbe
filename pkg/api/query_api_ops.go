@@ -37,6 +37,15 @@ func RegisterQueryAPI(a huma.API, caller string, querier query.Runner, middlewar
 		},
 		getParamsValidationHandler(),
 	)
+
+	// register routes specific to distributed querying
+	dqr, ok := querier.(*distributed.QueryRunner)
+	if ok {
+		registerDistributedQueryAPI(a, caller, dqr, middlewares)
+	}
+}
+
+func registerDistributedQueryAPI(a huma.API, caller string, qr *distributed.QueryRunner, middlewares huma.Middlewares) {
 	// query running
 	huma.Register(a,
 		huma.Operation{
@@ -48,17 +57,8 @@ func RegisterQueryAPI(a huma.API, caller string, querier query.Runner, middlewar
 			Middlewares: middlewares,
 			Tags:        queryTags,
 		},
-		getBodyQueryRunnerHandler(caller, querier),
+		getBodyQueryRunnerHandler(caller, qr),
 	)
-
-	// register routes specific to distributed querying
-	dqr, ok := querier.(*distributed.QueryRunner)
-	if ok {
-		registerDistributedQueryAPI(a, caller, dqr, middlewares)
-	}
-}
-
-func registerDistributedQueryAPI(a huma.API, caller string, qr *distributed.QueryRunner, middlewares huma.Middlewares) {
 	sse.Register(a,
 		huma.Operation{
 			OperationID: "query-post-run-sse",
