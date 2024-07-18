@@ -23,7 +23,7 @@ func TestDataMissing(t *testing.T) {
 		query string
 		opts  []query.Option
 	}{
-		{"eth1 raw - json output", "eth1", "raw", []query.Option{query.WithFirst("-30001d"), query.WithLast("-30000d"), query.WithFormat("json")}},
+		{"eth1 raw - json output", "eth1", "raw", []query.Option{query.WithFirst("-30001d"), query.WithLast("-30000d"), query.WithFormat(types.FormatJSON)}},
 	}
 
 	// run table-driven test
@@ -60,7 +60,7 @@ func TestEmptyOutput(t *testing.T) {
 			"time query on eth1 - json output",
 			"eth1",
 			"time",
-			[]query.Option{query.WithDirectionSum(), query.WithFirst("1456358400"), query.WithLast("1456473000"), query.WithCondition("sip = 255.255.255.255"), query.WithNumResults(query.MaxResults), query.WithFormat("json")},
+			[]query.Option{query.WithDirectionSum(), query.WithFirst("1456358400"), query.WithLast("1456473000"), query.WithCondition("sip = 255.255.255.255"), query.WithNumResults(query.MaxResults), query.WithFormat(types.FormatJSON)},
 		},
 	}
 
@@ -98,7 +98,7 @@ func TestSimpleQuery(t *testing.T) {
 			"time query on eth1 - json output",
 			"eth1",
 			"time",
-			[]query.Option{query.WithDirectionSum(), query.WithFirst("1456428000"), query.WithLast("1456473000"), query.WithNumResults(query.MaxResults), query.WithFormat("json")},
+			[]query.Option{query.WithDirectionSum(), query.WithFirst("1456428000"), query.WithLast("1456473000"), query.WithNumResults(query.MaxResults), query.WithFormat(types.FormatJSON)},
 		},
 	}
 

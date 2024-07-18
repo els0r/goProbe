@@ -4,6 +4,8 @@ import (
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/danielgtaylor/huma/v2/sse"
+	"github.com/els0r/goProbe/cmd/global-query/pkg/distributed"
 	"github.com/els0r/goProbe/pkg/query"
 	"github.com/els0r/goProbe/pkg/results"
 )
@@ -35,6 +37,15 @@ func RegisterQueryAPI(a huma.API, caller string, querier query.Runner, middlewar
 		},
 		getParamsValidationHandler(),
 	)
+
+	// register routes specific to distributed querying
+	dqr, ok := querier.(*distributed.QueryRunner)
+	if ok {
+		registerDistributedQueryAPI(a, caller, dqr, middlewares)
+	}
+}
+
+func registerDistributedQueryAPI(a huma.API, caller string, qr *distributed.QueryRunner, middlewares huma.Middlewares) {
 	// query running
 	huma.Register(a,
 		huma.Operation{
@@ -46,9 +57,36 @@ func RegisterQueryAPI(a huma.API, caller string, querier query.Runner, middlewar
 			Middlewares: middlewares,
 			Tags:        queryTags,
 		},
-		getBodyQueryRunnerHandler(caller, querier),
+		getBodyQueryRunnerHandler(caller, qr),
+	)
+	sse.Register(a,
+		huma.Operation{
+			OperationID: "query-post-run-sse",
+			Method:      http.MethodPost,
+			Path:        SSEQueryRoute,
+			Summary:     "Run query with server sent events (SSE)",
+			Description: "Runs a query based on the parameters provided in the body. Pushes back partial results via SSE",
+			Middlewares: middlewares,
+			Tags:        queryTags,
+		},
+		map[string]any{
+			string(StreamEventQueryError):    &query.DetailError{},
+			string(StreamEventPartialResult): &PartialResult{},
+			string(StreamEventFinalResult):   &FinalResult{},
+		},
+		getSSEBodyQueryRunnerHandler(caller, qr),
 	)
 }
+
+// StreamEventType describes the type of server sent event
+type StreamEventType string
+
+// Different event types that the query server sends
+const (
+	StreamEventQueryError    StreamEventType = "queryError"
+	StreamEventPartialResult StreamEventType = "partialResult"
+	StreamEventFinalResult   StreamEventType = "finalResult"
+)
 
 // ArgsBodyInput stores the query args to be validated in the body
 type ArgsInput struct {
@@ -66,3 +104,13 @@ type ArgsParamsInput struct {
 type QueryResultOutput struct {
 	Body *results.Result
 }
+
+// PartialResult represents an update to the results structure. It SHOULD only be used if the
+// results.Result object will be further modified / aggregated. This data structure is relevant
+// only in the context of SSE
+type PartialResult struct{ *results.Result }
+
+// FinalResult represents the result which is sent after all aggregation of partial results has
+// completed. It SHOULD only be sent at the end of a streaming operation. This data structure is relevant
+// only in the context of SSE
+type FinalResult struct{ *results.Result }

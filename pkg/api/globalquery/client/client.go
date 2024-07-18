@@ -2,22 +2,24 @@ package client
 
 import (
 	"context"
+	"net/http"
 
 	"github.com/els0r/goProbe/pkg/api"
 	"github.com/els0r/goProbe/pkg/api/client"
 	"github.com/els0r/goProbe/pkg/query"
 	"github.com/els0r/goProbe/pkg/results"
+	"github.com/els0r/goProbe/pkg/types"
 	"github.com/fako1024/httpc"
+)
+
+const (
+	clientName = "global-query-client"
 )
 
 // Client denotes a global query client
 type Client struct {
 	*client.DefaultClient
 }
-
-const (
-	clientName = "global-query-client"
-)
 
 // New creates a new client for the global-query API
 func New(addr string, opts ...client.Option) *Client {
@@ -38,7 +40,7 @@ func (c *Client) Query(ctx context.Context, args *query.Args) (*results.Result, 
 	queryArgs := *args
 
 	// whatever happens, the results are expected to be returned in json
-	queryArgs.Format = "json"
+	queryArgs.Format = types.FormatJSON
 
 	if queryArgs.Caller == "" {
 		queryArgs.Caller = clientName
@@ -47,7 +49,7 @@ func (c *Client) Query(ctx context.Context, args *query.Args) (*results.Result, 
 	var res = new(results.Result)
 
 	req := c.Modify(ctx,
-		httpc.NewWithClient("POST", c.NewURL(api.QueryRoute), c.Client()).
+		httpc.NewWithClient(http.MethodPost, c.NewURL(api.QueryRoute), c.Client()).
 			EncodeJSON(queryArgs).
 			ParseJSON(res),
 	)

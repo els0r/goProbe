@@ -3,8 +3,11 @@ package api
 import (
 	"context"
 
+	"github.com/danielgtaylor/huma/v2/sse"
+	"github.com/els0r/goProbe/cmd/global-query/pkg/distributed"
 	"github.com/els0r/goProbe/pkg/query"
 	"github.com/els0r/goProbe/pkg/results"
+	"github.com/els0r/goProbe/pkg/types"
 	"github.com/els0r/telemetry/logging"
 )
 
@@ -22,12 +25,30 @@ func getBodyQueryRunnerHandler(caller string, querier query.Runner) func(context
 	}
 }
 
+func getSSEBodyQueryRunnerHandler(caller string, querier *distributed.QueryRunner) func(context.Context, *ArgsInput, sse.Sender) {
+	return func(ctx context.Context, input *ArgsInput, send sse.Sender) {
+		querier.SetResultReceivedFn(func(res *results.Result) error {
+			if res == nil {
+				return nil
+			}
+			return send.Data(&PartialResult{res})
+		})
+
+		res, err := runQuery(ctx, caller, input.Body, querier)
+		if err != nil {
+			_ = send.Data(err)
+			return
+		}
+		_ = send.Data(&FinalResult{res})
+	}
+}
+
 func runQuery(ctx context.Context, caller string, args *query.Args, querier query.Runner) (*results.Result, error) {
 	// make sure all defaults are available if they weren't set explicitly
 	args.SetDefaults()
 
 	// Set default format for an API query is JSON
-	args.Format = "json"
+	args.Format = types.FormatJSON
 	if args.Caller == "" {
 		args.Caller = caller
 	}

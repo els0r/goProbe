@@ -11,6 +11,7 @@ const (
 	QueryLog             = queryKey + ".log"
 	QueryKeepAlive       = queryKey + ".keepalive"
 	QueryStats           = queryKey + ".stats"
+	QueryStreaming       = queryKey + ".streaming"
 
 	dbKey       = "db"
 	QueryDBPath = dbKey + ".path"

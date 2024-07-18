@@ -356,9 +356,9 @@ func NewTablePrinter(output io.Writer, cfg *PrinterConfig) (TablePrinter, error)
 
 	var printer TablePrinter
 	switch cfg.Format {
-	case "txt":
+	case types.FormatTXT:
 		printer = NewTextTablePrinter(b, cfg.NumFlows, cfg.resolutionTimeout, cfg.printQueryStats)
-	case "csv":
+	case types.FormatCSV:
 		printer = NewCSVTablePrinter(b)
 	default:
 		return nil, fmt.Errorf("unknown output format %s", cfg.Format)

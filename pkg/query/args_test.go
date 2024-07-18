@@ -23,16 +23,16 @@ func TestPrepareArgs(t *testing.T) {
 		{"unsupported format", &Args{Query: "sip", Format: "exe"},
 			&DetailError{},
 		},
-		{"wrong sort by", &Args{Query: "sip", Format: "json", SortBy: "biscuits"},
+		{"wrong sort by", &Args{Query: "sip", Format: types.FormatJSON, SortBy: "biscuits"},
 			&DetailError{},
 		},
 		{"empty sort by, invalid time",
-			&Args{Query: "sip,time", Format: "json", First: "10:"},
+			&Args{Query: "sip,time", Format: types.FormatJSON, First: "10:"},
 			&DetailError{},
 		},
 		{"dns resolution, wrong timeout",
 			&Args{
-				Query: "sip,time", Format: "json", First: "-7d",
+				Query: "sip,time", Format: types.FormatJSON, First: "-7d",
 				DNSResolution: DNSResolution{
 					Enabled: true,
 					Timeout: -1,
@@ -42,7 +42,7 @@ func TestPrepareArgs(t *testing.T) {
 		},
 		{"dns resolution, wrong number of rows",
 			&Args{
-				Query: "sip,time", Format: "json", First: "-7d",
+				Query: "sip,time", Format: types.FormatJSON, First: "-7d",
 				DNSResolution: DNSResolution{
 					Enabled: true,
 					Timeout: 20 * time.Second,
@@ -53,27 +53,27 @@ func TestPrepareArgs(t *testing.T) {
 		},
 		{"incorrect condition",
 			&Args{
-				Query: "sip,time", Format: "json", First: "-7d",
+				Query: "sip,time", Format: types.FormatJSON, First: "-7d",
 				Condition: "dipl = 0",
 			},
 			&DetailError{},
 		},
 		{"incorrect mem percentage",
 			&Args{
-				Query: "sip,time", Format: "json", First: "-7d",
+				Query: "sip,time", Format: types.FormatJSON, First: "-7d",
 			},
 			&DetailError{},
 		},
 		{"wrong number of results",
 			&Args{
-				Query: "sip,time", Format: "json", First: "-7d",
+				Query: "sip,time", Format: types.FormatJSON, First: "-7d",
 				MaxMemPct: 20,
 			},
 			&DetailError{},
 		},
 		{"invalid live mode",
 			&Args{
-				Query: "sip,time", Format: "json", Last: "-7d",
+				Query: "sip,time", Format: types.FormatJSON, Last: "-7d",
 				MaxMemPct: 20, NumResults: 20,
 				Live: true,
 			},
@@ -82,7 +82,7 @@ func TestPrepareArgs(t *testing.T) {
 		{"valid query args",
 			&Args{
 				Ifaces: "eth0",
-				Query:  "sip,time", Format: "json", Last: "-7d",
+				Query:  "sip,time", Format: types.FormatJSON, Last: "-7d",
 				MaxMemPct: 20, NumResults: 20,
 				outputs: []io.Writer{os.Stdout, os.Stderr},
 			},
@@ -115,7 +115,7 @@ func TestSelector(t *testing.T) {
 		{
 			name: "empty interface",
 			input: &Args{
-				Query: "sip", Format: "json", Last: "-7d",
+				Query: "sip", Format: types.FormatJSON, Last: "-7d",
 				MaxMemPct: 20, NumResults: 20,
 				outputs: []io.Writer{os.Stdout, os.Stderr},
 			},
@@ -126,7 +126,7 @@ func TestSelector(t *testing.T) {
 			name: "single interface",
 			input: &Args{
 				Ifaces: "eth0",
-				Query:  "sip", Format: "json", Last: "-7d",
+				Query:  "sip", Format: types.FormatJSON, Last: "-7d",
 				MaxMemPct: 20, NumResults: 20,
 				outputs: []io.Writer{os.Stdout, os.Stderr},
 			},
@@ -136,7 +136,7 @@ func TestSelector(t *testing.T) {
 			name: "two interfaces",
 			input: &Args{
 				Ifaces: "eth0,eth2",
-				Query:  "sip", Format: "json", Last: "-7d",
+				Query:  "sip", Format: types.FormatJSON, Last: "-7d",
 				MaxMemPct: 20, NumResults: 20,
 				outputs: []io.Writer{os.Stdout, os.Stderr},
 			},
@@ -148,7 +148,7 @@ func TestSelector(t *testing.T) {
 			name: "invalid interface name",
 			input: &Args{
 				Ifaces: "eth0,eth two",
-				Query:  "sip", Format: "json", Last: "-7d",
+				Query:  "sip", Format: types.FormatJSON, Last: "-7d",
 				MaxMemPct: 20, NumResults: 20,
 				outputs: []io.Writer{os.Stdout, os.Stderr},
 			},
