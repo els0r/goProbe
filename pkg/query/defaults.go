@@ -6,12 +6,13 @@ import (
 
 	"github.com/els0r/goProbe/pkg/defaults"
 	"github.com/els0r/goProbe/pkg/results"
+	"github.com/els0r/goProbe/pkg/types"
 )
 
 // Defaults for query arguments
 var (
 	DefaultDBPath         = defaults.DBPath
-	DefaultFormat         = "txt"
+	DefaultFormat         = types.FormatTXT
 	DefaultMaxMemPct      = 60
 	DefaultNumResults     = uint64(1000)
 	DefaultResolveRows    = 25
@@ -22,9 +23,9 @@ var (
 
 // PermittedFormats stores all supported output formats
 var permittedFormats = map[string]struct{}{
-	"txt":  {},
-	"json": {},
-	"csv":  {},
+	types.FormatTXT:  {},
+	types.FormatJSON: {},
+	types.FormatCSV:  {},
 }
 
 var (

@@ -18,20 +18,20 @@
 //
 // On Debian derivatives, we suggest creating a file `goquery` in `/etc/bash_completion.d` with the following contents:
 //
-//     _goquery() {
-//         case "$3" in
-//             -d) # the -d flag specifies the database directory.
-//                 # we rely on bash's builtin directory completion.
-//                 COMPREPLY=( $( compgen -d -- "$2" ) )
-//             ;;
+//	_goquery() {
+//	    case "$3" in
+//	        -d) # the -d flag specifies the database directory.
+//	            # we rely on bash's builtin directory completion.
+//	            COMPREPLY=( $( compgen -d -- "$2" ) )
+//	        ;;
 //
-//             *)
-//                 if [ -x /usr/local/share/goquery_completion ]; then
-//                     mapfile -t COMPREPLY < <( /usr/local/share/goquery_completion bash "${COMP_POINT}" "${COMP_LINE}" )
-//                 fi
-//             ;;
-//         esac
-//     }
+//	        *)
+//	            if [ -x /usr/local/share/goquery_completion ]; then
+//	                mapfile -t COMPREPLY < <( /usr/local/share/goquery_completion bash "${COMP_POINT}" "${COMP_LINE}" )
+//	            fi
+//	        ;;
+//	    esac
+//	}
 package main
 
 import (
@@ -40,6 +40,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/els0r/goProbe/pkg/types"
 	"github.com/els0r/goProbe/pkg/version"
 )
 
@@ -56,7 +57,7 @@ const (
 // bashUnescape unescapes the given string according to bash's escaping rules
 // for autocompletion. Note: the rules for escaping during completion seem
 // to differ from those during 'normal' operation of the shell.
-// For example, `'hello world''hello world'` is treated as ["hello world", "hello world"]
+// For example, `'hello world”hello world'` is treated as ["hello world", "hello world"]
 // during completion but would usually be treated as ["hello worldhello world"].
 //
 // weird is set to true iff we are at a weird position:
@@ -172,7 +173,7 @@ func bashCompletion(args []string) {
 		// handled by wrapper bash script
 		return
 	case "-e":
-		printlns(filterPrefix(last(args), "txt", "json", "csv", "influxdb"))
+		printlns(filterPrefix(last(args), types.FormatTXT, types.FormatJSON, types.FormatCSV, types.FormatInfluxDB))
 		return
 	case "-f", "-l", "-h", "--help":
 		return

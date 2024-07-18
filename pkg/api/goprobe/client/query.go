@@ -6,6 +6,7 @@ import (
 	"github.com/els0r/goProbe/pkg/api"
 	"github.com/els0r/goProbe/pkg/query"
 	"github.com/els0r/goProbe/pkg/results"
+	"github.com/els0r/goProbe/pkg/types"
 	"github.com/fako1024/httpc"
 )
 
@@ -19,7 +20,7 @@ func (c *Client) Query(ctx context.Context, args *query.Args) (*results.Result, 
 	// use a copy of the arguments, since some fields are modified by the client
 	queryArgs := *args
 	// whatever happens, the results are expected to be returned in json
-	queryArgs.Format = "json"
+	queryArgs.Format = types.FormatJSON
 
 	if queryArgs.Caller == "" {
 		queryArgs.Caller = clientName

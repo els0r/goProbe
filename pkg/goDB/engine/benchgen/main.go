@@ -36,7 +36,7 @@ func BenchmarkStdQueryJSONOutput(b *testing.B) {
 		[]query.Option{
 			query.WithFirst("0"),
 			query.WithNumResults(query.MaxResults),
-			query.WithFormat("json"),
+			query.WithFormat(types.FormatJSON),
 		}...,
 	)
 
@@ -54,7 +54,7 @@ func BenchmarkStdQueryJSONOutputCondition(b *testing.B) {
 		[]query.Option{
 			query.WithFirst("0"),
 			query.WithNumResults(query.MaxResults),
-			query.WithFormat("json"),
+			query.WithFormat(types.FormatJSON),
 			query.WithCondition("dport eq 443"),
 		}...,
 	)
@@ -102,7 +102,7 @@ func BenchmarkStdQueryCSVOutput(b *testing.B) {
 		[]query.Option{
 			query.WithFirst("0"),
 			query.WithNumResults(query.MaxResults),
-			query.WithFormat("csv"),
+			query.WithFormat(types.FormatCSV),
 		}...,
 	)
 
@@ -119,7 +119,7 @@ func BenchmarkStdQueryCSVOutputCondition(b *testing.B) {
 			query.WithFirst("0"),
 			query.WithNumResults(query.MaxResults),
 			query.WithCondition("dport eq 443"),
-			query.WithFormat("csv"),
+			query.WithFormat(types.FormatCSV),
 		}...,
 	)
 

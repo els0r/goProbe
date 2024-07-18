@@ -7,6 +7,7 @@ import (
 	"github.com/els0r/goProbe/cmd/global-query/pkg/distributed"
 	"github.com/els0r/goProbe/pkg/query"
 	"github.com/els0r/goProbe/pkg/results"
+	"github.com/els0r/goProbe/pkg/types"
 	"github.com/els0r/telemetry/logging"
 )
 
@@ -35,7 +36,7 @@ func getSSEBodyQueryRunnerHandler(caller string, querier *distributed.QueryRunne
 
 		res, err := runQuery(ctx, caller, input.Body, querier)
 		if err != nil {
-			send.Data(err)
+			_ = send.Data(err)
 			return
 		}
 		_ = send.Data(&FinalResult{res})
@@ -47,7 +48,7 @@ func runQuery(ctx context.Context, caller string, args *query.Args, querier quer
 	args.SetDefaults()
 
 	// Set default format for an API query is JSON
-	args.Format = "json"
+	args.Format = types.FormatJSON
 	if args.Caller == "" {
 		args.Caller = caller
 	}

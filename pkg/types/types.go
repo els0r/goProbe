@@ -9,6 +9,14 @@ import (
 	"time"
 )
 
+// Definition of format strings
+const (
+	FormatJSON     = "json"     // JSON format
+	FormatCSV      = "csv"      // CSV format
+	FormatTXT      = "txt"      // Text / Shell output format
+	FormatInfluxDB = "influxdb" // Influx DB format
+)
+
 // IPVersion denotes the IP layer version (if any) of a conditional node
 type IPVersion int
 

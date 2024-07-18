@@ -204,7 +204,7 @@ func initLogger() {
 	opts := []logging.Option{
 		logging.WithVersion(version.Short()),
 	}
-	if cmdLineParams.Format == "json" {
+	if cmdLineParams.Format == types.FormatJSON {
 		format = logging.EncodingJSON
 	}
 	opts = append(opts, logging.WithOutput(os.Stdout), logging.WithErrorOutput(os.Stderr))
@@ -343,7 +343,7 @@ func entrypoint(cmd *cobra.Command, args []string) (err error) {
 		// make sure that the hostname is present in the query type (and therefore output)
 		// The assumption being that a human will have better knowledge
 		// of hostnames than of their ID counterparts
-		if queryArgs.Format == "txt" {
+		if queryArgs.Format == types.FormatTXT {
 			if !strings.Contains(queryArgs.Query, types.HostnameName) {
 				queryArgs.Query += types.AttrSep + types.HostnameName
 			}
@@ -354,7 +354,8 @@ func entrypoint(cmd *cobra.Command, args []string) (err error) {
 			logger.Info("calling streaming API")
 
 			querier = gqclient.NewSSE(viper.GetString(conf.QueryServerAddr),
-				// this will become more informational in the future as in: printing partial results, etc.
+
+				// TODO: this will become more informational in the future as in: printing partial results, etc.
 				func(ctx context.Context, r *results.Result) error {
 					if r == nil {
 						return nil
@@ -432,7 +433,7 @@ func entrypoint(cmd *cobra.Command, args []string) (err error) {
 	}
 
 	// serialize raw results array if json is selected
-	if stmt.Format == "json" {
+	if stmt.Format == types.FormatJSON {
 		err = jsoniter.NewEncoder(stmt.Output).Encode(result)
 		if err != nil {
 			return fmt.Errorf("failed to serialize query results: %w", err)

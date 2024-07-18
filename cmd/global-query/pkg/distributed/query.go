@@ -21,6 +21,9 @@ type QueryRunner struct {
 	resolver hosts.Resolver
 	querier  Querier
 
+	// onResult provides an event-based callback function to be executed upon reception
+	// of a new result from one of the queried hosts (allowing for dynamic / iterative
+	// handling of said results)
 	onResult func(*results.Result) error
 }
 
@@ -39,7 +42,7 @@ func NewQueryRunner(resolver hosts.Resolver, querier Querier, opts ...QueryOptio
 	return
 }
 
-// SetResultReceivedFn registers a callback to be executed for every results that is
+// SetResultReceivedFn registers a callback to be executed for every results.Result that is
 // read off the results channel
 func (q *QueryRunner) SetResultReceivedFn(f func(*results.Result) error) *QueryRunner {
 	q.onResult = f
@@ -48,6 +51,9 @@ func (q *QueryRunner) SetResultReceivedFn(f func(*results.Result) error) *QueryR
 
 // ResultReceived calls the result callback with res and
 func (q *QueryRunner) ResultReceived(res *results.Result) error {
+	if q.onResult == nil {
+		return errors.New("no event callback provided (onResult)")
+	}
 	return q.onResult(res)
 }
 

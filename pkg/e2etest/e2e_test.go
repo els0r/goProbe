@@ -273,7 +273,7 @@ func testE2E(t *testing.T, valFilterDescriptor int, datasets ...[]byte) {
 
 	resGoQueryList := make([]goDB.InterfaceMetadata, 0)
 	runGoQuery(t, &resGoQueryList, []string{
-		"-e", "json",
+		"-e", types.FormatJSON,
 		"-l", time.Now().Add(time.Hour).Format(time.ANSIC),
 		"-d", tempDir,
 		"list",
@@ -283,7 +283,7 @@ func testE2E(t *testing.T, valFilterDescriptor int, datasets ...[]byte) {
 	resGoQuery := new(results.Result)
 	queryArgs := []string{
 		"-i", strings.Join(mockIfaces.Names(), ","),
-		"-e", "json",
+		"-e", types.FormatJSON,
 		"-l", time.Now().Add(time.Hour).Format(time.ANSIC),
 		"-d", tempDir,
 		"-n", strconv.Itoa(100000),
