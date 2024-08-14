@@ -14,6 +14,19 @@ var queryTags = []string{"Query"}
 
 // RegisterQueryAPI registers all query related endpoints
 func RegisterQueryAPI(a huma.API, caller string, querier query.Runner, middlewares huma.Middlewares) {
+	// query running
+	huma.Register(a,
+		huma.Operation{
+			OperationID: "query-post-run",
+			Method:      http.MethodPost,
+			Path:        QueryRoute,
+			Summary:     "Run query",
+			Description: "Runs a query based on the parameters provided in the body",
+			Middlewares: middlewares,
+			Tags:        queryTags,
+		},
+		getBodyQueryRunnerHandler(caller, querier),
+	)
 	// validation
 	huma.Register(a,
 		huma.Operation{

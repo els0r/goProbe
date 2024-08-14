@@ -8,7 +8,6 @@ import (
 	"github.com/els0r/goProbe/pkg/api"
 	"github.com/els0r/goProbe/pkg/api/server"
 	"github.com/els0r/goProbe/pkg/capture"
-	"github.com/els0r/goProbe/pkg/defaults"
 	"github.com/els0r/goProbe/pkg/goDB/engine"
 	"github.com/els0r/goProbe/pkg/version"
 )
@@ -24,16 +23,10 @@ type Server struct {
 	*server.DefaultServer
 }
 
-// SetDBPath sets the path to the database directory
-func (server *Server) SetDBPath(path string) *Server {
-	server.dbPath = path
-	return server
-}
-
 // New creates a new goprobe API server
-func New(addr string, captureManager *capture.Manager, configMonitor *config.Monitor, opts ...server.Option) *Server {
+func New(addr, dbPath string, captureManager *capture.Manager, configMonitor *config.Monitor, opts ...server.Option) *Server {
 	server := &Server{
-		dbPath:         defaults.DBPath,
+		dbPath:         dbPath,
 		captureManager: captureManager,
 		configMonitor:  configMonitor,
 		DefaultServer:  server.NewDefault(config.ServiceName, addr, opts...),
