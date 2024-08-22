@@ -14,7 +14,3 @@ go.work.sum
 .db/
 tmp/
 bin/
-goProbe
-goQuery
-gpctl
-global-query

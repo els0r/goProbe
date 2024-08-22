@@ -82,7 +82,7 @@ func main() {
 	openAPIfile := flags.CmdLine.OpenAPISpecOutfile
 	if openAPIfile != "" {
 		// skeleton server just for route registration
-		err := server.GenerateSpec(context.Background(), openAPIfile, gpserver.New("127.0.0.1:8145", nil, nil))
+		err := server.GenerateSpec(context.Background(), openAPIfile, gpserver.New("127.0.0.1:8145", config.DB.Path, nil, nil))
 		if err != nil {
 			logger.Fatal(err)
 		}
@@ -150,8 +150,7 @@ func main() {
 		// 	apiOptions = append(apiOptions, api.WithKeys(config.API.Keys))
 		// }
 
-		apiServer = gpserver.New(config.API.Addr, captureManager, configMonitor, apiOptions...)
-		apiServer.SetDBPath(config.DB.Path)
+		apiServer = gpserver.New(config.API.Addr, config.DB.Path, captureManager, configMonitor, apiOptions...)
 
 		// serve API
 		go func() {
