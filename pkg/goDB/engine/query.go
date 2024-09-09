@@ -5,8 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"regexp"
 	"runtime"
 	"runtime/debug"
+	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -88,6 +90,12 @@ func NewQueryRunnerWithLiveData(dbPath string, captureManager *capture.Manager) 
 	}
 }
 
+type DbLister struct{}
+
+func (dbLister DbLister) GetInterfaces(dbPath string) ([]string, error) {
+	return info.GetInterfaces(dbPath)
+}
+
 // Run implements the query.Runner interface
 func (qr *QueryRunner) Run(ctx context.Context, args *query.Args) (res *results.Result, err error) {
 	var argsStr string
@@ -104,8 +112,16 @@ func (qr *QueryRunner) Run(ctx context.Context, args *query.Args) (res *results.
 		return nil, fmt.Errorf("failed to prepare query statement: %w", err)
 	}
 
-	// get list of available interfaces in the local DB
-	stmt.Ifaces, err = parseIfaceList(qr.dbPath, args.Ifaces)
+	// get list of available interfaces in the local DB, filter based on given comma separated list or regexp,
+	// reg exp is preferred
+	var dbLister DbLister = DbLister{}
+
+	if args.IfaceRegExp == "" {
+		stmt.Ifaces, err = parseIfaceListWithCommaSeparatedString(dbLister, qr.dbPath, args.Ifaces)
+	} else {
+		stmt.Ifaces, err = parseIfaceListWithRegex(dbLister, qr.dbPath, args.IfaceRegExp)
+	}
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare query statement: %w", err)
 	}
@@ -392,23 +408,62 @@ func createWorkManager(dbPath string, iface string, tfirst, tlast int64, query *
 	return
 }
 
-func parseIfaceList(dbPath string, ifaceList string) ([]string, error) {
+func parseIfaceListWithCommaSeparatedString(lister types.InterfaceLister, dbPath string, ifaceList string) ([]string, error) {
 	if ifaceList == "" {
 		return nil, errors.New("no interface(s) specified")
 	}
 
-	if types.IsAnySelector(ifaceList) {
-		ifaces, err := info.GetInterfaces(dbPath)
-		if err != nil {
-			return nil, err
-		}
-		return ifaces, nil
-	}
-
-	ifaces, err := types.ValidateIfaceNames(ifaceList)
+	allIfaces, err := lister.GetInterfaces(dbPath)
 	if err != nil {
 		return nil, err
 	}
 
-	return ifaces, nil
+	selectedValidIfaces, negationFilters, validationErr := types.ValidateAndSeparateFilters(ifaceList)
+	if validationErr != nil {
+		return nil, validationErr
+	}
+
+	// add interfaces
+	var result []string
+	for _, iface := range selectedValidIfaces {
+		if types.IsAnySelector(iface) {
+			result = allIfaces
+		} else if slices.Contains(allIfaces, iface) {
+			result = append(result, iface)
+		}
+
+	}
+
+	// remove interfaces
+	for _, notIface := range negationFilters {
+		if slices.Contains(result, notIface) {
+			for i, v := range result {
+				if v == notIface {
+					// Remove the element by slicing
+					result = append(result[:i], result[i+1:]...)
+				}
+			}
+		}
+	}
+	return result, nil
+}
+
+func parseIfaceListWithRegex(lister types.InterfaceLister, dbPath string, ifaceRegexp string) ([]string, error) {
+	ifaces, err := lister.GetInterfaces(dbPath)
+	if err != nil {
+		return nil, err
+	}
+	regexp, reErr := regexp.Compile(ifaceRegexp)
+	if reErr != nil {
+		return nil, reErr
+	}
+
+	var filteredIfaces []string
+	for _, iface := range ifaces {
+		if regexp.MatchString(iface) {
+			filteredIfaces = append(filteredIfaces, iface)
+		}
+	}
+
+	return filteredIfaces, nil
 }

@@ -99,6 +99,7 @@ func init() {
 	flags.BoolVarP(&cmdLineParams.Version, "version", "v", false, "Print version information and exit\n")
 
 	flags.StringVarP(&cmdLineParams.Ifaces, "ifaces", "i", "", helpMap["Ifaces"])
+	flags.StringVarP(&cmdLineParams.IfaceRegExp, "ifaces-re", "", "", helpMap["Ifaces-re"])
 	flags.StringVarP(&cmdLineParams.Condition, "condition", "c", "", helpMap["Condition"])
 
 	flags.StringVarP(&cmdLineParams.SortBy, conf.SortBy, "s", query.DefaultSortBy,

@@ -2,12 +2,14 @@ package engine
 
 import (
 	"context"
-	"errors"
 	"io"
 	"testing"
 
+	"github.com/els0r/goProbe/pkg/goDB/info"
 	"github.com/els0r/goProbe/pkg/query"
 	"github.com/els0r/goProbe/pkg/types"
+
+	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -125,51 +127,96 @@ func TestSimpleQuery(t *testing.T) {
 	}
 }
 
-func TestInterfaceValidation(t *testing.T) {
+type MockInterfaceLister struct{}
 
-	// create args
-	var tests = []struct {
-		iface       string
-		expectedErr error
-	}{
+func (mockLister MockInterfaceLister) GetInterfaces(dbPath string) ([]string, error) {
+	return info.GetInterfaces(dbPath)
+}
+
+type InterfaceListerFunc func(dbPath string) ([]string, error)
+
+func (f InterfaceListerFunc) GetInterfaces(dbPath string) ([]string, error) {
+	return f(dbPath)
+}
+
+type filteringTestDefinition struct {
+	name     string
+	argument string
+	ifaces   []string
+	expected []string
+}
+
+func TestCommaSeparatedInterfaceFiltering(t *testing.T) {
+	var tests = []filteringTestDefinition{
 		{
-			"",
-			errors.New("interface list contains empty interface name"),
+			"selected interfaces are returned",
+			"eth0, eth2",
+			[]string{"eth0", "wlan0", "eth2"},
+			[]string{"eth0", "eth2"},
 		},
 		{
-			"eth/0",
-			errors.New("interface name `eth/0` is invalid"),
+			"nonexistent interface is ignored",
+			"eth0, eth2, notexistent",
+			[]string{"eth0", "wlan0", "eth2"},
+			[]string{"eth0", "eth2"},
 		},
 		{
-			"eth 0",
-			errors.New("interface name `eth 0` is invalid"),
+			"any arguments returns all ignored",
+			"any",
+			[]string{"eth0", "wlan0", "eth2"},
+			[]string{"eth0", "wlan0", "eth2"},
 		},
 		{
-			"thisinterfacenameisfartoolongtobesupported",
-			errors.New("interface name `thisinterfacenameisfartoolongtobesupported` is invalid"),
-		},
-		{
-			"eth.15",
-			nil,
-		},
-		{
-			"eth:0",
-			nil,
+			"all but negaded interface is returned",
+			"any,!eth2,!t1",
+			[]string{"eth0", "wlan0", "t1", "t2", "eth2"},
+			[]string{"eth0", "wlan0", "t2"},
 		},
 	}
 
-	// run table-driven test
 	for _, test := range tests {
-		t.Run(test.iface, func(t *testing.T) {
-			err := types.ValidateIfaceName(test.iface)
-			if test.expectedErr != nil {
-				if err == nil || err.Error() != test.expectedErr.Error() {
-					t.Fatalf("unexpected result for interface name validation: %s", err)
-				}
-			} else {
-				if err != nil {
-					t.Fatalf("unexpected result for interface name validation: %s", err)
-				}
+		t.Run(test.name, func(t *testing.T) {
+			lister := InterfaceListerFunc(func(dbPath string) ([]string, error) {
+				return test.ifaces, nil
+			})
+			actual, err := parseIfaceListWithCommaSeparatedString(lister, "", test.argument)
+			if err == nil {
+				require.EqualValues(t, test.expected, actual)
+			}
+		})
+	}
+}
+
+func TestRegExpInterfaceFiltering(t *testing.T) {
+	var tests = []filteringTestDefinition{
+		{
+			"precisely 1 interface is returned",
+			"eth0",
+			[]string{"eth0", "wlan0", "eth2"},
+			[]string{"eth0"},
+		},
+		{
+			"eth prefixed interfaces are selected with correct number range",
+			"eth[0-2]",
+			[]string{"eth0", "wlan0", "eth2", "eth3"},
+			[]string{"eth0", "eth2"},
+		},
+		{
+			"using regep or for smaller expression",
+			"eth[0-2]|wlan0|t4",
+			[]string{"eth0", "wlan0", "eth2", "t4", "ignored"},
+			[]string{"eth0", "wlan0", "eth2", "t4"},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			lister := InterfaceListerFunc(func(dbPath string) ([]string, error) {
+				return test.ifaces, nil
+			})
+			actual, err := parseIfaceListWithRegex(lister, "string", test.argument)
+			if err == nil {
+				require.EqualValues(t, test.expected, actual)
 			}
 		})
 	}
