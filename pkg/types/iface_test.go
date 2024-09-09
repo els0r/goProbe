@@ -129,34 +129,38 @@ func TestSplitAndValidateIFaces(t *testing.T) {
 
 func TestValidateIRegExp(t *testing.T) {
 	var testCases = []struct {
-		name   string
-		input  string
-		output string
+		name     string
+		input    string
+		output   string
+		errorMsg string
 	}{
 		{
-			name:   "valid iface regexp",
-			input:  "eth[0-4]",
-			output: "eth[0-4]",
+			"valid iface regexp",
+			"eth[0-4]",
+			"eth[0-4]",
+			"",
 		},
 		{
-			name:   "invalid iface regexp",
-			input:  "/\\",
-			output: "error parsing regexp: trailing backslash at end of expression: ``",
+			"invalid iface argument regexp",
+			"/\\",
+			"",
+			"error parsing regexp: trailing backslash at end of expression: ``",
 		},
 		{
-			name:   "invalid iface regexp",
-			input:  "",
-			output: "interface regexp is empty",
+			"empty iface argument regexp",
+			"",
+			"",
+			"interface regexp is empty",
 		},
 	}
 
 	for _, test := range testCases {
 		t.Run(test.name, func(t *testing.T) {
 			actual, actualError := ValidateRegExp(test.input)
-			if actual == nil { // validation returns nil when all is ok.
-				require.EqualValues(t, test.output, actualError.Error())
-			} else {
+			if test.errorMsg == "" {
 				require.EqualValues(t, test.output, actual.String())
+			} else {
+				require.EqualValues(t, test.errorMsg, actualError.Error())
 			}
 		})
 	}
