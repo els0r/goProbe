@@ -8,7 +8,6 @@ import (
 	"github.com/els0r/goProbe/pkg/goDB/info"
 	"github.com/els0r/goProbe/pkg/query"
 	"github.com/els0r/goProbe/pkg/types"
-
 	"github.com/stretchr/testify/require"
 )
 
