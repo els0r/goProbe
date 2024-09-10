@@ -95,10 +95,12 @@ type DBInterfaceLister struct {
 	dbPath string
 }
 
-func NewDBLister(dbPath string) *DBInterfaceLister {
+// Constructor for DBInterfaceLister
+func NewDBInterfaceLister(dbPath string) *DBInterfaceLister {
 	return &DBInterfaceLister{dbPath: dbPath}
 }
 
+// Implementation of the interface function that uses existing functionality.
 func (dbLister DBInterfaceLister) GetInterfaces() ([]string, error) {
 	return info.GetInterfaces(dbLister.dbPath)
 }
@@ -121,7 +123,7 @@ func (qr *QueryRunner) Run(ctx context.Context, args *query.Args) (res *results.
 
 	// get list of available interfaces in the local DB, filter based on given comma separated list or regexp,
 	// reg exp is preferred
-	var dbLister = NewDBLister(qr.dbPath)
+	var dbLister = NewDBInterfaceLister(qr.dbPath)
 
 	if args.IfaceRegExp == "" {
 		stmt.Ifaces, err = parseIfaceListWithCommaSeparatedString(dbLister, args.Ifaces)
