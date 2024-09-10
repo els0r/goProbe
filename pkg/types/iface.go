@@ -37,12 +37,11 @@ func ValidateAndSeparateFilters(ifaceList string) ([]string, []string, error) {
 	for _, iface := range ifaces {
 		if err := ValidateIfaceName(iface); err != nil {
 			return nil, nil, err
+		}
+		if strings.HasPrefix(iface, "!") {
+			negative = append(negative, iface[1:])
 		} else {
-			if iface[0] == '!' {
-				negative = append(negative, iface[1:])
-			} else {
-				positive = append(positive, iface)
-			}
+			positive = append(positive, iface)
 		}
 	}
 	return positive, negative, nil
@@ -52,9 +51,5 @@ func ValidateRegExp(regExp string) (*regexp.Regexp, error) {
 	if regExp == "" {
 		return nil, errors.New("interface regexp is empty")
 	}
-	re, reErr := regexp.Compile(regExp)
-	if reErr != nil {
-		return nil, reErr
-	}
-	return re, nil
+	return regexp.Compile(regExp)
 }

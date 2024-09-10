@@ -90,10 +90,17 @@ func NewQueryRunnerWithLiveData(dbPath string, captureManager *capture.Manager) 
 	}
 }
 
-type DbLister struct{}
+// DBLister lists network interfaces from DB.
+type DBInterfaceLister struct {
+	dbPath string
+}
 
-func (dbLister DbLister) GetInterfaces(dbPath string) ([]string, error) {
-	return info.GetInterfaces(dbPath)
+func NewDBLister(dbPath string) *DBInterfaceLister {
+	return &DBInterfaceLister{dbPath: dbPath}
+}
+
+func (dbLister DBInterfaceLister) GetInterfaces() ([]string, error) {
+	return info.GetInterfaces(dbLister.dbPath)
 }
 
 // Run implements the query.Runner interface
@@ -114,12 +121,12 @@ func (qr *QueryRunner) Run(ctx context.Context, args *query.Args) (res *results.
 
 	// get list of available interfaces in the local DB, filter based on given comma separated list or regexp,
 	// reg exp is preferred
-	var dbLister DbLister = DbLister{}
+	var dbLister = NewDBLister(qr.dbPath)
 
 	if args.IfaceRegExp == "" {
-		stmt.Ifaces, err = parseIfaceListWithCommaSeparatedString(dbLister, qr.dbPath, args.Ifaces)
+		stmt.Ifaces, err = parseIfaceListWithCommaSeparatedString(dbLister, args.Ifaces)
 	} else {
-		stmt.Ifaces, err = parseIfaceListWithRegex(dbLister, qr.dbPath, args.IfaceRegExp)
+		stmt.Ifaces, err = parseIfaceListWithRegex(dbLister, args.IfaceRegExp)
 	}
 
 	if err != nil {
@@ -408,19 +415,19 @@ func createWorkManager(dbPath string, iface string, tfirst, tlast int64, query *
 	return
 }
 
-func parseIfaceListWithCommaSeparatedString(lister types.InterfaceLister, dbPath string, ifaceList string) ([]string, error) {
+func parseIfaceListWithCommaSeparatedString(lister types.InterfaceLister, ifaceList string) ([]string, error) {
 	if ifaceList == "" {
 		return nil, errors.New("no interface(s) specified")
 	}
 
-	allIfaces, err := lister.GetInterfaces(dbPath)
+	allIfaces, err := lister.GetInterfaces()
 	if err != nil {
 		return nil, err
 	}
 
-	selectedValidIfaces, negationFilters, validationErr := types.ValidateAndSeparateFilters(ifaceList)
-	if validationErr != nil {
-		return nil, validationErr
+	selectedValidIfaces, negationFilters, err := types.ValidateAndSeparateFilters(ifaceList)
+	if err != nil {
+		return nil, err
 	}
 
 	// add interfaces
@@ -428,6 +435,7 @@ func parseIfaceListWithCommaSeparatedString(lister types.InterfaceLister, dbPath
 	for _, iface := range selectedValidIfaces {
 		if types.IsAnySelector(iface) {
 			result = allIfaces
+			break
 		} else if slices.Contains(allIfaces, iface) {
 			result = append(result, iface)
 		}
@@ -448,8 +456,8 @@ func parseIfaceListWithCommaSeparatedString(lister types.InterfaceLister, dbPath
 	return result, nil
 }
 
-func parseIfaceListWithRegex(lister types.InterfaceLister, dbPath string, ifaceRegexp string) ([]string, error) {
-	ifaces, err := lister.GetInterfaces(dbPath)
+func parseIfaceListWithRegex(lister types.InterfaceLister, ifaceRegexp string) ([]string, error) {
+	ifaces, err := lister.GetInterfaces()
 	if err != nil {
 		return nil, err
 	}

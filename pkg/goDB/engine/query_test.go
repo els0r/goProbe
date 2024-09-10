@@ -5,7 +5,6 @@ import (
 	"io"
 	"testing"
 
-	"github.com/els0r/goProbe/pkg/goDB/info"
 	"github.com/els0r/goProbe/pkg/query"
 	"github.com/els0r/goProbe/pkg/types"
 	"github.com/stretchr/testify/require"
@@ -126,16 +125,16 @@ func TestSimpleQuery(t *testing.T) {
 	}
 }
 
-type MockInterfaceLister struct{}
-
-func (mockLister MockInterfaceLister) GetInterfaces(dbPath string) ([]string, error) {
-	return info.GetInterfaces(dbPath)
+type MockInterfaceLister struct {
+	interfaces []string
 }
 
-type InterfaceListerFunc func(dbPath string) ([]string, error)
+func NewMockInterfaceLister(interfaces []string) *MockInterfaceLister {
+	return &MockInterfaceLister{interfaces: interfaces}
+}
 
-func (f InterfaceListerFunc) GetInterfaces(dbPath string) ([]string, error) {
-	return f(dbPath)
+func (mil MockInterfaceLister) GetInterfaces() ([]string, error) {
+	return mil.interfaces, nil
 }
 
 type filteringTestDefinition struct {
@@ -175,10 +174,8 @@ func TestCommaSeparatedInterfaceFiltering(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			lister := InterfaceListerFunc(func(dbPath string) ([]string, error) {
-				return test.ifaces, nil
-			})
-			actual, err := parseIfaceListWithCommaSeparatedString(lister, "", test.argument)
+			lister := NewMockInterfaceLister(test.ifaces)
+			actual, err := parseIfaceListWithCommaSeparatedString(lister, test.argument)
 			if err == nil {
 				require.EqualValues(t, test.expected, actual)
 			}
@@ -210,10 +207,8 @@ func TestRegExpInterfaceFiltering(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			lister := InterfaceListerFunc(func(dbPath string) ([]string, error) {
-				return test.ifaces, nil
-			})
-			actual, err := parseIfaceListWithRegex(lister, "string", test.argument)
+			lister := NewMockInterfaceLister(test.ifaces)
+			actual, err := parseIfaceListWithRegex(lister, test.argument)
 			if err == nil {
 				require.EqualValues(t, test.expected, actual)
 			}
