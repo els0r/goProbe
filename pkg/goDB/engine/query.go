@@ -132,9 +132,6 @@ func (qr *QueryRunner) Run(ctx context.Context, args *query.Args) (res *results.
 	// reg exp is preferred
 	var dbLister = NewDBInterfaceLister(qr.dbPath)
 
-	// TODO
-	fmt.Println("args.Ifaces")
-	fmt.Println(args.Ifaces)
 	if isIFaceArgumentRegExp(args.Ifaces) {
 		iFaceRegexpArg := args.Ifaces
 		iFacesRegExp := iFaceRegexpArg[1 : len(iFaceRegexpArg)-1]
@@ -467,7 +464,6 @@ func parseIfaceListWithCommaSeparatedString(lister types.InterfaceLister, ifaceL
 			}
 		}
 	}
-	fmt.Println(result)
 	return result, nil
 }
 
@@ -488,6 +484,5 @@ func parseIfaceListWithRegex(lister types.InterfaceLister, ifaceRegExp string) (
 			filteredIfaces = append(filteredIfaces, iface)
 		}
 	}
-	fmt.Println(filteredIfaces)
 	return filteredIfaces, nil
 }
