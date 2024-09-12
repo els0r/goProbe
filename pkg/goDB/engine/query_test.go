@@ -215,3 +215,46 @@ func TestRegExpInterfaceFiltering(t *testing.T) {
 		})
 	}
 }
+
+func TestDetectRegExpArgument(t *testing.T) {
+
+	var tests = []struct {
+		arg    string
+		result bool
+	}{
+		{
+			"/eth/",
+			true,
+		},
+		{
+			"//eth//",
+			true,
+		},
+		{
+			"eth0",
+			false,
+		},
+		{
+			"//",
+			false,
+		},
+		{
+			"/eth0",
+			false,
+		},
+		{
+			"eth0",
+			false,
+		}, {
+			"eth0/",
+			false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.arg, func(t *testing.T) {
+			actual := isIFaceArgumentRegExp(test.arg)
+			require.EqualValues(t, actual, test.result)
+		})
+	}
+}

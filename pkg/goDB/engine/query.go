@@ -10,6 +10,7 @@ import (
 	"runtime/debug"
 	"slices"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -105,6 +106,12 @@ func (dbLister DBInterfaceLister) GetInterfaces() ([]string, error) {
 	return info.GetInterfaces(dbLister.dbPath)
 }
 
+const regExpSeparator = "/"
+
+func isIFaceArgumentRegExp(iface string) bool {
+	return strings.HasPrefix(iface, regExpSeparator) && strings.HasSuffix(iface, regExpSeparator) && len(iface) > 2
+}
+
 // Run implements the query.Runner interface
 func (qr *QueryRunner) Run(ctx context.Context, args *query.Args) (res *results.Result, err error) {
 	var argsStr string
@@ -125,10 +132,15 @@ func (qr *QueryRunner) Run(ctx context.Context, args *query.Args) (res *results.
 	// reg exp is preferred
 	var dbLister = NewDBInterfaceLister(qr.dbPath)
 
-	if args.IfaceRegExp == "" {
-		stmt.Ifaces, err = parseIfaceListWithCommaSeparatedString(dbLister, args.Ifaces)
+	// TODO
+	fmt.Println("args.Ifaces")
+	fmt.Println(args.Ifaces)
+	if isIFaceArgumentRegExp(args.Ifaces) {
+		iFaceRegexpArg := args.Ifaces
+		iFacesRegExp := iFaceRegexpArg[1 : len(iFaceRegexpArg)-1]
+		stmt.Ifaces, err = parseIfaceListWithRegex(dbLister, iFacesRegExp)
 	} else {
-		stmt.Ifaces, err = parseIfaceListWithRegex(dbLister, args.IfaceRegExp)
+		stmt.Ifaces, err = parseIfaceListWithCommaSeparatedString(dbLister, args.Ifaces)
 	}
 
 	if err != nil {
@@ -455,15 +467,17 @@ func parseIfaceListWithCommaSeparatedString(lister types.InterfaceLister, ifaceL
 			}
 		}
 	}
+	fmt.Println(result)
 	return result, nil
 }
 
-func parseIfaceListWithRegex(lister types.InterfaceLister, ifaceRegexp string) ([]string, error) {
+func parseIfaceListWithRegex(lister types.InterfaceLister, ifaceRegExp string) ([]string, error) {
+
 	ifaces, err := lister.GetInterfaces()
 	if err != nil {
 		return nil, err
 	}
-	regexp, reErr := regexp.Compile(ifaceRegexp)
+	regexp, reErr := regexp.Compile(ifaceRegExp)
 	if reErr != nil {
 		return nil, reErr
 	}
@@ -474,6 +488,6 @@ func parseIfaceListWithRegex(lister types.InterfaceLister, ifaceRegexp string) (
 			filteredIfaces = append(filteredIfaces, iface)
 		}
 	}
-
+	fmt.Println(filteredIfaces)
 	return filteredIfaces, nil
 }

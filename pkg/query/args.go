@@ -76,9 +76,6 @@ type Args struct {
 	// Ifaces: the interfaces to query
 	Ifaces string `json:"ifaces" yaml:"ifaces" query:"ifaces" doc:"Interfaces to query" example:"eth0,eth1" minLength:"2"`
 
-	// IfaceRegExp: the reg exp of interfaces to query
-	IfaceRegExp string `json:"iface_regexp" yaml:"ifaces_regexp" query:"ifaces_regexp" doc:"Interfaces to query as reg exp" example:"eth[0-2]" minLength:"2"`
-
 	// QueryHosts: the hosts for which data is queried (comma-separated list)
 	QueryHosts string `json:"query_hosts,omitempty" yaml:"query_hosts,omitempty" query:"query_hosts" required:"false" doc:"Hosts for which data is queried" example:"hostA,hostB,hostC"`
 
@@ -360,32 +357,13 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 	}
 
 	// set and validate the interfaces
-	if a.Ifaces == "" && a.IfaceRegExp == "" {
+	if a.Ifaces == "" {
 		// collect error
 		errModel.Errors = append(errModel.Errors, &huma.ErrorDetail{
 			Message:  emptyInterfaceMsg,
 			Location: "body.ifaces",
 			Value:    a.Ifaces,
-		}, &huma.ErrorDetail{
-			Message:  emptyInterfaceMsg,
-			Location: "body.iface_regexp",
-			Value:    a.IfaceRegExp,
 		})
-	}
-
-	if a.IfaceRegExp == "" {
-		// s.Ifaces, err = types.ValidateIfaceNames(a.Ifaces)
-		s.Ifaces, _, err = types.ValidateAndSeparateFilters(a.Ifaces)
-		if err != nil {
-			// collect error
-			errModel.Errors = append(errModel.Errors, &huma.ErrorDetail{
-				Message:  fmt.Sprintf("%s: %s", invalidInterfaceMsg, err),
-				Location: "body.ifaces",
-				Value:    a.Ifaces,
-			})
-		}
-	} else {
-		selector.Iface = true
 	}
 
 	// insert iface attribute here in case multiple interfaces where specified and the

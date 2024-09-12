@@ -9,6 +9,8 @@ import (
 
 var ifaceNameRegexp = regexp.MustCompile(`^!?[a-zA-Z0-9\.:_-]{1,15}$`)
 
+const ifaceListDelimiter = ","
+
 func ValidateIfaceName(iface string) error {
 	if iface == "" {
 		return errors.New("interface list contains empty interface name")
@@ -22,7 +24,7 @@ func ValidateIfaceName(iface string) error {
 }
 
 func ValidateIfaceNames(ifaceList string) ([]string, error) {
-	ifaces := strings.Split(ifaceList, ",")
+	ifaces := strings.Split(ifaceList, ifaceListDelimiter)
 	for _, iface := range ifaces {
 		if err := ValidateIfaceName(iface); err != nil {
 			return nil, err
@@ -32,7 +34,7 @@ func ValidateIfaceNames(ifaceList string) ([]string, error) {
 }
 
 func ValidateAndSeparateFilters(ifaceList string) ([]string, []string, error) {
-	ifaces := strings.Split(ifaceList, ",")
+	ifaces := strings.Split(ifaceList, ifaceListDelimiter)
 	var positive, negative []string
 	for _, iface := range ifaces {
 		if err := ValidateIfaceName(iface); err != nil {

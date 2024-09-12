@@ -77,9 +77,6 @@ var helpMap = map[string]string{
 (e.g. "eth0 "eth0,t4_33760").
 You can specify "ANY" to query all interfaces.
 `,
-	"Ifaces-re": `Interface regular expression for which the query should be performed
-(e.g. "eth[0-3]" that would return eth0,eth1,eth2").
-`,
 	"Help": `Display this help text.
 `,
 	"Help-admin": `Display advanced options for database maintenance.
