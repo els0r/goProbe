@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"testing"
 
@@ -187,19 +188,19 @@ func TestRegExpInterfaceFiltering(t *testing.T) {
 	var tests = []filteringTestDefinition{
 		{
 			"precisely 1 interface is returned",
-			"eth0",
+			"/eth0/",
 			[]string{"eth0", "wlan0", "eth2"},
 			[]string{"eth0"},
 		},
 		{
 			"eth prefixed interfaces are selected with correct number range",
-			"eth[0-2]",
+			"/eth[0-2]/",
 			[]string{"eth0", "wlan0", "eth2", "eth3"},
 			[]string{"eth0", "eth2"},
 		},
 		{
 			"using regep or for smaller expression",
-			"eth[0-2]|wlan0|t4",
+			"/eth[0-2]|wlan0|t4/",
 			[]string{"eth0", "wlan0", "eth2", "t4", "ignored"},
 			[]string{"eth0", "wlan0", "eth2", "t4"},
 		},
@@ -209,9 +210,12 @@ func TestRegExpInterfaceFiltering(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			lister := NewMockInterfaceLister(test.ifaces)
 			actual, err := parseIfaceListWithRegex(lister, test.argument)
+			fmt.Println("actual")
+			fmt.Println(actual)
 			if err == nil {
 				require.EqualValues(t, test.expected, actual)
 			}
+			require.Nil(t, err, "No error expected for given input.")
 		})
 	}
 }
@@ -222,6 +226,10 @@ func TestDetectRegExpArgument(t *testing.T) {
 		arg    string
 		result bool
 	}{
+		{
+			"",
+			false,
+		},
 		{
 			"/eth/",
 			true,
@@ -253,7 +261,7 @@ func TestDetectRegExpArgument(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.arg, func(t *testing.T) {
-			actual := isIFaceArgumentRegExp(test.arg)
+			actual := types.IsIFaceArgumentRegExp(test.arg)
 			require.EqualValues(t, actual, test.result)
 		})
 	}

@@ -5,12 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"regexp"
 	"runtime"
 	"runtime/debug"
 	"slices"
 	"sort"
-	"strings"
 	"sync"
 	"time"
 
@@ -106,12 +104,6 @@ func (dbLister DBInterfaceLister) GetInterfaces() ([]string, error) {
 	return info.GetInterfaces(dbLister.dbPath)
 }
 
-const regExpSeparator = "/"
-
-func isIFaceArgumentRegExp(iface string) bool {
-	return strings.HasPrefix(iface, regExpSeparator) && strings.HasSuffix(iface, regExpSeparator) && len(iface) > 2
-}
-
 // Run implements the query.Runner interface
 func (qr *QueryRunner) Run(ctx context.Context, args *query.Args) (res *results.Result, err error) {
 	var argsStr string
@@ -132,10 +124,8 @@ func (qr *QueryRunner) Run(ctx context.Context, args *query.Args) (res *results.
 	// reg exp is preferred
 	var dbLister = NewDBInterfaceLister(qr.dbPath)
 
-	if isIFaceArgumentRegExp(args.Ifaces) {
-		iFaceRegexpArg := args.Ifaces
-		iFacesRegExp := iFaceRegexpArg[1 : len(iFaceRegexpArg)-1]
-		stmt.Ifaces, err = parseIfaceListWithRegex(dbLister, iFacesRegExp)
+	if types.IsIFaceArgumentRegExp(args.Ifaces) {
+		stmt.Ifaces, err = parseIfaceListWithRegex(dbLister, args.Ifaces)
 	} else {
 		stmt.Ifaces, err = parseIfaceListWithCommaSeparatedString(dbLister, args.Ifaces)
 	}
@@ -442,40 +432,39 @@ func parseIfaceListWithCommaSeparatedString(lister types.InterfaceLister, ifaceL
 	}
 
 	// add interfaces
-	var result []string
+	var resultingIfaces []string
 	for _, iface := range selectedValidIfaces {
 		if types.IsAnySelector(iface) {
-			result = allIfaces
+			resultingIfaces = allIfaces
 			break
 		} else if slices.Contains(allIfaces, iface) {
-			result = append(result, iface)
+			resultingIfaces = append(resultingIfaces, iface)
 		}
 
 	}
 
 	// remove interfaces
 	for _, notIface := range negationFilters {
-		if slices.Contains(result, notIface) {
-			for i, v := range result {
-				if v == notIface {
-					// Remove the element by slicing
-					result = append(result[:i], result[i+1:]...)
-				}
+		for i, v := range resultingIfaces {
+			if v == notIface {
+				// Remove the element by slicing
+				resultingIfaces = append(resultingIfaces[:i], resultingIfaces[i+1:]...)
 			}
 		}
 	}
-	return result, nil
+	return resultingIfaces, nil
 }
 
 func parseIfaceListWithRegex(lister types.InterfaceLister, ifaceRegExp string) ([]string, error) {
 
+	regexp, reErr := types.ValidateAndExtractRegExp(ifaceRegExp)
+	if reErr != nil {
+		return nil, reErr
+	}
+
 	ifaces, err := lister.GetInterfaces()
 	if err != nil {
 		return nil, err
-	}
-	regexp, reErr := regexp.Compile(ifaceRegExp)
-	if reErr != nil {
-		return nil, reErr
 	}
 
 	var filteredIfaces []string

@@ -23,14 +23,26 @@ func ValidateIfaceName(iface string) error {
 	return nil
 }
 
-func ValidateIfaceNames(ifaceList string) ([]string, error) {
-	ifaces := strings.Split(ifaceList, ifaceListDelimiter)
+// This function is used to validate the input and to jugde if interfaces should
+// be displayed in output table
+func ValidateIfaceArgument(ifaceArgument string) ([]string, error) {
+	if IsIFaceArgumentRegExp(ifaceArgument) {
+		_, err := ValidateRegExp(ifaceArgument)
+		return []string{ifaceArgument}, err
+	}
+	ifaces := strings.Split(ifaceArgument, ifaceListDelimiter)
 	for _, iface := range ifaces {
 		if err := ValidateIfaceName(iface); err != nil {
-			return nil, err
+			return ifaces, err
 		}
 	}
 	return ifaces, nil
+}
+
+const regExpSeparator = "/"
+
+func IsIFaceArgumentRegExp(iface string) bool {
+	return strings.HasPrefix(iface, regExpSeparator) && strings.HasSuffix(iface, regExpSeparator) && len(iface) > 2
 }
 
 func ValidateAndSeparateFilters(ifaceList string) ([]string, []string, error) {
@@ -54,4 +66,20 @@ func ValidateRegExp(regExp string) (*regexp.Regexp, error) {
 		return nil, errors.New("interface regexp is empty")
 	}
 	return regexp.Compile(regExp)
+}
+
+func ValidateAndExtractRegExp(regExp string) (*regexp.Regexp, error) {
+	if regExp == "" {
+		return nil, errors.New("interface regexp is empty")
+	}
+	// regexp to extract regular expression between the forward slashes
+	re := regexp.MustCompile(`^/(.*?)/$`)
+
+	// Find the match
+	match := re.FindStringSubmatch(regExp)
+
+	if len(match) > 1 {
+		return regexp.Compile(match[1])
+	}
+	return nil, fmt.Errorf("unexpected match count on regexp %s", regExp)
 }

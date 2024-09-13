@@ -365,11 +365,20 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 			Value:    a.Ifaces,
 		})
 	}
+	s.Ifaces, err = types.ValidateIfaceArgument(a.Ifaces)
+	if err != nil {
+		// collect error
+		errModel.Errors = append(errModel.Errors, &huma.ErrorDetail{
+			Message:  fmt.Sprintf("%s: %s", invalidInterfaceMsg, err),
+			Location: "body.ifaces",
+			Value:    a.Ifaces,
+		})
+	}
 
 	// insert iface attribute here in case multiple interfaces where specified and the
 	// interface column was not added as an attribute
 	if (len(s.Ifaces) > 1 || strings.Contains(a.Ifaces, types.AnySelector)) &&
-		!strings.Contains(a.Query, types.IfaceName) {
+		!strings.Contains(a.Query, types.IfaceName) || types.IsIFaceArgumentRegExp(a.Ifaces) {
 		selector.Iface = true
 	}
 	s.LabelSelector = selector
