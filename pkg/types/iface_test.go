@@ -165,3 +165,36 @@ func TestValidateIRegExp(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateAndExtractRegExp(t *testing.T) {
+	var testCases = []struct {
+		input    string
+		output   string
+		errorMsg string
+	}{
+		{
+			input:    "/eth/",
+			output:   "eth",
+			errorMsg: "",
+		},
+		{
+			input:    "/eth[0-2]|t[0-2]/",
+			output:   "eth[0-2]|t[0-2]",
+			errorMsg: "",
+		},
+		{
+			input:    "not_reg_exp",
+			output:   "",
+			errorMsg: "unexpected match count on regexp not_reg_exp",
+		},
+	}
+
+	for _, test := range testCases {
+		actual, actualError := ValidateAndExtractRegExp(test.input)
+		if actualError == nil {
+			require.EqualValues(t, actual.String(), test.output)
+		} else {
+			require.EqualValues(t, actualError.Error(), test.errorMsg)
+		}
+	}
+}
