@@ -100,7 +100,7 @@ func NewDBInterfaceLister(dbPath string) *DBInterfaceLister {
 }
 
 // Implementation of the interface function that uses existing functionality.
-func (dbLister DBInterfaceLister) GetInterfaces() ([]string, error) {
+func (dbLister DBInterfaceLister) ListInterfaces() ([]string, error) {
 	return info.GetInterfaces(dbLister.dbPath)
 }
 
@@ -421,7 +421,7 @@ func parseIfaceListWithCommaSeparatedString(lister types.InterfaceLister, ifaceL
 		return nil, errors.New("no interface(s) specified")
 	}
 
-	allIfaces, err := lister.GetInterfaces()
+	allIfaces, err := lister.ListInterfaces()
 	if err != nil {
 		return nil, err
 	}
@@ -462,7 +462,7 @@ func parseIfaceListWithRegex(lister types.InterfaceLister, ifaceRegExp string) (
 		return nil, reErr
 	}
 
-	ifaces, err := lister.GetInterfaces()
+	ifaces, err := lister.ListInterfaces()
 	if err != nil {
 		return nil, err
 	}

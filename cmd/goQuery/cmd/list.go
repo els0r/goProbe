@@ -86,7 +86,7 @@ func listInterfaces(ctx context.Context, dbPath, queryLogFile string, ifaces ...
 		return err
 	}
 
-	ifaceDirs, err := info.GetInterfaces(dbPath)
+	ifaceDirs, err := info.ListInterfaces(dbPath)
 	if err != nil {
 		return err
 	}

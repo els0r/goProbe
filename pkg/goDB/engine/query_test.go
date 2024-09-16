@@ -2,7 +2,6 @@ package engine
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"testing"
 
@@ -134,7 +133,7 @@ func NewMockInterfaceLister(interfaces []string) *MockInterfaceLister {
 	return &MockInterfaceLister{interfaces: interfaces}
 }
 
-func (mil MockInterfaceLister) GetInterfaces() ([]string, error) {
+func (mil MockInterfaceLister) ListInterfaces() ([]string, error) {
 	return mil.interfaces, nil
 }
 
@@ -210,8 +209,6 @@ func TestRegExpInterfaceFiltering(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			lister := NewMockInterfaceLister(test.ifaces)
 			actual, err := parseIfaceListWithRegex(lister, test.argument)
-			fmt.Println("actual")
-			fmt.Println(actual)
 			if err == nil {
 				require.EqualValues(t, test.expected, actual)
 			}
