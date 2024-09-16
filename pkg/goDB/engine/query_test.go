@@ -258,7 +258,7 @@ func TestDetectRegExpArgument(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.arg, func(t *testing.T) {
-			actual := types.IsIFaceArgumentRegExp(test.arg)
+			actual := types.IsIfaceArgumentRegExp(test.arg)
 			require.EqualValues(t, actual, test.result)
 		})
 	}

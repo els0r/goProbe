@@ -124,7 +124,7 @@ func (qr *QueryRunner) Run(ctx context.Context, args *query.Args) (res *results.
 	// reg exp is preferred
 	var dbLister = NewDBInterfaceLister(qr.dbPath)
 
-	if types.IsIFaceArgumentRegExp(args.Ifaces) {
+	if types.IsIfaceArgumentRegExp(args.Ifaces) {
 		stmt.Ifaces, err = parseIfaceListWithRegex(dbLister, args.Ifaces)
 	} else {
 		stmt.Ifaces, err = parseIfaceListWithCommaSeparatedString(dbLister, args.Ifaces)

@@ -26,7 +26,7 @@ func ValidateIfaceName(iface string) error {
 // This function is used to validate the input and to jugde if interfaces should
 // be displayed in output table
 func ValidateIfaceArgument(ifaceArgument string) ([]string, error) {
-	if IsIFaceArgumentRegExp(ifaceArgument) {
+	if IsIfaceArgumentRegExp(ifaceArgument) {
 		_, err := ValidateRegExp(ifaceArgument)
 		return []string{ifaceArgument}, err
 	}
@@ -41,7 +41,7 @@ func ValidateIfaceArgument(ifaceArgument string) ([]string, error) {
 
 const regExpSeparator = "/"
 
-func IsIFaceArgumentRegExp(iface string) bool {
+func IsIfaceArgumentRegExp(iface string) bool {
 	return strings.HasPrefix(iface, regExpSeparator) && strings.HasSuffix(iface, regExpSeparator) && len(iface) > 2
 }
 
