@@ -74,7 +74,7 @@ type Args struct {
 	// Query: the query type
 	Query string `json:"query" yaml:"query" query:"query" doc:"Query type / Attributes to aggregate by" example:"sip,dip,dport,proto" minLength:"3"`
 	// Ifaces: the interfaces to query
-	Ifaces string `json:"ifaces" yaml:"ifaces" query:"ifaces" doc:"Interfaces to query" example:"eth0,eth1" minLength:"2"`
+	Ifaces string `json:"ifaces" yaml:"ifaces" query:"ifaces" doc:"Interfaces to query, can also be a regexp if wrapped into forward slashes '/eth[0-3]/'" example:"eth0,eth1" minLength:"2"`
 
 	// QueryHosts: the hosts for which data is queried (comma-separated list)
 	QueryHosts string `json:"query_hosts,omitempty" yaml:"query_hosts,omitempty" query:"query_hosts" required:"false" doc:"Hosts for which data is queried" example:"hostA,hostB,hostC"`
