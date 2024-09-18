@@ -2,12 +2,12 @@ package engine
 
 import (
 	"context"
-	"errors"
 	"io"
 	"testing"
 
 	"github.com/els0r/goProbe/pkg/query"
 	"github.com/els0r/goProbe/pkg/types"
+	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -125,52 +125,141 @@ func TestSimpleQuery(t *testing.T) {
 	}
 }
 
-func TestInterfaceValidation(t *testing.T) {
+type MockInterfaceLister struct {
+	interfaces []string
+}
 
-	// create args
-	var tests = []struct {
-		iface       string
-		expectedErr error
-	}{
+func NewMockInterfaceLister(interfaces []string) *MockInterfaceLister {
+	return &MockInterfaceLister{interfaces: interfaces}
+}
+
+func (mil MockInterfaceLister) ListInterfaces() ([]string, error) {
+	return mil.interfaces, nil
+}
+
+type filteringTestDefinition struct {
+	name     string
+	argument string
+	ifaces   []string
+	expected []string
+}
+
+func TestCommaSeparatedInterfaceFiltering(t *testing.T) {
+	var tests = []filteringTestDefinition{
 		{
-			"",
-			errors.New("interface list contains empty interface name"),
+			"selected interfaces are returned",
+			"eth0, eth2",
+			[]string{"eth0", "wlan0", "eth2"},
+			[]string{"eth0", "eth2"},
 		},
 		{
-			"eth/0",
-			errors.New("interface name `eth/0` is invalid"),
+			"nonexistent interface is ignored",
+			"eth0, eth2, notexistent",
+			[]string{"eth0", "wlan0", "eth2"},
+			[]string{"eth0", "eth2"},
 		},
 		{
-			"eth 0",
-			errors.New("interface name `eth 0` is invalid"),
+			"any arguments returns all ignored",
+			"any",
+			[]string{"eth0", "wlan0", "eth2"},
+			[]string{"eth0", "wlan0", "eth2"},
 		},
 		{
-			"thisinterfacenameisfartoolongtobesupported",
-			errors.New("interface name `thisinterfacenameisfartoolongtobesupported` is invalid"),
-		},
-		{
-			"eth.15",
-			nil,
-		},
-		{
-			"eth:0",
-			nil,
+			"all but negaded interface is returned",
+			"any,!eth2,!t1",
+			[]string{"eth0", "wlan0", "t1", "t2", "eth2"},
+			[]string{"eth0", "wlan0", "t2"},
 		},
 	}
 
-	// run table-driven test
 	for _, test := range tests {
-		t.Run(test.iface, func(t *testing.T) {
-			err := types.ValidateIfaceName(test.iface)
-			if test.expectedErr != nil {
-				if err == nil || err.Error() != test.expectedErr.Error() {
-					t.Fatalf("unexpected result for interface name validation: %s", err)
-				}
-			} else {
-				if err != nil {
-					t.Fatalf("unexpected result for interface name validation: %s", err)
-				}
+		t.Run(test.name, func(t *testing.T) {
+			lister := NewMockInterfaceLister(test.ifaces)
+			actual, err := parseIfaceListWithCommaSeparatedString(lister, test.argument)
+			if err == nil {
+				require.EqualValues(t, test.expected, actual)
 			}
+		})
+	}
+}
+
+func TestRegExpInterfaceFiltering(t *testing.T) {
+	var tests = []filteringTestDefinition{
+		{
+			"precisely 1 interface is returned",
+			"/eth0/",
+			[]string{"eth0", "wlan0", "eth2"},
+			[]string{"eth0"},
+		},
+		{
+			"eth prefixed interfaces are selected with correct number range",
+			"/eth[0-2]/",
+			[]string{"eth0", "wlan0", "eth2", "eth3"},
+			[]string{"eth0", "eth2"},
+		},
+		{
+			"using regep or for smaller expression",
+			"/eth[0-2]|wlan0|t4/",
+			[]string{"eth0", "wlan0", "eth2", "t4", "ignored"},
+			[]string{"eth0", "wlan0", "eth2", "t4"},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			lister := NewMockInterfaceLister(test.ifaces)
+			actual, err := parseIfaceListWithRegex(lister, test.argument)
+			if err == nil {
+				require.EqualValues(t, test.expected, actual)
+			}
+			require.Nil(t, err, "No error expected for given input.")
+		})
+	}
+}
+
+func TestDetectRegExpArgument(t *testing.T) {
+
+	var tests = []struct {
+		arg    string
+		result bool
+	}{
+		{
+			"",
+			false,
+		},
+		{
+			"/eth/",
+			true,
+		},
+		{
+			"//eth//",
+			true,
+		},
+		{
+			"eth0",
+			false,
+		},
+		{
+			"//",
+			false,
+		},
+		{
+			"/eth0",
+			false,
+		},
+		{
+			"eth0",
+			false,
+		}, {
+			"eth0/",
+			false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.arg, func(t *testing.T) {
+			actual := types.IsIfaceArgumentRegExp(test.arg)
+			require.EqualValues(t, actual, test.result)
 		})
 	}
 }
