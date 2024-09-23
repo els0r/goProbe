@@ -14,19 +14,6 @@ var queryTags = []string{"Query"}
 
 // RegisterQueryAPI registers all query related endpoints
 func RegisterQueryAPI(a huma.API, caller string, querier query.Runner, middlewares huma.Middlewares) {
-	// query running
-	huma.Register(a,
-		huma.Operation{
-			OperationID: "query-post-run",
-			Method:      http.MethodPost,
-			Path:        QueryRoute,
-			Summary:     "Run query",
-			Description: "Runs a query based on the parameters provided in the body",
-			Middlewares: middlewares,
-			Tags:        queryTags,
-		},
-		getBodyQueryRunnerHandler(caller, querier),
-	)
 	// validation
 	huma.Register(a,
 		huma.Operation{
@@ -55,7 +42,22 @@ func RegisterQueryAPI(a huma.API, caller string, querier query.Runner, middlewar
 	dqr, ok := querier.(*distributed.QueryRunner)
 	if ok {
 		registerDistributedQueryAPI(a, caller, dqr, middlewares)
+		return
 	}
+
+	// query running in case it isn't a distributed API (e.g. goProbe's query endpoint)
+	huma.Register(a,
+		huma.Operation{
+			OperationID: "query-post-run",
+			Method:      http.MethodPost,
+			Path:        QueryRoute,
+			Summary:     "Run query",
+			Description: "Runs a query based on the parameters provided in the body",
+			Middlewares: middlewares,
+			Tags:        queryTags,
+		},
+		getBodyQueryRunnerHandler(caller, querier),
+	)
 }
 
 func registerDistributedQueryAPI(a huma.API, caller string, qr *distributed.QueryRunner, middlewares huma.Middlewares) {
