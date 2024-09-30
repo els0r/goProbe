@@ -16,6 +16,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"unicode"
 
 	"github.com/els0r/goProbe/pkg/goDB/protocols"
 )
@@ -256,8 +257,21 @@ const (
 	RawCompoundQuery         = "raw"
 )
 
+// spaceMap removes all whitespace is the string (including \t and \n)
+func spaceMap(str string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsSpace(r) {
+			return -1
+		}
+		return r
+	}, str)
+}
+
 // Tokenize translates query abbreviations into the attributes they hold
 func Tokenize(queryType string) (tokens []string) {
+	// trim any kind of whitespace from the query type
+	queryType = spaceMap(queryType)
+
 	// covers the case where aliases and attribute/label names are mixed (e.g. talk_conv,dport)
 	qtSplit := strings.Split(queryType, AttrSep)
 	if len(qtSplit) > 1 {

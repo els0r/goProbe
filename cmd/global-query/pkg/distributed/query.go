@@ -70,6 +70,9 @@ func (q *QueryRunner) Run(ctx context.Context, args *query.Args) (*results.Resul
 	ctx, span := tracing.Start(ctx, "(*distributed.QueryRunner).Run", trace.WithAttributes(attribute.String("args", queryArgs.ToJSONString())))
 	defer span.End()
 
+	// sanitize the query attributes
+	queryArgs.Query = types.SanitizeQueryType(queryArgs.Query)
+
 	// check if the statement can be created
 	stmt, err := queryArgs.Prepare()
 	if err != nil {
