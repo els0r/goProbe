@@ -49,8 +49,6 @@ const (
 
 	// defaultEncoderType denotes the default encoder / compressor
 	defaultEncoderType = encoders.EncoderTypeLZ4
-
-	keepAliveInterval = 5 * time.Second
 )
 
 // DBWorkManager schedules parallel processing of blocks relevant for a query
@@ -669,6 +667,9 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workDir *gpfile.GPDir, enc encoder
 				}
 			}
 		}
+
+		// Update keepalive (if required)
+		w.query.UpdateKeepalive()
 
 		// In case any error was observed during above sanity checks, skip this whole block
 		if blockBroken {

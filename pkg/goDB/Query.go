@@ -16,6 +16,8 @@
 package goDB
 
 import (
+	"time"
+
 	"github.com/els0r/goProbe/pkg/goDB/conditions/node"
 	"github.com/els0r/goProbe/pkg/types"
 )
@@ -55,6 +57,11 @@ type Query struct {
 
 	// Enables memory-saving mode
 	lowMem bool
+
+	// Query keep-alive tracking
+	lastKeepalive     time.Time
+	keepaliveInterval time.Duration
+	keepaliveFn       func()
 }
 
 // Computes a columnIndex from a column name. In principle we could merge
@@ -156,6 +163,13 @@ func (q *Query) LowMem(enable bool) *Query {
 	return q
 }
 
+// Keepalive enables sending keepalives at a given frequency
+func (q *Query) Keepalive(fn func(), interval time.Duration) *Query {
+	q.keepaliveFn = fn
+	q.keepaliveInterval = interval
+	return q
+}
+
 // IsLowMem returns if the query was run in low-memory mode
 func (q *Query) IsLowMem() bool {
 	return q.lowMem
@@ -169,4 +183,15 @@ func (q *Query) AttributesToString() []string {
 		s[i] = a.Name()
 	}
 	return s
+}
+
+// UpdateKeepalive emits a specific log line if enabled and a minimum time period has elapsed
+func (q *Query) UpdateKeepalive() {
+	if q.keepaliveInterval > 0 && q.keepaliveFn != nil {
+		// assess time since last keepalive emission and act accordingly
+		if time.Since(q.lastKeepalive) > q.keepaliveInterval {
+			q.lastKeepalive = time.Now()
+			q.keepaliveFn()
+		}
+	}
 }
