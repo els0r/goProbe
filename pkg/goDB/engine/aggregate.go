@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"runtime"
-	"time"
 
 	"github.com/els0r/goProbe/pkg/types"
 	"github.com/els0r/goProbe/pkg/types/hashmap"
@@ -14,6 +13,7 @@ import (
 
 type aggregateResult struct {
 	aggregatedMaps hashmap.NamedAggFlowMapWithMetadata
+	stats          *workload.Stats
 	totals         types.Counters
 	err            error
 }
@@ -67,10 +67,19 @@ func (qr *QueryRunner) aggregate(ctx context.Context, mapChan <-chan hashmap.Agg
 			// Since we know that the source maps retrieved over the channel are not
 			// changed anymore we can re-use the memory allocated for the keys in them by
 			// using them for the aggregate map
-			finalMaps = hashmap.NewNamedAggFlowMapWithMetadata(ifaces)
+			finalMaps  = hashmap.NewNamedAggFlowMapWithMetadata(ifaces)
+			finalStats = new(workload.Stats)
 		)
 
-		tLastStatsUpdate := time.Now()
+		// keep-alive updating of queries
+		if qr.keepAlive > 0 {
+			qr.query.Keepalive(func() {
+				finalStats.RLock()
+				logWorkloadStats(logger, "processing stats update", finalStats)
+				finalStats.RUnlock()
+			}, qr.keepAlive)
+		}
+
 		for item := range mapChan {
 			if item.IsNil() || item.Interface == "" {
 				resultChan <- aggregateResult{err: errorInternalProcessing}
@@ -79,6 +88,7 @@ func (qr *QueryRunner) aggregate(ctx context.Context, mapChan <-chan hashmap.Agg
 
 			finalMap := finalMaps[item.Interface]
 			finalMap.Stats.Add(item.Stats)
+			finalStats.Add(item.Stats)
 
 			// the processing stats have been processed. Skip to next item in case there's no flow data to process. This
 			// is relevant for cases where no flow records are returned as a result of conditions not matching
@@ -89,14 +99,6 @@ func (qr *QueryRunner) aggregate(ctx context.Context, mapChan <-chan hashmap.Agg
 			// Merge the item into the final map for this interface
 			finalMap.Merge(item)
 			nAgg[item.Interface] = nAgg[item.Interface] + 1
-
-			// keep-alive updating of queries
-			if qr.keepAlive > 0 {
-				if time.Since(tLastStatsUpdate) > qr.keepAlive {
-					tLastStatsUpdate = time.Now()
-					logWorkloadStats(logger.With("iface", item.Interface), "processing stats update", finalMap.Stats)
-				}
-			}
 
 			// Cleanup the now unused item / map
 			if isLowMem {
@@ -114,6 +116,7 @@ func (qr *QueryRunner) aggregate(ctx context.Context, mapChan <-chan hashmap.Agg
 
 		resultChan <- aggregateResult{
 			aggregatedMaps: finalMaps,
+			stats:          finalStats,
 			totals:         totals,
 		}
 	}()

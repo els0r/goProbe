@@ -354,8 +354,9 @@ func (qr *QueryRunner) RunStatement(ctx context.Context, stmt *query.Statement) 
 			count++
 		}
 
-		// add statistics to final result
+		// add statistics to final result and trigger keepalive (if required)
 		result.Summary.Stats.Add(aggMap.Stats)
+		qr.query.UpdateKeepalive()
 
 		// Now is a good time to release memory one last time for the final processing step
 		if qr.query.IsLowMem() {
