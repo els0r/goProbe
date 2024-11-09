@@ -75,7 +75,7 @@ jobs:
           desc: 'goProbe Network Traffic Monitoring'
 
       - name: Store artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: Debian
           path: |
@@ -143,7 +143,7 @@ jobs:
           desc: 'goProbe Network Traffic Monitoring'
 
       - name: Store artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: Fedora
           path: |
@@ -152,7 +152,7 @@ jobs:
 
   build-apk:
     runs-on: ubuntu-latest
-    container: golang:1.22-alpine3.19
+    container: golang:1-alpine
     steps:
 
       - name: Set environment
@@ -185,7 +185,7 @@ jobs:
           tar czf ./goprobe_${{ env.RELEASE_VERSION }}_alpine_x86_64.tar.gz goProbe global-query goQuery gpctl goConvert
 
       - name: Store artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: Alpine
           path: |
@@ -193,7 +193,7 @@ jobs:
 
   build-openapi-specs:
     runs-on: ubuntu-latest
-    container: golang:1.22-alpine3.19
+    container: golang:1-alpine
     steps:
         - name: Set environment
           run: |
@@ -210,7 +210,7 @@ jobs:
             go run ./cmd/global-query/main.go --config .buildconfig/global-query.yaml server --openapi.spec-outfile ./global-query_${{ env.RELEASE_VERSION }}_openapi.yaml
 
         - name: Store artifacts
-          uses: actions/upload-artifact@v3
+          uses: actions/upload-artifact@v4
           with:
             name: OpenAPI
             path: |
@@ -222,7 +222,7 @@ jobs:
     needs: [build-deb, build-rpm, build-apk, build-openapi-specs]
     steps:
 
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           path: downloaded-artifacts
 
