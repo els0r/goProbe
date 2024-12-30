@@ -15,7 +15,6 @@ This package comprises:
 Conversion tools:
 
 * [goConvert](./cmd/goConvert/) - Helper binary to convert goProbe-flow data stored in `csv` files
-* [legacy](./cmd/legacy/) - DB conversion tool to convert `.gpf` files - needed for upgrade to a `v4.x` compatible format
 
 Data backends:
 
@@ -30,7 +29,7 @@ As the name suggests, all components are written in [Go](https://golang.org/).
 > * goProbe's API endpoints
 > * the JSON results format from `goQuery`
 >
-> To convert your existing pre-v4 DB to a `v4.x` compatible format, please refer to the [legacy](./cmd/legacy) conversion tool.
+> To convert your existing pre-v4 DB to a `v4.x` compatible format, please refer to the [legacy](https://github.com/els0r/goProbe/tree/v4.1.6/cmd/legacy) conversion tool (v4.1 releases only).
 
 ## Introduction
 

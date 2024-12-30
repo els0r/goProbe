@@ -12,20 +12,20 @@ type Type uint8
 // When implementing new encoders, make sure to add the type above MaxEncoderType. Otherwise, compatibility
 // with existing databases is broken
 const (
-	EncoderTypeLZ4Custom Type = iota // EncoderTypeLZ4Custom : LZ4 encoder / compressor with custom checksum stripping (default, hence allocated the value 0)
-	EncoderTypeNull                  // EncoderTypeNull : Null encoder
-	EncoderTypeZSTD                  // EncoderTypeZSTD : ZSTD encoder / compressor
-	EncoderTypeLZ4                   // EncoderTypeLZ4 ; LZ4 encoder / compressor based on available lz4 system library (1.9.4 recommended for performance)
+	EncoderTypeLZ4CustomDeprecated Type = iota // EncoderTypeLZ4Custom : LZ4 encoder / compressor with custom checksum stripping (default, hence allocated the value 0)
+	EncoderTypeNull                            // EncoderTypeNull : Null encoder
+	EncoderTypeZSTD                            // EncoderTypeZSTD : ZSTD encoder / compressor
+	EncoderTypeLZ4                             // EncoderTypeLZ4 ; LZ4 encoder / compressor based on available lz4 system library (1.9.4 recommended for performance)
 
 	// MaxEncoderType should always be the last entry
 	MaxEncoderType = EncoderTypeLZ4
 )
 
 var encoderNames = map[Type]string{
-	EncoderTypeLZ4:       "lz4",
-	EncoderTypeLZ4Custom: "lz4cust",
-	EncoderTypeNull:      "null",
-	EncoderTypeZSTD:      "zstd",
+	EncoderTypeLZ4:                 "lz4",
+	EncoderTypeLZ4CustomDeprecated: "lz4cust",
+	EncoderTypeNull:                "null",
+	EncoderTypeZSTD:                "zstd",
 }
 
 // String returns a string representation of the encoding type
@@ -41,7 +41,7 @@ func GetTypeByString(t string) (Type, error) {
 	case "lz4":
 		return EncoderTypeLZ4, nil
 	case "lz4cust":
-		return EncoderTypeLZ4Custom, nil
+		return EncoderTypeLZ4CustomDeprecated, nil
 	case "zstd":
 		return EncoderTypeZSTD, nil
 	default:

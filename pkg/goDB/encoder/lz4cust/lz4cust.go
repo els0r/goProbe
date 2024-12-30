@@ -21,7 +21,7 @@ func (e *Encoder) SetLevel(level int) {
 
 // Type will return the type of encoder
 func (e *Encoder) Type() encoders.Type {
-	return encoders.EncoderTypeLZ4Custom
+	return encoders.EncoderTypeLZ4CustomDeprecated
 }
 
 // Close will close the encoder and release potentially allocated resources
