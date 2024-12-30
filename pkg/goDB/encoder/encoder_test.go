@@ -8,14 +8,13 @@ import (
 
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/lz4"
-	"github.com/els0r/goProbe/pkg/goDB/encoder/lz4cust"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/zstd"
 )
 
 var testEncoders = []encoders.Type{
 	encoders.EncoderTypeNull,
 	encoders.EncoderTypeLZ4,
-	encoders.EncoderTypeLZ4Custom,
+	encoders.EncoderTypeLZ4CustomDeprecated,
 	encoders.EncoderTypeZSTD,
 }
 
@@ -29,7 +28,7 @@ func TestNewByString(t *testing.T) {
 		{"empty string", "", encoders.EncoderTypeNull, false},
 		{"null encoder", "null", encoders.EncoderTypeNull, false},
 		{"lz4 encoder", "lz4", encoders.EncoderTypeLZ4, false},
-		{"lz4 encoder custom", "lz4cust", encoders.EncoderTypeLZ4Custom, lz4cust.ErrDeprecated != nil},
+		{"lz4 encoder custom", "lz4cust", encoders.EncoderTypeLZ4CustomDeprecated, true},
 		{"lz4 encoder (uppercase)", "LZ4", encoders.EncoderTypeLZ4, false},
 		{"zstd encoder", "zstd", encoders.EncoderTypeZSTD, false},
 		{"zstd encoder (uppercase)", "ZSTD", encoders.EncoderTypeZSTD, false},
@@ -63,7 +62,7 @@ func TestCompressionDecompression(t *testing.T) {
 		t.Run(encType.String(), func(t *testing.T) {
 			enc, err := New(encType)
 			if err != nil {
-				if errors.Is(err, lz4cust.ErrDeprecated) {
+				if errors.Is(err, ErrDeprecatedLZ4Cust) {
 					t.Skip("ignoring deprecated encoding algorithm")
 				}
 				t.Fatalf("Failed to instantiate encoder of type %s: %s", encType, err)
@@ -107,7 +106,7 @@ func TestCompressionDecompressionCustomLevel(t *testing.T) {
 			t.Run(fmt.Sprintf("%s_%d", encType, level), func(t *testing.T) {
 				enc, err := New(encType)
 				if err != nil {
-					if errors.Is(err, lz4cust.ErrDeprecated) {
+					if errors.Is(err, ErrDeprecatedLZ4Cust) {
 						t.Skip("ignoring deprecated encoding algorithm")
 					}
 					t.Fatalf("Failed to instantiate encoder of type %s: %s", encType, err)
@@ -152,7 +151,7 @@ func BenchmarkEncodersCompress(b *testing.B) {
 		b.Run(encType.String(), func(b *testing.B) {
 			enc, err := New(encType)
 			if err != nil {
-				if errors.Is(err, lz4cust.ErrDeprecated) {
+				if errors.Is(err, ErrDeprecatedLZ4Cust) {
 					b.Skip("ignoring deprecated encoding algorithm")
 				}
 				b.Fatalf("Failed to instantiate encoder of type %s: %s", encType, err)
@@ -186,7 +185,7 @@ func BenchmarkEncodersDecompress(b *testing.B) {
 		b.Run(encType.String(), func(b *testing.B) {
 			enc, err := New(encType)
 			if err != nil {
-				if errors.Is(err, lz4cust.ErrDeprecated) {
+				if errors.Is(err, ErrDeprecatedLZ4Cust) {
 					b.Skip("ignoring deprecated encoding algorithm")
 				}
 				b.Fatalf("Failed to instantiate encoder of type %s: %s", encType, err)

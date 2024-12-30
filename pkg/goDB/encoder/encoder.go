@@ -1,14 +1,20 @@
 package encoder
 
 import (
+	"errors"
 	"fmt"
 	"io"
 
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/lz4"
-	"github.com/els0r/goProbe/pkg/goDB/encoder/lz4cust"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/null"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/zstd"
+)
+
+var (
+
+	// ErrDeprecatedLZ4Cust is used to signify the obsoletion of the lz4cust encoding
+	ErrDeprecatedLZ4Cust = errors.New("the LZ4 custom implementation has been deprecated, please check out the v4.0.0 README")
 )
 
 // Encoder provides the GP File with a means to compress and decompress its raw data
@@ -38,8 +44,8 @@ func New(t encoders.Type) (Encoder, error) {
 		return null.New(), nil
 	case encoders.EncoderTypeLZ4:
 		return lz4.New(), nil
-	case encoders.EncoderTypeLZ4Custom:
-		return lz4cust.New(), lz4cust.ErrDeprecated
+	case encoders.EncoderTypeLZ4CustomDeprecated:
+		return nil, ErrDeprecatedLZ4Cust
 	case encoders.EncoderTypeZSTD:
 		return zstd.New(), nil
 	default:

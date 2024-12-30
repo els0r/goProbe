@@ -531,29 +531,6 @@ func DirTimestamp(timestamp int64) int64 {
 	return (timestamp / EpochDay) * EpochDay
 }
 
-// FindDirForTimestamp finds the full path to a GPDir given a timestamp (if the metadata suffix is
-// not known).
-// Note: This is inherently slow due to the search, so it should not be used to determine directories
-// used for queries (currently only used in legacy DB conversion tool)
-// TODO: Remove once legacy tool has been purged
-func FindDirForTimestamp(basePath string, timestamp int64) (match string, found bool) {
-	dayTimestamp := DirTimestamp(timestamp)
-	dayUnix := time.Unix(dayTimestamp, 0)
-
-	monthDir := filepath.Join(basePath, strconv.Itoa(dayUnix.Year()), padNumber(int64(dayUnix.Month())))
-	dirents, err := os.ReadDir(monthDir)
-	if err != nil {
-		return
-	}
-
-	// Find a matching directory using prefix-based binary search
-	if match, found = binarySearchPrefix(dirents, strconv.FormatInt(dayTimestamp, 10)); found {
-		match = filepath.Join(monthDir, match)
-	}
-
-	return
-}
-
 func genWritePathForTimestamp(basePath string, timestamp int64) (string, string) {
 	dayTimestamp := DirTimestamp(timestamp)
 	dayUnix := time.Unix(dayTimestamp, 0)
