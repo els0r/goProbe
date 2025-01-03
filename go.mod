@@ -13,7 +13,7 @@ require (
 	github.com/fako1024/gotools/bitpack v0.0.0-20240726111648-469fe0cf3902
 	github.com/fako1024/gotools/concurrency v0.0.0-20240726111648-469fe0cf3902
 	github.com/fako1024/httpc v1.1.1
-	github.com/fako1024/slimcap v1.0.6-0.20250102130210-2195184e7641
+	github.com/fako1024/slimcap v1.0.6
 	github.com/gin-contrib/cors v1.7.3
 	github.com/gin-contrib/pprof v1.5.2
 	github.com/gin-gonic/gin v1.10.0
@@ -102,8 +102,8 @@ require (
 	golang.org/x/crypto v0.31.0 // indirect
 	golang.org/x/exp v0.0.0-20241217172543-b2144cdd0a67 // indirect
 	golang.org/x/text v0.21.0 // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20241230172942-26aa7a208def // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20241230172942-26aa7a208def // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20250102185135-69823020774d // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20250102185135-69823020774d // indirect
 	google.golang.org/grpc v1.69.2 // indirect
 	google.golang.org/protobuf v1.36.1 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
