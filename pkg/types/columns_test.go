@@ -11,7 +11,6 @@
 package types
 
 import (
-	"fmt"
 	"reflect"
 	"testing"
 
@@ -93,6 +92,8 @@ var parseQueryTypeTests = []struct {
 	{"dst", []Attribute{DIPAttribute{}}, false, false},
 	{"talk_src", []Attribute{SIPAttribute{}}, false, false},
 	{"sip,dip,dip,sip,dport", []Attribute{SIPAttribute{}, DIPAttribute{}, DportAttribute{}}, false, false},
+	{` sip,	dip,  dip, sip,
+	dport `, []Attribute{SIPAttribute{}, DIPAttribute{}, DportAttribute{}}, false, false},
 	{"sip,dip,dip,iface,sip,dport", []Attribute{SIPAttribute{}, DIPAttribute{}, DportAttribute{}}, false, true},
 	{"sip,dip,dst,src,dport", []Attribute{SIPAttribute{}, DIPAttribute{}, DportAttribute{}}, false, false},
 	{"src,dst,dip,sip,dport", []Attribute{SIPAttribute{}, DIPAttribute{}, DportAttribute{}}, false, false},
@@ -104,9 +105,8 @@ var parseQueryTypeTests = []struct {
 }
 
 func TestParseQueryType(t *testing.T) {
-	for i, test := range parseQueryTypeTests {
-		test := test
-		t.Run(fmt.Sprint(i), func(t *testing.T) {
+	for _, test := range parseQueryTypeTests {
+		t.Run(test.InQueryType, func(t *testing.T) {
 			attributes, selector, err := ParseQueryType(test.InQueryType)
 			require.Nilf(t, err, "Unexpectedly failed on input %v", test.InQueryType)
 			require.Equal(t, test.OutHasAttrIface, selector.Iface)

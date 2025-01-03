@@ -75,7 +75,10 @@ const helpBaseLong = helpBase + `
 var helpMap = map[string]string{
 	"Ifaces": `Interfaces for which the query should be performed
 (e.g. "eth0 "eth0,t4_33760").
-You can specify "ANY" to query all interfaces.
+You can specify "ANY" to query all interfaces. 
+You can exclude interfaces with exlamation mark '!' (e.g "any,!eth2") Would list every interface but eth2.
+You can also use regular expressions if the argument is wrapped into forward slahes '/'.
+(e.g. "/eth[0-2]/")
 `,
 	"Help": `Display this help text.
 `,

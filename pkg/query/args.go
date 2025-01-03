@@ -74,7 +74,7 @@ type Args struct {
 	// Query: the query type
 	Query string `json:"query" yaml:"query" query:"query" doc:"Query type / Attributes to aggregate by" example:"sip,dip,dport,proto" minLength:"3"`
 	// Ifaces: the interfaces to query
-	Ifaces string `json:"ifaces" yaml:"ifaces" query:"ifaces" doc:"Interfaces to query" example:"eth0,eth1" minLength:"2"`
+	Ifaces string `json:"ifaces" yaml:"ifaces" query:"ifaces" doc:"Interfaces to query, can also be a regexp if wrapped into forward slashes '/eth[0-3]/'" example:"eth0,eth1" minLength:"2"`
 
 	// QueryHosts: the hosts for which data is queried (comma-separated list)
 	QueryHosts string `json:"query_hosts,omitempty" yaml:"query_hosts,omitempty" query:"query_hosts" required:"false" doc:"Hosts for which data is queried" example:"hostA,hostB,hostC"`
@@ -365,7 +365,7 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 			Value:    a.Ifaces,
 		})
 	}
-	s.Ifaces, err = types.ValidateIfaceNames(a.Ifaces)
+	s.Ifaces, err = types.ValidateIfaceArgument(a.Ifaces)
 	if err != nil {
 		// collect error
 		errModel.Errors = append(errModel.Errors, &huma.ErrorDetail{
@@ -378,7 +378,7 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 	// insert iface attribute here in case multiple interfaces where specified and the
 	// interface column was not added as an attribute
 	if (len(s.Ifaces) > 1 || strings.Contains(a.Ifaces, types.AnySelector)) &&
-		!strings.Contains(a.Query, types.IfaceName) {
+		!strings.Contains(a.Query, types.IfaceName) || types.IsIfaceArgumentRegExp(a.Ifaces) {
 		selector.Iface = true
 	}
 	s.LabelSelector = selector

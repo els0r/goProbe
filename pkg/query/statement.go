@@ -11,7 +11,7 @@ import (
 
 // Statement bundles all relevant options for running a query and displaying its result
 type Statement struct {
-	// Ifaces holds hte list of all interfaces that should be queried
+	// Ifaces holds the list of all interfaces that should be queried
 	Ifaces []string `json:"ifaces"`
 
 	LabelSelector types.LabelSelector `json:"label_selector,omitempty"`
