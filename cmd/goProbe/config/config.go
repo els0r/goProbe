@@ -23,6 +23,7 @@ import (
 	"github.com/els0r/goProbe/pkg/defaults"
 	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 	jsoniter "github.com/json-iterator/go"
+	"golang.org/x/net/bpf"
 	"golang.org/x/time/rate"
 	"gopkg.in/yaml.v3"
 )
@@ -67,10 +68,14 @@ type DBConfig struct {
 
 // CaptureConfig stores the capture / buffer related configuration for an individual interface
 type CaptureConfig struct {
+	// IgnoreVLANs: enables / disables skipping of VLAN-tagged packets
+	IgnoreVLANs bool `json:"ignore_vlans" yaml:"ignore_vlans" doc:"Enables / disables skipping of VLAN-tagged packets on interface" example:"true"`
 	// Promisc: enables / disables promiscuous capture mode
 	Promisc bool `json:"promisc" yaml:"promisc" doc:"Enables / disables promiscuous capture mode on interface" example:"true"`
 	// RingBuffer: denotes the kernel ring buffer configuration of this interface
 	RingBuffer *RingBufferConfig `json:"ring_buffer" yaml:"ring_buffer" doc:"Kernel ring buffer configuration for interface"`
+	// ExtraBPFFilters: allows setting additional BPF filter instructions during capture
+	ExtraBPFFilters []bpf.RawInstruction `json:"extra_bpf_filters" yaml:"extra_bpf_filters" doc:"Extra BPF filter instructions to be applied during capture"`
 }
 
 // LocalBufferConfig stores the shared local in-memory buffer configuration

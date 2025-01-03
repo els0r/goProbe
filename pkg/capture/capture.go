@@ -36,6 +36,8 @@ var (
 			afring.CaptureLength(link.CaptureLengthMinimalIPv6Transport),
 			afring.BufferSize(c.config.RingBuffer.BlockSize, c.config.RingBuffer.NumBlocks),
 			afring.Promiscuous(c.config.Promisc),
+			afring.IgnoreVLANs(c.config.IgnoreVLANs),
+			afring.ExtraBPFInstructions(c.config.ExtraBPFFilters),
 		)
 	}
 )
