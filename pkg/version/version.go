@@ -55,7 +55,7 @@ func Version() string {
 // git rev-parse --short. If SemVer has been provided, it will be
 // prepended
 func Short() string {
-	if GitSHA == "" {
+	if len(GitSHA) < 8 {
 		return devel
 	}
 	short := GitSHA[0:8]
