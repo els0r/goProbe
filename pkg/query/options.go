@@ -55,3 +55,9 @@ func WithMaxMemPct(m int) Option { return func(a *Args) { a.MaxMemPct = m } }
 
 // WithCaller sets the name of the program/tool calling the query
 func WithCaller(c string) Option { return func(a *Args) { a.Caller = c } }
+
+// WithQueryHosts sets the query hosts argument
+func WithQueryHosts(c string) Option { return func(a *Args) { a.QueryHosts = c } }
+
+// WithLive enables live data query
+func WithLive() Option { return func(a *Args) { a.Live = true } }
