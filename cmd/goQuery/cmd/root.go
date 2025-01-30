@@ -374,6 +374,9 @@ func entrypoint(cmd *cobra.Command, args []string) (err error) {
 			querier = gqclient.New(viper.GetString(conf.QueryServerAddr))
 		}
 	} else {
+		if queryArgs.Live {
+			return errors.New("cannot run live query in local DB mode")
+		}
 		// query using local goDB
 		querier = engine.NewQueryRunner(dbPathCfg, engine.WithKeepAlive(viper.GetDuration(conf.QueryKeepAlive)))
 	}
