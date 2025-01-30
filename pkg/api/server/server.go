@@ -43,16 +43,18 @@ type DefaultServer struct {
 	debug bool
 
 	// telemetry
-	profiling              bool
-	metrics                bool
-	tracing                bool
-	requestDurationBuckets []float64
+	profiling                 bool
+	metrics                   bool
+	tracing                   bool
+	disableRecursionDetection bool
+	requestDurationBuckets    []float64
 
 	serviceName string // serviceName is the name of the program that serves the API, e.g. global-query
 	addr        string
 
 	// global rate limiting for queries
-	queryRateLimiter *rate.Limiter
+	queryRateLimiter       *rate.Limiter
+	queryRateMaxConcurrent int
 
 	srv    *http.Server
 	router *gin.Engine
@@ -92,11 +94,19 @@ func WithTracing(enabled bool) Option {
 }
 
 // WithQueryRateLimit enables a global rate limit for query calls
-func WithQueryRateLimit(r rate.Limit, b int) Option {
+func WithQueryRateLimit(r rate.Limit, b, maxConcurrent int) Option {
 	return func(server *DefaultServer) {
+		server.queryRateMaxConcurrent = maxConcurrent
 		if r > 0. {
 			server.queryRateLimiter = rate.NewLimiter(r, b)
 		}
+	}
+}
+
+// WithNoRecursionDetection disables the query recursion detection
+func WithNoRecursionDetection() Option {
+	return func(server *DefaultServer) {
+		server.disableRecursionDetection = true
 	}
 }
 
@@ -155,9 +165,10 @@ func (server *DefaultServer) WriteOpenAPISpec(w io.Writer) error {
 	return err
 }
 
-// QueryRateLimiter returns the global rate limiter, if enabled (if not it return nil and false)
-func (server *DefaultServer) QueryRateLimiter() (*rate.Limiter, bool) {
-	return server.queryRateLimiter, server.queryRateLimiter != nil
+// QueryRateLimiter returns the maximum number of concurrent queries and the global rate limiter,
+// if enabled (if not it return nil and false)
+func (server *DefaultServer) QueryRateLimiter() (int, *rate.Limiter, bool) {
+	return server.queryRateMaxConcurrent, server.queryRateLimiter, server.queryRateLimiter != nil
 }
 
 func (server *DefaultServer) registerInfoRoutes() {
@@ -190,8 +201,10 @@ func (server *DefaultServer) registerMiddlewares() {
 	middlewares = append(middlewares,
 		api.TraceIDMiddleware(),
 		api.RequestLoggingMiddleware(),
-		api.RecursionDetectorMiddleware(RuntimeIDHeaderKey, info.RuntimeID()),
 	)
+	if !server.disableRecursionDetection {
+		middlewares = append(middlewares, api.RecursionDetectorMiddleware(RuntimeIDHeaderKey, info.RuntimeID()))
+	}
 
 	server.router.Use(middlewares...)
 

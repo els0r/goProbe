@@ -128,6 +128,8 @@ type Args struct {
 	MaxMemPct int `json:"max_mem_pct,omitempty" yaml:"max_mem_pct,omitempty" query:"max_mem_pct" required:"false" doc:"Maximum percentage of available host memory to use for query processing" default:"60" example:"80" minimum:"1" maximum:"100"`
 	// LowMem: use less memory for query processing
 	LowMem bool `json:"low_mem,omitempty" yaml:"low_mem,omitempty" query:"low_mem" required:"false" doc:"Use less memory for query processing" example:"false"`
+	// KeepAlive: keepalive message interval for query processor
+	KeepAlive time.Duration `json:"keepalive,omitempty" yaml:"keepalive,omitempty" query:"keepalive" required:"false" doc:"Keepalive message interval (duration) for query" example:"2000000000" minimum:"0"`
 
 	// Caller stores who produced these args (caller)
 	Caller string `json:"caller,omitempty" yaml:"caller,omitempty" query:"caller" required:"false" doc:"Caller stores who produced the arguments" example:"goQuery"`
@@ -154,6 +156,18 @@ type Args struct {
 // '}
 type DetailError struct {
 	huma.ErrorModel
+}
+
+// NewDetailError creates a new generic DetailError of specific status and
+// providing detailed information based on a generic error
+func NewDetailError(code int, err error) *DetailError {
+	return &DetailError{
+		ErrorModel: huma.ErrorModel{
+			Title:  http.StatusText(code),
+			Status: code,
+			Detail: err.Error(),
+		},
+	}
 }
 
 // Pretty implements the prettier interface for a huma.ErrorModel
@@ -252,6 +266,7 @@ const (
 	invalidConditionMsg            = "invalid condition"
 	invalidMaxMemPctMsg            = "invalid max memory percentage"
 	invalidRowLimitMsg             = "invalid row limit"
+	invalidKeepAliveDuration       = "invalid keepalive duration"
 	invalidLiveQueryMsg            = "query not possible"
 	unboundedQuery                 = "unbounded query"
 )
@@ -472,6 +487,19 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 		})
 	}
 	s.MaxMemPct = a.MaxMemPct
+
+	// check keepalive duration flag
+	if a.KeepAlive != 0 {
+		if !(0 < a.KeepAlive) {
+			// collect error
+			errModel.Errors = append(errModel.Errors, &huma.ErrorDetail{
+				Message:  fmt.Sprintf("%s: must be >0", invalidKeepAliveDuration),
+				Location: "body.keepalive",
+				Value:    a.KeepAlive,
+			})
+		}
+	}
+	s.KeepAliveDuration = a.KeepAlive
 
 	// check limits flag
 	if a.NumResults <= 0 {

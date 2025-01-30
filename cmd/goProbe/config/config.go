@@ -119,6 +119,7 @@ type LogConfig struct {
 type QueryRateLimitConfig struct {
 	MaxReqPerSecond rate.Limit `json:"max_req_per_sec" yaml:"max_req_per_sec"`
 	MaxBurst        int        `json:"max_burst" yaml:"max_burst"`
+	MaxConcurrent   int        `json:"max_concurrent" yaml:"max_concurrent"`
 }
 
 // APIConfig stores goProbe's API configuration
@@ -162,6 +163,9 @@ func (a APIConfig) validate() error {
 	}
 	if (a.QueryRateLimit.MaxReqPerSecond <= 0. && a.QueryRateLimit.MaxBurst > 0) ||
 		(a.QueryRateLimit.MaxReqPerSecond > 0. && a.QueryRateLimit.MaxBurst <= 0) {
+		return errorInvalidAPIQueryRateLimit
+	}
+	if a.QueryRateLimit.MaxConcurrent < 0 {
 		return errorInvalidAPIQueryRateLimit
 	}
 	for _, key := range a.Keys {

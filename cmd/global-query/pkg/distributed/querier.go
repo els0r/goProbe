@@ -11,10 +11,10 @@ import (
 // Querier provides a general interface for all query executors
 type Querier interface {
 	// Query runs the distributed query on the provided hosts and returns a channel from
-	// which the results can be read. It is the responsibility of the implementing type
-	// to close the channel.
-	// This may become a requirement through the interface definitions in future versions
-	Query(ctx context.Context, hosts hosts.Hosts, args *query.Args) <-chan *results.Result
+	// which the results can be read. In addition, keepalives are sent via a second channel.
+	// It is the responsibility of the implementing type to close the channels.
+	// This may become a requirement through the interface definitions in future versions.
+	Query(ctx context.Context, hosts hosts.Hosts, args *query.Args) (<-chan *results.Result, <-chan struct{})
 }
 
 // QuerierAnyable extends a "common" Querier with the support to retrieve a list of all hosts / targets

@@ -13,7 +13,7 @@ require (
 	github.com/fako1024/gotools/bitpack v0.0.0-20240726111648-469fe0cf3902
 	github.com/fako1024/gotools/concurrency v0.0.0-20240726111648-469fe0cf3902
 	github.com/fako1024/httpc v1.1.1
-	github.com/fako1024/slimcap v1.0.6
+	github.com/fako1024/slimcap v1.0.7
 	github.com/gin-contrib/cors v1.7.3
 	github.com/gin-contrib/pprof v1.5.2
 	github.com/gin-gonic/gin v1.10.0

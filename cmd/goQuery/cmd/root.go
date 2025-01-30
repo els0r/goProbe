@@ -98,6 +98,8 @@ func init() {
 	flags.BoolVarP(&cmdLineParams.Sum, "sum", "", false, helpMap["Sum"])
 	flags.BoolVarP(&cmdLineParams.Version, "version", "v", false, "Print version information and exit\n")
 
+	flags.DurationVarP(&cmdLineParams.KeepAlive, conf.QueryKeepAlive, "k", 0, "Interval to emit log messages showing that query processing is still ongoing\n")
+
 	flags.StringVarP(&cmdLineParams.Ifaces, "ifaces", "i", "", helpMap["Ifaces"])
 	flags.StringVarP(&cmdLineParams.Condition, "condition", "c", "", helpMap["Condition"])
 
@@ -185,7 +187,6 @@ goProbe.
 	pflags.String(conf.StoredQuery, "", "Load JSON serialized query arguments from disk and run them\n")
 	pflags.Duration(conf.QueryTimeout, query.DefaultQueryTimeout, "Abort query processing after timeout expires\n")
 	pflags.String(conf.QueryLog, "", "Log query invocations to file\n")
-	pflags.DurationP(conf.QueryKeepAlive, "k", 0, "Interval to emit log messages showing that query processing is still ongoing\n")
 	pflags.Bool(conf.QueryStats, false, "Print query DB interaction statistics\n")
 	pflags.Bool(conf.QueryStreaming, false, "Stream results instead of waiting for the final result from a distributed query\n")
 
@@ -369,13 +370,17 @@ func entrypoint(cmd *cobra.Command, args []string) (err error) {
 					return nil
 				},
 				func(ctx context.Context, r *results.Result) error { return nil },
+				func(ctx context.Context) error {
+					logging.FromContext(ctx).Infof("received keepalive")
+					return nil
+				},
 			)
 		} else {
 			querier = gqclient.New(viper.GetString(conf.QueryServerAddr))
 		}
 	} else {
 		// query using local goDB
-		querier = engine.NewQueryRunner(dbPathCfg, engine.WithKeepAlive(viper.GetDuration(conf.QueryKeepAlive)))
+		querier = engine.NewQueryRunner(dbPathCfg)
 	}
 
 	// check if the traceparent is set

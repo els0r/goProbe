@@ -41,15 +41,22 @@ const ifaceKey = "interface"
 
 func (server *Server) registerRoutes() {
 	var middlewares huma.Middlewares
-	rateLimiter, enabled := server.QueryRateLimiter()
+	maxConcurrentQueries, rateLimiter, enabled := server.QueryRateLimiter()
 	if enabled {
 		middlewares = append(middlewares, api.RateLimitMiddleware(rateLimiter))
 	}
 
 	// query
+	opts := []engine.RunnerOption{
+		engine.WithLiveData(server.captureManager),
+	}
+	if maxConcurrentQueries > 0 {
+		sem := make(chan struct{}, maxConcurrentQueries)
+		opts = append(opts, engine.WithMaxConcurrent(sem))
+	}
 	api.RegisterQueryAPI(server.API(),
 		fmt.Sprintf("goProbe/%s", version.Short()),
-		engine.NewQueryRunnerWithLiveData(server.dbPath, server.captureManager),
+		engine.NewQueryRunner(server.dbPath, opts...),
 		middlewares,
 	)
 

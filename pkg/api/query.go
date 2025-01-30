@@ -2,14 +2,40 @@ package api
 
 import (
 	"context"
+	"errors"
+	"net/http"
 
 	"github.com/danielgtaylor/huma/v2/sse"
-	"github.com/els0r/goProbe/cmd/global-query/pkg/distributed"
 	"github.com/els0r/goProbe/pkg/query"
 	"github.com/els0r/goProbe/pkg/results"
 	"github.com/els0r/goProbe/pkg/types"
 	"github.com/els0r/telemetry/logging"
 )
+
+var (
+	// ErrTooManyConcurrentRequest denotes that the number of concurrent queries
+	// has been exhausted
+	ErrTooManyConcurrentRequest = errors.New("too many concurrent requests")
+)
+
+func OnResultFn(res *results.Result, send sse.Sender) error {
+	if res == nil {
+		return nil
+	}
+
+	return send.Data(&PartialResult{res})
+}
+func OnKeepaliveFn(send sse.Sender) error {
+	return send.Data(&Keepalive{})
+}
+
+// SSEQueryRunner defines any query runner that supports partial results / SSE
+type SSEQueryRunner interface {
+	// RunStreaming takes a query statement, executes the underlying query and returns the result(s)
+	RunStreaming(ctx context.Context, args *query.Args, send sse.Sender) (*results.Result, error)
+
+	query.Runner
+}
 
 func getBodyQueryRunnerHandler(caller string, querier query.Runner) func(context.Context, *ArgsInput) (*QueryResultOutput, error) {
 	return func(ctx context.Context, input *ArgsInput) (*QueryResultOutput, error) {
@@ -25,49 +51,32 @@ func getBodyQueryRunnerHandler(caller string, querier query.Runner) func(context
 	}
 }
 
-func getSSEBodyQueryRunnerHandler(caller string, querier *distributed.QueryRunner) func(context.Context, *ArgsInput, sse.Sender) {
+func getSSEBodyQueryRunnerHandler(caller string, querier SSEQueryRunner) func(context.Context, *ArgsInput, sse.Sender) {
 	return func(ctx context.Context, input *ArgsInput, send sse.Sender) {
-		querier.SetResultReceivedFn(func(res *results.Result) error {
-			if res == nil {
-				return nil
-			}
-			return send.Data(&PartialResult{res})
-		})
-
-		res, err := runQuery(ctx, caller, input.Body, querier)
+		res, err := runQuerySSE(ctx, caller, input.Body, querier, send)
 		if err != nil {
-			_ = send.Data(err)
+			_ = send.Data(query.NewDetailError(http.StatusInternalServerError, err))
 			return
 		}
+
 		_ = send.Data(&FinalResult{res})
 	}
 }
 
 func runQuery(ctx context.Context, caller string, args *query.Args, querier query.Runner) (*results.Result, error) {
-	// make sure all defaults are available if they weren't set explicitly
-	args.SetDefaults()
-
-	// Set default format for an API query is JSON
-	args.Format = types.FormatJSON
-	if args.Caller == "" {
-		args.Caller = caller
-	}
-
-	logger := logging.FromContext(ctx)
-
-	// Check if the statement can be created
-	logger.With("args", args).Info("running query")
-	_, err := args.Prepare()
-	if err != nil {
+	if err := prepareArgs(ctx, caller, args); err != nil {
 		return nil, err
 	}
 
-	result, err := querier.Run(ctx, args)
-	if err != nil {
+	return querier.Run(ctx, args)
+}
+
+func runQuerySSE(ctx context.Context, caller string, args *query.Args, querier SSEQueryRunner, send sse.Sender) (*results.Result, error) {
+	if err := prepareArgs(ctx, caller, args); err != nil {
 		return nil, err
 	}
 
-	return result, nil
+	return querier.RunStreaming(ctx, args, send)
 }
 
 // getBodyValidationHandler returns the query args validation handler
@@ -109,4 +118,23 @@ func getParamsValidationHandler() func(context.Context, *ArgsParamsInput) (*stru
 		// 204 No Content is added since no data is returned and no error is returned
 		return nil, nil
 	}
+}
+
+func prepareArgs(ctx context.Context, caller string, args *query.Args) error {
+	// make sure all defaults are available if they weren't set explicitly
+	args.SetDefaults()
+
+	// Set default format for an API query is JSON
+	args.Format = types.FormatJSON
+	if args.Caller == "" {
+		args.Caller = caller
+	}
+
+	logger := logging.FromContext(ctx)
+
+	// Check if the statement can be created
+	logger.With("args", args).Info("running query")
+
+	_, err := args.Prepare()
+	return err
 }

@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/danielgtaylor/huma/v2/sse"
 	"github.com/els0r/goProbe/pkg/capture"
 	"github.com/els0r/goProbe/pkg/goDB"
 	"github.com/els0r/goProbe/pkg/goDB/conditions/node"
@@ -36,6 +37,7 @@ type QueryRunner struct {
 	dbPath         string
 
 	keepAlive      time.Duration
+	sem            chan struct{}
 	stats          *workload.Stats
 	statsCallbacks workload.StatsFuncs
 }
@@ -51,11 +53,10 @@ func WithLiveData(captureManager *capture.Manager) RunnerOption {
 	}
 }
 
-// WithKeepAlive toggles keep-alive messages emitted by the runner. It's meant to signal to a
-// calling process that a query is still being processed
-func WithKeepAlive(interval time.Duration) RunnerOption {
+// WithMaxConcurrent sets a maximum number of concurrent running queries
+func WithMaxConcurrent(sem chan struct{}) RunnerOption {
 	return func(qr *QueryRunner) {
-		qr.keepAlive = interval
+		qr.sem = sem
 	}
 }
 
@@ -79,16 +80,6 @@ func NewQueryRunner(dbPath string, opts ...RunnerOption) *QueryRunner {
 	return qr
 }
 
-// NewQueryRunnerWithLiveData creates a new query runner that acts on both DB and live data
-//
-// DEPRECATED: use NewQueryrunner(dbPath, WithLiveData(captureManager)) instead
-func NewQueryRunnerWithLiveData(dbPath string, captureManager *capture.Manager) *QueryRunner {
-	return &QueryRunner{
-		dbPath:         dbPath,
-		captureManager: captureManager,
-	}
-}
-
 // DBLister lists network interfaces from DB.
 type DBInterfaceLister struct {
 	dbPath string
@@ -106,18 +97,54 @@ func (dbLister DBInterfaceLister) ListInterfaces() ([]string, error) {
 
 // Run implements the query.Runner interface
 func (qr *QueryRunner) Run(ctx context.Context, args *query.Args) (res *results.Result, err error) {
+	ctx, span := tracing.Start(ctx, "(*engine.QueryRunner).Run")
+	defer span.End()
+
+	return qr.run(ctx, args, nil)
+}
+
+// RunStreaming implements the api.SSEQueryRunner interface
+func (qr *QueryRunner) RunStreaming(ctx context.Context, args *query.Args, send sse.Sender) (res *results.Result, err error) {
+	ctx, span := tracing.Start(ctx, "(*engine.QueryRunner).Run")
+	defer span.End()
+
+	return qr.run(ctx, args, send)
+}
+
+func (qr *QueryRunner) run(ctx context.Context, args *query.Args, send sse.Sender) (res *results.Result, err error) {
 	var argsStr string
 	b, aerr := jsoniter.Marshal(args)
 	if aerr == nil {
 		argsStr = string(b)
 	}
 
-	ctx, span := tracing.Start(ctx, "(*engine.QueryRunner).Run", trace.WithAttributes(attribute.String("args", argsStr)))
+	ctx, span := tracing.Start(ctx, "(*engine.QueryRunner).run", trace.WithAttributes(attribute.String("args", argsStr)))
 	defer span.End()
 
 	stmt, err := args.Prepare()
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare query statement: %w", err)
+	}
+
+	if qr.sem != nil {
+		// Create a timeout context for waiting up to 1 second.
+		waitContext, cancel := context.WithTimeout(ctx, time.Second)
+		defer cancel()
+
+		// Try to acquire a slot
+		select {
+		case qr.sem <- struct{}{}:
+			defer func() { <-qr.sem }()
+			break
+		case <-waitContext.Done():
+			fmt.Println("YOU SHALL NOT PASS")
+			return &results.Result{
+				Status: results.Status{
+					Code:    types.StatusTooManyRequests,
+					Message: "too many concurrent requests",
+				},
+			}, nil
+		}
 	}
 
 	// get list of available interfaces in the local DB, filter based on given comma separated list or regexp,
@@ -134,11 +161,11 @@ func (qr *QueryRunner) Run(ctx context.Context, args *query.Args) (res *results.
 		return nil, fmt.Errorf("failed to prepare query statement: %w", err)
 	}
 
-	return qr.RunStatement(ctx, stmt)
+	return qr.RunStatement(ctx, stmt, send)
 }
 
 // RunStatement executes the prepared statement and generates the results
-func (qr *QueryRunner) RunStatement(ctx context.Context, stmt *query.Statement) (res *results.Result, err error) {
+func (qr *QueryRunner) RunStatement(ctx context.Context, stmt *query.Statement, send sse.Sender) (res *results.Result, err error) {
 	result := results.New()
 	result.Start()
 	defer result.End()
@@ -152,6 +179,9 @@ func (qr *QueryRunner) RunStatement(ctx context.Context, stmt *query.Statement) 
 		return stmt.Ifaces[i] < stmt.Ifaces[j]
 	})
 	result.Summary.Interfaces = stmt.Ifaces
+	if stmt.KeepAliveDuration > 0 {
+		qr.keepAlive = stmt.KeepAliveDuration
+	}
 
 	// parse query
 	queryAttributes, _, err := types.ParseQueryType(stmt.QueryType)
@@ -199,7 +229,7 @@ func (qr *QueryRunner) RunStatement(ctx context.Context, stmt *query.Statement) 
 
 	// Channel for handling of returned maps
 	mapChan := make(chan hashmap.AggFlowMapWithMetadata, 1024)
-	aggregateChan := qr.aggregate(ctx, mapChan, stmt.Ifaces, stmt.LowMem)
+	aggregateChan := qr.aggregate(ctx, mapChan, send, stmt.Ifaces, stmt.LowMem)
 
 	go func() {
 		select {
@@ -356,7 +386,12 @@ func (qr *QueryRunner) RunStatement(ctx context.Context, stmt *query.Statement) 
 
 		// add statistics to final result and trigger keepalive (if required)
 		result.Summary.Stats.Add(aggMap.Stats)
-		qr.query.UpdateKeepalive()
+		select {
+		case <-queryCtx.Done():
+			return
+		default:
+			qr.query.UpdateKeepalive()
+		}
 
 		// Now is a good time to release memory one last time for the final processing step
 		if qr.query.IsLowMem() {

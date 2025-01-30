@@ -4,8 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
+	"github.com/danielgtaylor/huma/v2/sse"
 	"github.com/els0r/goProbe/cmd/global-query/pkg/hosts"
+	"github.com/els0r/goProbe/pkg/api"
 	"github.com/els0r/goProbe/pkg/query"
 	"github.com/els0r/goProbe/pkg/results"
 	"github.com/els0r/goProbe/pkg/types"
@@ -20,15 +23,18 @@ import (
 type QueryRunner struct {
 	resolver hosts.Resolver
 	querier  Querier
-
-	// onResult provides an event-based callback function to be executed upon reception
-	// of a new result from one of the queried hosts (allowing for dynamic / iterative
-	// handling of said results)
-	onResult func(*results.Result) error
+	sem      chan struct{}
 }
 
 // QueryOption configures the query runner
 type QueryOption func(*QueryRunner)
+
+// WithMaxConcurrent sets a maximum number of concurrent running queries
+func WithMaxConcurrent(sem chan struct{}) QueryOption {
+	return func(qr *QueryRunner) {
+		qr.sem = sem
+	}
+}
 
 // NewQueryRunner instantiates a new distributed query runner
 func NewQueryRunner(resolver hosts.Resolver, querier Querier, opts ...QueryOption) (qr *QueryRunner) {
@@ -42,23 +48,23 @@ func NewQueryRunner(resolver hosts.Resolver, querier Querier, opts ...QueryOptio
 	return
 }
 
-// SetResultReceivedFn registers a callback to be executed for every results.Result that is
-// read off the results channel
-func (q *QueryRunner) SetResultReceivedFn(f func(*results.Result) error) *QueryRunner {
-	q.onResult = f
-	return q
+// Run executes / runs the query and creates the final result structure
+func (q *QueryRunner) Run(ctx context.Context, args *query.Args) (*results.Result, error) {
+	ctx, span := tracing.Start(ctx, "(*distributed.QueryRunner).Run")
+	defer span.End()
+
+	return q.run(ctx, args, nil)
 }
 
-// ResultReceived calls the result callback with res and
-func (q *QueryRunner) ResultReceived(res *results.Result) error {
-	if q.onResult == nil {
-		return errors.New("no event callback provided (onResult)")
-	}
-	return q.onResult(res)
+func (q *QueryRunner) RunStreaming(ctx context.Context, args *query.Args, send sse.Sender) (*results.Result, error) {
+	ctx, span := tracing.Start(ctx, "(*distributed.QueryRunner).RunStreaming")
+	defer span.End()
+
+	return q.run(ctx, args, send)
 }
 
 // Run executes / runs the query and creates the final result structure
-func (q *QueryRunner) Run(ctx context.Context, args *query.Args) (*results.Result, error) {
+func (q *QueryRunner) run(ctx context.Context, args *query.Args, send sse.Sender) (*results.Result, error) {
 	// use a copy of the arguments, since some fields are modified by the querier
 	queryArgs := *args
 
@@ -67,7 +73,7 @@ func (q *QueryRunner) Run(ctx context.Context, args *query.Args) (*results.Resul
 		return nil, fmt.Errorf("couldn't prepare query: list of target hosts is empty")
 	}
 
-	ctx, span := tracing.Start(ctx, "(*distributed.QueryRunner).Run", trace.WithAttributes(attribute.String("args", queryArgs.ToJSONString())))
+	ctx, span := tracing.Start(ctx, "(*distributed.QueryRunner).run", trace.WithAttributes(attribute.String("args", queryArgs.ToJSONString())))
 	defer span.End()
 
 	// sanitize the query attributes
@@ -77,6 +83,26 @@ func (q *QueryRunner) Run(ctx context.Context, args *query.Args) (*results.Resul
 	stmt, err := queryArgs.Prepare()
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare query statement: %w", err)
+	}
+
+	if q.sem != nil {
+		// Create a timeout context for waiting up to 1 second.
+		waitContext, cancel := context.WithTimeout(ctx, time.Second)
+		defer cancel()
+
+		// Try to acquire a slot
+		select {
+		case q.sem <- struct{}{}:
+			defer func() { <-q.sem }()
+			break
+		case <-waitContext.Done():
+			return &results.Result{
+				Status: results.Status{
+					Code:    types.StatusTooManyRequests,
+					Message: "too many concurrent requests",
+				},
+			}, nil
+		}
 	}
 
 	// safeguards against loading too much data, as in, dumping whole
@@ -96,8 +122,12 @@ func (q *QueryRunner) Run(ctx context.Context, args *query.Args) (*results.Resul
 
 	logger.Info("reading query results from querier")
 
+	resChan, keepaliveChan := q.querier.Query(ctx, hostList, &queryArgs)
+	if send != nil && queryArgs.KeepAlive > 0 {
+		q.forwardKeepalives(keepaliveChan, send, queryArgs.KeepAlive)
+	}
 	finalResult := aggregateResults(ctx, stmt,
-		q.querier.Query(ctx, hostList, &queryArgs), q.onResult,
+		resChan, send,
 	)
 
 	finalResult.End()
@@ -136,9 +166,23 @@ func (q *QueryRunner) prepareHostList(ctx context.Context, queryHosts string) (h
 	return
 }
 
+func (q *QueryRunner) forwardKeepalives(keepaliveChan <-chan struct{}, send sse.Sender, keepaliveInterval time.Duration) {
+	go func() {
+		lastKeepalive := time.Now()
+		for range keepaliveChan {
+
+			// assess time since last keepalive emission and act accordingly
+			if time.Since(lastKeepalive) > keepaliveInterval {
+				lastKeepalive = time.Now()
+				api.OnKeepaliveFn(send)
+			}
+		}
+	}()
+}
+
 // aggregateResults takes finished query workloads from the workloads channel, aggregates the result by merging the rows and summaries,
 // and returns the final result. The `tracker` variable provides information about potential Run failures for individual hosts
-func aggregateResults(ctx context.Context, stmt *query.Statement, queryResults <-chan *results.Result, onResult func(*results.Result) error) (finalResult *results.Result) {
+func aggregateResults(ctx context.Context, stmt *query.Statement, queryResults <-chan *results.Result, send sse.Sender) (finalResult *results.Result) {
 	ctx, span := tracing.Start(ctx, "aggregateResults")
 	defer span.End()
 
@@ -217,12 +261,12 @@ func aggregateResults(ctx context.Context, stmt *query.Statement, queryResults <
 			// different systems, the overlap has to be deducted from the total
 			finalResult.Summary.Hits.Total += res.Summary.Hits.Total - merged
 
-			if onResult != nil {
+			if send != nil {
 				// make sure the rows are set for the results callback
 				if len(rowMap) > 0 {
 					finalResult.Rows = rowMap.ToRowsSorted(results.By(stmt.SortBy, stmt.Direction, stmt.SortAscending))
 				}
-				err := onResult(finalResult)
+				err := api.OnResultFn(finalResult, send)
 				if err != nil {
 					logger.With("error", err).Error("failed to call results callback")
 				}
