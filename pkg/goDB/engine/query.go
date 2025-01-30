@@ -22,6 +22,7 @@ import (
 	"github.com/els0r/goProbe/pkg/types"
 	"github.com/els0r/goProbe/pkg/types/hashmap"
 	"github.com/els0r/goProbe/pkg/types/workload"
+	"github.com/els0r/telemetry/logging"
 	"github.com/els0r/telemetry/tracing"
 	jsoniter "github.com/json-iterator/go"
 	"go.opentelemetry.io/otel/attribute"
@@ -396,6 +397,12 @@ func (qr *QueryRunner) runLiveQuery(ctx context.Context, mapChan chan hashmap.Ag
 	wg = new(sync.WaitGroup)
 
 	if !stmt.Live {
+		return
+	}
+	// If for some reason a live query was attempted without a CaptureManager running,
+	// throw an error and bail
+	if qr.captureManager == nil {
+		logging.FromContext(ctx).Error("no CaptureManager available, cannot run live query")
 		return
 	}
 

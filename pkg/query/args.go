@@ -486,7 +486,6 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 
 	// check for consistent use of the live flag
 	if s.Live && s.Last != types.MaxTime.Unix() {
-		// collect error
 		errModel.Errors = append(errModel.Errors, &huma.ErrorDetail{
 			Message:  fmt.Sprintf("%s: last timestamp unsupported", invalidLiveQueryMsg),
 			Location: "live",
