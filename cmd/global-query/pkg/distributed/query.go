@@ -86,8 +86,12 @@ func (q *QueryRunner) run(ctx context.Context, args *query.Args, send sse.Sender
 	}
 
 	if q.sem != nil {
-		// Create a timeout context for waiting up to 1 second.
-		waitContext, cancel := context.WithTimeout(ctx, time.Second)
+		// Create a timeout context for waiting up to one keepalive interval
+		semTimeout := time.Second
+		if stmt.KeepAliveDuration > 0 {
+			semTimeout = stmt.KeepAliveDuration
+		}
+		waitContext, cancel := context.WithTimeout(ctx, semTimeout)
 		defer cancel()
 
 		// Try to acquire a slot
