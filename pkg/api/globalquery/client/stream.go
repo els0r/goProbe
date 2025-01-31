@@ -9,7 +9,6 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/els0r/goProbe/pkg/api"
 	"github.com/els0r/goProbe/pkg/api/client"
@@ -52,8 +51,9 @@ func NewSSE(addr string, onUpdate, onFinish StreamingUpdate, onKeepalive Streami
 	}
 }
 
-// NewFromConfig creates the client based on cfg
-func NewSSEFromConfig(cfg *gpclient.Config, keepaliveChan chan struct{}) *SSEClient {
+// NewFromConfig creates the client based on cfg, sending keepalive signals on
+// the provided channel
+func NewSSEFromConfig(cfg *gpclient.Config, keepaliveChan chan<- struct{}) *SSEClient {
 	return NewSSE(cfg.Addr,
 		// TODO: this will become more informational in the future as in: printing partial results, etc.
 		func(ctx context.Context, r *results.Result) error {
@@ -64,12 +64,15 @@ func NewSSEFromConfig(cfg *gpclient.Config, keepaliveChan chan struct{}) *SSECli
 			errs := len(r.HostsStatuses.GetErrorStatuses())
 
 			logger := logging.FromContext(ctx)
-			logger.Infof("received update: %d total / %d done / %d errors", all, all-errs, errs)
+			logger.With("total", all, "done", all-errs, "errors", errs).Info("received update")
 
 			return nil
 		},
 		func(ctx context.Context, r *results.Result) error { return nil },
 		func(ctx context.Context) error {
+			if keepaliveChan == nil {
+				return nil
+			}
 			select {
 			case keepaliveChan <- struct{}{}:
 			default:
@@ -164,7 +167,7 @@ func (sse *SSEClient) readEventStream(ctx context.Context, r io.Reader) (res *re
 					logger.Info("stream finished")
 					return res, nil
 				}
-				return nil, fmt.Errorf("%s failed to read SSE event: %w", time.Now(), err)
+				return nil, fmt.Errorf("failed to read SSE event: %w", err)
 			}
 			eventsReceived++
 

@@ -14,8 +14,15 @@ import (
 	"github.com/els0r/goProbe/pkg/types"
 	"github.com/els0r/telemetry/logging"
 	"github.com/els0r/telemetry/tracing"
+	"github.com/fako1024/gotools/concurrency"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
+)
+
+const (
+	// DefaultSemTimeout is the default / fallback amount of time to wait for acquisition
+	// of a semaphore when performing concurrent queries
+	DefaultSemTimeout = time.Second
 )
 
 // QueryRunner denotes a query runner / executor, wrapping a Querier interface instance with
@@ -23,7 +30,7 @@ import (
 type QueryRunner struct {
 	resolver hosts.Resolver
 	querier  Querier
-	sem      chan struct{}
+	sem      concurrency.Semaphore
 }
 
 // QueryOption configures the query runner
@@ -85,29 +92,16 @@ func (q *QueryRunner) run(ctx context.Context, args *query.Args, send sse.Sender
 		return nil, fmt.Errorf("failed to prepare query statement: %w", err)
 	}
 
-	if q.sem != nil {
-		// Create a timeout context for waiting up to one keepalive interval
-		semTimeout := time.Second
-		if stmt.KeepAliveDuration > 0 {
-			semTimeout = stmt.KeepAliveDuration
-		}
-		waitContext, cancel := context.WithTimeout(ctx, semTimeout)
-		defer cancel()
-
-		// Try to acquire a slot
-		select {
-		case q.sem <- struct{}{}:
-			defer func() { <-q.sem }()
-			break
-		case <-waitContext.Done():
-			return &results.Result{
-				Status: results.Status{
-					Code:    types.StatusTooManyRequests,
-					Message: "too many concurrent requests",
-				},
-			}, nil
-		}
+	smeDone, err := q.checkSemaphore(stmt)
+	if err != nil {
+		return &results.Result{
+			Status: results.Status{
+				Code:    types.StatusTooManyRequests,
+				Message: "too many concurrent requests",
+			},
+		}, nil
 	}
+	defer smeDone()
 
 	// safeguards against loading too much data, as in, dumping whole
 	// DBs via the network
@@ -170,6 +164,20 @@ func (q *QueryRunner) prepareHostList(ctx context.Context, queryHosts string) (h
 	return
 }
 
+func (q *QueryRunner) checkSemaphore(stmt *query.Statement) (func(), error) {
+	if q.sem == nil {
+		return func() {}, nil
+	}
+
+	// Create a timeout context for waiting up to one keepalive interval
+	semTimeout := DefaultSemTimeout
+	if stmt.KeepAliveDuration > 0 {
+		semTimeout = stmt.KeepAliveDuration
+	}
+
+	return q.sem.TryAddFor(semTimeout)
+}
+
 func (q *QueryRunner) forwardKeepalives(keepaliveChan <-chan struct{}, send sse.Sender, keepaliveInterval time.Duration) {
 	go func() {
 		lastKeepalive := time.Now()
@@ -178,7 +186,7 @@ func (q *QueryRunner) forwardKeepalives(keepaliveChan <-chan struct{}, send sse.
 			// assess time since last keepalive emission and act accordingly
 			if time.Since(lastKeepalive) > keepaliveInterval {
 				lastKeepalive = time.Now()
-				api.OnKeepaliveFn(send)
+				api.OnKeepalive(send)
 			}
 		}
 	}()
@@ -265,15 +273,18 @@ func aggregateResults(ctx context.Context, stmt *query.Statement, queryResults <
 			// different systems, the overlap has to be deducted from the total
 			finalResult.Summary.Hits.Total += res.Summary.Hits.Total - merged
 
-			if send != nil {
-				// make sure the rows are set for the results callback
-				if len(rowMap) > 0 {
-					finalResult.Rows = rowMap.ToRowsSorted(results.By(stmt.SortBy, stmt.Direction, stmt.SortAscending))
-				}
-				err := api.OnResultFn(finalResult, send)
-				if err != nil {
-					logger.With("error", err).Error("failed to call results callback")
-				}
+			// perform sorting
+			if len(rowMap) > 0 {
+				finalResult.Rows = rowMap.ToRowsSorted(results.By(stmt.SortBy, stmt.Direction, stmt.SortAscending))
+			}
+
+			// if no SSE callback is provided: return with no further action
+			if send == nil {
+				return
+			}
+			err := api.OnResult(finalResult, send)
+			if err != nil {
+				logger.With("error", err).Error("failed to call results callback")
 			}
 		}
 	}

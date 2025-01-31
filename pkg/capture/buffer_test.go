@@ -81,7 +81,7 @@ func BenchmarkBuffer(b *testing.B) {
 		dummyOK         bool
 	)
 
-	localBuf := new(LocalBuffer)
+	localBuf := NewLocalBuffer(testLocalBufferPool)
 	data := make([]byte, 128*1024*1024)
 	localBuf.Assign(data)
 

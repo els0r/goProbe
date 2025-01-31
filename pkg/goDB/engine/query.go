@@ -24,9 +24,16 @@ import (
 	"github.com/els0r/goProbe/pkg/types/hashmap"
 	"github.com/els0r/goProbe/pkg/types/workload"
 	"github.com/els0r/telemetry/tracing"
+	"github.com/fako1024/gotools/concurrency"
 	jsoniter "github.com/json-iterator/go"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
+)
+
+const (
+	// DefaultSemTimeout is the default / fallback amount of time to wait for acquisition
+	// of a semaphore when performing concurrent queries
+	DefaultSemTimeout = time.Second
 )
 
 // QueryRunner implements the Runner interface to execute queries
@@ -37,7 +44,7 @@ type QueryRunner struct {
 	dbPath         string
 
 	keepAlive      time.Duration
-	sem            chan struct{}
+	sem            concurrency.Semaphore
 	stats          *workload.Stats
 	statsCallbacks workload.StatsFuncs
 }
@@ -126,26 +133,16 @@ func (qr *QueryRunner) run(ctx context.Context, args *query.Args, send sse.Sende
 		return nil, fmt.Errorf("failed to prepare query statement: %w", err)
 	}
 
-	if qr.sem != nil {
-		// Create a timeout context for waiting up to 1 second.
-		waitContext, cancel := context.WithTimeout(ctx, time.Second)
-		defer cancel()
-
-		// Try to acquire a slot
-		select {
-		case qr.sem <- struct{}{}:
-			defer func() { <-qr.sem }()
-			break
-		case <-waitContext.Done():
-			fmt.Println("YOU SHALL NOT PASS")
-			return &results.Result{
-				Status: results.Status{
-					Code:    types.StatusTooManyRequests,
-					Message: "too many concurrent requests",
-				},
-			}, nil
-		}
+	smeDone, err := qr.checkSemaphore(stmt)
+	if err != nil {
+		return &results.Result{
+			Status: results.Status{
+				Code:    types.StatusTooManyRequests,
+				Message: "too many concurrent requests",
+			},
+		}, nil
 	}
+	defer smeDone()
 
 	// get list of available interfaces in the local DB, filter based on given comma separated list or regexp,
 	// reg exp is preferred
@@ -441,6 +438,20 @@ func (qr *QueryRunner) runLiveQuery(ctx context.Context, mapChan chan hashmap.Ag
 	}()
 
 	return
+}
+
+func (qr *QueryRunner) checkSemaphore(stmt *query.Statement) (func(), error) {
+	if qr.sem == nil {
+		return func() {}, nil
+	}
+
+	// Create a timeout context for waiting up to one keepalive interval
+	semTimeout := DefaultSemTimeout
+	if stmt.KeepAliveDuration > 0 {
+		semTimeout = stmt.KeepAliveDuration
+	}
+
+	return qr.sem.TryAddFor(semTimeout)
 }
 
 func createWorkManager(dbPath string, iface string, tfirst, tlast int64, query *goDB.Query, numProcessingUnits int, opts ...goDB.WorkManagerOption) (workManager *goDB.DBWorkManager, nonempty bool, err error) {

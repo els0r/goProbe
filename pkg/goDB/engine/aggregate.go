@@ -80,7 +80,7 @@ func (qr *QueryRunner) aggregate(ctx context.Context, mapChan <-chan hashmap.Agg
 				logWorkloadStats(logger, "processing stats update", finalStats)
 				finalStats.RUnlock()
 				if send != nil {
-					err := api.OnKeepaliveFn(send)
+					err := api.OnKeepalive(send)
 					if err != nil {
 						logger.With("error", err).Error("failed to call keepalive callback")
 					}

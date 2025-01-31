@@ -18,20 +18,26 @@ var (
 	ErrTooManyConcurrentRequest = errors.New("too many concurrent requests")
 )
 
-func OnResultFn(res *results.Result, send sse.Sender) error {
+// OnResult is a generic handler / function that sends a result via an SSE sender
+// to the client(s)
+func OnResult(res *results.Result, send sse.Sender) error {
 	if res == nil {
 		return nil
 	}
 
 	return send.Data(&PartialResult{res})
 }
-func OnKeepaliveFn(send sse.Sender) error {
+
+// OnResultFn is a generic handler / function that sends a keepalive signal via an SSE sender
+// to the client(s)
+func OnKeepalive(send sse.Sender) error {
 	return send.Data(&Keepalive{})
 }
 
 // SSEQueryRunner defines any query runner that supports partial results / SSE
 type SSEQueryRunner interface {
 	// RunStreaming takes a query statement, executes the underlying query and returns the result(s)
+	// while sending partial results to the sse.Sender
 	RunStreaming(ctx context.Context, args *query.Args, send sse.Sender) (*results.Result, error)
 
 	query.Runner

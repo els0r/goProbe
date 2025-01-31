@@ -371,7 +371,7 @@ func entrypoint(cmd *cobra.Command, args []string) (err error) {
 				},
 				func(ctx context.Context, r *results.Result) error { return nil },
 				func(ctx context.Context) error {
-					logging.FromContext(ctx).Infof("received keepalive")
+					logging.FromContext(ctx).Debugf("received keepalive")
 					return nil
 				},
 			)
