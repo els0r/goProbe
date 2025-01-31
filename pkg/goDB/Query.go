@@ -16,6 +16,7 @@
 package goDB
 
 import (
+	"sync"
 	"time"
 
 	"github.com/els0r/goProbe/pkg/goDB/conditions/node"
@@ -62,6 +63,8 @@ type Query struct {
 	lastKeepalive     time.Time
 	keepaliveInterval time.Duration
 	keepaliveFn       func()
+
+	sync.Mutex
 }
 
 // Computes a columnIndex from a column name. In principle we could merge
@@ -165,8 +168,10 @@ func (q *Query) LowMem(enable bool) *Query {
 
 // Keepalive enables sending keepalives at a given frequency
 func (q *Query) Keepalive(fn func(), interval time.Duration) *Query {
+	q.Lock()
 	q.keepaliveFn = fn
 	q.keepaliveInterval = interval
+	q.Unlock()
 	return q
 }
 
@@ -187,6 +192,7 @@ func (q *Query) AttributesToString() []string {
 
 // UpdateKeepalive emits a specific log line if enabled and a minimum time period has elapsed
 func (q *Query) UpdateKeepalive() {
+	q.Lock()
 	if q.keepaliveInterval > 0 && q.keepaliveFn != nil {
 		// assess time since last keepalive emission and act accordingly
 		if time.Since(q.lastKeepalive) > q.keepaliveInterval {
@@ -194,4 +200,5 @@ func (q *Query) UpdateKeepalive() {
 			q.keepaliveFn()
 		}
 	}
+	q.Unlock()
 }
