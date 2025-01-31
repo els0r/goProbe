@@ -202,12 +202,11 @@ func aggregateResults(ctx context.Context, stmt *query.Statement, queryResults <
 	finalResult = results.New()
 	finalResult.Start()
 
-	var rowMap = make(results.RowsMap)
-
 	// tracker maps for meta info
-	var ifaceMap = make(map[string]struct{})
-
-	logger := logging.FromContext(ctx)
+	var (
+		rowMap   = make(results.RowsMap)
+		ifaceMap = make(map[string]struct{})
+	)
 
 	defer func() {
 		if len(rowMap) > 0 {
@@ -224,68 +223,69 @@ func aggregateResults(ctx context.Context, stmt *query.Statement, queryResults <
 			if !open {
 				return
 			}
-			logger := logger.With("hostname", qr.Hostname)
-			if qr.Err() != nil {
-				// unwrap the error if it's possible
-				uerr := errors.Unwrap(qr.Err())
-				if uerr == nil {
-					uerr = qr.Err()
-				}
 
-				finalResult.HostsStatuses.SetErr(qr.Hostname, uerr)
-
-				logger.Error(qr.Err())
-				continue
-			}
-
-			res := qr
-
-			for host, status := range res.HostsStatuses {
-				finalResult.HostsStatuses[host] = status
-			}
-
-			// for the final result, the hostname is only set if the result was from a single host
-			if len(finalResult.HostsStatuses) > 0 {
-				res.Hostname = ""
-			}
-
-			// merges the traffic data
-			merged := rowMap.MergeRows(res.Rows)
-
-			// merges the metadata
-			for _, iface := range res.Summary.Interfaces {
-				ifaceMap[iface] = struct{}{}
-			}
-			var ifaces = make([]string, 0, len(ifaceMap))
-			for iface := range ifaceMap {
-				ifaces = append(ifaces, iface)
-			}
-
-			finalResult.Summary.Interfaces = ifaces
-
-			finalResult.Query = res.Query
-			finalResult.Summary.First = res.Summary.First
-			finalResult.Summary.Last = res.Summary.Last
-			finalResult.Summary.Totals.Add(res.Summary.Totals)
-			finalResult.Summary.Stats.Add(res.Summary.Stats)
-
-			// take the total from the query result. Since there may be overlap between the queries of two
-			// different systems, the overlap has to be deducted from the total
-			finalResult.Summary.Hits.Total += res.Summary.Hits.Total - merged
-
-			// perform sorting
-			if len(rowMap) > 0 {
-				finalResult.Rows = rowMap.ToRowsSorted(results.By(stmt.SortBy, stmt.Direction, stmt.SortAscending))
-			}
-
-			// if no SSE callback is provided: return with no further action
-			if send == nil {
-				return
-			}
-			err := api.OnResult(finalResult, send)
-			if err != nil {
-				logger.With("error", err).Error("failed to call results callback")
-			}
+			aggregateSingleResult(ctx, qr, finalResult, ifaceMap, rowMap, send)
 		}
+	}
+}
+
+func aggregateSingleResult(ctx context.Context, qr, finalResult *results.Result, ifaceMap map[string]struct{}, rowMap results.RowsMap, send sse.Sender) {
+	logger := logging.FromContext(ctx).With("hostname", qr.Hostname)
+	if qr.Err() != nil {
+		// unwrap the error if it's possible
+		uerr := errors.Unwrap(qr.Err())
+		if uerr == nil {
+			uerr = qr.Err()
+		}
+
+		finalResult.HostsStatuses.SetErr(qr.Hostname, uerr)
+
+		logger.Error(qr.Err())
+		return
+	}
+
+	res := qr
+
+	for host, status := range res.HostsStatuses {
+		finalResult.HostsStatuses[host] = status
+	}
+
+	// for the final result, the hostname is only set if the result was from a single host
+	if len(finalResult.HostsStatuses) > 0 {
+		res.Hostname = ""
+	}
+
+	// merges the traffic data
+	merged := rowMap.MergeRows(res.Rows)
+
+	// merges the metadata
+	for _, iface := range res.Summary.Interfaces {
+		ifaceMap[iface] = struct{}{}
+	}
+	var ifaces = make([]string, 0, len(ifaceMap))
+	for iface := range ifaceMap {
+		ifaces = append(ifaces, iface)
+	}
+
+	finalResult.Summary.Interfaces = ifaces
+
+	finalResult.Query = res.Query
+	finalResult.Summary.First = res.Summary.First
+	finalResult.Summary.Last = res.Summary.Last
+	finalResult.Summary.Totals.Add(res.Summary.Totals)
+	finalResult.Summary.Stats.Add(res.Summary.Stats)
+
+	// take the total from the query result. Since there may be overlap between the queries of two
+	// different systems, the overlap has to be deducted from the total
+	finalResult.Summary.Hits.Total += res.Summary.Hits.Total - merged
+
+	// if SSE callback is provided, run i
+	if send == nil {
+		return
+	}
+
+	err := api.OnResult(finalResult, send)
+	if err != nil {
+		logger.With("error", err).Error("failed to call results callback")
 	}
 }

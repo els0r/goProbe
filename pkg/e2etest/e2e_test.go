@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -55,6 +56,19 @@ const (
 	testDataPath        = "testdata"
 	defaultPcapTestFile = "default.pcap.gz"
 )
+
+var (
+	firstGoProbePort uint16 = 11131
+	portMutex        sync.Mutex
+)
+
+func getGoProbePort() (port uint16) {
+	portMutex.Lock()
+	port = firstGoProbePort
+	firstGoProbePort++
+	portMutex.Unlock()
+	return
+}
 
 //go:embed testdata/*
 var pcaps embed.FS
@@ -244,11 +258,17 @@ func TestE2EExternal(t *testing.T) {
 	}
 }
 
+func TestE2EDistributedStreaming(t *testing.T) {
+	pcapData, err := pcaps.ReadFile(filepath.Join(testDataPath, defaultPcapTestFile))
+	require.Nil(t, err)
+
+	testE2EDistributed(t, true, 3, 0, pcapData)
+}
 func TestE2EDistributed(t *testing.T) {
 	pcapData, err := pcaps.ReadFile(filepath.Join(testDataPath, defaultPcapTestFile))
 	require.Nil(t, err)
 
-	testE2EDistributed(t, 2, 0, pcapData)
+	testE2EDistributed(t, false, 3, 0, pcapData)
 }
 
 func TestStartStop(t *testing.T) {
@@ -391,7 +411,7 @@ func testE2E(t *testing.T, valFilterDescriptor int, datasets ...[]byte) {
 	validateMetrics(t, 1, mockIfaces)
 }
 
-func testE2EDistributed(t *testing.T, nDistHosts, valFilterDescriptor int, datasets ...[]byte) {
+func testE2EDistributed(t *testing.T, enableStreaming bool, nDistHosts, valFilterDescriptor int, datasets ...[]byte) {
 
 	// Reset all Prometheus counters for the next E2E test to avoid double counting
 	defer capture.ResetCountersTestingOnly()
@@ -420,7 +440,7 @@ func testE2EDistributed(t *testing.T, nDistHosts, valFilterDescriptor int, datas
 
 		// Run GoProbe (storing a copy of all processed live flows)
 		liveFlowResults := make(map[string]hashmap.AggFlowMapWithMetadata)
-		goProbeHosts[strconv.Itoa(i)] = fmt.Sprintf("127.0.0.1:%d", 11131+i)
+		goProbeHosts[strconv.Itoa(i)] = fmt.Sprintf("127.0.0.1:%d", getGoProbePort())
 		for liveFlowMap := range runGoProbe(t, tempDir, goProbeHosts[strconv.Itoa(i)], setupSources(mockIfaces)) {
 			liveFlowResults[liveFlowMap.Interface] = liveFlowMap
 		}
@@ -428,7 +448,8 @@ func testE2EDistributed(t *testing.T, nDistHosts, valFilterDescriptor int, datas
 	}
 
 	// Run global-query server / API
-	runGlobalQuery(t, "127.0.0.1:11130", goProbeHosts)
+	closeAPI := runGlobalQuery(t, "127.0.0.1:11130", goProbeHosts)
+	defer closeAPI()
 
 	// Run GoQuery and build reference results from tracking
 	resGoQuery := new(results.Result)
@@ -440,8 +461,12 @@ func testE2EDistributed(t *testing.T, nDistHosts, valFilterDescriptor int, datas
 		"--query.hosts-resolution", "any",
 		"-n", strconv.Itoa(100000),
 		"-s", "packets",
-		"sip,dip,dport,proto",
 	}
+	if enableStreaming {
+		queryArgs = append(queryArgs, "--query.streaming")
+	}
+
+	queryArgs = append(queryArgs, "sip,dip,dport,proto")
 	dir := ""
 	switch valFilterDescriptor {
 	case 1:
@@ -633,7 +658,7 @@ func runGoQuery(t *testing.T, res interface{}, args []string) {
 	require.Nil(t, jsoniter.NewDecoder(buf).Decode(&res))
 }
 
-func runGlobalQuery(t *testing.T, addr string, apiEndpoints map[string]string) {
+func runGlobalQuery(t *testing.T, addr string, apiEndpoints map[string]string) func() {
 	endpoints := map[string]*client.Config{}
 	for k, v := range apiEndpoints {
 		endpoints[k] = &client.Config{Addr: v}
@@ -644,8 +669,12 @@ func runGlobalQuery(t *testing.T, addr string, apiEndpoints map[string]string) {
 		MaxConcurrent: 10,
 	}, server.WithNoRecursionDetection())
 	go func() {
-		require.Nil(t, apiServer.Serve())
+		require.ErrorIs(t, apiServer.Serve(), http.ErrServerClosed)
 	}()
+
+	return func() {
+		apiServer.Shutdown(context.Background())
+	}
 }
 
 func setupSources(ifaces mockIfaces) func() (mockIfaces, func(c *capture.Capture) (capture.Source, error)) {
