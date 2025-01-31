@@ -61,10 +61,11 @@ type Status string
 
 // Definition of some common status results
 const (
-	StatusError       Status = "error"
-	StatusEmpty       Status = "empty"
-	StatusMissingData Status = "missing_data"
-	StatusOK          Status = "ok"
+	StatusError           Status = "error"
+	StatusEmpty           Status = "empty"
+	StatusMissingData     Status = "missing_data"
+	StatusTooManyRequests Status = "too many requests"
+	StatusOK              Status = "ok"
 )
 
 // DefaultTimeOutputFormat denotes the default time format to use when displaying time.Time information

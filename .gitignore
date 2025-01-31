@@ -13,3 +13,5 @@ go.work.sum
 .db/
 tmp/
 bin/
+
+.codegpt

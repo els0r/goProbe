@@ -8,9 +8,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/els0r/goProbe/pkg/api"
 	"github.com/els0r/goProbe/pkg/api/client"
+	gpclient "github.com/els0r/goProbe/pkg/api/goprobe/client"
 	"github.com/els0r/goProbe/pkg/query"
 	"github.com/els0r/goProbe/pkg/results"
 	"github.com/els0r/goProbe/pkg/types"
@@ -25,8 +27,9 @@ type event struct {
 
 // SSEClient is a global query client capable of streaming updates
 type SSEClient struct {
-	onUpdate StreamingUpdate
-	onFinish StreamingUpdate
+	onUpdate    StreamingUpdate
+	onFinish    StreamingUpdate
+	onKeepalive StreamingKeepalive
 
 	*client.DefaultClient
 }
@@ -34,14 +37,53 @@ type SSEClient struct {
 // StreamingUpdate is a function which operates on a received result
 type StreamingUpdate func(context.Context, *results.Result) error
 
+// StreamingKeepalive is a function which operates on a received keepalive
+type StreamingKeepalive func(context.Context) error
+
 // NewSSE creates a new streaming client for the global-query API
-func NewSSE(addr string, onUpdate, onFinish StreamingUpdate, opts ...client.Option) *SSEClient {
+func NewSSE(addr string, onUpdate, onFinish StreamingUpdate, onKeepalive StreamingKeepalive, opts ...client.Option) *SSEClient {
 	opts = append(opts, client.WithName(clientName))
 	return &SSEClient{
 		onUpdate:      onUpdate,
 		onFinish:      onFinish,
+		onKeepalive:   onKeepalive,
 		DefaultClient: client.NewDefault(addr, opts...),
 	}
+}
+
+// NewFromConfig creates the client based on cfg, sending keepalive signals on
+// the provided channel
+func NewSSEFromConfig(cfg *gpclient.Config, keepaliveChan chan<- struct{}) *SSEClient {
+	return NewSSE(cfg.Addr,
+		// TODO: this will become more informational in the future as in: printing partial results, etc.
+		func(ctx context.Context, r *results.Result) error {
+			if r == nil {
+				return nil
+			}
+			all := len(r.HostsStatuses)
+			errs := len(r.HostsStatuses.GetErrorStatuses())
+
+			logger := logging.FromContext(ctx)
+			logger.With("total", all, "done", all-errs, "errors", errs).Info("received update")
+
+			return nil
+		},
+		func(ctx context.Context, r *results.Result) error { return nil },
+		func(ctx context.Context) error {
+			if keepaliveChan == nil {
+				return nil
+			}
+			select {
+			case keepaliveChan <- struct{}{}:
+			default:
+			}
+
+			return nil
+		},
+		client.WithRequestTimeout(cfg.RequestTimeout),
+		client.WithScheme(cfg.Scheme),
+		client.WithAPIKey(cfg.Key),
+	)
 }
 
 // Run implements the query.Runner interface
@@ -92,6 +134,15 @@ func (sse *SSEClient) Query(ctx context.Context, args *query.Args) (*results.Res
 	}
 	defer resp.Body.Close()
 
+	// Handle RFC 9457
+	if strings.EqualFold(resp.Header.Get("Content-Type"), "application/problem+json") {
+		buf := new(bytes.Buffer)
+		if _, err := io.Copy(buf, resp.Body); err != nil {
+			return nil, fmt.Errorf("failed to load body into buffer for error handling: %w", err)
+		}
+		return nil, fmt.Errorf("%s [body=%s]", resp.Status, buf.String())
+	}
+
 	// parse events
 	return sse.readEventStream(ctx, resp.Body)
 }
@@ -101,6 +152,7 @@ func (sse *SSEClient) readEventStream(ctx context.Context, r io.Reader) (res *re
 
 	reader := bufio.NewReader(r)
 	res = new(results.Result)
+	keepalive := new(api.Keepalive)
 
 	var eventsReceived int
 	for {
@@ -119,7 +171,7 @@ func (sse *SSEClient) readEventStream(ctx context.Context, r io.Reader) (res *re
 			}
 			eventsReceived++
 
-			logger.With("event_type", event.streamType, "events_received", eventsReceived).Debug("received event")
+			logger.With("event_type", event.streamType, "events_received", eventsReceived).Info("received event")
 
 			switch event.streamType {
 			case api.StreamEventQueryError:
@@ -130,6 +182,14 @@ func (sse *SSEClient) readEventStream(ctx context.Context, r io.Reader) (res *re
 					return nil, errors.New(string(event.data))
 				}
 				return nil, qe
+			case api.StreamEventKeepalive:
+				if err := jsoniter.Unmarshal(event.data, keepalive); err != nil {
+					logger.With("error", err).Error("failed to parse JSON")
+					continue
+				}
+				if err := sse.onKeepalive(ctx); err != nil {
+					logger.With("error", err).Error("failed to call keepalive callback")
+				}
 			case api.StreamEventPartialResult, api.StreamEventFinalResult:
 				if err := jsoniter.Unmarshal(event.data, res); err != nil {
 					logger.With("error", err).Error("failed to parse JSON")
@@ -176,6 +236,8 @@ func readEvent(r *bufio.Reader) (*event, error) {
 			event.streamType = api.StreamEventPartialResult
 		case bytes.Equal(data, finalResult):
 			event.streamType = api.StreamEventFinalResult
+		case bytes.Equal(data, keepalive):
+			event.streamType = api.StreamEventKeepalive
 			// TODO: default case required?
 		}
 	}
@@ -204,4 +266,5 @@ var (
 	queryError    = []byte(api.StreamEventQueryError)
 	partialResult = []byte(api.StreamEventPartialResult)
 	finalResult   = []byte(api.StreamEventFinalResult)
+	keepalive     = []byte(api.StreamEventKeepalive)
 )

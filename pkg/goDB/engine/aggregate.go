@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"runtime"
 
+	"github.com/danielgtaylor/huma/v2/sse"
+	"github.com/els0r/goProbe/pkg/api"
 	"github.com/els0r/goProbe/pkg/types"
 	"github.com/els0r/goProbe/pkg/types/hashmap"
 	"github.com/els0r/goProbe/pkg/types/workload"
@@ -52,7 +54,7 @@ func logWorkloadStats(logger *logging.L, msg string, stats *workload.Stats) {
 // Then send aggregation result over resultChan.
 // If an error occurs, aggregate may return prematurely.
 // Closes resultChan on termination.
-func (qr *QueryRunner) aggregate(ctx context.Context, mapChan <-chan hashmap.AggFlowMapWithMetadata, ifaces []string, isLowMem bool) chan aggregateResult {
+func (qr *QueryRunner) aggregate(ctx context.Context, mapChan <-chan hashmap.AggFlowMapWithMetadata, send sse.Sender, ifaces []string, isLowMem bool) chan aggregateResult {
 	// create channel that returns the final aggregate result
 	resultChan := make(chan aggregateResult, 1)
 	logger := logging.FromContext(ctx)
@@ -77,6 +79,12 @@ func (qr *QueryRunner) aggregate(ctx context.Context, mapChan <-chan hashmap.Agg
 				finalStats.RLock()
 				logWorkloadStats(logger, "processing stats update", finalStats)
 				finalStats.RUnlock()
+				if send != nil {
+					err := api.OnKeepalive(send)
+					if err != nil {
+						logger.With("error", err).Error("failed to call keepalive callback")
+					}
+				}
 			}, qr.keepAlive)
 		}
 

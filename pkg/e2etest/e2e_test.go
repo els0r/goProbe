@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -22,12 +23,17 @@ import (
 	"testing"
 	"time"
 
+	"github.com/els0r/goProbe/cmd/global-query/pkg/hosts"
 	"github.com/els0r/goProbe/cmd/goProbe/config"
 	"github.com/els0r/goProbe/cmd/goQuery/cmd"
+	"github.com/els0r/goProbe/plugins/querier/apiclient"
 	"github.com/els0r/telemetry/logging"
 	"github.com/prometheus/client_golang/prometheus"
 
-	// "github.com/els0r/goProbe/cmd/goQuery/commands"
+	gqserver "github.com/els0r/goProbe/pkg/api/globalquery/server"
+	"github.com/els0r/goProbe/pkg/api/goprobe/client"
+	gpserver "github.com/els0r/goProbe/pkg/api/goprobe/server"
+	"github.com/els0r/goProbe/pkg/api/server"
 
 	"github.com/els0r/goProbe/pkg/capture"
 	"github.com/els0r/goProbe/pkg/capture/capturetypes"
@@ -50,6 +56,19 @@ const (
 	testDataPath        = "testdata"
 	defaultPcapTestFile = "default.pcap.gz"
 )
+
+var (
+	firstGoProbePort uint16 = 11131
+	portMutex        sync.Mutex
+)
+
+func getGoProbePort() (port uint16) {
+	portMutex.Lock()
+	port = firstGoProbePort
+	firstGoProbePort++
+	portMutex.Unlock()
+	return
+}
 
 //go:embed testdata/*
 var pcaps embed.FS
@@ -239,6 +258,19 @@ func TestE2EExternal(t *testing.T) {
 	}
 }
 
+func TestE2EDistributedStreaming(t *testing.T) {
+	pcapData, err := pcaps.ReadFile(filepath.Join(testDataPath, defaultPcapTestFile))
+	require.Nil(t, err)
+
+	testE2EDistributed(t, true, 3, 0, pcapData)
+}
+func TestE2EDistributed(t *testing.T) {
+	pcapData, err := pcaps.ReadFile(filepath.Join(testDataPath, defaultPcapTestFile))
+	require.Nil(t, err)
+
+	testE2EDistributed(t, false, 3, 0, pcapData)
+}
+
 func TestStartStop(t *testing.T) {
 	for i := 0; i < 1000; i++ {
 		testStartStop(t)
@@ -252,9 +284,7 @@ func testE2E(t *testing.T, valFilterDescriptor int, datasets ...[]byte) {
 
 	// Setup a temporary directory for the test DB
 	tempDir, err := os.MkdirTemp(os.TempDir(), "goprobe_e2e")
-	if err != nil {
-		require.Nil(t, err)
-	}
+	require.Nil(t, err)
 	defer func(t *testing.T) {
 		require.Nil(t, os.RemoveAll(tempDir))
 	}(t)
@@ -267,7 +297,7 @@ func testE2E(t *testing.T, valFilterDescriptor int, datasets ...[]byte) {
 
 	// Run GoProbe (storing a copy of all processed live flows)
 	liveFlowResults := make(map[string]hashmap.AggFlowMapWithMetadata)
-	for liveFlowMap := range runGoProbe(t, tempDir, setupSources(mockIfaces)) {
+	for liveFlowMap := range runGoProbe(t, tempDir, "", setupSources(mockIfaces)) {
 		liveFlowResults[liveFlowMap.Interface] = liveFlowMap
 	}
 
@@ -378,10 +408,125 @@ func testE2E(t *testing.T, valFilterDescriptor int, datasets ...[]byte) {
 	require.EqualValues(t, refRows, resRows)
 
 	// Cross-check metrics collected by Prometheus for consistency
-	validateMetrics(t, mockIfaces)
+	validateMetrics(t, 1, mockIfaces)
 }
 
-func validateMetrics(t *testing.T, mockIfaces mockIfaces) {
+func testE2EDistributed(t *testing.T, enableStreaming bool, nDistHosts, valFilterDescriptor int, datasets ...[]byte) {
+
+	// Reset all Prometheus counters for the next E2E test to avoid double counting
+	defer capture.ResetCountersTestingOnly()
+
+	// Setup temporary directories for the test DBs
+	var (
+		tempDirList         []string
+		mockIfacesList      []mockIfaces
+		liveFlowResultsList []map[string]hashmap.AggFlowMapWithMetadata
+		goProbeHosts        = make(map[string]string)
+	)
+	for i := 0; i < nDistHosts; i++ {
+		tempDir, err := os.MkdirTemp(os.TempDir(), fmt.Sprintf("goprobe_e2e_%d", i))
+		require.Nil(t, err)
+		tempDirList = append(tempDirList, tempDir)
+		defer func(t *testing.T) {
+			require.Nil(t, os.RemoveAll(tempDir))
+		}(t)
+
+		// Define mock interfaces
+		var mockIfaces mockIfaces
+		for j, data := range datasets {
+			mockIfaces = append(mockIfaces, newPcapSource(t, fmt.Sprintf("mock%03d", j+1), data))
+		}
+		mockIfacesList = append(mockIfacesList, mockIfaces)
+
+		// Run GoProbe (storing a copy of all processed live flows)
+		liveFlowResults := make(map[string]hashmap.AggFlowMapWithMetadata)
+		goProbeHosts[strconv.Itoa(i)] = fmt.Sprintf("127.0.0.1:%d", getGoProbePort())
+		for liveFlowMap := range runGoProbe(t, tempDir, goProbeHosts[strconv.Itoa(i)], setupSources(mockIfaces)) {
+			liveFlowResults[liveFlowMap.Interface] = liveFlowMap
+		}
+		liveFlowResultsList = append(liveFlowResultsList, liveFlowResults)
+	}
+
+	// Run global-query server / API
+	closeAPI := runGlobalQuery(t, "127.0.0.1:11130", goProbeHosts)
+	defer closeAPI()
+
+	// Run GoQuery and build reference results from tracking
+	resGoQuery := new(results.Result)
+	queryArgs := []string{
+		"-i", "any",
+		"-e", types.FormatJSON,
+		"-l", time.Now().Add(time.Hour).Format(time.ANSIC),
+		"--query.server.addr", "127.0.0.1:11130",
+		"--query.hosts-resolution", "any",
+		"-n", strconv.Itoa(100000),
+		"-s", "packets",
+	}
+	if enableStreaming {
+		queryArgs = append(queryArgs, "--query.streaming")
+	}
+
+	queryArgs = append(queryArgs, "sip,dip,dport,proto")
+	dir := ""
+	switch valFilterDescriptor {
+	case 1:
+		dir = "in"
+	case 2:
+		dir = "out"
+	case 3:
+		dir = "uni"
+	case 4:
+		dir = "bi"
+	}
+	valFilterNode := valFilters[valFilterDescriptor]
+	tmp := make([]string, len(queryArgs)+2)
+	copy(tmp, queryArgs[:2])
+	tmp[2] = "-c"
+	tmp[3] = ""
+	if dir != "" {
+		tmp[3] = fmt.Sprintf("dir = %s", dir)
+	}
+	copy(tmp[4:], queryArgs[2:])
+	queryArgs = tmp
+	runGoQuery(t, resGoQuery, queryArgs)
+
+	// Counter consistency checks
+	if valFilterNode == nil {
+		require.EqualValuesf(t, uint64(nDistHosts)*mockIfacesList[0].NParsed(), resGoQuery.Summary.Totals.PacketsRcvd, "expected: %d, actual %d", uint64(nDistHosts)*mockIfacesList[0].NParsed(), resGoQuery.Summary.Totals.PacketsRcvd)
+		require.EqualValuesf(t, uint64(nDistHosts)*mockIfacesList[0].NParsed(), uint64(nDistHosts)*mockIfacesList[0].NRead()-uint64(nDistHosts)*mockIfacesList[0].NErr(), "expected: %d, actual %d - %d", uint64(nDistHosts)*mockIfacesList[0].NParsed(), uint64(nDistHosts)*mockIfacesList[0].NRead(), uint64(nDistHosts)*mockIfacesList[0].NErr())
+	}
+
+	// Hack: make the deep equal disregard the DB load stats until we know exactly how they should look like
+	// TODO: go through all pcaps and calculate these stats
+	resGoQuery.Summary.Stats = nil
+
+	// Cross-check aggregated flow logs from the live capture with the respective mock interface flows
+	for _, mockIface := range mockIfacesList[0] {
+		aggMap := mockIface.aggregate()
+
+		liveResults, exists := liveFlowResultsList[0][mockIface.name]
+		if !exists {
+			liveResults = hashmap.NewAggFlowMapWithMetadata()
+		}
+		require.Equal(t, aggMap.Len(), liveResults.Len())
+
+		for it := aggMap.PrimaryMap.Iter(); it.Next(); {
+			compVal, exists := liveResults.PrimaryMap.Get(it.Key())
+			require.True(t, exists)
+			require.EqualValuesf(t, it.Val(), compVal, "mismatching key: %v", types.Key(it.Key()))
+		}
+		for j, it := 0, aggMap.SecondaryMap.Iter(); it.Next(); j++ {
+			compVal, exists := liveResults.SecondaryMap.Get(it.Key())
+			require.True(t, exists)
+			require.EqualValuesf(t, it.Val(), compVal, "mismatching key: %v", types.Key(it.Key()))
+		}
+	}
+
+	// Cross-check metrics collected by Prometheus for consistency
+	validateMetrics(t, uint64(nDistHosts), mockIfacesList[0])
+}
+
+func validateMetrics(t *testing.T, muliplier uint64, mockIfaces mockIfaces) {
 	metrics, err := prometheus.DefaultGatherer.Gather()
 	require.Nil(t, err)
 
@@ -393,7 +538,7 @@ func validateMetrics(t *testing.T, mockIfaces mockIfaces) {
 			for _, metricVal := range metric.Metric {
 				sum += metricVal.Counter.GetValue()
 			}
-			require.Equal(t, float64(mockIfaces.NParsedOrFailed()), sum)
+			require.Equal(t, float64(muliplier*mockIfaces.NParsedOrFailed()), sum)
 			metricsValidated++
 		case "goprobe_capture_capture_issues_total":
 			var sum, sumTracked float64
@@ -415,8 +560,8 @@ func validateMetrics(t *testing.T, mockIfaces mockIfaces) {
 				}
 			}
 
-			require.Equal(t, float64(mockIfaces.NErr()), sum)
-			require.Equal(t, float64(mockIfaces.NErrTracked()), sumTracked)
+			require.Equal(t, float64(muliplier*mockIfaces.NErr()), sum)
+			require.Equal(t, float64(muliplier*mockIfaces.NErrTracked()), sumTracked)
 			metricsValidated++
 		case "goprobe_capture_packets_dropped_total":
 			var sum float64
@@ -432,7 +577,7 @@ func validateMetrics(t *testing.T, mockIfaces mockIfaces) {
 	require.Equal(t, 3, metricsValidated)
 }
 
-func runGoProbe(t *testing.T, testDir string, sourceInitFn func() (mockIfaces, func(c *capture.Capture) (capture.Source, error))) chan hashmap.AggFlowMapWithMetadata {
+func runGoProbe(t *testing.T, testDir, addr string, sourceInitFn func() (mockIfaces, func(c *capture.Capture) (capture.Source, error))) chan hashmap.AggFlowMapWithMetadata {
 
 	// We quit on encountering SIGUSR2 (instead of the ususal SIGTERM or SIGINT)
 	// to avoid killing the test
@@ -457,6 +602,13 @@ func runGoProbe(t *testing.T, testDir string, sourceInitFn func() (mockIfaces, f
 		capture.WithSkipWriteoutSchedule(true),
 	)
 	require.Nil(t, err)
+
+	if addr != "" {
+		apiServer := gpserver.New(addr, testDir, captureManager, nil, server.WithNoRecursionDetection())
+		go func() {
+			require.Nil(t, apiServer.Serve())
+		}()
+	}
 
 	// Wait until goProbe is done processing all packets, then kill it in the
 	// background via the SIGUSR2 signal
@@ -504,6 +656,25 @@ func runGoQuery(t *testing.T, res interface{}, args []string) {
 	))
 
 	require.Nil(t, jsoniter.NewDecoder(buf).Decode(&res))
+}
+
+func runGlobalQuery(t *testing.T, addr string, apiEndpoints map[string]string) func() {
+	endpoints := map[string]*client.Config{}
+	for k, v := range apiEndpoints {
+		endpoints[k] = &client.Config{Addr: v}
+	}
+
+	apiServer := gqserver.New(addr, hosts.NewStringResolver(true), &apiclient.APIClientQuerier{
+		APIEndpoints:  endpoints,
+		MaxConcurrent: 10,
+	}, server.WithNoRecursionDetection())
+	go func() {
+		require.ErrorIs(t, apiServer.Serve(), http.ErrServerClosed)
+	}()
+
+	return func() {
+		apiServer.Shutdown(context.Background())
+	}
 }
 
 func setupSources(ifaces mockIfaces) func() (mockIfaces, func(c *capture.Capture) (capture.Source, error)) {

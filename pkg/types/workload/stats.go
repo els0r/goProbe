@@ -75,7 +75,6 @@ type Stats struct {
 
 // LogValue implements the slog.LogValuer interface
 func (s *Stats) LogValue() (v slog.Value) {
-	s.RLock()
 	v = slog.GroupValue(
 		slog.Uint64("bytes_loaded", s.BytesLoaded),
 		slog.Uint64("bytes_decompressed", s.BytesDecompressed),
@@ -84,7 +83,6 @@ func (s *Stats) LogValue() (v slog.Value) {
 		slog.Uint64("directories_processed", s.DirectoriesProcessed),
 		slog.Uint64("workloads", s.Workloads),
 	)
-	s.RUnlock()
 	return
 }
 
@@ -94,11 +92,13 @@ func (s *Stats) Add(stats *Stats) {
 		return
 	}
 	s.Lock()
+	stats.RLock()
 	s.BlocksProcessed += stats.BlocksProcessed
 	s.BytesDecompressed += stats.BytesDecompressed
 	s.BlocksProcessed += stats.BlocksProcessed
 	s.BlocksCorrupted += stats.BlocksCorrupted
 	s.DirectoriesProcessed += stats.DirectoriesProcessed
 	s.Workloads += stats.Workloads
+	stats.RUnlock()
 	s.Unlock()
 }

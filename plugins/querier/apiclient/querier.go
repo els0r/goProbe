@@ -10,6 +10,8 @@ import (
 
 	"log/slog"
 
+	gqclient "github.com/els0r/goProbe/pkg/api/globalquery/client"
+
 	"github.com/els0r/goProbe/cmd/global-query/pkg/distributed"
 	"github.com/els0r/goProbe/cmd/global-query/pkg/hosts"
 	"github.com/els0r/goProbe/pkg/api/goprobe/client"
@@ -33,9 +35,8 @@ func init() {
 
 // APIClientQuerier implements an API-based querier, fulfilling the Querier interface
 type APIClientQuerier struct {
-	apiEndpoints map[string]*client.Config `json:"endpoints" yaml:"endpoints"`
-
-	maxConcurrent int `json:"max_concurrent" yaml:"max_concurrent"`
+	APIEndpoints  map[string]*client.Config `json:"endpoints" yaml:"endpoints"`
+	MaxConcurrent int                       `json:"max_concurrent" yaml:"max_concurrent"`
 }
 
 // one CPU can handle more than one client call at a time
@@ -45,8 +46,8 @@ var defaultMaxConcurrent = 2 * runtime.NumCPU()
 // under the hood to run queries
 func New(cfgPath string) (*APIClientQuerier, error) {
 	a := &APIClientQuerier{
-		apiEndpoints:  make(map[string]*client.Config),
-		maxConcurrent: defaultMaxConcurrent,
+		APIEndpoints:  make(map[string]*client.Config),
+		MaxConcurrent: defaultMaxConcurrent,
 	}
 
 	// read in the endpoints config
@@ -60,7 +61,7 @@ func New(cfgPath string) (*APIClientQuerier, error) {
 		}
 	}()
 
-	err = yaml.NewDecoder(f).Decode(a.apiEndpoints)
+	err = yaml.NewDecoder(f).Decode(a.APIEndpoints)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read in config: %w", err)
 	}
@@ -71,18 +72,18 @@ func New(cfgPath string) (*APIClientQuerier, error) {
 // it's sufficient to set this to the amount of hosts available in configuration or the list of hosts
 // queried
 func (a *APIClientQuerier) SetMaxConcurrent(num int) *APIClientQuerier {
-	a.maxConcurrent = num
+	a.MaxConcurrent = num
 	return a
 }
 
 // createQueryWorkload prepares and executes the workload required to perform the query
-func (a *APIClientQuerier) createQueryWorkload(_ context.Context, host string, args *query.Args) (*queryWorkload, error) {
+func (a *APIClientQuerier) createQueryWorkload(_ context.Context, host string, args *query.Args, keepaliveChan chan struct{}) (*queryWorkload, error) {
 	qw := &queryWorkload{
 		Host: host,
 		Args: args,
 	}
 	// create the api client runner by looking up the endpoint config for the given host
-	cfg, exists := a.apiEndpoints[host]
+	cfg, exists := a.APIEndpoints[host]
 	if !exists {
 		err := fmt.Errorf("couldn't find endpoint configuration for host")
 
@@ -90,7 +91,11 @@ func (a *APIClientQuerier) createQueryWorkload(_ context.Context, host string, a
 		// result
 		qw.Runner = distributed.NewErrorRunner(err)
 	} else {
-		qw.Runner = client.NewFromConfig(cfg)
+		if args.KeepAlive > 0 {
+			qw.Runner = gqclient.NewSSEFromConfig(cfg, keepaliveChan)
+		} else {
+			qw.Runner = client.NewFromConfig(cfg)
+		}
 	}
 
 	return qw, nil
@@ -98,14 +103,15 @@ func (a *APIClientQuerier) createQueryWorkload(_ context.Context, host string, a
 
 // prepareQueries creates query workloads for all hosts in the host list and returns the channel it sends the
 // workloads on
-func (a *APIClientQuerier) prepareQueries(ctx context.Context, hostList hosts.Hosts, args *query.Args) <-chan *queryWorkload {
+func (a *APIClientQuerier) prepareQueries(ctx context.Context, hostList hosts.Hosts, args *query.Args) (<-chan *queryWorkload, chan struct{}) {
 	workloads := make(chan *queryWorkload)
+	keepaliveChan := make(chan struct{}, 64)
 
 	go func(ctx context.Context) {
 		logger := logging.FromContext(ctx)
 
 		for _, host := range hostList {
-			wl, err := a.createQueryWorkload(ctx, host, args)
+			wl, err := a.createQueryWorkload(ctx, host, args, keepaliveChan)
 			if err != nil {
 				logger.With("hostname", host).Errorf("failed to create workload: %v", err)
 			}
@@ -114,13 +120,13 @@ func (a *APIClientQuerier) prepareQueries(ctx context.Context, hostList hosts.Ho
 		close(workloads)
 	}(ctx)
 
-	return workloads
+	return workloads, keepaliveChan
 }
 
 // AllHosts returns a list of all hosts / targets available to the querier
 func (a *APIClientQuerier) AllHosts() (hostList hosts.Hosts, err error) {
-	hostList = make([]string, 0, len(a.apiEndpoints))
-	for host := range a.apiEndpoints {
+	hostList = make([]string, 0, len(a.APIEndpoints))
+	for host := range a.APIEndpoints {
 		hostList = append(hostList, host)
 	}
 
@@ -128,17 +134,17 @@ func (a *APIClientQuerier) AllHosts() (hostList hosts.Hosts, err error) {
 }
 
 // Query takes query workloads from the internal workloads channel, runs them, and returns a channel from which
-// the results can be read
-func (a *APIClientQuerier) Query(ctx context.Context, hosts hosts.Hosts, args *query.Args) <-chan *results.Result {
-	out := make(chan *results.Result, a.maxConcurrent)
+// the results can be read and a channel from which keepalive signals can be read
+func (a *APIClientQuerier) Query(ctx context.Context, hosts hosts.Hosts, args *query.Args) (<-chan *results.Result, <-chan struct{}) {
+	out := make(chan *results.Result, a.MaxConcurrent)
 
-	workloads := a.prepareQueries(ctx, hosts, args)
+	workloads, keepaliveChan := a.prepareQueries(ctx, hosts, args)
 
 	// query pipeline setup
 	// sets up a fan-out, fan-in query processing pipeline
 	numRunners := len(hosts)
-	if 0 < a.maxConcurrent && a.maxConcurrent < numRunners {
-		numRunners = a.maxConcurrent
+	if 0 < a.MaxConcurrent && a.MaxConcurrent < numRunners {
+		numRunners = a.MaxConcurrent
 	}
 
 	logger := logging.FromContext(ctx).With("runners", numRunners)
@@ -177,14 +183,18 @@ func (a *APIClientQuerier) Query(ctx context.Context, hosts hosts.Hosts, args *q
 	go func() {
 		wg.Wait()
 		close(out)
+		if keepaliveChan != nil {
+			close(keepaliveChan)
+		}
 	}()
-	return out
+	return out, keepaliveChan
 }
 
 // queryWorkload denotes an individual workload to perform a query on a remote host
 type queryWorkload struct {
 	Host string
 
-	Runner query.Runner
-	Args   *query.Args
+	Runner        query.Runner
+	Args          *query.Args
+	KeepaliveChan chan struct{}
 }

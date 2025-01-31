@@ -5,7 +5,6 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/sse"
-	"github.com/els0r/goProbe/cmd/global-query/pkg/distributed"
 	"github.com/els0r/goProbe/pkg/query"
 	"github.com/els0r/goProbe/pkg/results"
 )
@@ -39,7 +38,7 @@ func RegisterQueryAPI(a huma.API, caller string, querier query.Runner, middlewar
 	)
 
 	// register routes specific to distributed querying
-	dqr, ok := querier.(*distributed.QueryRunner)
+	dqr, ok := querier.(SSEQueryRunner)
 	if ok {
 		registerDistributedQueryAPI(a, caller, dqr, middlewares)
 		return
@@ -60,7 +59,7 @@ func RegisterQueryAPI(a huma.API, caller string, querier query.Runner, middlewar
 	)
 }
 
-func registerDistributedQueryAPI(a huma.API, caller string, qr *distributed.QueryRunner, middlewares huma.Middlewares) {
+func registerDistributedQueryAPI(a huma.API, caller string, qr SSEQueryRunner, middlewares huma.Middlewares) {
 	// query running
 	huma.Register(a,
 		huma.Operation{
@@ -88,6 +87,7 @@ func registerDistributedQueryAPI(a huma.API, caller string, qr *distributed.Quer
 			string(StreamEventQueryError):    &query.DetailError{},
 			string(StreamEventPartialResult): &PartialResult{},
 			string(StreamEventFinalResult):   &FinalResult{},
+			string(StreamEventKeepalive):     &Keepalive{},
 		},
 		getSSEBodyQueryRunnerHandler(caller, qr),
 	)
@@ -101,6 +101,7 @@ const (
 	StreamEventQueryError    StreamEventType = "queryError"
 	StreamEventPartialResult StreamEventType = "partialResult"
 	StreamEventFinalResult   StreamEventType = "finalResult"
+	StreamEventKeepalive     StreamEventType = "keepalive"
 )
 
 // ArgsBodyInput stores the query args to be validated in the body
@@ -129,3 +130,7 @@ type PartialResult struct{ *results.Result }
 // completed. It SHOULD only be sent at the end of a streaming operation. This data structure is relevant
 // only in the context of SSE
 type FinalResult struct{ *results.Result }
+
+// Keepalive represents an keeplive signal. This data structure is relevant
+// only in the context of SSE
+type Keepalive struct{}

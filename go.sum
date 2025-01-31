@@ -30,10 +30,14 @@ github.com/fako1024/gotools/bitpack v0.0.0-20240726111648-469fe0cf3902 h1:GesUzR
 github.com/fako1024/gotools/bitpack v0.0.0-20240726111648-469fe0cf3902/go.mod h1:4wD0uVvDrCUyQd0YxxugT1GYeGtiWVIZ5qhrCWSiH6I=
 github.com/fako1024/gotools/concurrency v0.0.0-20240726111648-469fe0cf3902 h1:OLmGPQdcdABQhcnVf9E0x0ii+OsCzV2EwhJoeaf01UM=
 github.com/fako1024/gotools/concurrency v0.0.0-20240726111648-469fe0cf3902/go.mod h1:WkG6W0MW1wyyCsC1gvOs10Vd/F8RubRILDfv7LaooLk=
+github.com/fako1024/gotools/concurrency v0.0.0-20250131082013-8eced4a4a537 h1:6AMg4dT+txCrb3I4dGaDuHvdjUBKnt/hQd8VEKVfpYs=
+github.com/fako1024/gotools/concurrency v0.0.0-20250131082013-8eced4a4a537/go.mod h1:3ALRLl+moaiZInwD1FPHO3orrGm0U/E3tolgV9XaCEE=
 github.com/fako1024/httpc v1.1.1 h1:omIcNWGsWjsUhLhCdz2vJmILkfBQmP2KvDyH3uRikAI=
 github.com/fako1024/httpc v1.1.1/go.mod h1:Qu5VDs/jNUx8Uy9ObozbfJmrCh+hZnb+VIWXO+DPBL0=
 github.com/fako1024/slimcap v1.0.6 h1:gKR1xNGP7r6rNieCMzEK5ebWhKdTEvlYvvBL1PTI/Aw=
 github.com/fako1024/slimcap v1.0.6/go.mod h1:H2L57jHhLQI6a58lkmt0GhGjSyq68giXd1Fe92ne/uw=
+github.com/fako1024/slimcap v1.0.7 h1:HUsMvHfaSO9MRjRbgARZ46P7d4nTtSJMQJmrLyAeLjs=
+github.com/fako1024/slimcap v1.0.7/go.mod h1:H2L57jHhLQI6a58lkmt0GhGjSyq68giXd1Fe92ne/uw=
 github.com/felixge/httpsnoop v1.0.4 h1:NFTV2Zj1bL4mc9sqWACXbQFVBBg2W3GPvqp8/ESS2Wg=
 github.com/felixge/httpsnoop v1.0.4/go.mod h1:m8KPJKqk1gH5J9DgRY2ASl2lWCfGKXixSwevea8zH2U=
 github.com/frankban/quicktest v1.14.6 h1:7Xjx+VpznH+oBnejlPUj8oUpdxnVs4f8XU8WnHkI4W8=

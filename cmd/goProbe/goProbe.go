@@ -144,7 +144,7 @@ func main() {
 			server.WithMetrics(config.API.Metrics, []float64{0.01, 0.05, 0.1, 0.25, 1, 5, 10, 30, 60, 300}...),
 
 			// enable global query rate limit if provided
-			server.WithQueryRateLimit(config.API.QueryRateLimit.MaxReqPerSecond, config.API.QueryRateLimit.MaxBurst),
+			server.WithQueryRateLimit(config.API.QueryRateLimit.MaxReqPerSecond, config.API.QueryRateLimit.MaxBurst, config.API.QueryRateLimit.MaxConcurrent),
 		}
 		// if len(config.API.Keys) > 0 {
 		// 	apiOptions = append(apiOptions, api.WithKeys(config.API.Keys))

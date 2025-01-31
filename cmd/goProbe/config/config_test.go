@@ -152,6 +152,24 @@ func TestValidate(t *testing.T) {
 			},
 			errorInvalidAPIQueryRateLimit,
 		},
+		{"max concurrent value",
+			&Config{
+				DB: DBConfig{Path: defaults.DBPath},
+				Interfaces: Ifaces{
+					"eth0": CaptureConfig{
+						RingBuffer: &RingBufferConfig{BlockSize: 1024 * 1024, NumBlocks: 2},
+					},
+				},
+				Logging: LogConfig{Level: "debug", Encoding: "logfmt"},
+				API: &APIConfig{
+					Addr: "unix:/var/run/goprobe.sock",
+					QueryRateLimit: QueryRateLimitConfig{
+						MaxConcurrent: -10,
+					},
+				},
+			},
+			errorInvalidAPIQueryRateLimit,
+		},
 	}
 
 	// run tests

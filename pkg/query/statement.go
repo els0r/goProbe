@@ -46,6 +46,9 @@ type Statement struct {
 	MaxMemPct int  `json:"max_mem_pct,omitempty"`
 	LowMem    bool `json:"low_mem,omitempty"`
 
+	// query keepalive
+	KeepAliveDuration time.Duration `json:"keepalive,omitempty"`
+
 	// request live flow data (in addition to DB)
 	Live bool `json:"live,omitempty"`
 }

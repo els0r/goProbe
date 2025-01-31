@@ -36,14 +36,19 @@ func New(addr string, resolver hosts.Resolver, querier distributed.Querier, opts
 func (server *Server) registerRoutes() {
 	var middlewares huma.Middlewares
 
-	rateLimiter, enabled := server.QueryRateLimiter()
+	maxConcurrentQueries, rateLimiter, enabled := server.QueryRateLimiter()
 	if enabled {
 		middlewares = append(middlewares, api.RateLimitMiddleware(rateLimiter))
 	}
 
+	opts := []distributed.QueryOption{}
+	if maxConcurrentQueries > 0 {
+		sem := make(chan struct{}, maxConcurrentQueries)
+		opts = append(opts, distributed.WithMaxConcurrent(sem))
+	}
 	api.RegisterQueryAPI(server.API(),
 		fmt.Sprintf("global-query/%s", version.Short()),
-		distributed.NewQueryRunner(server.hostListResolver, server.querier),
+		distributed.NewQueryRunner(server.hostListResolver, server.querier, opts...),
 		middlewares,
 	)
 }

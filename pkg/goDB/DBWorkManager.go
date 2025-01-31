@@ -511,9 +511,9 @@ func (w *DBWorkManager) grabAndProcessWorkload(ctx context.Context, id int, wg *
 				select {
 				case <-ctx.Done():
 					// query was cancelled, exit
-					wl.Stats().Lock()
-					logger.Infof("query cancelled (workload %d / %d)...", wl.Stats().DirectoriesProcessed, w.nWorkloads)
-					wl.Stats().Unlock()
+					wl.Stats().RLock()
+					logger.Warnf("query cancelled (workload %d / %d): %s", wl.Stats().DirectoriesProcessed, w.nWorkloads, ctx.Err())
+					wl.Stats().RUnlock()
 					return
 				default:
 					// check if a memory pool is available
