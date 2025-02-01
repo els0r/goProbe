@@ -290,6 +290,10 @@ func TestStartStop(t *testing.T) {
 
 func testE2E(t *testing.T, useAPI, enableStreaming bool, valFilterDescriptor int, datasets ...[]byte) {
 
+	if !useAPI && enableStreaming {
+		t.Fatal("cannot use streaming without API")
+	}
+
 	// Reset all Prometheus counters for the next E2E test to avoid double counting
 	defer capture.ResetCountersTestingOnly()
 
@@ -308,7 +312,10 @@ func testE2E(t *testing.T, useAPI, enableStreaming bool, valFilterDescriptor int
 
 	// Run GoProbe (storing a copy of all processed live flows)
 	liveFlowResults := make(map[string]hashmap.AggFlowMapWithMetadata)
-	goProbePort := fmt.Sprintf("127.0.0.1:%d", getGoProbePort())
+	var goProbePort string
+	if useAPI {
+		goProbePort = fmt.Sprintf("127.0.0.1:%d", getGoProbePort())
+	}
 	for liveFlowMap := range runGoProbe(t, tempDir, goProbePort, setupSources(mockIfaces)) {
 		liveFlowResults[liveFlowMap.Interface] = liveFlowMap
 	}
@@ -335,10 +342,7 @@ func testE2E(t *testing.T, useAPI, enableStreaming bool, valFilterDescriptor int
 		queryArgs = append(queryArgs, "--query.streaming")
 	}
 	if useAPI {
-		queryArgs = append(queryArgs, "--query.server.addr", goProbePort)
-	}
-	if enableStreaming || useAPI {
-		queryArgs = append(queryArgs, "--query.hosts-resolution", "any")
+		queryArgs = append(queryArgs, "--query.server.addr", goProbePort, "--query.hosts-resolution", "any")
 	}
 	queryArgs = append(queryArgs, "sip,dip,dport,proto")
 
