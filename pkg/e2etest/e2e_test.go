@@ -151,7 +151,7 @@ func TestE2EBasic(t *testing.T) {
 	pcapData, err := pcaps.ReadFile(filepath.Join(testDataPath, defaultPcapTestFile))
 	require.Nil(t, err)
 
-	testE2E(t, 0, pcapData)
+	testE2E(t, false, false, 0, pcapData)
 }
 
 func TestE2EMultipleIfaces(t *testing.T) {
@@ -169,7 +169,7 @@ func TestE2EMultipleIfaces(t *testing.T) {
 				ifaceData[i] = pcapData
 			}
 
-			testE2E(t, 0, ifaceData...)
+			testE2E(t, false, false, 0, ifaceData...)
 		})
 	}
 }
@@ -185,7 +185,7 @@ func testE2EExtended(t *testing.T, valFilterDescriptor int) {
 			pcapData, err := pcaps.ReadFile(path)
 			require.Nil(t, err)
 
-			testE2E(t, valFilterDescriptor, pcapData)
+			testE2E(t, false, false, valFilterDescriptor, pcapData)
 		})
 	}
 }
@@ -218,7 +218,7 @@ func TestE2EExtendedPermuted(t *testing.T) {
 		}
 
 		t.Run(testMsg, func(t *testing.T) {
-			testE2E(t, 0, ifaceData...)
+			testE2E(t, false, false, 0, ifaceData...)
 		})
 	})
 }
@@ -244,7 +244,7 @@ func TestE2EExternal(t *testing.T) {
 			pcapData, err := os.ReadFile(filepath.Clean(path))
 			require.Nil(t, err)
 
-			testE2E(t, 0, pcapData)
+			testE2E(t, false, false, 0, pcapData)
 
 			return nil
 		}))
@@ -254,10 +254,21 @@ func TestE2EExternal(t *testing.T) {
 		pcapData, err := os.ReadFile(filepath.Clean(externalPCAPPath))
 		require.Nil(t, err)
 
-		testE2E(t, 0, pcapData)
+		testE2E(t, false, false, 0, pcapData)
 	}
 }
+func TestE2EAPI(t *testing.T) {
+	pcapData, err := pcaps.ReadFile(filepath.Join(testDataPath, defaultPcapTestFile))
+	require.Nil(t, err)
 
+	testE2E(t, true, false, 0, pcapData)
+}
+func TestE2EAPIStreaming(t *testing.T) {
+	pcapData, err := pcaps.ReadFile(filepath.Join(testDataPath, defaultPcapTestFile))
+	require.Nil(t, err)
+
+	testE2E(t, true, true, 0, pcapData)
+}
 func TestE2EDistributedStreaming(t *testing.T) {
 	pcapData, err := pcaps.ReadFile(filepath.Join(testDataPath, defaultPcapTestFile))
 	require.Nil(t, err)
@@ -277,7 +288,7 @@ func TestStartStop(t *testing.T) {
 	}
 }
 
-func testE2E(t *testing.T, valFilterDescriptor int, datasets ...[]byte) {
+func testE2E(t *testing.T, useAPI, enableStreaming bool, valFilterDescriptor int, datasets ...[]byte) {
 
 	// Reset all Prometheus counters for the next E2E test to avoid double counting
 	defer capture.ResetCountersTestingOnly()
@@ -297,7 +308,8 @@ func testE2E(t *testing.T, valFilterDescriptor int, datasets ...[]byte) {
 
 	// Run GoProbe (storing a copy of all processed live flows)
 	liveFlowResults := make(map[string]hashmap.AggFlowMapWithMetadata)
-	for liveFlowMap := range runGoProbe(t, tempDir, "", setupSources(mockIfaces)) {
+	goProbePort := fmt.Sprintf("127.0.0.1:%d", getGoProbePort())
+	for liveFlowMap := range runGoProbe(t, tempDir, goProbePort, setupSources(mockIfaces)) {
 		liveFlowResults[liveFlowMap.Interface] = liveFlowMap
 	}
 
@@ -318,8 +330,18 @@ func testE2E(t *testing.T, valFilterDescriptor int, datasets ...[]byte) {
 		"-d", tempDir,
 		"-n", strconv.Itoa(100000),
 		"-s", "packets",
-		"sip,dip,dport,proto",
 	}
+	if enableStreaming {
+		queryArgs = append(queryArgs, "--query.streaming")
+	}
+	if useAPI {
+		queryArgs = append(queryArgs, "--query.server.addr", goProbePort)
+	}
+	if enableStreaming || useAPI {
+		queryArgs = append(queryArgs, "--query.hosts-resolution", "any")
+	}
+	queryArgs = append(queryArgs, "sip,dip,dport,proto")
+
 	dir := ""
 	switch valFilterDescriptor {
 	case 1:
