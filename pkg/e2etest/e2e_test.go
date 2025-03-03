@@ -81,6 +81,8 @@ var defaultCaptureConfig = config.CaptureConfig{
 	},
 }
 
+var promMetrics = capture.NewMetrics()
+
 var externalPCAPPath string
 
 var valFilters = []*node.ValFilterNode{
@@ -127,7 +129,8 @@ func testStartStop(t *testing.T) {
 		)
 		require.Nil(t, err)
 		return mockSrc, nil
-	}), capture.WithSkipWriteoutSchedule(true))
+	}), capture.WithSkipWriteoutSchedule(true),
+		capture.WithMetrics(promMetrics))
 	require.Nil(t, err)
 
 	// Wait until goProbe is done processing all packets, then kill it in the
@@ -295,7 +298,7 @@ func testE2E(t *testing.T, useAPI, enableStreaming bool, valFilterDescriptor int
 	}
 
 	// Reset all Prometheus counters for the next E2E test to avoid double counting
-	defer capture.ResetCountersTestingOnly()
+	defer promMetrics.ResetCountersTestingOnly()
 
 	// Setup a temporary directory for the test DB
 	tempDir, err := os.MkdirTemp(os.TempDir(), "goprobe_e2e")
@@ -440,7 +443,7 @@ func testE2E(t *testing.T, useAPI, enableStreaming bool, valFilterDescriptor int
 func testE2EDistributed(t *testing.T, enableStreaming bool, nDistHosts, valFilterDescriptor int, datasets ...[]byte) {
 
 	// Reset all Prometheus counters for the next E2E test to avoid double counting
-	defer capture.ResetCountersTestingOnly()
+	defer promMetrics.ResetCountersTestingOnly()
 
 	// Setup temporary directories for the test DBs
 	var (
@@ -626,6 +629,7 @@ func runGoProbe(t *testing.T, testDir, addr string, sourceInitFn func() (mockIfa
 	},
 		capture.WithSourceInitFn(initFn),
 		capture.WithSkipWriteoutSchedule(true),
+		capture.WithMetrics(promMetrics),
 	)
 	require.Nil(t, err)
 

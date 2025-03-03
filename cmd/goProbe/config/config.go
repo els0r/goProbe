@@ -124,12 +124,13 @@ type QueryRateLimitConfig struct {
 
 // APIConfig stores goProbe's API configuration
 type APIConfig struct {
-	Addr           string               `json:"addr" yaml:"addr"`
-	Metrics        bool                 `json:"metrics" yaml:"metrics"`
-	Profiling      bool                 `json:"profiling" yaml:"profiling"`
-	Timeout        int                  `json:"request_timeout" yaml:"request_timeout"`
-	Keys           []string             `json:"keys" yaml:"keys"`
-	QueryRateLimit QueryRateLimitConfig `json:"query_rate_limit" yaml:"query_rate_limit"`
+	Addr                string               `json:"addr" yaml:"addr"`
+	Metrics             bool                 `json:"metrics" yaml:"metrics"`
+	DisableIfaceMetrics bool                 `json:"disable_iface_metrics" yaml:"disable_iface_metrics"`
+	Profiling           bool                 `json:"profiling" yaml:"profiling"`
+	Timeout             int                  `json:"request_timeout" yaml:"request_timeout"`
+	Keys                []string             `json:"keys" yaml:"keys"`
+	QueryRateLimit      QueryRateLimitConfig `json:"query_rate_limit" yaml:"query_rate_limit"`
 }
 
 // newDefault creates a new configuration struct with default settings
