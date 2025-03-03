@@ -13,7 +13,8 @@ const (
 )
 
 var (
-	DefaultMetricsHistogramBins = []float64{0.01, 0.05, 0.1, 0.25, 1, 5, 10, 30, 60, 300}
+	// DefaultRotationDurationHistogramBins provides a reasonable standard set of histogram bins
+	DefaultRotationDurationHistogramBins = []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 0.75, 1}
 )
 
 type promMetrics struct {
@@ -49,6 +50,7 @@ func DisableIfaceTracking() MetricsOption {
 	}
 }
 
+// NewMetrics instantiates a new set of capture metrics
 func NewMetrics(opts ...MetricsOption) *Metrics {
 	metrics := &Metrics{
 		trackIfaces: true,
@@ -133,7 +135,7 @@ func NewMetrics(opts ...MetricsOption) *Metrics {
 			Name:      "rotation_duration_seconds",
 			Help:      "Total flow map rotation time, aggregated across all interfaces",
 			// rotation is significantly faster than the writeout. Hence the small buckets
-			Buckets: []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 0.75, 1},
+			Buckets: DefaultRotationDurationHistogramBins,
 		}),
 	}
 
@@ -152,6 +154,7 @@ func NewMetrics(opts ...MetricsOption) *Metrics {
 	return metrics
 }
 
+// ObservePacketsProcessed returns the counter metric relevant for the provided labels
 func (m *Metrics) ObservePacketsProcessed(iface string) prometheus.Counter {
 	if m.trackIfaces {
 		return m.promPacketsProcessed.WithLabelValues(iface)
@@ -159,6 +162,7 @@ func (m *Metrics) ObservePacketsProcessed(iface string) prometheus.Counter {
 	return m.promPacketsProcessed.WithLabelValues()
 }
 
+// ObservePacketsDropped returns the counter metric relevant for the provided labels
 func (m *Metrics) ObservePacketsDropped(iface string) prometheus.Counter {
 	if m.trackIfaces {
 		return m.promPacketsDropped.WithLabelValues(iface)
@@ -166,6 +170,7 @@ func (m *Metrics) ObservePacketsDropped(iface string) prometheus.Counter {
 	return m.promPacketsDropped.WithLabelValues()
 }
 
+// ObserveBytesTotal returns the counter metric relevant for the provided labels
 func (m *Metrics) ObserveBytesTotal(iface, direction string) prometheus.Counter {
 	if m.trackIfaces {
 		return m.promBytes.WithLabelValues(iface, direction)
@@ -173,6 +178,7 @@ func (m *Metrics) ObserveBytesTotal(iface, direction string) prometheus.Counter 
 	return m.promBytes.WithLabelValues(direction)
 }
 
+// ObservePacketsTotal returns the counter metric relevant for the provided labels
 func (m *Metrics) ObservePacketsTotal(iface, direction string) prometheus.Counter {
 	if m.trackIfaces {
 		return m.promPackets.WithLabelValues(iface, direction)
@@ -180,6 +186,7 @@ func (m *Metrics) ObservePacketsTotal(iface, direction string) prometheus.Counte
 	return m.promPackets.WithLabelValues(direction)
 }
 
+// ObserveGlobalBufferUsage returns the gauge metric relevant for the provided labels
 func (m *Metrics) ObserveGlobalBufferUsage(iface string) prometheus.Gauge {
 	if m.trackIfaces {
 		return m.promGlobalBufferUsage.WithLabelValues(iface)
@@ -187,6 +194,7 @@ func (m *Metrics) ObserveGlobalBufferUsage(iface string) prometheus.Gauge {
 	return m.promGlobalBufferUsage.WithLabelValues()
 }
 
+// ObserveNumFlows returns the gauge metric relevant for the provided labels
 func (m *Metrics) ObserveNumFlows(iface string) prometheus.Gauge {
 	if m.trackIfaces {
 		return m.promNumFlows.WithLabelValues(iface)
@@ -194,17 +202,20 @@ func (m *Metrics) ObserveNumFlows(iface string) prometheus.Gauge {
 	return m.promNumFlows.WithLabelValues()
 }
 
-func (m *Metrics) ObserveCaptureIssues(iface, issue_type string) prometheus.Counter {
+// ObserveCaptureIssues returns the counter metric relevant for the provided labels
+func (m *Metrics) ObserveCaptureIssues(iface, issueType string) prometheus.Counter {
 	if m.trackIfaces {
-		return m.promCaptureIssues.WithLabelValues(iface, issue_type)
+		return m.promCaptureIssues.WithLabelValues(iface, issueType)
 	}
-	return m.promCaptureIssues.WithLabelValues(issue_type)
+	return m.promCaptureIssues.WithLabelValues(issueType)
 }
 
+// ObserveNumIfacesCapturing returns the gauge metric
 func (m *Metrics) ObserveNumIfacesCapturing() prometheus.Gauge {
 	return m.promInterfacesCapturing
 }
 
+// ObserveRotationDuration returns the histogram metric
 func (m *Metrics) ObserveRotationDuration() prometheus.Histogram {
 	return m.promRotationDuration
 }
