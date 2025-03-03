@@ -327,7 +327,7 @@ func benchmarkRotation(b *testing.B, nIP uint32, nSPort, nDPort uint16) {
 				binary.BigEndian.PutUint16(ipLayer[ipv4.HeaderLen:ipv4.HeaderLen+2], s)
 				binary.BigEndian.PutUint16(ipLayer[ipv4.HeaderLen+2:ipv4.HeaderLen+4], d)
 
-				epHash, auxInfo, errno := ParsePacketV4(ipLayer)
+				epHash, auxInfo, _ := ParsePacketV4(ipLayer)
 
 				switch {
 
@@ -356,7 +356,7 @@ func benchmarkRotation(b *testing.B, nIP uint32, nSPort, nDPort uint16) {
 					}
 				}
 
-				benchCap.addToFlowLogV4(epHash, capture.PacketOutgoing, 128, auxInfo, errno)
+				benchCap.addToFlowLogV4(epHash, capture.PacketOutgoing, 128, auxInfo)
 			}
 		}
 	}
@@ -376,8 +376,8 @@ func benchmarkRotation(b *testing.B, nIP uint32, nSPort, nDPort uint16) {
 		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
-			epHash, auxInfo, errno := ParsePacketV4(pkt.IPLayer())
-			benchCap.addToFlowLogV4(epHash, capture.PacketOutgoing, 128, auxInfo, errno)
+			epHash, auxInfo, _ := ParsePacketV4(pkt.IPLayer())
+			benchCap.addToFlowLogV4(epHash, capture.PacketOutgoing, 128, auxInfo)
 		}
 	})
 
@@ -394,8 +394,8 @@ func benchmarkRotation(b *testing.B, nIP uint32, nSPort, nDPort uint16) {
 		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
-			epHash, auxInfo, errno := ParsePacketV4(pkt.IPLayer())
-			benchCap.addToFlowLogV4(epHash, capture.PacketThisHost, 128, auxInfo, errno)
+			epHash, auxInfo, _ := ParsePacketV4(pkt.IPLayer())
+			benchCap.addToFlowLogV4(epHash, capture.PacketThisHost, 128, auxInfo)
 		}
 	})
 
@@ -442,8 +442,8 @@ func benchmarkRotation(b *testing.B, nIP uint32, nSPort, nDPort uint16) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			epHash, auxInfo, errno := ParsePacketV4(pkt.IPLayer())
-			benchCapPost.addToFlowLogV4(epHash, capture.PacketOutgoing, 128, auxInfo, errno)
+			epHash, auxInfo, _ := ParsePacketV4(pkt.IPLayer())
+			benchCapPost.addToFlowLogV4(epHash, capture.PacketOutgoing, 128, auxInfo)
 		}
 	})
 
@@ -459,8 +459,8 @@ func benchmarkRotation(b *testing.B, nIP uint32, nSPort, nDPort uint16) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			epHash, auxInfo, errno := ParsePacketV4(pkt.IPLayer())
-			benchCapPost.addToFlowLogV4(epHash, capture.PacketThisHost, 128, auxInfo, errno)
+			epHash, auxInfo, _ := ParsePacketV4(pkt.IPLayer())
+			benchCapPost.addToFlowLogV4(epHash, capture.PacketThisHost, 128, auxInfo)
 		}
 	})
 }

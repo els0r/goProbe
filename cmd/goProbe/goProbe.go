@@ -34,6 +34,10 @@ import (
 
 const shutdownGracePeriod = 30 * time.Second
 
+var (
+	defaultRequestDurationHistogramBins = []float64{0.01, 0.05, 0.1, 0.25, 1, 5, 10, 30, 60, 300}
+)
+
 func main() {
 
 	// A general note on error handling: Any errors encountered during startup that make it
@@ -117,8 +121,17 @@ func main() {
 		logger.Fatalf("failed to create database directory: %v", err)
 	}
 
+	var cmOpts []capture.ManagerOption
+	if config.API.Metrics {
+		var metricsOpts []capture.MetricsOption
+		if config.API.DisableIfaceMetrics {
+			metricsOpts = append(metricsOpts, capture.DisableIfaceTracking())
+		}
+		cmOpts = append(cmOpts, capture.WithMetrics(capture.NewMetrics(metricsOpts...)))
+	}
+
 	// None of the initialization steps failed.
-	captureManager, err := capture.InitManager(ctx, config)
+	captureManager, err := capture.InitManager(ctx, config, cmOpts...)
 	if err != nil {
 		logger.Fatal(err)
 	}
@@ -141,7 +154,7 @@ func main() {
 
 			// this line will enable not only HTTP request metrics, but also the default prometheus golang client
 			// metrics for memory, cpu, gc performance, etc.
-			server.WithMetrics(config.API.Metrics, []float64{0.01, 0.05, 0.1, 0.25, 1, 5, 10, 30, 60, 300}...),
+			server.WithMetrics(config.API.Metrics, defaultRequestDurationHistogramBins...),
 
 			// enable global query rate limit if provided
 			server.WithQueryRateLimit(config.API.QueryRateLimit.MaxReqPerSecond, config.API.QueryRateLimit.MaxBurst, config.API.QueryRateLimit.MaxConcurrent),

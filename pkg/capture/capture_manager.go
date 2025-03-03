@@ -36,6 +36,7 @@ type Manager struct {
 	skipWriteoutSchedule bool
 
 	localBufferPool *LocalBufferPool
+	metrics         *Metrics
 }
 
 // InitManager initializes a CaptureManager and the underlying writeout logic
@@ -196,6 +197,13 @@ func WithLocalBuffers(nBuffers, sizeLimit int) ManagerOption {
 	return func(cm *Manager) {
 		cm.localBufferPool.NBuffers = nBuffers
 		cm.localBufferPool.MaxBufferSize = sizeLimit
+	}
+}
+
+// WithMetrics enables / sets tracking of metrics
+func WithMetrics(metrics *Metrics) ManagerOption {
+	return func(cm *Manager) {
+		cm.metrics = metrics
 	}
 }
 
@@ -397,7 +405,7 @@ func (cm *Manager) update(ctx context.Context, ifaces config.Ifaces, enable, dis
 
 			logger.Info("initializing capture / running packet processing")
 
-			newCap := newCapture(iface.Name, ifaces[iface.Name]).SetSourceInitFn(cm.sourceInitFn)
+			newCap := newCapture(iface.Name, ifaces[iface.Name], cm.metrics).SetSourceInitFn(cm.sourceInitFn)
 			if err := newCap.run(cm.localBufferPool); err != nil {
 				logger.Errorf("failed to start capture: %s", err)
 				return
@@ -552,8 +560,10 @@ func (cm *Manager) rotate(ctx context.Context, writeoutChan chan<- capturetypes.
 
 	// observe rotation duration
 	t1 := time.Since(t0)
-	promRotationDuration.Observe(float64(t1) / float64(time.Second))
-	promInterfacesCapturing.Set(float64(len(ifaces)))
+	if cm.metrics != nil {
+		cm.metrics.ObserveRotationDuration().Observe(float64(t1) / float64(time.Second))
+		cm.metrics.ObserveNumIfacesCapturing().Set(float64(len(ifaces)))
+	}
 
 	logger.With(
 		"elapsed", t1.Round(time.Microsecond).String(),

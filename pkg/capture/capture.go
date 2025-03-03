@@ -83,6 +83,9 @@ type Capture struct {
 	// startedAt tracks when the capture was started
 	startedAt time.Time
 
+	// metrics tracks prometheus metrics (if set)
+	metrics *Metrics
+
 	// Mutex to allow concurrent access to capture components
 	// This is _unrelated_ to the three-point capture lock to
 	// interrupt the capture for purposes of e.g. rotation
@@ -90,11 +93,12 @@ type Capture struct {
 }
 
 // newCapture creates a new Capture associated with the given iface.
-func newCapture(iface string, config config.CaptureConfig) *Capture {
+func newCapture(iface string, config config.CaptureConfig, metrics *Metrics) *Capture {
 	return &Capture{
 		iface:        iface,
 		config:       config,
 		flowLog:      NewFlowLog(),
+		metrics:      metrics,
 		sourceInitFn: defaultSourceInitFn,
 	}
 }
@@ -166,19 +170,21 @@ func (c *Capture) rotate(ctx context.Context) (agg *hashmap.AggFlowMap) {
 	nFlows := c.flowLog.Len()
 
 	var totals = &types.Counters{}
-	defer func() {
-		go func(iface string) {
-			// write volume metrics to prometheus
-			promNumFlows.WithLabelValues(c.iface).Set(float64(nFlows))
+	if c.metrics != nil {
+		defer func() {
+			go func(iface string) {
+				// write volume metrics to prometheus
+				c.metrics.ObserveNumFlows(iface).Set(float64(nFlows))
 
-			if totals != nil {
-				promBytes.WithLabelValues(iface, "inbound").Add(float64(totals.BytesRcvd))
-				promBytes.WithLabelValues(iface, "outbound").Add(float64(totals.BytesSent))
-				promPackets.WithLabelValues(iface, "inbound").Add(float64(totals.PacketsRcvd))
-				promPackets.WithLabelValues(iface, "outbound").Add(float64(totals.PacketsSent))
-			}
-		}(c.iface)
-	}()
+				if totals != nil {
+					c.metrics.ObserveBytesTotal(iface, "inbound").Add(float64(totals.BytesRcvd))
+					c.metrics.ObserveBytesTotal(iface, "outbound").Add(float64(totals.BytesSent))
+					c.metrics.ObservePacketsTotal(iface, "inbound").Add(float64(totals.PacketsRcvd))
+					c.metrics.ObservePacketsTotal(iface, "outbound").Add(float64(totals.PacketsSent))
+				}
+			}(c.iface)
+		}()
+	}
 
 	if nFlows == 0 {
 		logger.Debug("there are currently no flow records available")
@@ -284,7 +290,7 @@ func (c *Capture) process() <-chan error {
 				}
 
 				c.stats.Processed++
-				c.addToFlowLogV4(epHash, pktType, pktSize, direction, errno)
+				c.addToFlowLogV4(epHash, pktType, pktSize, direction)
 			} else if iplayerType == ipLayerTypeV6 {
 				epHash, direction, errno := ParsePacketV6(ipLayer)
 
@@ -298,7 +304,7 @@ func (c *Capture) process() <-chan error {
 				}
 
 				c.stats.Processed++
-				c.addToFlowLogV6(epHash, pktType, pktSize, direction, errno)
+				c.addToFlowLogV6(epHash, pktType, pktSize, direction)
 			} else {
 				c.stats.Processed++
 				c.stats.ParsingErrors[capturetypes.ErrnoInvalidIPHeader]++
@@ -390,15 +396,18 @@ func (c *Capture) bufferPackets(buf *LocalBuffer, captureErrors chan error) erro
 		c.stats.Processed++
 
 		if isIPv4 {
-			c.addToFlowLogV4(capturetypes.EPHashV4(epHash), pktType, pktSize, auxInfo, errno)
+			c.addToFlowLogV4(capturetypes.EPHashV4(epHash), pktType, pktSize, auxInfo)
 			continue
 		}
-		c.addToFlowLogV6(capturetypes.EPHashV6(epHash), pktType, pktSize, auxInfo, errno)
+		c.addToFlowLogV6(capturetypes.EPHashV6(epHash), pktType, pktSize, auxInfo)
 	}
 
-	// Update the buffer usage gauge for this interface and release the buffer
-	promGlobalBufferUsage.WithLabelValues(c.iface).Set(buf.Usage())
+	if c.metrics == nil {
+		return nil
+	}
 
+	// Update the buffer usage gauge for this interface
+	c.metrics.ObserveGlobalBufferUsage(c.iface).Set(buf.Usage())
 	return nil
 }
 
@@ -413,7 +422,7 @@ func (c *Capture) updateParsingErrorCounters(errno capturetypes.ParsingErrno) {
 	}
 }
 
-func (c *Capture) addToFlowLogV4(epHash capturetypes.EPHashV4, pktType byte, pktSize uint32, auxInfo byte, errno capturetypes.ParsingErrno) {
+func (c *Capture) addToFlowLogV4(epHash capturetypes.EPHashV4, pktType byte, pktSize uint32, auxInfo byte) {
 
 	// Predict if the packet is most likely to trigger the reverse hash lookup and start with that flow then
 	if epHash.IsProbablyReverse() {
@@ -449,7 +458,7 @@ func (c *Capture) addToFlowLogV4(epHash capturetypes.EPHashV4, pktType byte, pkt
 	}
 }
 
-func (c *Capture) addToFlowLogV6(epHash capturetypes.EPHashV6, pktType byte, pktSize uint32, auxInfo byte, errno capturetypes.ParsingErrno) {
+func (c *Capture) addToFlowLogV6(epHash capturetypes.EPHashV6, pktType byte, pktSize uint32, auxInfo byte) {
 
 	// Predict if the packet is most likely to trigger the reverse hash lookup and start with that flow then
 	if epHash.IsProbablyReverse() {
@@ -501,19 +510,21 @@ func (c *Capture) status() (*capturetypes.CaptureStats, error) {
 	// with the main packet processing loop (or introduce race conditions). If this counter
 	// moves slowly (as in gets gets an update only every ~5 minutes) it's not an issue to
 	// understand processed data volumes across longer time frames
-	go func(iface string, processed, dropped uint64, captureIssues capturetypes.ParsingErrTracker) {
+	if c.metrics != nil {
+		go func(iface string, processed, dropped uint64, captureIssues capturetypes.ParsingErrTracker) {
 
-		// Count total packet stats
-		promPacketsProcessed.WithLabelValues(iface).Add(float64(processed))
-		promPacketsDropped.WithLabelValues(iface).Add(float64(dropped))
+			// Count total packet stats
+			c.metrics.ObservePacketsProcessed(iface).Add(float64(processed))
+			c.metrics.ObservePacketsDropped(iface).Add(float64(dropped))
 
-		// Count the individual packet parsing issues / errors (note that this operates on a copy
-		// of the provided ParsingErrTracker which is unaffected by the Reset() performed on the original
-		// array outside of this goroutine)
-		for i := capturetypes.ErrnoPacketFragmentIgnore; i < capturetypes.NumParsingErrors; i++ {
-			promCaptureIssues.WithLabelValues(iface, i.String()).Add(float64(captureIssues[i]))
-		}
-	}(c.iface, c.stats.Processed, stats.PacketsDropped, c.stats.ParsingErrors)
+			// Count the individual packet parsing issues / errors (note that this operates on a copy
+			// of the provided ParsingErrTracker which is unaffected by the Reset() performed on the original
+			// array outside of this goroutine)
+			for i := capturetypes.ErrnoPacketFragmentIgnore; i < capturetypes.NumParsingErrors; i++ {
+				c.metrics.ObserveCaptureIssues(iface, i.String()).Add(float64(captureIssues[i]))
+			}
+		}(c.iface, c.stats.Processed, stats.PacketsDropped, c.stats.ParsingErrors)
+	}
 
 	res := capturetypes.CaptureStats{
 		StartedAt:      c.startedAt,

@@ -59,7 +59,7 @@ func TestBenchmarkCaptureThroughput(t *testing.T) {
 	})
 
 	// Reset all Prometheus counters for the next E2E test to avoid double counting
-	capture.ResetCountersTestingOnly()
+	promMetrics.ResetCountersTestingOnly()
 }
 
 func runBenchmarkCaptureThroughput(t *testing.T, w io.Writer, runtime time.Duration, fn func(*capture.Capture) (capture.Source, error)) {
