@@ -290,7 +290,7 @@ func (c *Capture) process() <-chan error {
 				}
 
 				c.stats.Processed++
-				c.addToFlowLogV4(epHash, pktType, pktSize, direction, errno)
+				c.addToFlowLogV4(epHash, pktType, pktSize, direction)
 			} else if iplayerType == ipLayerTypeV6 {
 				epHash, direction, errno := ParsePacketV6(ipLayer)
 
@@ -304,7 +304,7 @@ func (c *Capture) process() <-chan error {
 				}
 
 				c.stats.Processed++
-				c.addToFlowLogV6(epHash, pktType, pktSize, direction, errno)
+				c.addToFlowLogV6(epHash, pktType, pktSize, direction)
 			} else {
 				c.stats.Processed++
 				c.stats.ParsingErrors[capturetypes.ErrnoInvalidIPHeader]++
@@ -396,10 +396,10 @@ func (c *Capture) bufferPackets(buf *LocalBuffer, captureErrors chan error) erro
 		c.stats.Processed++
 
 		if isIPv4 {
-			c.addToFlowLogV4(capturetypes.EPHashV4(epHash), pktType, pktSize, auxInfo, errno)
+			c.addToFlowLogV4(capturetypes.EPHashV4(epHash), pktType, pktSize, auxInfo)
 			continue
 		}
-		c.addToFlowLogV6(capturetypes.EPHashV6(epHash), pktType, pktSize, auxInfo, errno)
+		c.addToFlowLogV6(capturetypes.EPHashV6(epHash), pktType, pktSize, auxInfo)
 	}
 
 	if c.metrics == nil {
@@ -422,7 +422,7 @@ func (c *Capture) updateParsingErrorCounters(errno capturetypes.ParsingErrno) {
 	}
 }
 
-func (c *Capture) addToFlowLogV4(epHash capturetypes.EPHashV4, pktType byte, pktSize uint32, auxInfo byte, errno capturetypes.ParsingErrno) {
+func (c *Capture) addToFlowLogV4(epHash capturetypes.EPHashV4, pktType byte, pktSize uint32, auxInfo byte) {
 
 	// Predict if the packet is most likely to trigger the reverse hash lookup and start with that flow then
 	if epHash.IsProbablyReverse() {
@@ -458,7 +458,7 @@ func (c *Capture) addToFlowLogV4(epHash capturetypes.EPHashV4, pktType byte, pkt
 	}
 }
 
-func (c *Capture) addToFlowLogV6(epHash capturetypes.EPHashV6, pktType byte, pktSize uint32, auxInfo byte, errno capturetypes.ParsingErrno) {
+func (c *Capture) addToFlowLogV6(epHash capturetypes.EPHashV6, pktType byte, pktSize uint32, auxInfo byte) {
 
 	// Predict if the packet is most likely to trigger the reverse hash lookup and start with that flow then
 	if epHash.IsProbablyReverse() {
