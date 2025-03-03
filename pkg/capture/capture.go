@@ -402,11 +402,12 @@ func (c *Capture) bufferPackets(buf *LocalBuffer, captureErrors chan error) erro
 		c.addToFlowLogV6(capturetypes.EPHashV6(epHash), pktType, pktSize, auxInfo, errno)
 	}
 
-	// Update the buffer usage gauge for this interface and release the buffer
-	if c.metrics != nil {
-		c.metrics.ObserveGlobalBufferUsage(c.iface).Set(buf.Usage())
+	if c.metrics == nil {
+		return nil
 	}
 
+	// Update the buffer usage gauge for this interface
+	c.metrics.ObserveGlobalBufferUsage(c.iface).Set(buf.Usage())
 	return nil
 }
 
