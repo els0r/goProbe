@@ -43,7 +43,6 @@ require (
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/cloudwego/base64x v0.1.5 // indirect
-	github.com/cloudwego/iasm v0.2.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/fsnotify/fsnotify v1.8.0 // indirect
@@ -62,7 +61,6 @@ require (
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.26.1 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
-	github.com/invopop/yaml v0.3.1 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.10 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect

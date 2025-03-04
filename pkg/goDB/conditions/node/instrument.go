@@ -110,22 +110,22 @@ func generateCompareValue(condition *conditionNode) error {
 			switch condition.comparator {
 			case "=":
 				condition.compareValue = func(currentValue types.Key) bool {
-					ip := currentValue
+					ip := currentValue.GetSIP()
 					// apply the netmask on the relevant byte in order to obtain
 					// the network address
 					ip[index] = ip[index] & netmaskByte
 
-					return bytes.Equal(ip.GetSIP()[:lenBytes], value[:lenBytes])
+					return bytes.Equal(ip[:lenBytes], value[:lenBytes])
 				}
 				return nil
 			case "!=":
 				condition.compareValue = func(currentValue types.Key) bool {
-					ip := currentValue
+					ip := currentValue.GetSIP()
 					// apply the netmask on the relevant byte in order to obtain
 					// the network address
 					ip[index] = ip[index] & netmaskByte
 
-					return !bytes.Equal(ip.GetSIP()[:lenBytes], value[:lenBytes])
+					return !bytes.Equal(ip[:lenBytes], value[:lenBytes])
 				}
 				return nil
 			default:
@@ -169,22 +169,22 @@ func generateCompareValue(condition *conditionNode) error {
 			switch condition.comparator {
 			case "=":
 				condition.compareValue = func(currentValue types.Key) bool {
-					ip := currentValue
+					ip := currentValue.GetDIP()
 					// apply the netmask on the relevant byte in order to obtain
 					// the network address
 					ip[index] = ip[index] & netmaskByte
 
-					return bytes.Equal(ip.GetDIP()[:lenBytes], value[:lenBytes])
+					return bytes.Equal(ip[:lenBytes], value[:lenBytes])
 				}
 				return nil
 			case "!=":
 				condition.compareValue = func(currentValue types.Key) bool {
-					ip := currentValue
+					ip := currentValue.GetDIP()
 					// apply the netmask on the relevant byte in order to obtain
 					// the network address
 					ip[index] = ip[index] & netmaskByte
 
-					return !bytes.Equal(ip.GetDIP()[:lenBytes], value[:lenBytes])
+					return !bytes.Equal(ip[:lenBytes], value[:lenBytes])
 				}
 				return nil
 			default:
