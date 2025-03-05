@@ -4,7 +4,7 @@ package lz4
 import (
 	"errors"
 
-	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
+	"github.com/els0r/goProbe/v4/pkg/goDB/encoder/encoders"
 )
 
 const (

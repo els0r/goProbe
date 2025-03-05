@@ -3,8 +3,8 @@ package gpfile
 import (
 	"io/fs"
 
-	"github.com/els0r/goProbe/pkg/goDB/encoder"
-	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
+	"github.com/els0r/goProbe/v4/pkg/goDB/encoder"
+	"github.com/els0r/goProbe/v4/pkg/goDB/encoder/encoders"
 	"github.com/fako1024/gotools/concurrency"
 )
 

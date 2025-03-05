@@ -6,7 +6,7 @@ import (
 	"os"
 
 	"github.com/danielgtaylor/huma/v2"
-	"github.com/els0r/goProbe/pkg/version"
+	"github.com/els0r/goProbe/v4/pkg/version"
 )
 
 var infoTags = []string{"Info"}

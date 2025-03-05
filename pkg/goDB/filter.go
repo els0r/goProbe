@@ -1,7 +1,7 @@
 package goDB
 
 import (
-	"github.com/els0r/goProbe/pkg/types/hashmap"
+	"github.com/els0r/goProbe/v4/pkg/types/hashmap"
 )
 
 // FilterFn denotes a function that filters an exisiting AggFlowMap and returns a new one

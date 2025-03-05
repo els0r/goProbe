@@ -11,11 +11,11 @@ import (
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
-	"github.com/els0r/goProbe/pkg/goDB/conditions"
-	"github.com/els0r/goProbe/pkg/goDB/conditions/node"
-	"github.com/els0r/goProbe/pkg/query/dns"
-	"github.com/els0r/goProbe/pkg/results"
-	"github.com/els0r/goProbe/pkg/types"
+	"github.com/els0r/goProbe/v4/pkg/goDB/conditions"
+	"github.com/els0r/goProbe/v4/pkg/goDB/conditions/node"
+	"github.com/els0r/goProbe/v4/pkg/query/dns"
+	"github.com/els0r/goProbe/v4/pkg/results"
+	"github.com/els0r/goProbe/v4/pkg/types"
 	jsoniter "github.com/json-iterator/go"
 )
 

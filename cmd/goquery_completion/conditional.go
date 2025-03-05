@@ -13,9 +13,9 @@ package main
 import (
 	"strings"
 
-	"github.com/els0r/goProbe/pkg/goDB/conditions"
-	"github.com/els0r/goProbe/pkg/goDB/protocols"
-	"github.com/els0r/goProbe/pkg/types"
+	"github.com/els0r/goProbe/v4/pkg/goDB/conditions"
+	"github.com/els0r/goProbe/v4/pkg/goDB/protocols"
+	"github.com/els0r/goProbe/v4/pkg/types"
 )
 
 func openParens(tokens []string) (open int) {

@@ -4,7 +4,7 @@ import (
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
-	gpapi "github.com/els0r/goProbe/pkg/api/goprobe"
+	gpapi "github.com/els0r/goProbe/v4/pkg/api/goprobe"
 )
 
 var statusTags = []string{"Status"}

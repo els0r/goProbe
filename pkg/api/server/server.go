@@ -11,9 +11,9 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humagin"
-	"github.com/els0r/goProbe/pkg/api"
-	"github.com/els0r/goProbe/pkg/goDB/info"
-	"github.com/els0r/goProbe/pkg/version"
+	"github.com/els0r/goProbe/v4/pkg/api"
+	"github.com/els0r/goProbe/v4/pkg/goDB/info"
+	"github.com/els0r/goProbe/v4/pkg/version"
 	"github.com/els0r/telemetry/metrics"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"

@@ -3,9 +3,9 @@ package distributed
 import (
 	"context"
 
-	"github.com/els0r/goProbe/cmd/global-query/pkg/hosts"
-	"github.com/els0r/goProbe/pkg/query"
-	"github.com/els0r/goProbe/pkg/results"
+	"github.com/els0r/goProbe/v4/cmd/global-query/pkg/hosts"
+	"github.com/els0r/goProbe/v4/pkg/query"
+	"github.com/els0r/goProbe/v4/pkg/results"
 )
 
 // Querier provides a general interface for all query executors

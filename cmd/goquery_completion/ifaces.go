@@ -14,9 +14,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/els0r/goProbe/pkg/goDB/info"
-	"github.com/els0r/goProbe/pkg/types"
-	"github.com/els0r/goProbe/pkg/util"
+	"github.com/els0r/goProbe/v4/pkg/goDB/info"
+	"github.com/els0r/goProbe/v4/pkg/types"
+	"github.com/els0r/goProbe/v4/pkg/util"
 )
 
 // tries to find the db path based on args

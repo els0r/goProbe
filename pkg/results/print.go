@@ -6,8 +6,8 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/els0r/goProbe/pkg/formatting"
-	"github.com/els0r/goProbe/pkg/types"
+	"github.com/els0r/goProbe/v4/pkg/formatting"
+	"github.com/els0r/goProbe/v4/pkg/types"
 )
 
 // FooterTabwriter is a specific tabwriter for the results footer

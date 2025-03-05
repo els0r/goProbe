@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/els0r/goProbe/cmd/goProbe/config"
-	gpapi "github.com/els0r/goProbe/pkg/api/goprobe"
-	"github.com/els0r/goProbe/pkg/capture/capturetypes"
+	"github.com/els0r/goProbe/v4/cmd/goProbe/config"
+	gpapi "github.com/els0r/goProbe/v4/pkg/api/goprobe"
+	"github.com/els0r/goProbe/v4/pkg/capture/capturetypes"
 	"github.com/fako1024/httpc"
 )
 

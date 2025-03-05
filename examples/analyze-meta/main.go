@@ -11,10 +11,10 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
-	"github.com/els0r/goProbe/pkg/goDB/storage/gpfile"
-	"github.com/els0r/goProbe/pkg/types"
-	"github.com/els0r/goProbe/pkg/version"
+	"github.com/els0r/goProbe/v4/pkg/goDB/encoder/encoders"
+	"github.com/els0r/goProbe/v4/pkg/goDB/storage/gpfile"
+	"github.com/els0r/goProbe/v4/pkg/types"
+	"github.com/els0r/goProbe/v4/pkg/version"
 	"github.com/els0r/telemetry/logging"
 )
 

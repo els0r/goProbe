@@ -22,14 +22,14 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/els0r/goProbe/cmd/goProbe/flags"
-	gpserver "github.com/els0r/goProbe/pkg/api/goprobe/server"
-	"github.com/els0r/goProbe/pkg/api/server"
-	"github.com/els0r/goProbe/pkg/capture"
-	"github.com/els0r/goProbe/pkg/version"
+	"github.com/els0r/goProbe/v4/cmd/goProbe/flags"
+	gpserver "github.com/els0r/goProbe/v4/pkg/api/goprobe/server"
+	"github.com/els0r/goProbe/v4/pkg/api/server"
+	"github.com/els0r/goProbe/v4/pkg/capture"
+	"github.com/els0r/goProbe/v4/pkg/version"
 	"github.com/els0r/telemetry/logging"
 
-	gpconf "github.com/els0r/goProbe/cmd/goProbe/config"
+	gpconf "github.com/els0r/goProbe/v4/cmd/goProbe/config"
 )
 
 const shutdownGracePeriod = 30 * time.Second

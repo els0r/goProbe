@@ -29,12 +29,12 @@ import (
 	// for metrics export to metricsbeat
 	_ "expvar"
 
-	"github.com/els0r/goProbe/pkg/capture/capturetypes"
-	"github.com/els0r/goProbe/pkg/goDB"
-	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
-	"github.com/els0r/goProbe/pkg/types"
-	"github.com/els0r/goProbe/pkg/types/hashmap"
-	"github.com/els0r/goProbe/pkg/version"
+	"github.com/els0r/goProbe/v4/pkg/capture/capturetypes"
+	"github.com/els0r/goProbe/v4/pkg/goDB"
+	"github.com/els0r/goProbe/v4/pkg/goDB/encoder/encoders"
+	"github.com/els0r/goProbe/v4/pkg/types"
+	"github.com/els0r/goProbe/v4/pkg/types/hashmap"
+	"github.com/els0r/goProbe/v4/pkg/version"
 	"github.com/els0r/telemetry/logging"
 
 	"flag"

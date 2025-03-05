@@ -20,9 +20,9 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/els0r/goProbe/pkg/formatting"
-	"github.com/els0r/goProbe/pkg/goDB/protocols"
-	"github.com/els0r/goProbe/pkg/types"
+	"github.com/els0r/goProbe/v4/pkg/formatting"
+	"github.com/els0r/goProbe/v4/pkg/goDB/protocols"
+	"github.com/els0r/goProbe/v4/pkg/types"
 	"go.opentelemetry.io/otel/trace"
 )
 

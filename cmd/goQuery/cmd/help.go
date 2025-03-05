@@ -7,7 +7,7 @@ import (
 
 	"text/tabwriter"
 
-	"github.com/els0r/goProbe/pkg/query"
+	"github.com/els0r/goProbe/v4/pkg/query"
 )
 
 // TODO: This part is currently unused - cross check if that is intentional (in which case it can be removed)

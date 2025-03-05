@@ -17,7 +17,7 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	"github.com/els0r/goProbe/pkg/goDB/protocols"
+	"github.com/els0r/goProbe/v4/pkg/goDB/protocols"
 )
 
 // Key stores the 5-tuple which defines a goProbe flow

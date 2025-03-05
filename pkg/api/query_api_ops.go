@@ -5,8 +5,8 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/sse"
-	"github.com/els0r/goProbe/pkg/query"
-	"github.com/els0r/goProbe/pkg/results"
+	"github.com/els0r/goProbe/v4/pkg/query"
+	"github.com/els0r/goProbe/v4/pkg/results"
 )
 
 var queryTags = []string{"Query"}

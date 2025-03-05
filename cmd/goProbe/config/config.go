@@ -20,12 +20,13 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/els0r/goProbe/pkg/defaults"
-	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
 	jsoniter "github.com/json-iterator/go"
 	"golang.org/x/net/bpf"
 	"golang.org/x/time/rate"
 	"gopkg.in/yaml.v3"
+
+	"github.com/els0r/goProbe/v4/pkg/defaults"
+	"github.com/els0r/goProbe/v4/pkg/goDB/encoder/encoders"
 )
 
 const (

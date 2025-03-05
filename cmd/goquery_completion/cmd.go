@@ -40,8 +40,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/els0r/goProbe/pkg/types"
-	"github.com/els0r/goProbe/pkg/version"
+	"github.com/els0r/goProbe/v4/pkg/types"
+	"github.com/els0r/goProbe/v4/pkg/version"
 )
 
 type bashMode byte

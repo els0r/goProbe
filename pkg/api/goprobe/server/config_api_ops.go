@@ -4,8 +4,8 @@ import (
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
-	"github.com/els0r/goProbe/cmd/goProbe/config"
-	gpapi "github.com/els0r/goProbe/pkg/api/goprobe"
+	"github.com/els0r/goProbe/v4/cmd/goProbe/config"
+	gpapi "github.com/els0r/goProbe/v4/pkg/api/goprobe"
 )
 
 var configTags = []string{"Config"}

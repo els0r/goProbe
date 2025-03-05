@@ -4,12 +4,12 @@ import (
 	"fmt"
 
 	"github.com/danielgtaylor/huma/v2"
-	"github.com/els0r/goProbe/cmd/goProbe/config"
-	"github.com/els0r/goProbe/pkg/api"
-	"github.com/els0r/goProbe/pkg/api/server"
-	"github.com/els0r/goProbe/pkg/capture"
-	"github.com/els0r/goProbe/pkg/goDB/engine"
-	"github.com/els0r/goProbe/pkg/version"
+	"github.com/els0r/goProbe/v4/cmd/goProbe/config"
+	"github.com/els0r/goProbe/v4/pkg/api"
+	"github.com/els0r/goProbe/v4/pkg/api/server"
+	"github.com/els0r/goProbe/v4/pkg/capture"
+	"github.com/els0r/goProbe/v4/pkg/goDB/engine"
+	"github.com/els0r/goProbe/v4/pkg/version"
 )
 
 // Server runs a goprobe API server

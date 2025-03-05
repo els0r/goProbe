@@ -5,8 +5,8 @@ import (
 	"strings"
 	"unsafe"
 
-	"github.com/els0r/goProbe/pkg/goDB/storage"
-	"github.com/els0r/goProbe/pkg/types"
+	"github.com/els0r/goProbe/v4/pkg/goDB/storage"
+	"github.com/els0r/goProbe/v4/pkg/types"
 	"github.com/fako1024/gotools/bitpack"
 )
 

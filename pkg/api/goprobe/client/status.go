@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	gpapi "github.com/els0r/goProbe/pkg/api/goprobe"
-	"github.com/els0r/goProbe/pkg/capture/capturetypes"
+	gpapi "github.com/els0r/goProbe/v4/pkg/api/goprobe"
+	"github.com/els0r/goProbe/v4/pkg/capture/capturetypes"
 	"github.com/fako1024/httpc"
 )
 

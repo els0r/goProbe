@@ -3,7 +3,7 @@ package capture
 import (
 	"unsafe"
 
-	"github.com/els0r/goProbe/pkg/capture/capturetypes"
+	"github.com/els0r/goProbe/v4/pkg/capture/capturetypes"
 	"github.com/fako1024/gotools/concurrency"
 	"golang.org/x/sys/unix"
 )

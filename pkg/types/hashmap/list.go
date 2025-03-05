@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"sort"
 
-	"github.com/els0r/goProbe/pkg/types"
+	"github.com/els0r/goProbe/v4/pkg/types"
 )
 
 // Item denotes a flat key / value pair

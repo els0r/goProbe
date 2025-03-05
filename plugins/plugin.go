@@ -7,7 +7,7 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/els0r/goProbe/cmd/global-query/pkg/distributed"
+	"github.com/els0r/goProbe/v4/cmd/global-query/pkg/distributed"
 )
 
 func init() {

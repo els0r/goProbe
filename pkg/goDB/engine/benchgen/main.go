@@ -7,7 +7,7 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/els0r/goProbe/pkg/query"
+	"github.com/els0r/goProbe/v4/pkg/query"
 )
 
 var (

@@ -20,7 +20,7 @@ import (
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
-	"github.com/els0r/goProbe/pkg/types"
+	"github.com/els0r/goProbe/v4/pkg/types"
 )
 
 // TimeFormat denotes a time format with an optional verbose name for display

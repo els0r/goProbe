@@ -8,16 +8,16 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/els0r/goProbe/cmd/global-query/pkg/conf"
-	gqserver "github.com/els0r/goProbe/pkg/api/globalquery/server"
-	"github.com/els0r/goProbe/pkg/api/server"
-	"github.com/els0r/goProbe/plugins"
+	"github.com/els0r/goProbe/v4/cmd/global-query/pkg/conf"
+	gqserver "github.com/els0r/goProbe/v4/pkg/api/globalquery/server"
+	"github.com/els0r/goProbe/v4/pkg/api/server"
+	"github.com/els0r/goProbe/v4/plugins"
 	"github.com/els0r/telemetry/logging"
 	"github.com/els0r/telemetry/tracing"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	_ "github.com/els0r/goProbe/plugins/contrib" // Include third-party plugins (if enabled, see README)
+	_ "github.com/els0r/goProbe/v4/plugins/contrib" // Include third-party plugins (if enabled, see README)
 )
 
 // serverCmd represents the server command

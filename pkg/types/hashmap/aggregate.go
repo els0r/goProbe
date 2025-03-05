@@ -1,8 +1,8 @@
 package hashmap
 
 import (
-	"github.com/els0r/goProbe/pkg/types"
-	"github.com/els0r/goProbe/pkg/types/workload"
+	"github.com/els0r/goProbe/v4/pkg/types"
+	"github.com/els0r/goProbe/v4/pkg/types/workload"
 )
 
 // Type definitions for easy modification

@@ -3,7 +3,7 @@ package capturetypes
 import (
 	"time"
 
-	"github.com/els0r/goProbe/pkg/types/hashmap"
+	"github.com/els0r/goProbe/v4/pkg/types/hashmap"
 )
 
 // TaggedAggFlowMap represents an aggregated

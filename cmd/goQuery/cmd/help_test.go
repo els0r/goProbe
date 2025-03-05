@@ -3,7 +3,7 @@ package cmd
 import (
 	"testing"
 
-	"github.com/els0r/goProbe/pkg/query"
+	"github.com/els0r/goProbe/v4/pkg/query"
 	"github.com/stretchr/testify/require"
 )
 

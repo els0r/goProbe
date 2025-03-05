@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/els0r/goProbe/pkg/types"
+	"github.com/els0r/goProbe/v4/pkg/types"
 	"github.com/stretchr/testify/assert"
 )
 

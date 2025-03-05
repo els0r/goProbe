@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/els0r/goProbe/pkg/types"
+	"github.com/els0r/goProbe/v4/pkg/types"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/stretchr/testify/require"
 )

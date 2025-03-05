@@ -7,8 +7,8 @@ import (
 	"os/exec"
 	"testing"
 
-	"github.com/els0r/goProbe/pkg/query"
-	"github.com/els0r/goProbe/pkg/types"
+	"github.com/els0r/goProbe/v4/pkg/query"
+	"github.com/els0r/goProbe/v4/pkg/types"
 	"github.com/els0r/telemetry/logging"
 )
 

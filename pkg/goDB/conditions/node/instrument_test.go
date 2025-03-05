@@ -14,7 +14,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/els0r/goProbe/pkg/types"
+	"github.com/els0r/goProbe/v4/pkg/types"
 )
 
 var IPStringToBytesTests = []struct {

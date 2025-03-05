@@ -16,7 +16,7 @@ import (
 	"fmt"
 	"log/syslog"
 
-	"github.com/els0r/goProbe/pkg/types/hashmap"
+	"github.com/els0r/goProbe/v4/pkg/types/hashmap"
 )
 
 // SyslogDBWriter can write goProbe's flow map to a syslog destination

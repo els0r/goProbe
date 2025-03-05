@@ -4,7 +4,7 @@ import (
 	"log/slog"
 	"sync"
 
-	"github.com/els0r/goProbe/pkg/goDB/storage/gpfile"
+	"github.com/els0r/goProbe/v4/pkg/goDB/storage/gpfile"
 )
 
 // Workload stores all relevant parameters to load a block and execute a query on it

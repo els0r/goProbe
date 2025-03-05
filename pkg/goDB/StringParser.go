@@ -18,8 +18,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/els0r/goProbe/pkg/goDB/protocols"
-	"github.com/els0r/goProbe/pkg/types"
+	"github.com/els0r/goProbe/v4/pkg/goDB/protocols"
+	"github.com/els0r/goProbe/v4/pkg/types"
 )
 
 // ErrIPVersionMismatch signifies that there is an IPv4 / IPv6 mismatch

@@ -10,8 +10,8 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/els0r/goProbe/pkg/types"
-	"github.com/els0r/goProbe/pkg/types/workload"
+	"github.com/els0r/goProbe/v4/pkg/types"
+	"github.com/els0r/goProbe/v4/pkg/types/workload"
 	jsoniter "github.com/json-iterator/go"
 )
 
