@@ -19,8 +19,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/els0r/goProbe/pkg/goDB/conditions/node"
-	"github.com/els0r/goProbe/pkg/types"
+	"github.com/els0r/goProbe/v4/pkg/goDB/conditions/node"
+	"github.com/els0r/goProbe/v4/pkg/types"
 )
 
 // Query stores all relevant parameters for data selection

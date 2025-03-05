@@ -15,11 +15,11 @@ import (
 	"io/fs"
 	"path/filepath"
 
-	"github.com/els0r/goProbe/pkg/capture/capturetypes"
-	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
-	"github.com/els0r/goProbe/pkg/goDB/storage/gpfile"
-	"github.com/els0r/goProbe/pkg/types"
-	"github.com/els0r/goProbe/pkg/types/hashmap"
+	"github.com/els0r/goProbe/v4/pkg/capture/capturetypes"
+	"github.com/els0r/goProbe/v4/pkg/goDB/encoder/encoders"
+	"github.com/els0r/goProbe/v4/pkg/goDB/storage/gpfile"
+	"github.com/els0r/goProbe/v4/pkg/types"
+	"github.com/els0r/goProbe/v4/pkg/types/hashmap"
 	"github.com/fako1024/gotools/bitpack"
 )
 

@@ -3,8 +3,8 @@ package goprobe
 import (
 	"time"
 
-	"github.com/els0r/goProbe/cmd/goProbe/config"
-	"github.com/els0r/goProbe/pkg/capture/capturetypes"
+	"github.com/els0r/goProbe/v4/cmd/goProbe/config"
+	"github.com/els0r/goProbe/v4/pkg/capture/capturetypes"
 )
 
 const (

@@ -1,12 +1,9 @@
-module github.com/els0r/goProbe
+module github.com/els0r/goProbe/v4
 
 go 1.23.1
 
-replace github.com/els0r/goProbe/plugins/contrib => ./plugins/contrib
-
 require (
 	github.com/danielgtaylor/huma/v2 v2.30.0
-	github.com/els0r/goProbe/plugins/contrib v0.0.0-20250103113557-25cb9a97687d
 	github.com/els0r/telemetry/logging v0.0.0-20241007081432-5f966df95bbd
 	github.com/els0r/telemetry/metrics v0.0.0-20241007081432-5f966df95bbd
 	github.com/els0r/telemetry/tracing v0.0.0-20241007081432-5f966df95bbd

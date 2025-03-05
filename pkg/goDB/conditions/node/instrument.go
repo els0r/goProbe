@@ -23,8 +23,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/els0r/goProbe/pkg/goDB/protocols"
-	"github.com/els0r/goProbe/pkg/types"
+	"github.com/els0r/goProbe/v4/pkg/goDB/protocols"
+	"github.com/els0r/goProbe/v4/pkg/types"
 )
 
 // Returns an identical version of the receiver instrumented

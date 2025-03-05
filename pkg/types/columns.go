@@ -18,7 +18,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/els0r/goProbe/pkg/goDB/protocols"
+	"github.com/els0r/goProbe/v4/pkg/goDB/protocols"
 )
 
 // ColumnIndex denotes a static index for one of the supported DB columns

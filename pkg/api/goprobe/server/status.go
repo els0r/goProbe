@@ -4,7 +4,7 @@ import (
 	"context"
 	"net/http"
 
-	gpapi "github.com/els0r/goProbe/pkg/api/goprobe"
+	gpapi "github.com/els0r/goProbe/v4/pkg/api/goprobe"
 )
 
 func (server *Server) getIfaceStatusHandler() func(ctx context.Context, input *GetIfaceStatusInput) (*GetStatusOutput, error) {

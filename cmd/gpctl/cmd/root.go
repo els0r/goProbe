@@ -9,9 +9,9 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/els0r/goProbe/cmd/gpctl/pkg/conf"
-	"github.com/els0r/goProbe/pkg/api"
-	"github.com/els0r/goProbe/pkg/version"
+	"github.com/els0r/goProbe/v4/cmd/gpctl/pkg/conf"
+	"github.com/els0r/goProbe/v4/pkg/api"
+	"github.com/els0r/goProbe/v4/pkg/version"
 	"github.com/els0r/telemetry/logging"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"

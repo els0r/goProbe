@@ -7,12 +7,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/els0r/goProbe/cmd/goProbe/config"
-	"github.com/els0r/goProbe/pkg/capture/capturetypes"
-	"github.com/els0r/goProbe/pkg/goDB"
-	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
-	"github.com/els0r/goProbe/pkg/goprobe/writeout"
-	"github.com/els0r/goProbe/pkg/types/hashmap"
+	"github.com/els0r/goProbe/v4/cmd/goProbe/config"
+	"github.com/els0r/goProbe/v4/pkg/capture/capturetypes"
+	"github.com/els0r/goProbe/v4/pkg/goDB"
+	"github.com/els0r/goProbe/v4/pkg/goDB/encoder/encoders"
+	"github.com/els0r/goProbe/v4/pkg/goprobe/writeout"
+	"github.com/els0r/goProbe/v4/pkg/types/hashmap"
 	"github.com/els0r/telemetry/logging"
 	"github.com/fako1024/gotools/concurrency"
 )

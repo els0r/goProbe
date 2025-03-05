@@ -4,12 +4,12 @@ import (
 	"fmt"
 
 	"github.com/danielgtaylor/huma/v2"
-	"github.com/els0r/goProbe/cmd/global-query/pkg/conf"
-	"github.com/els0r/goProbe/cmd/global-query/pkg/distributed"
-	"github.com/els0r/goProbe/cmd/global-query/pkg/hosts"
-	"github.com/els0r/goProbe/pkg/api"
-	"github.com/els0r/goProbe/pkg/api/server"
-	"github.com/els0r/goProbe/pkg/version"
+	"github.com/els0r/goProbe/v4/cmd/global-query/pkg/conf"
+	"github.com/els0r/goProbe/v4/cmd/global-query/pkg/distributed"
+	"github.com/els0r/goProbe/v4/cmd/global-query/pkg/hosts"
+	"github.com/els0r/goProbe/v4/pkg/api"
+	"github.com/els0r/goProbe/v4/pkg/api/server"
+	"github.com/els0r/goProbe/v4/pkg/version"
 )
 
 // Server runs a global-query API server

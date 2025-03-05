@@ -1,10 +1,10 @@
 package goDB
 
 import (
-	"github.com/els0r/goProbe/pkg/formatting"
-	"github.com/els0r/goProbe/pkg/goDB/storage/gpfile"
-	"github.com/els0r/goProbe/pkg/results"
-	"github.com/els0r/goProbe/pkg/types"
+	"github.com/els0r/goProbe/v4/pkg/formatting"
+	"github.com/els0r/goProbe/v4/pkg/goDB/storage/gpfile"
+	"github.com/els0r/goProbe/v4/pkg/results"
+	"github.com/els0r/goProbe/v4/pkg/types"
 )
 
 // InterfaceMetadata describes the time range for which data is available, how many flows

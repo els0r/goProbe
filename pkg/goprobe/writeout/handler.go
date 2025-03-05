@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/els0r/goProbe/pkg/capture/capturetypes"
+	"github.com/els0r/goProbe/v4/pkg/capture/capturetypes"
 )
 
 // WriteoutsChanDepth defines a default depth for sending writeouts over the writeout channel

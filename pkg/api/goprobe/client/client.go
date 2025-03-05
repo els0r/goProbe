@@ -5,8 +5,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/els0r/goProbe/pkg/api/client"
-	gpapi "github.com/els0r/goProbe/pkg/api/goprobe"
+	"github.com/els0r/goProbe/v4/pkg/api/client"
+	gpapi "github.com/els0r/goProbe/v4/pkg/api/goprobe"
 	"gopkg.in/yaml.v3"
 )
 

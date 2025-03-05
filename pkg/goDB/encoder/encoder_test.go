@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
-	"github.com/els0r/goProbe/pkg/goDB/encoder/lz4"
-	"github.com/els0r/goProbe/pkg/goDB/encoder/zstd"
+	"github.com/els0r/goProbe/v4/pkg/goDB/encoder/encoders"
+	"github.com/els0r/goProbe/v4/pkg/goDB/encoder/lz4"
+	"github.com/els0r/goProbe/v4/pkg/goDB/encoder/zstd"
 )
 
 var testEncoders = []encoders.Type{

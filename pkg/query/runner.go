@@ -3,7 +3,7 @@ package query
 import (
 	"context"
 
-	"github.com/els0r/goProbe/pkg/results"
+	"github.com/els0r/goProbe/v4/pkg/results"
 )
 
 // Runner specifies the functionality a query runner must provide

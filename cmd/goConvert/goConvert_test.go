@@ -7,8 +7,8 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/els0r/goProbe/pkg/goDB"
-	"github.com/els0r/goProbe/pkg/types"
+	"github.com/els0r/goProbe/v4/pkg/goDB"
+	"github.com/els0r/goProbe/v4/pkg/types"
 
 	"bufio"
 	"bytes"

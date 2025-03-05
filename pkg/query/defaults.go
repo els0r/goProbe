@@ -4,9 +4,9 @@ import (
 	"sort"
 	"time"
 
-	"github.com/els0r/goProbe/pkg/defaults"
-	"github.com/els0r/goProbe/pkg/results"
-	"github.com/els0r/goProbe/pkg/types"
+	"github.com/els0r/goProbe/v4/pkg/defaults"
+	"github.com/els0r/goProbe/v4/pkg/results"
+	"github.com/els0r/goProbe/v4/pkg/types"
 )
 
 // Defaults for query arguments

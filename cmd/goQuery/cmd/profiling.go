@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"runtime/pprof"
 
-	"github.com/els0r/goProbe/cmd/goQuery/pkg/conf"
+	"github.com/els0r/goProbe/v4/cmd/goQuery/pkg/conf"
 	"github.com/els0r/telemetry/logging"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"

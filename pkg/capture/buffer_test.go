@@ -4,8 +4,8 @@ import (
 	"net"
 	"testing"
 
-	"github.com/els0r/goProbe/cmd/goProbe/config"
-	"github.com/els0r/goProbe/pkg/capture/capturetypes"
+	"github.com/els0r/goProbe/v4/cmd/goProbe/config"
+	"github.com/els0r/goProbe/v4/pkg/capture/capturetypes"
 	"github.com/fako1024/slimcap/capture"
 	"github.com/stretchr/testify/require"
 )

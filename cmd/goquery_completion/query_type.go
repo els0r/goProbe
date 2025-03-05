@@ -13,7 +13,7 @@ package main
 import (
 	"strings"
 
-	"github.com/els0r/goProbe/pkg/types"
+	"github.com/els0r/goProbe/v4/pkg/types"
 )
 
 func queryType(args []string) []string {

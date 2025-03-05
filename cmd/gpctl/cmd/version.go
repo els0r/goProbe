@@ -3,7 +3,7 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/els0r/goProbe/pkg/version"
+	"github.com/els0r/goProbe/v4/pkg/version"
 	"github.com/spf13/cobra"
 )
 

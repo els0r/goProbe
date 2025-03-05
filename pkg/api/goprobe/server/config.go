@@ -5,7 +5,7 @@ import (
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
-	gpapi "github.com/els0r/goProbe/pkg/api/goprobe"
+	gpapi "github.com/els0r/goProbe/v4/pkg/api/goprobe"
 )
 
 func (server *Server) getIfaceConfigHandler() func(ctx context.Context, input *GetIfaceConfigInput) (*GetConfigOutput, error) {

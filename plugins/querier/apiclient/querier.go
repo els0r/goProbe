@@ -10,14 +10,14 @@ import (
 
 	"log/slog"
 
-	gqclient "github.com/els0r/goProbe/pkg/api/globalquery/client"
+	gqclient "github.com/els0r/goProbe/v4/pkg/api/globalquery/client"
 
-	"github.com/els0r/goProbe/cmd/global-query/pkg/distributed"
-	"github.com/els0r/goProbe/cmd/global-query/pkg/hosts"
-	"github.com/els0r/goProbe/pkg/api/goprobe/client"
-	"github.com/els0r/goProbe/pkg/query"
-	"github.com/els0r/goProbe/pkg/results"
-	"github.com/els0r/goProbe/plugins"
+	"github.com/els0r/goProbe/v4/cmd/global-query/pkg/distributed"
+	"github.com/els0r/goProbe/v4/cmd/global-query/pkg/hosts"
+	"github.com/els0r/goProbe/v4/pkg/api/goprobe/client"
+	"github.com/els0r/goProbe/v4/pkg/query"
+	"github.com/els0r/goProbe/v4/pkg/results"
+	"github.com/els0r/goProbe/v4/plugins"
 	"github.com/els0r/telemetry/logging"
 	"gopkg.in/yaml.v3"
 )

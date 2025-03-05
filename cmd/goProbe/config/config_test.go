@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/els0r/goProbe/pkg/defaults"
+	"github.com/els0r/goProbe/v4/pkg/defaults"
 	"github.com/stretchr/testify/assert"
 )
 

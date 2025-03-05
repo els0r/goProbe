@@ -2,7 +2,7 @@
 package lz4cust
 
 import (
-	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
+	"github.com/els0r/goProbe/v4/pkg/goDB/encoder/encoders"
 )
 
 // Encoder compresses data with the LZ4 algorithm (omitting certain bounds-checks for performance reasons)

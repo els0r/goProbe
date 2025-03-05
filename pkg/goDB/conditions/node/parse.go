@@ -33,7 +33,7 @@ package node
 import (
 	"errors"
 
-	"github.com/els0r/goProbe/pkg/types"
+	"github.com/els0r/goProbe/v4/pkg/types"
 )
 
 // errEmptyConditional is a sentinel error indicating that an emoty conditional was parsed

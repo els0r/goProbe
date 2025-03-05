@@ -7,9 +7,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/els0r/goProbe/pkg/capture/capturetypes"
-	"github.com/els0r/goProbe/pkg/goDB"
-	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
+	"github.com/els0r/goProbe/v4/pkg/capture/capturetypes"
+	"github.com/els0r/goProbe/v4/pkg/goDB"
+	"github.com/els0r/goProbe/v4/pkg/goDB/encoder/encoders"
 	"github.com/els0r/telemetry/logging"
 )
 

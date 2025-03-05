@@ -1,7 +1,7 @@
 package writeout
 
 import (
-	"github.com/els0r/goProbe/cmd/goProbe/config"
+	"github.com/els0r/goProbe/v4/cmd/goProbe/config"
 	"github.com/prometheus/client_golang/prometheus"
 )
 

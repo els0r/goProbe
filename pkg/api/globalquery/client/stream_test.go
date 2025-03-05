@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/els0r/goProbe/pkg/api"
+	"github.com/els0r/goProbe/v4/pkg/api"
 	"github.com/stretchr/testify/require"
 )
 

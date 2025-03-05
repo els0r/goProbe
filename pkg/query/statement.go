@@ -5,8 +5,8 @@ import (
 	"io"
 	"time"
 
-	"github.com/els0r/goProbe/pkg/results"
-	"github.com/els0r/goProbe/pkg/types"
+	"github.com/els0r/goProbe/v4/pkg/results"
+	"github.com/els0r/goProbe/v4/pkg/types"
 )
 
 // Statement bundles all relevant options for running a query and displaying its result

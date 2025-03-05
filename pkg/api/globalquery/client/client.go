@@ -4,11 +4,11 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/els0r/goProbe/pkg/api"
-	"github.com/els0r/goProbe/pkg/api/client"
-	"github.com/els0r/goProbe/pkg/query"
-	"github.com/els0r/goProbe/pkg/results"
-	"github.com/els0r/goProbe/pkg/types"
+	"github.com/els0r/goProbe/v4/pkg/api"
+	"github.com/els0r/goProbe/v4/pkg/api/client"
+	"github.com/els0r/goProbe/v4/pkg/query"
+	"github.com/els0r/goProbe/v4/pkg/results"
+	"github.com/els0r/goProbe/v4/pkg/types"
 	"github.com/fako1024/httpc"
 )
 

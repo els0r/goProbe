@@ -11,10 +11,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/els0r/goProbe/pkg/goDB/encoder"
-	"github.com/els0r/goProbe/pkg/goDB/encoder/encoders"
-	"github.com/els0r/goProbe/pkg/goDB/storage"
-	"github.com/els0r/goProbe/pkg/types"
+	"github.com/els0r/goProbe/v4/pkg/goDB/encoder"
+	"github.com/els0r/goProbe/v4/pkg/goDB/encoder/encoders"
+	"github.com/els0r/goProbe/v4/pkg/goDB/storage"
+	"github.com/els0r/goProbe/v4/pkg/types"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/stretchr/testify/require"
 )

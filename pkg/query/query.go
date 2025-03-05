@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/els0r/goProbe/pkg/query/dns"
-	"github.com/els0r/goProbe/pkg/query/heap"
-	"github.com/els0r/goProbe/pkg/results"
-	"github.com/els0r/goProbe/pkg/types"
+	"github.com/els0r/goProbe/v4/pkg/query/dns"
+	"github.com/els0r/goProbe/v4/pkg/query/heap"
+	"github.com/els0r/goProbe/v4/pkg/results"
+	"github.com/els0r/goProbe/v4/pkg/types"
 	"github.com/els0r/telemetry/tracing"
 )
 
