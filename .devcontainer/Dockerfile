@@ -16,6 +16,5 @@ RUN mkdir -p /var/lib/dbus/ && echo "da314207b73d8b1bdeb86e5adfa0d6cb" > /var/li
 
 # go
 USER vscode
-RUN go clean -modcache
 RUN go install golang.org/x/tools/gopls@latest
 RUN curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.54.2
