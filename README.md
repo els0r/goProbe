@@ -3,7 +3,7 @@
 [![Github Release](https://img.shields.io/github/release/els0r/goProbe.svg)](https://github.com/els0r/goProbe/releases)
 [![GoDoc](https://godoc.org/github.com/els0r/goProbe?status.svg)](https://godoc.org/github.com/els0r/goProbe/)
 [![Go Report Card](https://goreportcard.com/badge/github.com/els0r/goProbe)](https://goreportcard.com/report/github.com/els0r/goProbe)
-[![Build/Test Status](https://github.com/els0r/goProbe/workflows/Go/badge.svg)](https://github.com/els0r/goProbe/actions?query=workflow%3AGo)
+[![Build / Test Status](https://github.com/els0r/goProbe/actions/workflows/ci-push.yml/badge.svg)](https://github.com/els0r/goProbe/actions/workflows/ci-push.yml)
 [![CodeQL](https://github.com/els0r/goProbe/actions/workflows/codeql.yml/badge.svg)](https://github.com/els0r/goProbe/actions/workflows/codeql.yml)
 
 This package comprises:
