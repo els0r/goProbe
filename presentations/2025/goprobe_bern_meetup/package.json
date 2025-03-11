@@ -1,0 +1,66 @@
+{
+  "name": "slidev-theme-eloc",
+  "version": "1.1.0",
+  "description": "Focus on writing, present in a concise style.",
+  "keywords": [
+    "slidev-theme",
+    "slidev"
+  ],
+  "license": "MIT",
+  "repository": "https://github.com/zthxxx/slides/blob/master/packages/slidev-theme-eloc",
+  "homepage": "https://eloc-slidev.vercel.app",
+  "type": "module",
+  "scripts": {
+    "dev": "slidev example.md --open",
+    "clean": "rimraf dist",
+    "build:example": "npm run clean && slidev build example.md",
+    "export": "slidev export screenshot.md --output export",
+    "screenshot": "slidev export screenshot.md --output screenshot --format png",
+    "deploy": "npm run build:example && vercel --cwd dist"
+  },
+  "files": [
+    "README.md",
+    "CHANGELOG.md",
+    "example.md",
+    "components",
+    "layouts",
+    "public",
+    "setup",
+    "styles",
+    "vite.config.ts",
+    "*.vue"
+  ],
+  "dependencies": {
+    "@slidev/theme-apple-basic": "^0.25.1",
+    "@slidev/theme-default": "^0.25.0",
+    "@slidev/types": "^51.1.1",
+    "@vueuse/core": "^12.7.0",
+    "@vueuse/math": "^12.7.0",
+    "slidev-theme-eloc": "^1.1.0"
+  },
+  "devDependencies": {
+    "@slidev/cli": "51.1.1",
+    "playwright-chromium": "1.50.1",
+    "postcss": "8.5.2",
+    "rimraf": "6.0.1"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "slidev": ">=51.0.0"
+  },
+  "//": "Learn more: https://sli.dev/guide/write-theme.html",
+  "// slidev theme meta": "https://github.com/slidevjs/slidev/blob/v51.1.1/packages/types/src/types.ts#L73",
+  "slidev": {
+    "colorSchema": "both",
+    "highlighter": "shiki",
+    "// slidev config": "https://github.com/slidevjs/slidev/blob/v51.1.1/packages/parser/src/config.ts#L5",
+    "defaults": {
+      "routerMode": "history",
+      "canvasWidth": 1580,
+      "selectable": true,
+      "fonts": {
+        "mono": "Fira Code"
+      }
+    }
+  }
+}
