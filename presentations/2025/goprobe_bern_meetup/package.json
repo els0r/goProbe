@@ -31,11 +31,13 @@
     "*.vue"
   ],
   "dependencies": {
+    "@shikijs/monaco": "^3.2.0",
     "@slidev/theme-apple-basic": "^0.25.1",
     "@slidev/theme-default": "^0.25.0",
     "@slidev/types": "^51.1.1",
     "@vueuse/core": "^12.7.0",
     "@vueuse/math": "^12.7.0",
+    "defu": "^6.1.4",
     "slidev-theme-eloc": "^1.1.0"
   },
   "devDependencies": {
