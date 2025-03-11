@@ -7,7 +7,7 @@ replace github.com/els0r/goProbe/plugins/contrib/v4 => ./plugins/contrib
 
 require (
 	github.com/danielgtaylor/huma/v2 v2.30.0
-	github.com/els0r/goProbe/plugins/contrib/v4 v4.1.13
+	github.com/els0r/goProbe/plugins/contrib/v4 v4.0.0-20250311082229-45a8753b72a7
 	github.com/els0r/telemetry/logging v0.0.0-20241007081432-5f966df95bbd
 	github.com/els0r/telemetry/metrics v0.0.0-20241007081432-5f966df95bbd
 	github.com/els0r/telemetry/tracing v0.0.0-20241007081432-5f966df95bbd
