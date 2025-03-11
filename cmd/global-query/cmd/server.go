@@ -17,7 +17,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	_ "github.com/els0r/goProbe/v4/plugins/contrib" // Include third-party plugins (if enabled, see README)
+	_ "github.com/els0r/goProbe/plugins/contrib/v4" // Include third-party plugins (if enabled, see README)
 )
 
 // serverCmd represents the server command
