@@ -22,8 +22,7 @@ Fabian Kohn
 
 
 ---
-layout: image-right
-image: ./pictures/els0r-gh.png
+layout: two-cols
 ---
 
 # Lennart Elsen
@@ -37,9 +36,15 @@ Born and raised in Hamburg, Germany
 Surfing, Coffee and Open Source Software
 > South Shore Beach, RI, US, Double Espresso (no cream, no sugar), [els0r/goProbe](https://github.com/els0r/goProbe)
 
+::right::
+
+<div style="justify-self: center">
+<img src="./pictures/els0r-gh.png" size="240px" style="justify-self: center"/>
+</div>
+
+
 ---
-layout: image-right
-image: ./pictures/fako1024-gh.png
+layout: two-cols
 ---
 
 # Fabian Kohn
@@ -52,6 +57,12 @@ Born and raised in Göttingen, Germany
 
 Running, Coffee and Open Source Software
 > Everywhere, Flat White, [fako1024/slimcap](https://github.com/fako1024/slimcap)
+
+::right::
+
+<div style="justify-self: center">
+<img src="./pictures/fako1024-gh.png" size="240px" style="justify-self: center"/>
+</div>
 
 
 ---
@@ -139,7 +150,7 @@ layout: image
 layout: default
 ---
 
-# For `t == time.Now()`
+# For `t == now`
 
 Live capture
 
@@ -151,7 +162,7 @@ tcpdump -ni eth0
 layout: default
 ---
 
-# For `t == time.Now()`
+# For `t == now`
 
 Live capture
 
@@ -224,7 +235,7 @@ layout: default
 goquery -i eth0 -f -24h -c "dip=10.236.2.18 and sip=211.154.236.12 and dport=22 and proto=tcp" sip,dip,dport,proto
 ```
 
-Yields
+Yields now.
 
 ```
                                              packets  packets             bytes      bytes
