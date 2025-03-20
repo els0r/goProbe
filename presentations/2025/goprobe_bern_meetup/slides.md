@@ -259,6 +259,11 @@ C(GO) / system library dependency (`libpcap`)
 Abysmal testing capabilities
 
 ---
+layout: image
+image: ./pictures/slimcap/fine.jpg
+---
+
+---
 layout: two-cols
 ---
 
