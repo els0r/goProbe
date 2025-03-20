@@ -330,7 +330,21 @@ Out-of-the-box tests / benchmarks
 ## Capture Setup
 ### Filtering
 
-TBD
+Some blabla
+
+```go
+res = append(res, []bpf.RawInstruction{
+    {Op: opLDH, Jt: 0x0, Jf: 0x0, K: regEtherType},            // Load byte 12 from the packet (ethernet type)
+    {Op: opJEQ, Jt: 0x5, Jf: 0x0, K: etherTypeIPv4},           // Compare against IPv4 header, continue further below if true
+    {Op: opJEQ, Jt: 0x4, Jf: 0x0, K: etherTypeIPv6},           // Compare against IPv6 header, continue further below if true
+    {Op: opJEQ, Jt: 0x0, Jf: 0x4 + nExtra, K: etherTypePPPOE}, // Compare against PPPOE header, continue if true, return (no data) if false
+    {Op: opLDH, Jt: 0x0, Jf: 0x0, K: regPPPType},              // Load byte 20 from the packet (PPP protocol type)
+    {Op: opJEQ, Jt: 0x1, Jf: 0x0, K: pppTypeIPv4},             // Compare against IPv4 PPP header, continue further below if true
+    {Op: opJEQ, Jt: 0x0, Jf: 0x1 + nExtra, K: pppTypeIPv6},    // Compare against IPv6 PPP header, continue further below if true, return (no data) if false
+    {Op: opRET, Jt: 0x0, Jf: 0x0, K: uint32(snapLen)},         // Return up to snapLen bytes of the packet
+    {Op: opRET, Jt: 0x0, Jf: 0x0, K: 0x0},                     // Return (no data)
+}
+```
 
 ---
 
