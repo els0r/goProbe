@@ -244,16 +244,6 @@ Query stats : displayed top 1 hits out of 1 in 9ms
 
 ---
 
-# Hello `slimcap`
-
-```go
-func StartInterface(ctx context.Context) {
-  return
-}
-```
-
----
-
 ## Next-Gen Packet Capture
 ### Goals / DoD
 
@@ -329,7 +319,7 @@ Out-of-the-box tests / benchmarks
 
 ---
 
-# Interfaces
+## Interfaces
 
 ````md magic-move
 ```go
@@ -356,7 +346,7 @@ type SourceZeroCopy interface {
 
 ---
 
-# Minimal Example
+## Minimal Example
 
 ````md magic-move
 ```go {1,2,8}
@@ -419,7 +409,7 @@ if err != nil {
 
 ---
 
-# Minimal Example (cont'd)
+## Minimal Example (cont'd)
 
 ````md magic-move
 ```go
@@ -518,6 +508,80 @@ Features:
 ## Testing
 ### Benchmarks
 
+````md magic-move
+```shell
+(pprof) top15
+Showing nodes accounting for 92.90s, 88.65% of 104.79s total
+Dropped 441 nodes (cum <= 0.52s)
+Showing top 15 nodes out of 60
+      flat  flat%   sum%        cum   cum%
+    28.87s 27.55% 27.55%     28.90s 27.58%  afring.(*Source).NextPayloadZeroCopy afring_zerocopy.go:76
+    18.24s 17.41% 44.96%     18.24s 17.41%  afring.(*Source).NextPayloadZeroCopy afring_zerocopy.go:81
+    10.87s 10.37% 55.33%     10.87s 10.37%  runtime.futex /usr/local/go/src/runtime/sys_linux_amd64.s:558
+     7.56s  7.21% 62.54%      7.56s  7.21%  afring.(*Source).NextPayloadZeroCopy afring_zerocopy.go:79
+     3.66s  3.49% 66.04%      3.66s  3.49%  runtime/internal/syscall.Syscall6 <..>/asm_linux_amd64.s:36
+     3.65s  3.48% 69.52%      3.65s  3.48%  afring.(*Source).NextPayloadZeroCopy afring_zerocopy.go:14
+     3.32s  3.17% 72.69%      3.32s  3.17%  runtime.write1 <..>/sys_linux_amd64.s:99
+     3.17s  3.03% 75.71%      3.17s  3.03%  afring.BenchmarkCaptureMethods.func5 afring_mock_test.go:454
+     2.51s  2.40% 78.11%      2.51s  2.40%  afring.tPacketHeader.parseHeader tpacket.go:120 (inline)
+     2.46s  2.35% 80.46%      2.46s  2.35%  afring.(*Source).NextPayloadZeroCopy afring_zerocopy.go:80
+     2.11s  2.01% 82.47%      2.11s  2.01%  afring.(*Source).NextPayloadZeroCopy afring_zerocopy.go:19
+     1.83s  1.75% 84.22%     75.20s 71.76%  afring.BenchmarkCaptureMethods.func5 afring_mock_test.go:455
+     1.77s  1.69% 85.91%      3.34s  3.19%  afring.(*Source).NextPayloadZeroCopy afring_zerocopy.go:26
+     1.57s  1.50% 87.40%      1.57s  1.50%  afring.tPacketHeader.nextOffset tpacket.go:112 (inline)
+     1.31s  1.25% 88.65%      3.83s  3.65%  afring.(*Source).NextPayloadZeroCopy afring_zerocopy.go:75
+```
+```shell {14,19}
+(pprof) top15
+Showing nodes accounting for 92.90s, 88.65% of 104.79s total
+Dropped 441 nodes (cum <= 0.52s)
+Showing top 15 nodes out of 60
+      flat  flat%   sum%        cum   cum%
+    28.87s 27.55% 27.55%     28.90s 27.58%  afring.(*Source).NextPayloadZeroCopy afring_zerocopy.go:76
+    18.24s 17.41% 44.96%     18.24s 17.41%  afring.(*Source).NextPayloadZeroCopy afring_zerocopy.go:81
+    10.87s 10.37% 55.33%     10.87s 10.37%  runtime.futex /usr/local/go/src/runtime/sys_linux_amd64.s:558
+     7.56s  7.21% 62.54%      7.56s  7.21%  afring.(*Source).NextPayloadZeroCopy afring_zerocopy.go:79
+     3.66s  3.49% 66.04%      3.66s  3.49%  runtime/internal/syscall.Syscall6 <..>/asm_linux_amd64.s:36
+     3.65s  3.48% 69.52%      3.65s  3.48%  afring.(*Source).NextPayloadZeroCopy afring_zerocopy.go:14
+     3.32s  3.17% 72.69%      3.32s  3.17%  runtime.write1 <..>/sys_linux_amd64.s:99
+     3.17s  3.03% 75.71%      3.17s  3.03%  afring.BenchmarkCaptureMethods.func5 afring_mock_test.go:454
+     2.51s  2.40% 78.11%      2.51s  2.40%  afring.tPacketHeader.parseHeader tpacket.go:120 (inline)
+     2.46s  2.35% 80.46%      2.46s  2.35%  afring.(*Source).NextPayloadZeroCopy afring_zerocopy.go:80
+     2.11s  2.01% 82.47%      2.11s  2.01%  afring.(*Source).NextPayloadZeroCopy afring_zerocopy.go:19
+     1.83s  1.75% 84.22%     75.20s 71.76%  afring.BenchmarkCaptureMethods.func5 afring_mock_test.go:455
+     1.77s  1.69% 85.91%      3.34s  3.19%  afring.(*Source).NextPayloadZeroCopy afring_zerocopy.go:26
+     1.57s  1.50% 87.40%      1.57s  1.50%  afring.tPacketHeader.nextOffset tpacket.go:112 (inline)
+     1.31s  1.25% 88.65%      3.83s  3.65%  afring.(*Source).NextPayloadZeroCopy afring_zerocopy.go:75
+```
+```shell {8,13,17}
+(pprof) top15
+Showing nodes accounting for 92.90s, 88.65% of 104.79s total
+Dropped 441 nodes (cum <= 0.52s)
+Showing top 15 nodes out of 60
+      flat  flat%   sum%        cum   cum%
+    28.87s 27.55% 27.55%     28.90s 27.58%  afring.(*Source).NextPayloadZeroCopy afring_zerocopy.go:76
+    18.24s 17.41% 44.96%     18.24s 17.41%  afring.(*Source).NextPayloadZeroCopy afring_zerocopy.go:81
+    10.87s 10.37% 55.33%     10.87s 10.37%  runtime.futex /usr/local/go/src/runtime/sys_linux_amd64.s:558
+     7.56s  7.21% 62.54%      7.56s  7.21%  afring.(*Source).NextPayloadZeroCopy afring_zerocopy.go:79
+     3.66s  3.49% 66.04%      3.66s  3.49%  runtime/internal/syscall.Syscall6 <..>/asm_linux_amd64.s:36
+     3.65s  3.48% 69.52%      3.65s  3.48%  afring.(*Source).NextPayloadZeroCopy afring_zerocopy.go:14
+     3.32s  3.17% 72.69%      3.32s  3.17%  runtime.write1 <..>/sys_linux_amd64.s:99
+     3.17s  3.03% 75.71%      3.17s  3.03%  afring.BenchmarkCaptureMethods.func5 afring_mock_test.go:454
+     2.51s  2.40% 78.11%      2.51s  2.40%  afring.tPacketHeader.parseHeader tpacket.go:120 (inline)
+     2.46s  2.35% 80.46%      2.46s  2.35%  afring.(*Source).NextPayloadZeroCopy afring_zerocopy.go:80
+     2.11s  2.01% 82.47%      2.11s  2.01%  afring.(*Source).NextPayloadZeroCopy afring_zerocopy.go:19
+     1.83s  1.75% 84.22%     75.20s 71.76%  afring.BenchmarkCaptureMethods.func5 afring_mock_test.go:455
+     1.77s  1.69% 85.91%      3.34s  3.19%  afring.(*Source).NextPayloadZeroCopy afring_zerocopy.go:26
+     1.57s  1.50% 87.40%      1.57s  1.50%  afring.tPacketHeader.nextOffset tpacket.go:112 (inline)
+     1.31s  1.25% 88.65%      3.83s  3.65%  afring.(*Source).NextPayloadZeroCopy afring_zerocopy.go:75
+```
+````
+
+---
+
+## Testing
+### Benchmarks
+
 **Testbed:** TBD
 
 **Scenario:** 1h Real-life capture `goProbe` v3 (`gopacket`) / v4 (`slimcap`)
@@ -545,3 +609,22 @@ Features:
     <span class="text-right color-blue">~ xZZ</span>
   </div>
 </div>
+
+---
+
+## Next-Gen Packet Capture
+### Goals / DoD revisited
+
+Minimize Overhead:
+* IP Layer extraction (if exists)
+* Limit to start of transport layer
+
+Focus on Linux (but keep extensible)
+
+Native Go without external *[read: C(GO)]* dependencies
+
+Ease of use (semi-stateless)
+
+Zero-copy / zero-allocation support
+
+Out-of-the-box tests / benchmarks
