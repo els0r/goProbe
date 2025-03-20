@@ -247,11 +247,11 @@ Query stats : displayed top 1 hits out of 1 in 9ms
 ## Next-Gen Packet Capture
 ### Goals / DoD
 
-Resource limitations running goProbe on several hosts
+Resource limitations running `goProbe` on several hosts
 
 Existing capture solution:
-* Does a lot *[more than we need]* under the hood
-* Complex / intricate to use (stateful pcap capture handle)
+* Does <u>a lot</u> *[more than we need]* under the hood
+* Complex / intricate to use (stateful `pcap` capture handle)
 * Customizations / fork required
 
 C(GO) / system library dependency (`libpcap`)
@@ -294,33 +294,43 @@ Out-of-the-box tests / benchmarks
 
 ---
 
-## Capture Setup `AF_PACKET & MMAP()`
+## Capture Setup
+### AF_PACKET & MMAP()
 
 <div class="flex justify-center items-center">
- <div class="w-[75%] translate-y-[3%]">
+ <div class="w-[70%] translate-y-[3%]">
   <img src="./pictures/slimcap/ringbuf_1.png">
  </div>
 </div>
 
 ---
 
-## Capture Setup `AF_PACKET & MMAP()`
+## Capture Setup
+### AF_PACKET & MMAP()
 
 <div class="flex justify-center items-center">
- <div class="w-[75%] translate-y-[3%]">
+ <div class="w-[70%] translate-y-[3%]">
   <img src="./pictures/slimcap/ringbuf_2.png">
  </div>
 </div>
 
 ---
 
-## Capture Setup `AF_PACKET & MMAP()`
+## Capture Setup
+### AF_PACKET & MMAP()
 
 <div class="flex justify-center items-center">
- <div class="w-[75%] translate-y-[3%]">
+ <div class="w-[70%] translate-y-[3%]">
   <img src="./pictures/slimcap/ringbuf_3.png">
  </div>
 </div>
+
+---
+
+## Capture Setup
+### Filtering
+
+TBD
 
 ---
 
