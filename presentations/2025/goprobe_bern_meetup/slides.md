@@ -60,7 +60,7 @@ layout: default
 
 <div class="flex h-screen justify-center">
   <div class="w-1/3 flex flex-col items-center">
-    <div>Internet Traffic</div>dd
+    <div>Internet Traffic</div>
     <img src="./pictures/packets_single.png" alt="Internet Traffic" class="mt-4 h-48">
   </div>
   <div class="w-1/3 flex flex-col items-center">
