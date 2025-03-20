@@ -278,7 +278,7 @@ Focus on Linux (but keep extensible)
 
 Native Go without external *[read: C(GO)]* dependencies
 
-Ease of use (semi-stateless)
+~~Ease of~~ Trivial to use (semi-stateless)
 
 Zero-copy / zero-allocation support
 
@@ -330,8 +330,11 @@ Out-of-the-box tests / benchmarks
 ```go
 // Source denotes a generic packet capture source
 type Source interface {
+    NextPacket(pBuf Packet) (Packet, error)
     NextPayload(pBuf []byte) ([]byte, byte, uint32, error)
     NextIPPacket(pBuf IPLayer) (IPLayer, PacketType, uint32, error)
+    NextPacketFn(func(payload []byte, totalLen uint32, pktType PacketType, ipLayerOffset byte) error) error
+
     Stats() (Stats, error)
     Close() error
     // ...
@@ -357,7 +360,7 @@ type SourceZeroCopy interface {
 ```go {1,2,8}
 src, err := afring.NewSource(
     “enp1s0”,
-    afring.CaptureLength(link.CaptureLengthMinimalIPv6Transport),
+    afring.CaptureLength(link.CaptureLengthMinimalIPv4Transport),
     afring.BufferSize(
         1024*1024,       // Block Size
         4,               // Number of Blocks
@@ -371,7 +374,7 @@ if err != nil {
 ```go {1,3,8}
 src, err := afring.NewSource(
     “enp1s0”,
-    afring.CaptureLength(link.CaptureLengthMinimalIPv6Transport),
+    afring.CaptureLength(link.CaptureLengthMinimalIPv4Transport),
     afring.BufferSize(
         1024*1024,       // Block Size
         4,               // Number of Blocks
@@ -385,7 +388,7 @@ if err != nil {
 ```go {1,4-8}
 src, err := afring.NewSource(
     “enp1s0”,
-    afring.CaptureLength(link.CaptureLengthMinimalIPv6Transport),
+    afring.CaptureLength(link.CaptureLengthMinimalIPv4Transport),
     afring.BufferSize(
         1024*1024,       // Block Size
         4,               // Number of Blocks
@@ -399,7 +402,7 @@ if err != nil {
 ```go
 src, err := afring.NewSource(
     “enp1s0”,
-    afring.CaptureLength(link.CaptureLengthMinimalIPv6Transport),
+    afring.CaptureLength(link.CaptureLengthMinimalIPv4Transport),
     afring.BufferSize(
         1024*1024,       // Block Size
         4,               // Number of Blocks
