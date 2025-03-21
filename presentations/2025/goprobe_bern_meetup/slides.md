@@ -330,21 +330,55 @@ Out-of-the-box tests / benchmarks
 ## Capture Setup
 ### Filtering
 
-Some blabla
+BPF: Let kernel do the heavy lifting (valid IPv4 / IPv6 packets)
 
+````md magic-move
 ```go
-res = append(res, []bpf.RawInstruction{
-    {Op: opLDH, Jt: 0x0, Jf: 0x0, K: regEtherType},            // Load byte 12 from the packet (ethernet type)
-    {Op: opJEQ, Jt: 0x5, Jf: 0x0, K: etherTypeIPv4},           // Compare against IPv4 header, continue further below if true
-    {Op: opJEQ, Jt: 0x4, Jf: 0x0, K: etherTypeIPv6},           // Compare against IPv6 header, continue further below if true
-    {Op: opJEQ, Jt: 0x0, Jf: 0x4 + nExtra, K: etherTypePPPOE}, // Compare against PPPOE header, continue if true, return (no data) if false
-    {Op: opLDH, Jt: 0x0, Jf: 0x0, K: regPPPType},              // Load byte 20 from the packet (PPP protocol type)
-    {Op: opJEQ, Jt: 0x1, Jf: 0x0, K: pppTypeIPv4},             // Compare against IPv4 PPP header, continue further below if true
-    {Op: opJEQ, Jt: 0x0, Jf: 0x1 + nExtra, K: pppTypeIPv6},    // Compare against IPv6 PPP header, continue further below if true, return (no data) if false
-    {Op: opRET, Jt: 0x0, Jf: 0x0, K: uint32(snapLen)},         // Return up to snapLen bytes of the packet
-    {Op: opRET, Jt: 0x0, Jf: 0x0, K: 0x0},                     // Return (no data)
+// LinkTypeLoopback
+// not outbound && (ether proto 0x0800 || ether proto 0x86DD)
+var bpfInstructionsLinkTypeLoopback = func(snapLen int) ([]bpf.RawInstruction)
+```
+```go
+// LinkTypeLoopback
+// not outbound && (ether proto 0x0800 || ether proto 0x86DD)
+var bpfInstructionsLinkTypeLoopback = func(snapLen int) ([]bpf.RawInstruction) {
+    return []bpf.RawInstruction{
+        {Op: opLDH, Jt: 0x0, Jf: 0x0, K: regPktType},        // Load pktType
+        {Op: opJEQ, Jt: 0x4, Jf: 0x0, K: pktTypeOutbound},   // Skip duplicate "OUTBOUND" packets
+    }
+}
+
+```
+```go
+// LinkTypeLoopback
+// not outbound && (ether proto 0x0800 || ether proto 0x86DD)
+var bpfInstructionsLinkTypeLoopback = func(snapLen int) ([]bpf.RawInstruction) {
+    return []bpf.RawInstruction{
+        {Op: opLDH, Jt: 0x0, Jf: 0x0, K: regPktType},        // Load pktType
+        {Op: opJEQ, Jt: 0x4, Jf: 0x0, K: pktTypeOutbound},   // Skip duplicate "OUTBOUND" packets
+        {Op: opLDH, Jt: 0x0, Jf: 0x0, K: regEtherType},      // Load byte 12 from the packet (ethernet type)
+        {Op: opJEQ, Jt: 0x1, Jf: 0x0, K: etherTypeIPv4},     // Check for IPv4 header
+        {Op: opJEQ, Jt: 0x0, Jf: 0x1, K: etherTypeIPv6},     // Check for IPv6 header
+    }
+}
+
+```
+```go
+// LinkTypeLoopback
+// not outbound && (ether proto 0x0800 || ether proto 0x86DD)
+var bpfInstructionsLinkTypeLoopback = func(snapLen int) ([]bpf.RawInstruction) {
+    return []bpf.RawInstruction{
+        {Op: opLDH, Jt: 0x0, Jf: 0x0, K: regPktType},        // Load pktType
+        {Op: opJEQ, Jt: 0x4, Jf: 0x0, K: pktTypeOutbound},   // Skip duplicate "OUTBOUND" packets
+        {Op: opLDH, Jt: 0x0, Jf: 0x0, K: regEtherType},      // Load byte 12 from the packet (ethernet type)
+        {Op: opJEQ, Jt: 0x1, Jf: 0x0, K: etherTypeIPv4},     // Check for IPv4 header
+        {Op: opJEQ, Jt: 0x0, Jf: 0x1, K: etherTypeIPv6},     // Check for IPv6 header
+        {Op: opRET, Jt: 0x0, Jf: 0x0, K: uint32(snapLen)},   // Return up to snapLen bytes of the packet
+        {Op: opRET, Jt: 0x0, Jf: 0x0, K: 0x0},               // Return (no data)
+    }
 }
 ```
+````
 
 ---
 
@@ -474,6 +508,62 @@ for {
 }
 ```
 ````
+
+---
+layout: two-cols
+---
+
+## Integration
+### Capture Rotation
+
+During data writeout (flow map “rotation”) in goProbe:
+
+* Fundamentally concurrency-safe read / write<br>
+  <span class="color-coolgray">Permanent overhead</span>
+
+      OR
+
+* Interrupt capture during rotation<br>
+  <span class="color-coolgray">Potential ring buffer overflow</span>
+
+::right::
+
+<div class="flex w-[80%] justify-center items-center">
+ <div class="translate-x-[15%] translate-y-[10%]">
+  <img src="./pictures/slimcap/capture_flow_1.png">
+ </div>
+</div>
+
+---
+layout: two-cols
+---
+
+## Integration
+### Capture Rotation
+
+During data writeout (flow map “rotation”) in goProbe:
+
+* Fundamentally concurrency-safe read / write<br>
+  <span class="color-coolgray">Permanent overhead</span>
+
+      OR
+
+* Interrupt capture during rotation<br>
+  <span class="color-coolgray">Potential ring buffer overflow</span>
+
+Mitigation:
+
+* Sequential rotation of interfaces
+* Additional (shared) local buffer
+* Packet processing & parsing while buffering
+
+::right::
+
+<div class="flex w-[80%] justify-center items-center">
+ <div class="translate-x-[15%] translate-y-[10%]">
+  <img src="./pictures/slimcap/capture_flow_2.png">
+ </div>
+</div>
 
 ---
 
