@@ -230,14 +230,52 @@ layout: default
 
 # For `t == now - 24h`?
 
+Did we run
 
 ```shell
-goquery -i eth0 -f -24h -c "dip=10.236.2.18 and sip=211.154.236.12 and dport=22 and proto=tcp" sip,dip,dport,proto
+tcpdump -ni eth0 -w eth0.pcap
 ```
 
-Yields now.
+?
+
+---
+layout: default
+---
+
+# For `t == now - 24h`?
+
+Did we run
 
 ```
+out of disk space
+```
+
+?
+
+---
+layout: default
+---
+
+# For `t == now - 24h`?
+
+What if we had captured the metadata?
+
+
+---
+layout: default
+---
+
+# For `t == now - 24h`?
+
+What if we queried the metadata?
+
+````md magic-move
+```
+query -i eth0 -f -24h -c "dip=10.236.2.18 and sip=211.154.236.12 and dport=22 and proto=tcp" sip,dip,dport,proto
+```
+```
+query -i eth0 -f -24h -c "dip=10.236.2.18 and sip=211.154.236.12 and dport=22 and proto=tcp" sip,dip,dport,proto
+
                                              packets  packets             bytes      bytes
              sip          dip  dport  proto       in      out       %        in        out       %
   211.154.236.12  10.236.2.18     22    TCP    481      475    100.00  59.27 kB   65.91 kB  100.00
@@ -252,7 +290,117 @@ Sorted by   : accumulated data volume (sent and received)
 Conditions  : (dip = 10.236.2.18 & (sip = 211.154.236.12 & (dport = 22 & proto = tcp)))
 Query stats : displayed top 1 hits out of 1 in 9ms
 ```
+````
 
+---
+layout: two-cols
+---
+
+### Write Path
+
+::right::
+
+### Read Path
+
+---
+layout: two-cols
+---
+
+### Write Path
+* continuous capture of network metadata
+
+::right::
+
+### Read Path
+* a means to query it
+
+---
+layout: two-cols
+---
+
+### Write Path
+* continuous capture of network metadata
+* low footprint, non-invasive
+
+::right::
+
+### Read Path
+* a means to query it
+* low read-latency
+
+
+---
+layout: two-cols
+---
+
+`goProbe`
+
+### Write Path
+* continuous capture of network metadata
+* low footprint, non-invasive
+
+::right::
+
+`goQuery`
+
+### Read Path
+* a means to query it
+* low read-latency
+
+
+---
+layout: two-cols
+---
+
+`goProbe`
+
+### Write Path
+* continuous capture of network metadata
+* low footprint, non-invasive
+
+`goQuery`
+
+### Read Path
+* a means to query it
+* low read-latency
+
+::right::
+
+<div class="flex w-[50%] h-[70%] justify-center items-center">
+ <div class="translate-x-[15%] translate-y-[10%]">
+  <img src="./pictures/goprobe_system_overview_host.png">
+ </div>
+</div>
+
+
+---
+layout: fact
+---
+
+## Isn't this a **solved** problem?
+
+---
+layout: fact
+---
+
+## Yes
+
+---
+layout: fact
+---
+
+## Yes,
+## BUT
+
+---
+layout: fact
+---
+
+## low footprint, non-invasive
+
+## low read-latency
+
+---
 ---
 
 ## Next-Gen Packet Capture
@@ -761,3 +909,191 @@ Ease of use (semi-stateless)
 Zero-copy / zero-allocation support
 
 Out-of-the-box tests / benchmarks
+
+---
+layout: fact
+---
+
+````md magic-move
+```
+(SSH session, TCP port 22)
+
+from 211.154.236.12
+
+to 10.236.2.18
+```
+```
+(SSH session, TCP port 22)
+
+from 211.154.236.12
+
+on all hosts
+```
+````
+
+---
+---
+
+<div class="flex justify-center items-center">
+ <div class="w-[100%]">
+  <img src="./pictures/goprobe_system_overview.png">
+ </div>
+</div>
+
+---
+---
+
+<div class="flex justify-center items-center">
+ <div class="w-[100%]">
+  <img src="./pictures/goprobe_system_overview_gq_focus.png">
+ </div>
+</div>
+
+---
+layout: two-cols
+---
+
+# Global Queries
+### A `Row` of metadata
+
+````md magic-move
+```go
+type Row struct {
+    // Labels
+    Timestamp time.Time
+    Iface string
+    Hostname string
+    HostID string
+}
+```
+```go {1,8,9,10,11,12,13}
+type Row struct {
+    // Labels
+    Timestamp time.Time
+    Iface string
+    Hostname string
+    HostID string
+
+    // Attributes
+    SrcIP   netip.Addr
+    DstIP   netip.Addr
+    IPProto uint8
+    DstPort uint16
+}
+```
+```go {1,13,14,15,16,17,18,19}
+type Row struct {
+    // Labels
+    Timestamp time.Time
+    Iface string
+    Hostname string
+    HostID string
+
+    // Attributes
+    SrcIP   netip.Addr
+    DstIP   netip.Addr
+    IPProto uint8
+    DstPort uint16
+
+    // Counters
+    BytesRcvd   uint64
+    BytesSent   uint64
+    PacketsRcvd uint64
+    PacketsSent uint64
+}
+```
+```go
+type Row struct {
+    // Labels are the partition Attributes
+    Labels Labels
+
+    // Attributes which can be grouped by
+    Attributes Attributes
+
+    // Counters for bytes/packets
+    Counters types.Counters
+}
+```
+```go {1,2,6}
+type Row struct {
+    MergeableAttributes
+
+    // Counters for bytes/packets
+    Counters types.Counters
+}
+```
+````
+
+---
+---
+
+# Global Queries
+### A first class data structure for flow aggregation
+
+````md magic-move
+```go
+// RowsMap is an aggregated representation of a Rows list
+type RowsMap map[MergeableAttributes]types.Counters
+```
+````
+
+---
+---
+
+### Which systems did `211.154.236.12` access via SSH?
+
+---
+---
+
+### Which systems did `211.154.236.12` access via SSH?
+
+````md magic-move
+```
+goquery -i eth0 -f -24h -c "sip=211.154.236.12 and dport=22 and proto=tcp" dip
+```
+```
+goquery -i eth0 -f -24h -c "sip=211.154.236.12 and dport=22 and proto=tcp" dip -q hostA,hostB,...,hostK
+```
+```
+goquery -i eth0 -f -24h -c "sip=211.154.236.12 and dport=22 and proto=tcp" dip -q hostA,hostB,...,hostK
+
+                                      packets   packets             bytes      bytes
+                 host           dip        in       out      %         in        out      %
+            acme-sg-1   10.236.2.19   55.11 k   56.80 k  32.01    7.30 MB   17.92 MB  18.16
+            acme-sg-2   10.236.2.20   69.14 k   62.46 k  37.65    6.46 MB    7.57 MB  10.10
+    acme-node4-test-1  10.236.50.32    7.25 k    4.54 k   3.37   10.92 MB  731.57 kB   8.37
+    acme-node1-test-1  10.236.50.30    5.82 k    1.75 k   2.16   11.38 MB  159.01 kB   8.31
+    acme-node2-test-1   10.236.50.2    5.08 k    1.36 k   1.84   11.34 MB  133.30 kB   8.25
+    acme-node3-test-1  10.236.50.31    3.70 k    1.08 k   1.37   10.60 MB  115.16 kB   7.71
+            acme-sg-6  10.236.50.17    5.04 k    1.82 k   1.96    9.70 MB  189.60 kB   7.12
+   acme-node4-ch-zh-1  10.236.48.26    4.85 k    1.09 k   1.70    9.71 MB  145.36 kB   7.09
+   acme-node3-ch-zh-1   10.236.48.7    5.38 k    1.07 k   1.84    9.70 MB  111.05 kB   7.06
+   acme-node1-ch-zh-1   10.236.48.5    3.96 k    1.10 k   1.45    9.64 MB  141.61 kB   7.04
+            acme-sg-3   10.236.50.7    3.61 k    1.37 k   1.42    9.58 MB  131.51 kB   6.99
+            acme-sg-4   10.236.2.59   19.89 k   17.63 k  10.73    1.97 MB    2.38 MB   3.13
+            acme-sg-5   10.236.2.18    4.53 k    4.17 k   2.49  459.46 kB  495.22 kB   0.67
+
+                                     193.32 k  156.25 k         108.75 MB   30.17 MB
+
+              Totals:                          349.57 k                    138.92 MB
+
+Timespan          : [2025-03-24 10:33:35, 2025-03-25 10:35:00] (1d1m0s)
+Interface / Hosts : eth0 on 34 hosts: 25 ok / 0 empty / 9 error
+```
+```
+goquery -i eth0 -f -24h -c "sip=211.154.236.12 and dport=22 and proto=tcp" dip -q hostA,hostB,...,hostK
+
+Timespan          : [2025-03-24 10:33:35, 2025-03-25 10:35:00] (1d1m0s)
+Interface / Hosts : eth0 on 34 hosts: 25 ok / 0 empty / 9 error
+Query stats       : displayed top 13 hits out of 13 in 10.196s
+Trace ID          : c7c51c6e5c463716cedcb69bd40a36e4
+```
+``` {4,5}
+goquery -i eth0 -f -24h -c "sip=211.154.236.12 and dport=22 and proto=tcp" dip -q hostA,hostB,...,hostK
+
+Timespan          : [2025-03-24 10:33:35, 2025-03-25 10:35:00] (1d1m0s)
+Interface / Hosts : eth0 on 34 hosts: 25 ok / 0 empty / 9 error
+Query stats       : displayed top 13 hits out of 13 in 10.196s
+Trace ID          : c7c51c6e5c463716cedcb69bd40a36e4
+```
+````
