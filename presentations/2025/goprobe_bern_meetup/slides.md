@@ -427,9 +427,9 @@ layout: fact
 
 ## Next-Gen Packet Capture
 
-Existing / previous capture solution:
+Previous capture solution:
 * Does <u>a lot</u> *[more than we need]* under the hood
-* Complex / intricate to use (stateful `pcap` capture handle, <u>lots</u> of interfaces)
+* Complex / intricate to use (stateful `pcap` capture handle vs. <u>lots</u> of interfaces)
 * Customizations / fork required
 
 C(GO) / system library dependency (`libpcap`)
@@ -777,9 +777,9 @@ Stand-in wrappers (down to socket interaction) around actual sources:
 * Memory barrier vs. atomic status flag / field
 
 Features:
-* Reading / replay of pcap dumps (no timing)
+* Reading & replay of pcap dumps (no timing)
 * Synthetic packet / payload generation
-* No privileges / *actual* interfaces
+* No privileges (or *actual* interfaces)
 * Piping from other mock sources
 * High-throughput mode (benchmarks)
 
@@ -1233,4 +1233,4 @@ image: ./pictures/bg-initial.png
 
 * [open an issue](https://github.com/els0r/goProbe/issues)
 
-* PRs welcome. See _good first issue_
+* PRs welcome. See `good first issue`
