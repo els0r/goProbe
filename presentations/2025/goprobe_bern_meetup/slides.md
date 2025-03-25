@@ -889,31 +889,31 @@ Showing top 15 nodes out of 60
 ## Testing
 ### Benchmarks
 
-**Testbed:** TBD
+**Testbed:** Production Host (DC Firewall)
 
-**Scenario:** 1h Real-life capture `goProbe` v3 (`gopacket`) / v4 (`slimcap`)
+**Scenario:** 1h Real-life capture `goProbe` v3 (`gopacket`) / v4 (`slimcap`), 676.9 M packets
 
 <div class="w-[70%] translate-x-[10%] translate-y-[20%] grid gap-1">
   <div class="grid grid-cols-[1.5fr_1fr_1fr_1fr_1fr]">
     <span>CPU Time:</span>
-    <span class="text-right">XXX s</span>
+    <span class="text-right">43:17.7 m</span>
     <span class="text-right">vs.</span>
-    <span class="text-right">YYY s</span>
-    <span class="text-right color-blue">~ xZZ</span>
+    <span class="text-right">1:57.7 m</span>
+    <span class="text-right color-blue">~ x22</span>
   </div>
   <div class="grid grid-cols-[1.5fr_1fr_1fr_1fr_1fr]">
     <span>Peak Mem Usage:</span>
-    <span class="text-right">XXX MiB</span>
+    <span class="text-right">150 MiB</span>
     <span class="text-right">vs.</span>
-    <span class="text-right">YYY MiB</span>
-    <span class="text-right color-blue">~ xZZ</span>
+    <span class="text-right">153 MiB</span>
+    <span class="text-right color-blue">~ x1</span>
   </div>
   <div class="grid grid-cols-[1.5fr_1fr_1fr_1fr_1fr]">
     <span>Dropped Packets:</span>
-    <span class="text-right">XXX</span>
+    <span class="text-right">98 k</span>
     <span class="text-right">vs.</span>
-    <span class="text-right">YYY</span>
-    <span class="text-right color-blue">~ xZZ</span>
+    <span class="text-right">0</span>
+    <span class="text-right color-blue"></span>
   </div>
 </div>
 
