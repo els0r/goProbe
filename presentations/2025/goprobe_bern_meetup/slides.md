@@ -172,7 +172,7 @@ tcpdump -ni eth0
 
 Output
 
-```shell
+```
 tcpdump: verbose output suppressed, use -v[v]... for full protocol decode
 listening on eth0, link-type EN10MB (Ethernet), snapshot length 262144 bytes
 11:33:16.002178 IP 211.154.236.12.35178 > 10.236.2.18.22: Flags [.], ack 188, win 83, options [nop,nop,TS val 515841640 ecr 3570605299], length 0
@@ -192,23 +192,55 @@ Live capture
 tcpdump -ni eth0
 ```
 
-Output
+What a network engineer looks at
 
-```shell
+<style>
+  pre.text-focus {
+    color: #bbb;
+  }
+  pre.text-focus mark {
+    background-color: transparent;
+  }
+</style>
+
+<pre class="slidev-code text-focus" style="font-size:12px">
 tcpdump: verbose output suppressed, use -v[v]... for full protocol decode
 listening on eth0, link-type EN10MB (Ethernet), snapshot length 262144 bytes
-11:33:16.002178 IP 211.154.236.12.35178 > 10.236.2.18.22: Flags [.], ack 188, win 83, options [nop,nop,TS val 515841640 ecr 3570605299], length 0
-11:33:16.021053 IP 211.154.236.12.35178 > 10.236.2.18.22: Flags [P.], seq 1:37, ack 188, win 83, options [nop,nop,TS val 515841659 ecr 3570605299], length 36
-11:33:16.021268 IP 10.236.2.18.22 > 211.154.236.12.35178: Flags [P.], seq 188:224, ack 37, win 83, options [nop,nop,TS val 3570605320 ecr 515841659], length 36
+<mark>11:33:16.002178</mark> IP <mark>211.154.236.12</mark>.35178 <mark>> 10.236.2.18</mark>.<mark>22</mark>: Flags [.], ack 188, win 83, options [nop,nop,TS val 515841640 ecr 3570605299], length 0
+<mark>11:33:16.021053</mark> IP <mark>211.154.236.12</mark>.35178 <mark>> 10.236.2.18</mark>.<mark>22</mark>: Flags [P.], seq 1:37, ack 188, win 83, options [nop,nop,TS val 515841659 ecr 3570605299], length 36
+<mark>11:33:16.021268</mark> IP <mark>10.236.2.18</mark>.<mark>22 > 211.154.236.12</mark>.35178: Flags [P.], seq 188:224, ack 37, win 83, options [nop,nop,TS val 3570605320 ecr 515841659], length 36
+</pre>
+
+---
+layout: default
+---
+
+# For `t == now`
+
+Live capture
+
+```shell
+tcpdump -ni eth0
 ```
 
 What a network engineer looks at
 
-```shell
-11:33:16.002178 SrcIP 211.154.236.12         > DstIP 10.236.2.18    Port 22
-11:33:16.021053 SrcIP 211.154.236.12         > DstIP 10.236.2.18    Port 22
-11:33:16.021268 SrcIP 10.236.2.18    Port 22 > DstIP 211.154.236.12
-```
+<style>
+  pre.text-focus {
+    color: #bbb;
+  }
+  pre.text-focus mark {
+    background-color: transparent;
+  }
+</style>
+
+<pre class="slidev-code text-focus" style="font-size:12px">
+tcpdump: verbose output suppressed, use -v[v]... for full protocol decode
+listening on eth0, link-type EN10MB (Ethernet), snapshot length 262144 bytes
+<mark>11:33:16.002178</mark> IP <mark>211.154.236.12</mark>.35178 <mark>> 10.236.2.18</mark>.<mark>22</mark>: Flags [.], ack 188, win 83, options [nop,nop,TS val 515841640 ecr 3570605299], length 0
+<mark>11:33:16.021053</mark> IP <mark>211.154.236.12</mark>.35178 <mark>> 10.236.2.18</mark>.<mark>22</mark>: Flags [P.], seq 1:37, ack 188, win 83, options [nop,nop,TS val 515841659 ecr 3570605299], length 36
+<mark>11:33:16.021268</mark> IP <mark>10.236.2.18</mark>.<mark>22 > 211.154.236.12</mark>.35178: Flags [P.], seq 188:224, ack 37, win 83, options [nop,nop,TS val 3570605320 ecr 515841659], length 36
+</pre>
 
 _Bi-directional traffic (SSH session) from 211.154.236.12 to 10.236.2.18_
 
@@ -274,7 +306,7 @@ What if we queried the metadata?
 query -i eth0 -f -24h -c "dip=10.236.2.18 and sip=211.154.236.12 and dport=22 and proto=tcp" sip,dip,dport,proto
 ```
 ```
-query -i eth0 -f -24h -c "dip=10.236.2.18 and sip=211.154.236.12 and dport=22 and proto=tcp" sip,dip,dport,proto
+goquery -i eth0 -f -24h -c "dip=10.236.2.18 and sip=211.154.236.12 and dport=22 and proto=tcp" sip,dip,dport,proto
 
                                              packets  packets             bytes      bytes
              sip          dip  dport  proto       in      out       %        in        out       %
@@ -328,24 +360,33 @@ layout: two-cols
 * a means to query it
 * low read-latency
 
+---
+layout: fact
+---
+
+## Isn't this a **solved** problem?
 
 ---
-layout: two-cols
+layout: fact
 ---
 
-`goProbe`
+## Yes.
+## It is.
 
-### Write Path
-* continuous capture of network metadata
-* low footprint, non-invasive
+---
+layout: fact
+---
 
-::right::
+## Yes,
+## BUT
 
-`goQuery`
+---
+layout: fact
+---
 
-### Read Path
-* a means to query it
-* low read-latency
+## low footprint, non-invasive
+
+## low read-latency
 
 
 ---
@@ -377,28 +418,9 @@ layout: two-cols
 layout: fact
 ---
 
-## Isn't this a **solved** problem?
+# Write Path
 
----
-layout: fact
----
-
-## Yes
-
----
-layout: fact
----
-
-## Yes,
-## BUT
-
----
-layout: fact
----
-
-## low footprint, non-invasive
-
-## low read-latency
+## `goProbe`
 
 ---
 ---
@@ -909,6 +931,14 @@ Ease of use (semi-stateless)
 Zero-copy / zero-allocation support
 
 Out-of-the-box tests / benchmarks
+
+---
+layout: fact
+---
+
+# Read Path
+
+## `goQuery`
 
 ---
 ---
