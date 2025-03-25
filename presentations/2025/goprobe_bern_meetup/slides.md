@@ -427,7 +427,7 @@ layout: fact
 
 ## Next-Gen Packet Capture
 
-Existing capture solution:
+Existing / previous capture solution:
 * Does <u>a lot</u> *[more than we need]* under the hood
 * Complex / intricate to use (stateful `pcap` capture handle, <u>lots</u> of interfaces)
 * Customizations / fork required
@@ -447,7 +447,7 @@ layout: fact
 
 ## low footprint, non-invasive
 
-## low read-latency
+## <span class="color-coolgray">low read-latency</span>
 
 ---
 layout: two-cols
