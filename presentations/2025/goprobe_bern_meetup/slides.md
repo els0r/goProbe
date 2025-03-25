@@ -911,6 +911,50 @@ Zero-copy / zero-allocation support
 Out-of-the-box tests / benchmarks
 
 ---
+---
+
+# Local Queries
+### A `Row` of metadata
+
+Load only what you need
+
+````md magic-move
+```
+goquery -i eth0 -f -24h dip
+```
+``` {1,3,4,6,10-14}
+goquery -i eth0 -f -24h dip
+
+eth0/
+  2025/03/1742860800
+    sip.gpf
+    dip.gpf
+    dport.gpf
+    proto.gpf
+
+    bytes_rcvd.gpf
+    bytes_sent.gpf
+    pkts_rcvd.gpf
+    pkts_sent.gpf
+```
+```
+goquery -i eth0 -f -24h -c "sip=211.154.236.12 and dport=22 and proto=tcp" dip
+
+eth0/
+  2025/03/1742860800
+    sip.gpf
+    dip.gpf
+    dport.gpf
+    proto.gpf
+
+    bytes_rcvd.gpf
+    bytes_sent.gpf
+    pkts_rcvd.gpf
+    pkts_sent.gpf
+```
+````
+
+---
 layout: fact
 ---
 
@@ -920,7 +964,7 @@ layout: fact
 
 from 211.154.236.12
 
-to 10.236.2.18
+on hostA
 ```
 ```
 (SSH session, TCP port 22)
@@ -1097,3 +1141,61 @@ Query stats       : displayed top 13 hits out of 13 in 10.196s
 Trace ID          : c7c51c6e5c463716cedcb69bd40a36e4
 ```
 ````
+
+---
+
+## Global Network Observability
+
+---
+
+## Global Network Observability
+
+### Troubleshooting
+
+* historic traffic patterns across the WAN path
+  * did `A` access `B`?
+  * did `A` get blocked?
+  * is there asymmetric routing?
+
+* biggest bandwidth hogs in WAN fleet
+
+
+---
+
+## Global Network Observability
+
+### Troubleshooting
+
+* historic traffic patterns across the WAN path
+  * did `A` access `B`?
+  * did `A` get blocked?
+  * is there asymmetric routing?
+
+* biggest bandwidth hogs in WAN fleet
+
+### Security
+
+* am I affected?
+* has malicious actor with IP `x.y.z.a` accessed any systems?
+
+
+---
+# https://github.com/slidevjs/slidev/blob/v51.1.1/packages/types/src/config.ts#L10
+layout: intro-image
+image: ./pictures/bg-initial.png
+---
+
+# Thank You
+
+
+---
+# https://github.com/slidevjs/slidev/blob/v51.1.1/packages/types/src/config.ts#L10
+layout: intro-image
+image: ./pictures/bg-initial.png
+---
+
+# Want to Contribute?
+
+* [open an issue](https://github.com/els0r/goProbe/issues)
+
+* PRs welcome. See _good first issue_
