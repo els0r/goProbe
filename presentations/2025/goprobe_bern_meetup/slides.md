@@ -896,9 +896,9 @@ Showing top 15 nodes out of 60
 <div class="w-[70%] translate-x-[10%] translate-y-[20%] grid gap-1">
   <div class="grid grid-cols-[1.5fr_1fr_1fr_1fr_1fr]">
     <span>CPU Time:</span>
-    <span class="text-right">43:17.7 m</span>
+    <span class="text-right">43:17.7 min</span>
     <span class="text-right">vs.</span>
-    <span class="text-right">1:57.7 m</span>
+    <span class="text-right">1:57.7 min</span>
     <span class="text-right color-blue">~ x22</span>
   </div>
   <div class="grid grid-cols-[1.5fr_1fr_1fr_1fr_1fr]">
