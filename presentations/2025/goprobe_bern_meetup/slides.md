@@ -950,7 +950,27 @@ Load only what you need
 
 ````md magic-move
 ```
-goquery -i eth0 -f -24h dip
+goquery -i eth0 -f -24h -c "sip=211.154.236.12 and dport=22 and proto=tcp" dip
+```
+``` {1,3}
+goquery -i eth0
+
+eth0/
+```
+``` {1,3,4}
+goquery -i eth0 -f -24h
+
+eth0/
+  2025/03/1742860800
+    sip.gpf
+    dip.gpf
+    dport.gpf
+    proto.gpf
+
+    bytes_rcvd.gpf
+    bytes_sent.gpf
+    pkts_rcvd.gpf
+    pkts_sent.gpf
 ```
 ``` {1,3,4,6,10-14}
 goquery -i eth0 -f -24h dip
