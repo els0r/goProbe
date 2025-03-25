@@ -426,13 +426,10 @@ layout: fact
 ---
 
 ## Next-Gen Packet Capture
-### Goals / DoD
-
-Resource limitations running `goProbe` on several hosts
 
 Existing capture solution:
 * Does <u>a lot</u> *[more than we need]* under the hood
-* Complex / intricate to use (stateful `pcap` capture handle)
+* Complex / intricate to use (stateful `pcap` capture handle, <u>lots</u> of interfaces)
 * Customizations / fork required
 
 C(GO) / system library dependency (`libpcap`)
@@ -445,11 +442,18 @@ image: ./pictures/slimcap/fine.jpg
 ---
 
 ---
+layout: fact
+---
+
+## low footprint, non-invasive
+
+## low read-latency
+
+---
 layout: two-cols
 ---
 
 ## Next-Gen Packet Capture
-### Goals / DoD
 
 Minimize Overhead:
 * IP Layer extraction (if exists)
@@ -697,7 +701,7 @@ layout: two-cols
 ## Integration
 ### Capture Rotation
 
-During data writeout (flow map “rotation”) in goProbe:
+During data writeout (flow map “rotation”) in `goProbe`:
 
 * Fundamentally concurrency-safe read / write<br>
   <span class="color-coolgray">Permanent overhead</span>
@@ -722,7 +726,7 @@ layout: two-cols
 ## Integration
 ### Capture Rotation
 
-During data writeout (flow map “rotation”) in goProbe:
+During data writeout (flow map “rotation”) in `goProbe`:
 
 * Fundamentally concurrency-safe read / write<br>
   <span class="color-coolgray">Permanent overhead</span>
@@ -912,25 +916,6 @@ Showing top 15 nodes out of 60
     <span class="text-right color-blue">~ xZZ</span>
   </div>
 </div>
-
----
-
-## Next-Gen Packet Capture
-### Goals / DoD revisited
-
-Minimize Overhead:
-* IP Layer extraction (if exists)
-* Limit to start of transport layer
-
-Focus on Linux (but keep extensible)
-
-Native Go without external *[read: C(GO)]* dependencies
-
-Ease of use (semi-stateless)
-
-Zero-copy / zero-allocation support
-
-Out-of-the-box tests / benchmarks
 
 ---
 layout: fact
