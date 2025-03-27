@@ -922,40 +922,40 @@ layout: two-cols
 ```go
 type Row struct {
     // Labels
-    Timestamp time.Time
-    Iface string
-    Hostname string
-    HostID string
+    Timestamp   time.Time
+    Iface       string
+    Hostname    string
+    HostID      string
 }
 ```
 ```go {1,8,9,10,11,12,13}
 type Row struct {
     // Labels
-    Timestamp time.Time
-    Iface string
-    Hostname string
-    HostID string
+    Timestamp   time.Time
+    Iface       string
+    Hostname    string
+    HostID      string
 
     // Attributes
-    SrcIP   netip.Addr
-    DstIP   netip.Addr
-    IPProto uint8
-    DstPort uint16
+    SrcIP       netip.Addr
+    DstIP       netip.Addr
+    IPProto     uint8
+    DstPort     uint16
 }
 ```
 ```go {1,13,14,15,16,17,18,19}
 type Row struct {
     // Labels
-    Timestamp time.Time
-    Iface string
-    Hostname string
-    HostID string
+    Timestamp   time.Time
+    Iface       string
+    Hostname    string
+    HostID      string
 
     // Attributes
-    SrcIP   netip.Addr
-    DstIP   netip.Addr
-    IPProto uint8
-    DstPort uint16
+    SrcIP       netip.Addr
+    DstIP       netip.Addr
+    IPProto     uint8
+    DstPort     uint16
 
     // Counters
     BytesRcvd   uint64
