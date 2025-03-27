@@ -5,6 +5,11 @@ layout: intro-image
 image: ./pictures/bg-initial.png
 title: Global Network Observability with goProbe
 ---
+<style>
+h2 code {
+  color: black;
+}
+</style>
 
 ## Global Network Observability with `goProbe` and `goQuery`
 
@@ -1095,6 +1100,11 @@ image: ./pictures/bg-initial.png
 layout: intro-image
 image: ./pictures/bg-initial.png
 ---
+<style>
+code {
+  color: black;
+}
+</style>
 
 # Want to Contribute?
 
