@@ -518,7 +518,7 @@ Out-of-the-box tests / benchmarks
 ## Capture Setup
 ### Filtering
 
-**BPF**[^bpf] Let kernel do the heavy lifting (filter valid IPv4 / IPv6 packets)
+**BPF**[^bpf]: Let kernel do the heavy lifting (filter valid IPv4 / IPv6 packets)
 
 ```go
 // LinkTypeLoopback
@@ -582,7 +582,6 @@ src, err := afring.NewSource(
         4,               // Number of Blocks
     ),
 )
-
 if err != nil {
     // Error handling
 }
@@ -596,7 +595,6 @@ src, err := afring.NewSource(
         4,               // Number of Blocks
     ),
 )
-
 if err != nil {
     // Error handling
 }
@@ -610,21 +608,6 @@ src, err := afring.NewSource(
         4,               // Number of Blocks
     ),
 )
-
-if err != nil {
-    // Error handling
-}
-```
-```go
-src, err := afring.NewSource(
-    “enp1s0”,
-    afring.CaptureLength(link.CaptureLengthMinimalIPv4Transport),
-    afring.BufferSize(
-        1024*1024,       // Block Size
-        4,               // Number of Blocks
-    ),
-)
-
 if err != nil {
     // Error handling
 }
