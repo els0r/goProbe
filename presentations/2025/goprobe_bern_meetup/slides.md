@@ -744,6 +744,34 @@ Stand-in wrappers (down to socket interaction) around actual sources:
 ## Testing
 ### Mock Capture Sources
 
+````md magic-move
+```go
+src, err := afring.NewSource(
+    “enp1s0”,
+    afring.CaptureLength(link.CaptureLengthMinimalIPv4Transport),
+    afring.BufferSize(
+        1024*1024,       // Block Size
+        4,               // Number of Blocks
+    ),
+)
+```
+```go
+src, err := afring.NewMockSource(
+    “enp1s0”,
+    afring.CaptureLength(link.CaptureLengthMinimalIPv4Transport),
+    afring.BufferSize(
+        1024*1024,       // Block Size
+        4,               // Number of Blocks
+    ),
+)
+```
+````
+
+---
+
+## Testing
+### Mock Capture Sources
+
 Stand-in wrappers (down to socket interaction) around actual sources:
 * `AF_PACKET` socket vs. simple FD / EFD semaphore
 * `MMAP`’ed area vs. user space slice
