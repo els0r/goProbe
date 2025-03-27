@@ -1066,6 +1066,34 @@ Trace ID          : c7c51c6e5c463716cedcb69bd40a36e4
 
 * biggest bandwidth hogs in WAN fleet
 
+---
+---
+
+<div class="flex justify-center items-center">
+ <div class="w-[100%]">
+  <img src="./pictures/ntm-global-analysis/ntm-global-analysis.001.png">
+ </div>
+</div>
+
+---
+---
+
+<div class="flex justify-center items-center">
+ <div class="w-[100%]">
+  <img src="./pictures/ntm-global-analysis/ntm-global-analysis.002.png">
+ </div>
+</div>
+
+---
+---
+
+<div class="flex justify-center items-center">
+ <div class="w-[100%]">
+  <img src="./pictures/ntm-global-analysis/ntm-global-analysis.003.png">
+ </div>
+</div>
+
+
 
 ---
 
@@ -1084,6 +1112,63 @@ Trace ID          : c7c51c6e5c463716cedcb69bd40a36e4
 
 * am I affected?
 * has malicious actor with IP `x.y.z.a` accessed any systems?
+
+---
+---
+
+<div class="flex justify-center items-center">
+ <div class="w-[100%]">
+  <img src="./pictures/ntm-global-analysis/ntm-global-analysis.004.png">
+ </div>
+</div>
+
+---
+---
+
+<div class="flex justify-center items-center">
+ <div class="w-[100%]">
+  <img src="./pictures/ntm-global-analysis/ntm-global-analysis.005.png">
+ </div>
+</div>
+
+---
+---
+
+<div class="flex justify-center items-center">
+ <div class="w-[100%]">
+  <img src="./pictures/ntm-global-analysis/ntm-global-analysis.006.png">
+ </div>
+</div>
+
+---
+---
+
+# Who is `141.98.168.34`?
+
+````md magic-move
+```shell
+dig -x 141.98.168.34 +short
+```
+```shell {2}
+dig -x 141.98.168.34 +short
+vm3783913.stark-industries.solutions.
+```
+````
+
+---
+---
+
+# Who is `141.98.168.34`?
+
+```shell
+dig -x 141.98.168.34 +short
+vm3783913.stark-industries.solutions.
+```
+
+<br>
+
+> “Two weeks before Russia invaded Ukraine in February 2022, a large, mysterious new Internet hosting firm called Stark Industries materialized and quickly became the epicenter of massive distributed denial-of-service (DDoS) attacks on government and commercial targets in Ukraine and Europe. An investigation into Stark Industries reveals it is being used as a global proxy network that conceals the true source of cyberattacks and disinformation campaigns against enemies of Russia.” [[1]](https://krebsonsecurity.com/2024/05/stark-industries-solutions-an-iron-hammer-in-the-cloud/)
+
 
 
 ---
@@ -1108,7 +1193,7 @@ code {
 
 # Want to Contribute?
 
-* [open an issue](https://github.com/els0r/goProbe/issues)
+* [open an issue on github.com/els0r/goProbe](https://github.com/els0r/goProbe/issues)
 
 * PRs welcome. See `good first issue`
 
