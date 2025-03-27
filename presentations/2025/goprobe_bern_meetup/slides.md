@@ -1,10 +1,11 @@
 ---
 # https://github.com/slidevjs/slidev/blob/v51.1.1/packages/types/src/config.ts#L10
-theme:  apple-basic
+theme: ./theme
 layout: intro-image
 image: ./pictures/bg-initial.png
 title: Global Network Observability with goProbe
 ---
+
 <style>
 h2 code {
   color: black;
@@ -24,7 +25,6 @@ Fabian Kohn
 <br/>
 
 **Observability Team @ Open Systems AG**
-
 
 ---
 layout: two-cols
@@ -800,7 +800,7 @@ layout: fact
 ---
 ---
 
-# Local Queries
+## Local Queries
 ### A `Row` of metadata
 
 Load only what you need
@@ -904,7 +904,7 @@ on all hosts
 layout: two-cols
 ---
 
-# Global Queries
+## Global Queries
 ### A `Row` of metadata
 
 ````md magic-move
@@ -978,7 +978,7 @@ type Row struct {
 ---
 ---
 
-# Global Queries
+## Global Queries
 ### A first class data structure for flow aggregation
 
 ````md magic-move
