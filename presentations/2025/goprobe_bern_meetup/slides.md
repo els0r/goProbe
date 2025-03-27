@@ -418,7 +418,7 @@ layout: two-cols
 layout: fact
 ---
 
-# Write Path
+# Capture
 
 ## `goProbe`
 
@@ -427,14 +427,12 @@ layout: fact
 
 ## Next-Gen Packet Capture
 
-Previous capture solution:
+Previous capture solution (`goProbe` v3):
 * Does <u>a lot</u> *[more than we need]* under the hood
 * Complex / intricate to use (stateful `pcap` capture handle vs. <u>lots</u> of interfaces)
+* `C(GO)` / system library dependency (`libpcap`)
 * Customizations / fork required
-
-C(GO) / system library dependency (`libpcap`)
-
-Abysmal testing capabilities
+* Abysmal testing capabilities
 
 ---
 layout: image
@@ -459,11 +457,11 @@ Minimize Overhead:
 * IP Layer extraction (if exists)
 * Limit to start of transport layer
 
-Focus on Linux (but keep extensible)
+Linux only (but keep extensible)
 
-Native Go without external *[read: C(GO)]* dependencies
+Native Go, no external [read: `C(GO)`] dependencies
 
-~~Ease of~~ Trivial to use (semi-stateless)
+~~Easy~~ Trivial to use (semi-stateless)
 
 Zero-copy / zero-allocation support
 
@@ -515,7 +513,7 @@ Out-of-the-box tests / benchmarks
 ## Capture Setup
 ### Filtering
 
-BPF: Let kernel do the heavy lifting (valid IPv4 / IPv6 packets)
+**BPF**[^bpf] Let kernel do the heavy lifting (filter valid IPv4 / IPv6 packets)
 
 ```go
 // LinkTypeLoopback
@@ -532,6 +530,8 @@ var bpfInstructionsLinkTypeLoopback = func(snapLen int) ([]bpf.RawInstruction) {
     }
 }
 ```
+
+[^bpf]: https://en.wikipedia.org/wiki/Berkeley_Packet_Filter
 
 ---
 
