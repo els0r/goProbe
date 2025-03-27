@@ -756,33 +756,6 @@ Features:
 ## Testing
 ### Benchmarks
 
-**Testbed:** Quad-core Odroid H3, 32 GiB RAM
-
-**Scenario:** Synthetic mock benchmark (zero-copy packet retrieval) on `slimcap`
-
-<div class="w-[45%] translate-x-[10%] translate-y-[20%] grid gap-1">
-  <div class="grid grid-cols-3">
-    <span>Time / op:</span>
-    <span class="text-right">16.2 ns</span>
-    <span class="text-right color-coolgray">± 1%</span>
-  </div>
-  <div class="grid grid-cols-3">
-    <span>Throughput:</span>
-    <span class="text-right">61.7 Mpps</span>
-    <span class="text-right color-coolgray">± 1%</span>
-  </div>
-  <div class="grid grid-cols-3">
-    <span>Allocations / op:</span>
-    <span class="text-right">0</span>
-    <span class="text-right"></span>
-  </div>
-</div>
-
----
-
-## Testing
-### Benchmarks
-
 **Testbed:** Production Host (DC Firewall)
 
 **Scenario:** 1h Real-life capture `goProbe` v3 (`gopacket`) / v4 (`slimcap`), 676.9 M packets
@@ -1128,3 +1101,36 @@ image: ./pictures/bg-initial.png
 * [open an issue](https://github.com/els0r/goProbe/issues)
 
 * PRs welcome. See `good first issue`
+
+---
+
+# Backup
+
+---
+
+## Testing
+### Benchmarks
+
+**Testbed:** Quad-core Odroid H3, 32 GiB RAM
+
+**Scenario:** Synthetic mock benchmark (zero-copy packet retrieval) on `slimcap`
+
+<div class="w-[45%] translate-x-[10%] translate-y-[20%] grid gap-1">
+  <div class="grid grid-cols-3">
+    <span>Time / op:</span>
+    <span class="text-right">16.2 ns</span>
+    <span class="text-right color-coolgray">± 1%</span>
+  </div>
+  <div class="grid grid-cols-3">
+    <span>Throughput:</span>
+    <span class="text-right">61.7 Mpps</span>
+    <span class="text-right color-coolgray">± 1%</span>
+  </div>
+  <div class="grid grid-cols-3">
+    <span>Allocations / op:</span>
+    <span class="text-right">0</span>
+    <span class="text-right"></span>
+  </div>
+</div>
+
+---
