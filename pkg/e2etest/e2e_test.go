@@ -62,7 +62,7 @@ var (
 	portMutex        sync.Mutex
 )
 
-func getGoProbePort() (port uint16) {
+func getAvailablePort() (port uint16) {
 	portMutex.Lock()
 	port = firstGoProbePort
 	firstGoProbePort++
@@ -286,7 +286,7 @@ func TestE2EDistributed(t *testing.T) {
 }
 
 func TestStartStop(t *testing.T) {
-	for i := 0; i < 1000; i++ {
+	for range 1000 {
 		testStartStop(t)
 	}
 }
@@ -317,7 +317,7 @@ func testE2E(t *testing.T, useAPI, enableStreaming bool, valFilterDescriptor int
 	liveFlowResults := make(map[string]hashmap.AggFlowMapWithMetadata)
 	var goProbePort string
 	if useAPI {
-		goProbePort = fmt.Sprintf("127.0.0.1:%d", getGoProbePort())
+		goProbePort = fmt.Sprintf("127.0.0.1:%d", getAvailablePort())
 	}
 	for liveFlowMap := range runGoProbe(t, tempDir, goProbePort, setupSources(mockIfaces)) {
 		liveFlowResults[liveFlowMap.Interface] = liveFlowMap
@@ -447,15 +447,13 @@ func testE2EDistributed(t *testing.T, enableStreaming bool, nDistHosts, valFilte
 
 	// Setup temporary directories for the test DBs
 	var (
-		tempDirList         []string
 		mockIfacesList      []mockIfaces
 		liveFlowResultsList []map[string]hashmap.AggFlowMapWithMetadata
 		goProbeHosts        = make(map[string]string)
 	)
-	for i := 0; i < nDistHosts; i++ {
+	for i := range nDistHosts {
 		tempDir, err := os.MkdirTemp(os.TempDir(), fmt.Sprintf("goprobe_e2e_%d", i))
 		require.Nil(t, err)
-		tempDirList = append(tempDirList, tempDir)
 		defer func(t *testing.T) {
 			require.Nil(t, os.RemoveAll(tempDir))
 		}(t)
@@ -469,7 +467,7 @@ func testE2EDistributed(t *testing.T, enableStreaming bool, nDistHosts, valFilte
 
 		// Run GoProbe (storing a copy of all processed live flows)
 		liveFlowResults := make(map[string]hashmap.AggFlowMapWithMetadata)
-		goProbeHosts[strconv.Itoa(i)] = fmt.Sprintf("127.0.0.1:%d", getGoProbePort())
+		goProbeHosts[strconv.Itoa(i)] = fmt.Sprintf("127.0.0.1:%d", getAvailablePort())
 		for liveFlowMap := range runGoProbe(t, tempDir, goProbeHosts[strconv.Itoa(i)], setupSources(mockIfaces)) {
 			liveFlowResults[liveFlowMap.Interface] = liveFlowMap
 		}
@@ -477,8 +475,13 @@ func testE2EDistributed(t *testing.T, enableStreaming bool, nDistHosts, valFilte
 	}
 
 	// Run global-query server / API
-	closeAPI := runGlobalQuery(t, "127.0.0.1:11130", goProbeHosts)
-	defer closeAPI()
+	globalQueryEndpoint := fmt.Sprintf("127.0.0.1:%d", getAvailablePort())
+	closeAPI := runGlobalQuery(t, globalQueryEndpoint, goProbeHosts)
+	defer func() {
+		if err := closeAPI(); err != nil {
+			panic(err)
+		}
+	}()
 
 	// Run GoQuery and build reference results from tracking
 	resGoQuery := new(results.Result)
@@ -486,7 +489,7 @@ func testE2EDistributed(t *testing.T, enableStreaming bool, nDistHosts, valFilte
 		"-i", "any",
 		"-e", types.FormatJSON,
 		"-l", time.Now().Add(time.Hour).Format(time.ANSIC),
-		"--query.server.addr", "127.0.0.1:11130",
+		"--query.server.addr", globalQueryEndpoint,
 		"--query.hosts-resolution", "any",
 		"-n", strconv.Itoa(100000),
 		"-s", "packets",
@@ -688,7 +691,7 @@ func runGoQuery(t *testing.T, res interface{}, args []string) {
 	require.Nil(t, jsoniter.NewDecoder(buf).Decode(&res))
 }
 
-func runGlobalQuery(t *testing.T, addr string, apiEndpoints map[string]string) func() {
+func runGlobalQuery(t *testing.T, addr string, apiEndpoints map[string]string) func() error {
 	endpoints := map[string]*client.Config{}
 	for k, v := range apiEndpoints {
 		endpoints[k] = &client.Config{Addr: v}
@@ -702,8 +705,8 @@ func runGlobalQuery(t *testing.T, addr string, apiEndpoints map[string]string) f
 		require.ErrorIs(t, apiServer.Serve(), http.ErrServerClosed)
 	}()
 
-	return func() {
-		apiServer.Shutdown(context.Background())
+	return func() error {
+		return apiServer.Shutdown(context.Background())
 	}
 }
 
@@ -746,8 +749,7 @@ func newPcapSource(t testing.TB, name string, data []byte) (res *mockIface) {
 
 		src, err := pcap.NewSource(res.name, bytes.NewBuffer(data))
 		require.Nil(t, err)
-		src.PacketAddCallbackFn(func(payload []byte, totalLen uint32, pktType, ipLayerOffset byte) {
-
+		src.PacketAddCallbackFn(func(_ []byte, _ uint32, _, _ byte) {
 			res.Lock()
 			defer res.Unlock()
 
