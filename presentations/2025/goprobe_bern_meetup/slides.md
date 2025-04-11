@@ -4,6 +4,7 @@ theme: ./theme
 layout: intro-image
 image: ./pictures/bg-initial.png
 title: Global Network Observability with goProbe
+exportFilename: global-network-observability-with-goprobe
 ---
 
 <style>
