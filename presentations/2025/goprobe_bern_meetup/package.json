@@ -37,7 +37,9 @@
     "@slidev/types": "^51.1.1",
     "@vueuse/core": "^12.7.0",
     "@vueuse/math": "^12.7.0",
+    "codemirror-theme-vars": "^0.1.2",
     "defu": "^6.1.4",
+    "prism-theme-vars": "^0.2.5",
     "slidev-theme-eloc": "^1.1.0"
   },
   "devDependencies": {
