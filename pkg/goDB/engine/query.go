@@ -268,15 +268,18 @@ func (qr *QueryRunner) RunStatement(ctx context.Context, stmt *query.Statement, 
 		}
 	}
 
-	// the covered time period is the union of all covered times
-	tSpanFirst, tSpanLast := time.Now().AddDate(100, 0, 0), time.Time{} // a hundred years in the future, the beginning of time
-	for _, workManager := range workManagers {
-		t0, t1 := workManager.GetCoveredTimeInterval()
-		if t0.Before(tSpanFirst) {
-			tSpanFirst = t0
-		}
-		if tSpanLast.Before(t1) {
-			tSpanLast = t1
+	// the covered time period is the union of all covered times (initialize to query time period in case no work managers are created
+	tSpanFirst, tSpanLast := time.Unix(stmt.First, 0), time.Unix(stmt.Last, 0)
+	if len(workManagers) > 0 {
+		tSpanFirst, tSpanLast = time.Now().AddDate(100, 0, 0), time.Time{} // a hundred years in the future, the beginning of time
+		for _, workManager := range workManagers {
+			t0, t1 := workManager.GetCoveredTimeInterval()
+			if t0.Before(tSpanFirst) {
+				tSpanFirst = t0
+			}
+			if tSpanLast.Before(t1) {
+				tSpanLast = t1
+			}
 		}
 	}
 
