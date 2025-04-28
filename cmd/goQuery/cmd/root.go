@@ -458,7 +458,6 @@ func entrypoint(cmd *cobra.Command, args []string) (err error) {
 			return err
 		}
 		logger.Infof("Status %q: %s", result.Status.Code, result.Status.Message)
-		return nil
 	}
 
 	// when running a distributed query, host status errors should be reported

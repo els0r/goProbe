@@ -555,25 +555,27 @@ func NewTextTablePrinter(b basePrinter, numFlows int, resolveTimeout time.Durati
 	header1[OutcolBothBytesRcvd] = bytesStr
 	header1[OutcolBothBytesSent] = bytesStr
 
-	var header2 = append(types.AllColumns(), []string{
-		"in", "%", "in", "%",
-		"out", "%", "out", "%",
-		"in+out", "%", "in+out", "%",
-		"in", "out", "%", "in", "out", "%",
-	}...)
+	if numFlows > 0 {
+		var header2 = append(types.AllColumns(), []string{
+			"in", "%", "in", "%",
+			"out", "%", "out", "%",
+			"in+out", "%", "in+out", "%",
+			"in", "out", "%", "in", "out", "%",
+		}...)
 
-	for _, col := range t.cols {
-		fmt.Fprint(t.writer, header1[col])
-		fmt.Fprint(t.writer, "\t")
+		for _, col := range t.cols {
+			fmt.Fprint(t.writer, header1[col])
+			fmt.Fprint(t.writer, "\t")
 
+		}
+		fmt.Fprintln(t.writer)
+
+		for _, col := range t.cols {
+			fmt.Fprint(t.writer, header2[col])
+			fmt.Fprint(t.writer, "\t")
+		}
+		fmt.Fprintln(t.writer)
 	}
-	fmt.Fprintln(t.writer)
-
-	for _, col := range t.cols {
-		fmt.Fprint(t.writer, header2[col])
-		fmt.Fprint(t.writer, "\t")
-	}
-	fmt.Fprintln(t.writer)
 
 	return t
 }
@@ -631,41 +633,43 @@ func (t *TextTablePrinter) Footer(ctx context.Context, result *Result) error {
 	isTotal[OutcolBothBytesRcvd] = true
 	isTotal[OutcolBothBytesSent] = true
 
-	// line with ... in the right places to separate totals
-	for _, col := range t.cols {
-		if isTotal[col] && t.numPrinted < t.numFlows {
-			fmt.Fprint(t.writer, "...")
-		}
-		fmt.Fprint(t.writer, "\t")
-	}
-	fmt.Fprintln(t.writer)
-
-	// Totals
-	for _, col := range t.cols {
-		if isTotal[col] {
-			fmt.Fprint(t.writer, extractTotal(TextFormatter{}, t.totals, col))
-		}
-		fmt.Fprint(t.writer, "\t")
-	}
-	fmt.Fprintln(t.writer)
-
-	if t.direction == types.DirectionBoth {
-		for range t.cols[1:] {
-			fmt.Fprint(t.writer, "\t")
-		}
-		fmt.Fprintln(t.writer)
-
-		fmt.Fprint(t.writer, totalsKey+":\t")
-		for _, col := range t.cols[1:] {
-			if col == OutcolBothPktsSent {
-				fmt.Fprint(t.writer, TextFormatter{}.Count(t.totals.SumPackets()))
-			}
-			if col == OutcolBothBytesSent {
-				fmt.Fprint(t.writer, TextFormatter{}.Size(t.totals.SumBytes()))
+	if len(result.Rows) > 0 {
+		// line with ... in the right places to separate totals
+		for _, col := range t.cols {
+			if isTotal[col] && t.numPrinted < t.numFlows {
+				fmt.Fprint(t.writer, "...")
 			}
 			fmt.Fprint(t.writer, "\t")
 		}
 		fmt.Fprintln(t.writer)
+
+		// Totals
+		for _, col := range t.cols {
+			if isTotal[col] {
+				fmt.Fprint(t.writer, extractTotal(TextFormatter{}, t.totals, col))
+			}
+			fmt.Fprint(t.writer, "\t")
+		}
+		fmt.Fprintln(t.writer)
+
+		if t.direction == types.DirectionBoth {
+			for range t.cols[1:] {
+				fmt.Fprint(t.writer, "\t")
+			}
+			fmt.Fprintln(t.writer)
+
+			fmt.Fprint(t.writer, totalsKey+":\t")
+			for _, col := range t.cols[1:] {
+				if col == OutcolBothPktsSent {
+					fmt.Fprint(t.writer, TextFormatter{}.Count(t.totals.SumPackets()))
+				}
+				if col == OutcolBothBytesSent {
+					fmt.Fprint(t.writer, TextFormatter{}.Size(t.totals.SumBytes()))
+				}
+				fmt.Fprint(t.writer, "\t")
+			}
+			fmt.Fprintln(t.writer)
+		}
 	}
 
 	textFormatter := TextFormatter{}
@@ -742,7 +746,9 @@ func (t *TextTablePrinter) Print(result *Result) error {
 	if err := t.writer.Flush(); err != nil {
 		return err
 	}
-	fmt.Fprintln(t.output)
+	if len(result.Rows) > 0 {
+		fmt.Fprintln(t.output)
+	}
 	if err := t.footerWriter.Flush(); err != nil {
 		return err
 	}
