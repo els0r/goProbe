@@ -196,19 +196,30 @@ func (d *GPDir) ReadBlockAtIndex(colIdx types.ColumnIndex, blockIdx int) ([]byte
 		return nil, ErrDirNotOpen
 	}
 
-	// Load column if required
-	_, err := d.Column(colIdx)
+	// Attempt to read the block
+	data, err := d.readBlockAtIndex(colIdx, blockIdx)
 	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+
+			// Attempt to recover the GPDir by closing and reopening it
+			_ = d.Close()
+			if err := d.Open(); err != nil {
+				return nil, err
+			}
+
+			// Retry reading the block
+			return d.readBlockAtIndex(colIdx, blockIdx)
+		}
+
 		return nil, err
 	}
 
-	// Read block data from file
-	return d.gpFiles[colIdx].ReadBlockAtIndex(blockIdx)
+	return data, nil
 }
 
 // WriteBlocks writes a set of blocks to the underlying GPFiles and updates the metadata
 func (d *GPDir) WriteBlocks(timestamp int64, blockTraffic TrafficMetadata, counters types.Counters, dbData [types.ColIdxCount][]byte) error {
-	for colIdx := types.ColumnIndex(0); colIdx < types.ColIdxCount; colIdx++ {
+	for colIdx := range types.ColIdxCount {
 
 		// Load column if required
 		_, err := d.Column(colIdx)
@@ -434,6 +445,7 @@ func (d *GPDir) Close() error {
 			if err := d.gpFiles[i].Close(); err != nil {
 				errs = append(errs, err)
 			}
+			d.gpFiles[i] = nil // Clear the reference to the GPFile
 		}
 	}
 
@@ -532,6 +544,44 @@ func (d *GPDir) setMetadataFromSuffix(metadataSuffix string) {
 	}
 }
 
+// recoverDirPath attempts to recover the full path of the GPDir based on the month path and a metadata file
+// in case the GPDir path + metadata suffix has changed
+func (d *GPDir) recoverDirPath() error {
+	searchDir, prefix := filepath.Dir(d.dirMonthPath), filepath.Base(d.dirMonthPath)
+
+	dirEnts, err := os.ReadDir(searchDir)
+	if err != nil {
+		return fmt.Errorf("failed to list contents of directory `%s`: %w", searchDir, err)
+	}
+
+	match, found := binarySearchPrefix(dirEnts, prefix)
+	if !found {
+		return fmt.Errorf("metadata file `%s` missing", d.MetadataPath())
+	}
+
+	d.dirPath = filepath.Join(searchDir, match)
+	d.metaPath = filepath.Join(d.dirPath, metadataFileName)
+
+	_, metadataSuffix, err := ExtractTimestampMetadataSuffix(match)
+	if err != nil {
+		return fmt.Errorf("failed to extract metadata suffix from `%s`: %w", match, err)
+	}
+
+	d.setMetadataFromSuffix(metadataSuffix)
+	return nil
+}
+
+func (d *GPDir) readBlockAtIndex(colIdx types.ColumnIndex, blockIdx int) ([]byte, error) {
+	// Load column if required
+	_, err := d.Column(colIdx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Read block data from file
+	return d.gpFiles[colIdx].ReadBlockAtIndex(blockIdx)
+}
+
 // DirTimestamp returns timestamp rounded down to the nearest directory time frame (usually a day)
 func DirTimestamp(timestamp int64) int64 {
 	return (timestamp / EpochDay) * EpochDay
@@ -571,33 +621,6 @@ func genReadPathForTimestamp(basePath string, timestamp int64, metadataSuffix st
 
 	path := filepath.Join(basePath, strconv.Itoa(dayUnix.Year()), padNumber(int64(dayUnix.Month())), strconv.FormatInt(dayTimestamp, 10))
 	return path, path + "_" + metadataSuffix
-}
-
-// recoverDirPath attempts to recover the full path of the GPDir based on the month path and a metadata file
-// in case the GPDir path + metadata suffix has changed
-func (d *GPDir) recoverDirPath() error {
-	searchDir, prefix := filepath.Dir(d.dirMonthPath), filepath.Base(d.dirMonthPath)
-
-	dirEnts, err := os.ReadDir(searchDir)
-	if err != nil {
-		return fmt.Errorf("failed to list contents of directory `%s`: %w", searchDir, err)
-	}
-
-	match, found := binarySearchPrefix(dirEnts, prefix)
-	if !found {
-		return fmt.Errorf("metadata file `%s` missing", d.MetadataPath())
-	}
-
-	d.dirPath = filepath.Join(searchDir, match)
-	d.metaPath = filepath.Join(d.dirPath, metadataFileName)
-
-	_, metadataSuffix, err := ExtractTimestampMetadataSuffix(match)
-	if err != nil {
-		return fmt.Errorf("failed to extract metadata suffix from `%s`: %w", match, err)
-	}
-
-	d.setMetadataFromSuffix(metadataSuffix)
-	return nil
 }
 
 func padNumber(n int64) string {

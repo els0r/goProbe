@@ -365,7 +365,7 @@ func TestBrokenAccess(t *testing.T) {
 
 	// Attempt to read from closed GPDir (should return an error)
 	t.Run("not open", func(t *testing.T) {
-		for i := types.ColumnIndex(0); i < types.ColIdxCount; i++ {
+		for i := range types.ColIdxCount {
 			data, err := testDir.ReadBlockAtIndex(i, 0)
 			require.Nil(t, data)
 			require.ErrorIs(t, err, ErrDirNotOpen)
@@ -438,15 +438,26 @@ func TestPathRenamedDuringAccess(t *testing.T) {
 	require.Equal(t, testDir.BlockMetadata[0].NBlocks(), 4)
 	require.Nil(t, testDir.Close(), "error writing test dir")
 
-	// Read the directory using the old path and validate that we "see" three blocks on metadata level
+	// Read the directory using the old path and validate that we "see" four blocks on metadata level
+	// after recovery has been performed
 	testDir = NewDirReader(testDirPath, ts, suffix)
 	require.Nil(t, testDir.Open(), "error opening test dir for reading")
 	require.Equal(t, expectedOffset, testDir.BlockMetadata[0].CurrentOffset)
 	require.Equal(t, testDir.BlockMetadata[0].NBlocks(), 4)
+
+	// Append another block and flush the data to disk
+	testDirW := NewDirWriter(testDirPath, 1000)
+	require.Nil(t, testDirW.Open(), "error opening test dir for writing")
+	require.Equal(t, expectedOffset, testDirW.BlockMetadata[0].CurrentOffset)
+	require.Nil(t, writeDummyBlock(5, testDirW, 5), "failed to write blocks")
+	require.Equal(t, testDirW.BlockMetadata[0].NBlocks(), 5)
+	require.Nil(t, testDirW.Close(), "error writing test dir")
+
 	for i := range types.ColIdxCount {
 		_, err := testDir.ReadBlockAtIndex(i, 0)
 		require.Nil(t, err)
 	}
+
 	require.Nil(t, testDir.Close(), "error closing test dir")
 }
 
