@@ -202,6 +202,7 @@ func (d *GPDir) ReadBlockAtIndex(colIdx types.ColumnIndex, blockIdx int) ([]byte
 		if errors.Is(err, fs.ErrNotExist) {
 
 			// Attempt to recover the GPDir by closing and reopening it
+			// Closing may fail because of files / paths having moved, so we ignore any error
 			_ = d.Close()
 			if err := d.Open(); err != nil {
 				return nil, err
