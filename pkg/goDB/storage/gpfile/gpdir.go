@@ -171,7 +171,7 @@ func (d *GPDir) Open(options ...Option) error {
 	}
 
 	d.isOpen = true
-	return err
+	return nil
 }
 
 // IsOpen returns if the GPFile instance is currently opened
