@@ -418,6 +418,7 @@ func (w *DBWorkManager) readMetadataAndEvaluate(workDir *gpfile.GPDir, blocks []
 		// Read the blocks from their files
 		for _, colIdx := range w.query.columnIndices {
 			// Read the block from the file
+			// TODO: If this fails due to a missing file, reset everything and retry opening the GPDir (but only once to avoid infinite loops)
 			if colBlocks[colIdx], err = workDir.ReadBlockAtIndex(colIdx, ind); err != nil {
 				blockBroken = true
 				logger.With(
@@ -612,6 +613,7 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workDir *gpfile.GPDir, enc encoder
 		// Read the blocks from their files
 		for _, colIdx := range w.query.columnIndices {
 			// Read the block from the file
+			// TODO: If this fails due to a missing file, reset everything and retry opening the GPDir (but only once to avoid infinite loops)
 			blocks[colIdx], err = workDir.ReadBlockAtIndex(colIdx, b)
 			if err != nil {
 				blockBroken = true

@@ -50,6 +50,7 @@ type GPDir struct {
 
 	options          []Option    // Options (forwarded to all GPFiles)
 	basePath         string      // goDB base path (up to interface)
+	dirMonthPath     string      // GPDir path (up to GPDir month)
 	dirTimestampPath string      // GPDir path (up to GPDir timestanp)
 	dirPath          string      // GPDir path (full path including GPDir timestanp and potential metadata suffix)
 	metaPath         string      // Full path to GPDir metadata
@@ -60,7 +61,7 @@ type GPDir struct {
 	*Metadata
 }
 
-// SplitTimestampMetadataSuffix is a convenience function that performs timestamp (and potentially
+// ExtractTimestampMetadataSuffix is a convenience function that performs timestamp (and potentially
 // metadata prefix) extraction for the GPDir path / directory name
 func ExtractTimestampMetadataSuffix(filename string) (timestamp int64, metadataSuffix string, err error) {
 
@@ -97,7 +98,7 @@ func NewDirWriter(basePath string, timestamp int64, options ...Option) *GPDir {
 	return &obj
 }
 
-// NewDir instantiates a new directory (doesn't yet do anything except for potentially
+// NewDirReader instantiates a new directory (doesn't yet do anything except for potentially
 // reading / decoding a subset of the metadata from a provided string suffix)
 func NewDirReader(basePath string, timestamp int64, metadataSuffix string, options ...Option) *GPDir {
 	obj := GPDir{
@@ -107,7 +108,7 @@ func NewDirReader(basePath string, timestamp int64, metadataSuffix string, optio
 		options:     options,
 	}
 
-	obj.dirPath = genReadPathForTimestamp(basePath, timestamp, metadataSuffix)
+	obj.dirMonthPath, obj.dirPath = genReadPathForTimestamp(basePath, timestamp, metadataSuffix)
 	obj.metaPath = filepath.Join(obj.dirPath, metadataFileName)
 
 	// If metdadata was provided via a suffix, attempt to read / decode it and fall
@@ -139,33 +140,38 @@ func (d *GPDir) Open(options ...Option) error {
 
 	// Attempt to read the metadata from file
 	metadataFile, err := os.Open(d.MetadataPath())
-	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
 
-			// In read mode the metadata file has to be present, otherwise we instantiate
-			// an empty one
-			if d.accessMode == ModeRead {
-				return fmt.Errorf("metadata file `%s` missing", d.MetadataPath())
+	switch d.accessMode {
+	case ModeWrite:
+		// In write mode the metadata file is optional, if it doesn't exist we create a new one
+		if err != nil {
+			if !errors.Is(err, fs.ErrNotExist) {
+				return fmt.Errorf("error reading metadata file `%s`: %w", d.MetadataPath(), err)
 			}
-			d.Metadata = newMetadata()
-		} else {
-			return fmt.Errorf("error reading metadata file `%s`: %w", d.MetadataPath(), err)
+			d.Metadata, d.isOpen = newMetadata(), true
+			return nil
 		}
-	} else {
 
-		// Deserialize and close underlying file after reading is complete
-		defer func() {
-			if cerr := metadataFile.Close(); cerr != nil && err != nil {
-				err = cerr
+	case ModeRead:
+		// In read mode the metadata file has to be present, but we attempt to recover
+		// it in case it is missing
+		if errors.Is(err, fs.ErrNotExist) {
+			if err = d.recoverDirPath(); err == nil {
+				metadataFile, err = os.Open(d.MetadataPath())
 			}
-		}()
-		if err := d.Unmarshal(metadataFile); err != nil {
-			return fmt.Errorf("error decoding metadata file `%s`: %w", d.MetadataPath(), err)
+		}
+		if err != nil {
+			return fmt.Errorf("error reading metadata file `%s`: %w", d.MetadataPath(), err)
 		}
 	}
 
+	// Deserialize underlying file (closing taking care of in Unmarshal() method)
+	if err := d.Unmarshal(metadataFile); err != nil {
+		return fmt.Errorf("error decoding metadata file `%s`: %w", d.MetadataPath(), err)
+	}
+
 	d.isOpen = true
-	return nil
+	return err
 }
 
 // IsOpen returns if the GPFile instance is currently opened
@@ -258,7 +264,7 @@ func (d *GPDir) Unmarshal(r concurrency.ReadWriteSeekCloser) error {
 	d.Metadata = newMetadata()
 
 	d.Metadata.Version = binary.BigEndian.Uint64(data[0:8])                // Get header version
-	nBlocks := int(binary.BigEndian.Uint64(data[8:16]))                    // Get flat nummber of blocks
+	nBlocks := binary.BigEndian.Uint64(data[8:16])                         // Get flat nummber of blocks
 	d.Metadata.Traffic.NumV4Entries = binary.BigEndian.Uint64(data[16:24]) // Get global number of IPv4 flows
 	d.Metadata.Traffic.NumV6Entries = binary.BigEndian.Uint64(data[24:32]) // Get global number of IPv6 flows
 	d.Metadata.Traffic.NumDrops = binary.BigEndian.Uint64(data[32:40])     // Get global number of dropped packets
@@ -269,12 +275,12 @@ func (d *GPDir) Unmarshal(r concurrency.ReadWriteSeekCloser) error {
 	pos := minMetadataFileSizePos
 
 	// Get block information
-	for i := 0; i < int(types.ColIdxCount); i++ {
+	for i := range int(types.ColIdxCount) {
 		d.BlockMetadata[i].CurrentOffset = binary.BigEndian.Uint64(data[pos : pos+8])
 		d.BlockMetadata[i].BlockList = make([]storage.BlockAtTime, nBlocks)
 		pos += 8
 		curOffset := uint64(0)
-		for j := 0; j < nBlocks; j++ {
+		for j := range nBlocks {
 			d.BlockMetadata[i].BlockList[j].Offset = curOffset
 			d.BlockMetadata[i].BlockList[j].Len = binary.BigEndian.Uint32(data[pos : pos+4])
 			d.BlockMetadata[i].BlockList[j].RawLen = binary.BigEndian.Uint32(data[pos+4 : pos+8])
@@ -289,7 +295,7 @@ func (d *GPDir) Unmarshal(r concurrency.ReadWriteSeekCloser) error {
 	d.BlockTraffic = make([]TrafficMetadata, nBlocks)
 	lastTimestamp := int64(binary.BigEndian.Uint64(data[pos : pos+8]))
 	pos += 8
-	for i := 0; i < nBlocks; i++ {
+	for i := uint64(0); i < nBlocks; i++ {
 		d.BlockTraffic[i].NumV4Entries = uint64(binary.BigEndian.Uint32(data[pos : pos+4]))
 		d.BlockTraffic[i].NumV6Entries = uint64(binary.BigEndian.Uint32(data[pos+4 : pos+8]))
 		d.BlockTraffic[i].NumDrops = uint64(binary.BigEndian.Uint32(data[pos+8 : pos+12]))
@@ -423,7 +429,7 @@ func (d *GPDir) Close() error {
 
 	// Close all open GPFiles
 	var errs []error
-	for i := 0; i < int(types.ColIdxCount); i++ {
+	for i := range int(types.ColIdxCount) {
 		if d.gpFiles[i] != nil {
 			if err := d.gpFiles[i].Close(); err != nil {
 				errs = append(errs, err)
@@ -434,7 +440,7 @@ func (d *GPDir) Close() error {
 	// Ensure resources are marked for cleanup
 	defer func() {
 		d.Metadata.BlockTraffic = nil
-		for i := 0; i < int(types.ColIdxCount); i++ {
+		for i := range int(types.ColIdxCount) {
 			d.Metadata.BlockMetadata[i].BlockList = nil
 			d.Metadata.BlockMetadata[i] = nil
 		}
@@ -554,15 +560,44 @@ func genWritePathForTimestamp(basePath string, timestamp int64) (string, string)
 
 // genReadPathForTimestamp provides a unified generator method that allows to construct the path to
 // the data on disk based on a base path, a timestamp and a metadata suffix
-func genReadPathForTimestamp(basePath string, timestamp int64, metadataSuffix string) string {
+func genReadPathForTimestamp(basePath string, timestamp int64, metadataSuffix string) (string, string) {
 	dayTimestamp := DirTimestamp(timestamp)
 	dayUnix := time.Unix(dayTimestamp, 0)
 
 	if metadataSuffix == "" {
-		return filepath.Join(basePath, strconv.Itoa(dayUnix.Year()), padNumber(int64(dayUnix.Month())), strconv.FormatInt(dayTimestamp, 10))
+		path := filepath.Join(basePath, strconv.Itoa(dayUnix.Year()), padNumber(int64(dayUnix.Month())), strconv.FormatInt(dayTimestamp, 10))
+		return path, filepath.Join(basePath, strconv.Itoa(dayUnix.Year()), padNumber(int64(dayUnix.Month())), strconv.FormatInt(dayTimestamp, 10))
 	}
 
-	return filepath.Join(basePath, strconv.Itoa(dayUnix.Year()), padNumber(int64(dayUnix.Month())), strconv.FormatInt(dayTimestamp, 10)+"_"+metadataSuffix)
+	path := filepath.Join(basePath, strconv.Itoa(dayUnix.Year()), padNumber(int64(dayUnix.Month())), strconv.FormatInt(dayTimestamp, 10))
+	return path, path + "_" + metadataSuffix
+}
+
+// recoverDirPath attempts to recover the full path of the GPDir based on the month path and a metadata file
+// in case the GPDir path + metadata suffix has changed
+func (d *GPDir) recoverDirPath() error {
+	searchDir, prefix := filepath.Dir(d.dirMonthPath), filepath.Base(d.dirMonthPath)
+
+	dirEnts, err := os.ReadDir(searchDir)
+	if err != nil {
+		return fmt.Errorf("failed to list contents of directory `%s`: %w", searchDir, err)
+	}
+
+	match, found := binarySearchPrefix(dirEnts, prefix)
+	if !found {
+		return fmt.Errorf("metadata file `%s` missing", d.MetadataPath())
+	}
+
+	d.dirPath = filepath.Join(searchDir, match)
+	d.metaPath = filepath.Join(d.dirPath, metadataFileName)
+
+	_, metadataSuffix, err := ExtractTimestampMetadataSuffix(match)
+	if err != nil {
+		return fmt.Errorf("failed to extract metadata suffix from `%s`: %w", match, err)
+	}
+
+	d.setMetadataFromSuffix(metadataSuffix)
+	return nil
 }
 
 func padNumber(n int64) string {
