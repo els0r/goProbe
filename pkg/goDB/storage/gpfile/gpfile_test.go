@@ -342,7 +342,7 @@ func TestBrokenAccess(t *testing.T) {
 	require.Nil(t, testDir.Open(), "error opening test dir for writing")
 	require.Nil(t, writeDummyBlock(3, testDir, 3), "failed to write blocks")
 	require.NotEqual(t, expectedOffset, testDir.BlockMetadata[0].CurrentOffset)
-	for i := 0; i < int(types.ColIdxCount); i++ {
+	for i := range int(types.ColIdxCount) {
 		if testDir.gpFiles[i] != nil {
 			require.Nil(t, testDir.gpFiles[i].Close())
 		}
@@ -357,7 +357,7 @@ func TestBrokenAccess(t *testing.T) {
 	require.Nil(t, testDir.Open(), "error opening test dir for reading")
 	require.Equal(t, expectedOffset, testDir.BlockMetadata[0].CurrentOffset)
 	require.Equal(t, testDir.BlockMetadata[0].NBlocks(), 2)
-	for i := types.ColumnIndex(0); i < types.ColIdxCount; i++ {
+	for i := range types.ColIdxCount {
 		_, err := testDir.ReadBlockAtIndex(i, 0)
 		require.Nil(t, err)
 	}
@@ -365,7 +365,7 @@ func TestBrokenAccess(t *testing.T) {
 
 	// Attempt to read from closed GPDir (should return an error)
 	t.Run("not open", func(t *testing.T) {
-		for i := types.ColumnIndex(0); i < types.ColIdxCount; i++ {
+		for i := range types.ColIdxCount {
 			data, err := testDir.ReadBlockAtIndex(i, 0)
 			require.Nil(t, data)
 			require.ErrorIs(t, err, ErrDirNotOpen)
@@ -391,13 +391,73 @@ func TestBrokenAccess(t *testing.T) {
 	require.Nil(t, testDir.Open(), "error opening test dir for reading")
 	require.Equal(t, expectedOffset, testDir.BlockMetadata[0].CurrentOffset)
 	require.Equal(t, testDir.BlockMetadata[0].NBlocks(), 4)
-	for i := types.ColumnIndex(0); i < types.ColIdxCount; i++ {
+	for i := range types.ColIdxCount {
 		for j := 0; j < testDir.BlockMetadata[0].NBlocks(); j++ {
 			data, err := testDir.ReadBlockAtIndex(i, j)
 			require.Nilf(t, err, "error fetching block data at index %d, block %d", i, j)
 			require.Equalf(t, int64(data[0]), testDir.BlockMetadata[i].Blocks()[j].Timestamp, "unexpected block data at index %d / block %d, want %d, have %d", i, j, testDir.BlockMetadata[i].Blocks()[j].Timestamp, data[0])
 		}
 	}
+	require.Nil(t, testDir.Close(), "error closing test dir")
+}
+
+func TestPathRenamedDuringAccess(t *testing.T) {
+
+	require.Nil(t, os.RemoveAll(testDirPath))
+
+	// Write some blocks and flush the data to disk
+	testDir := NewDirWriter(testDirPath, 1000)
+	require.Nil(t, testDir.Open(), "error opening test dir for writing")
+	require.Nil(t, writeDummyBlock(1, testDir, 1), "failed to write blocks")
+	require.Nil(t, writeDummyBlock(2, testDir, 2), "failed to write blocks")
+	expectedOffset := testDir.BlockMetadata[0].CurrentOffset
+	require.Nil(t, testDir.Close(), "error writing test dir")
+
+	_, fullPath := genWritePathForTimestamp(testDirPath, 1000)
+	ts, suffix, err := ExtractTimestampMetadataSuffix(filepath.Base(fullPath))
+	require.Nil(t, err)
+
+	// Read the directory and validate that we "see" two blocks on metadata level
+	testDir = NewDirReader(testDirPath, ts, suffix)
+	require.Nil(t, testDir.Open(), "error opening test dir for reading")
+	require.Equal(t, expectedOffset, testDir.BlockMetadata[0].CurrentOffset)
+	require.Equal(t, testDir.BlockMetadata[0].NBlocks(), 2)
+	for i := range types.ColIdxCount {
+		_, err := testDir.ReadBlockAtIndex(i, 0)
+		require.Nil(t, err)
+	}
+	require.Nil(t, testDir.Close(), "error closing test dir")
+
+	// Append another block and flush the data to disk
+	testDir = NewDirWriter(testDirPath, 1000)
+	require.Nil(t, testDir.Open(), "error opening test dir for writing")
+	require.Equal(t, expectedOffset, testDir.BlockMetadata[0].CurrentOffset)
+	require.Nil(t, writeDummyBlock(3, testDir, 3), "failed to write blocks")
+	require.Nil(t, writeDummyBlock(4, testDir, 4), "failed to write blocks")
+	expectedOffset = testDir.BlockMetadata[0].CurrentOffset
+	require.Equal(t, testDir.BlockMetadata[0].NBlocks(), 4)
+	require.Nil(t, testDir.Close(), "error writing test dir")
+
+	// Read the directory using the old path and validate that we "see" four blocks on metadata level
+	// after recovery has been performed
+	testDir = NewDirReader(testDirPath, ts, suffix)
+	require.Nil(t, testDir.Open(), "error opening test dir for reading")
+	require.Equal(t, expectedOffset, testDir.BlockMetadata[0].CurrentOffset)
+	require.Equal(t, testDir.BlockMetadata[0].NBlocks(), 4)
+
+	// Append another block and flush the data to disk
+	testDirW := NewDirWriter(testDirPath, 1000)
+	require.Nil(t, testDirW.Open(), "error opening test dir for writing")
+	require.Equal(t, expectedOffset, testDirW.BlockMetadata[0].CurrentOffset)
+	require.Nil(t, writeDummyBlock(5, testDirW, 5), "failed to write blocks")
+	require.Equal(t, testDirW.BlockMetadata[0].NBlocks(), 5)
+	require.Nil(t, testDirW.Close(), "error writing test dir")
+
+	for i := range types.ColIdxCount {
+		_, err := testDir.ReadBlockAtIndex(i, 0)
+		require.Nil(t, err)
+	}
+
 	require.Nil(t, testDir.Close(), "error closing test dir")
 }
 
@@ -435,11 +495,11 @@ func (t testDirEntry) IsDir() bool {
 }
 
 func (t testDirEntry) Type() fs.FileMode {
-	panic("not implemented") // TODO: Implement
+	panic("not implemented")
 }
 
 func (t testDirEntry) Info() (fs.FileInfo, error) {
-	panic("not implemented") // TODO: Implement
+	panic("not implemented")
 }
 
 func TestBinarySearchPrefix(t *testing.T) {
