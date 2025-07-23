@@ -283,14 +283,14 @@ done:
 // Merge allows to incorporate the content of a map m2 into an existing map m (providing
 // additional in-place counter updates). It re-uses / duplicates code from the iterator
 // part to minimize function call overhead and allocations
-func (m *Map) Merge(m2 *Map) {
+func (m *Map) Merge(src *Map) {
 
-	if m2.Len() == 0 {
+	if src.Len() == 0 {
 		return
 	}
 
 	var it Iter
-	m2.iter(&it)
+	src.iter(&it)
 
 start:
 	bucket := it.bucket
@@ -309,9 +309,9 @@ next:
 			it.val = zeroE
 			return
 		}
-		if m2.isGrowing() && len(it.buckets) == len(m2.buckets) {
+		if src.isGrowing() && len(it.buckets) == len(src.buckets) {
 			oldBucket := uint64(bucket) & it.m.oldBucketMask()
-			b = &(*m2.oldBuckets)[oldBucket]
+			b = &(*src.oldBuckets)[oldBucket]
 			if !evacuated(b) {
 				checkBucket = bucket
 			} else {
@@ -336,9 +336,9 @@ next:
 			continue
 		}
 		k := b.keys[offi]
-		if checkBucket != noBucket && !m2.sameSizeGrow() {
-			hash := xxh3.HashSeed(k, m.seed)
-			if int(hash&m2.bucketMask()) != checkBucket {
+		if checkBucket != noBucket && !src.sameSizeGrow() {
+			hash := xxh3.HashSeed(k, src.seed)
+			if int(hash&src.bucketMask()) != checkBucket {
 				continue
 			}
 		}
@@ -346,7 +346,7 @@ next:
 			it.key = k
 			it.val = b.vals[offi]
 		} else {
-			rk, re := m2.mapaccessK(k)
+			rk, re := src.mapaccessK(k)
 			if rk == nil {
 				continue
 			}

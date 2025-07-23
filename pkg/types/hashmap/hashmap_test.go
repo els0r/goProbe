@@ -12,7 +12,7 @@ import (
 
 func TestSeedRandomness(t *testing.T) {
 	var lastSeed uint64
-	for i := 0; i < 1000; i++ {
+	for range 1000 {
 		testMap := New()
 		require.NotEqual(t, 0, testMap.seed)
 		require.NotEqual(t, lastSeed, testMap.seed)
@@ -82,7 +82,7 @@ func TestHashMapSetOrUpdate(t *testing.T) {
 
 func TestHashMapIteratorConsistency(t *testing.T) {
 	testMap := New()
-	for i := 0; i < 1000; i++ {
+	for i := range 1000 {
 		temp := make([]byte, 8)
 		binary.BigEndian.PutUint64(temp, uint64(i))
 		testMap.Set(temp, types.Counters{BytesRcvd: uint64(i), BytesSent: 0, PacketsRcvd: 0, PacketsSent: 0})
@@ -98,7 +98,7 @@ func TestHashMapIteratorConsistency(t *testing.T) {
 
 func TestHashMapMetaIteratorConsistency(t *testing.T) {
 	testMap := NewAggFlowMap()
-	for i := 0; i < 1000; i++ {
+	for i := range 1000 {
 		temp := make([]byte, 8)
 		binary.BigEndian.PutUint64(temp, uint64(i))
 		testMap.PrimaryMap.Set(temp, types.Counters{BytesRcvd: uint64(i), BytesSent: 0, PacketsRcvd: 0, PacketsSent: 0})
@@ -115,7 +115,7 @@ func TestHashMapMetaIteratorConsistency(t *testing.T) {
 
 func TestHashMapMetaIteratorFilter(t *testing.T) {
 	testMap := NewAggFlowMap()
-	for i := 0; i < 1000; i++ {
+	for i := range 1000 {
 		temp := make([]byte, 8)
 		binary.BigEndian.PutUint64(temp, uint64(i))
 		testMap.PrimaryMap.Set(temp, types.Counters{BytesRcvd: uint64(i%2) + 1, BytesSent: uint64((i+1)%2) + 1, PacketsRcvd: uint64(i%2) + 1, PacketsSent: uint64((i+1)%2) + 1})
@@ -150,7 +150,7 @@ func TestHashMapMetaIteratorFilter(t *testing.T) {
 
 func TestAggFlowMapFlatten(t *testing.T) {
 	testMap := NewAggFlowMap()
-	for i := 0; i < 1000; i++ {
+	for i := range 1000 {
 		temp := make([]byte, 8)
 		binary.BigEndian.PutUint64(temp, uint64(i))
 		testMap.PrimaryMap.Set(temp, types.Counters{BytesRcvd: uint64(i), BytesSent: 0, PacketsRcvd: 0, PacketsSent: 0})
@@ -171,7 +171,7 @@ func TestAggFlowMapFlatten(t *testing.T) {
 func TestLinearHashMapOperations(t *testing.T) {
 
 	testMap := New()
-	for i := 0; i < 100000; i++ {
+	for i := range 100000 {
 		temp := make([]byte, 8)
 		binary.BigEndian.PutUint64(temp, uint64(i))
 		testMap.Set(temp, types.Counters{BytesRcvd: uint64(i), BytesSent: 0, PacketsRcvd: 0, PacketsSent: 0})
@@ -179,7 +179,7 @@ func TestLinearHashMapOperations(t *testing.T) {
 
 	require.Equal(t, 100000, testMap.Len())
 
-	for i := 0; i < 100000; i++ {
+	for i := range 100000 {
 		temp := make([]byte, 8)
 		binary.BigEndian.PutUint64(temp, uint64(i))
 		val, exists := testMap.Get(temp)
@@ -191,7 +191,7 @@ func TestLinearHashMapOperations(t *testing.T) {
 func TestMerge(t *testing.T) {
 
 	testMap, testMap2 := New(), New(100000)
-	for i := 0; i < 110000; i++ {
+	for i := range 110000 {
 		temp := make([]byte, 8)
 		binary.BigEndian.PutUint64(temp, uint64(i))
 		if i < 100000 {
@@ -222,6 +222,29 @@ func TestMerge(t *testing.T) {
 	require.Equal(t, 60000, testMap2.Len())
 }
 
+func TestMergeWhileGrowing(t *testing.T) {
+
+	// Run often enough to ensure that we don't miss accidentally matching outputs
+	for range 32 {
+
+		// Attempt to find the "sweet spot" of the hashmap size (where growing is triggered with the next operation)
+		// as it might be different on different architectures
+		for max := range 64 {
+
+			// Fill map with _max_ elements and attempt to merge to empty map
+			mergeMap, testMap := New(), New()
+			for i := range max {
+				temp := make([]byte, 16)
+				binary.BigEndian.PutUint64(temp, uint64(i))
+				testMap.Set(temp, types.Counters{BytesRcvd: uint64(i), BytesSent: 0, PacketsRcvd: 0, PacketsSent: 0})
+			}
+
+			mergeMap.Merge(testMap)
+			require.Equal(t, testMap.Len(), mergeMap.Len())
+		}
+	}
+}
+
 func TestJSONMarshalAggFlowMap(t *testing.T) {
 
 	var ip [16]byte
@@ -243,7 +266,7 @@ func BenchmarkHashMapAccesses(b *testing.B) {
 	for _, nElem := range []int{8, 100000} {
 		b.Run(fmt.Sprintf("%d elem", nElem), func(b *testing.B) {
 			testMap := New()
-			for i := 0; i < nElem; i++ {
+			for i := range nElem {
 				temp := make([]byte, 8)
 				binary.BigEndian.PutUint64(temp, uint64(i))
 				testMap.Set(temp, types.Counters{BytesRcvd: uint64(i), BytesSent: 0, PacketsRcvd: 0, PacketsSent: 0})
