@@ -9,11 +9,9 @@ import (
 	"runtime/debug"
 	"slices"
 	"sort"
-	"sync"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2/sse"
-	"github.com/els0r/goProbe/v4/pkg/capture"
 	"github.com/els0r/goProbe/v4/pkg/goDB"
 	"github.com/els0r/goProbe/v4/pkg/goDB/conditions/node"
 	"github.com/els0r/goProbe/v4/pkg/goDB/info"
@@ -23,9 +21,7 @@ import (
 	"github.com/els0r/goProbe/v4/pkg/types"
 	"github.com/els0r/goProbe/v4/pkg/types/hashmap"
 	"github.com/els0r/goProbe/v4/pkg/types/workload"
-	"github.com/els0r/telemetry/logging"
 	"github.com/els0r/telemetry/tracing"
-	"github.com/fako1024/gotools/concurrency"
 	jsoniter "github.com/json-iterator/go"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -37,29 +33,8 @@ const (
 	DefaultSemTimeout = time.Second
 )
 
-// QueryRunner implements the Runner interface to execute queries
-// against the goDB flow database
-type QueryRunner struct {
-	query          *goDB.Query
-	captureManager *capture.Manager
-	dbPath         string
-
-	keepAlive      time.Duration
-	sem            concurrency.Semaphore
-	stats          *workload.Stats
-	statsCallbacks workload.StatsFuncs
-}
-
 // RunnerOption allows to configure the query runner
 type RunnerOption func(*QueryRunner)
-
-// WithLiveData adds a capture manager which allows to query live data in addition to the data
-// fetched from the DB
-func WithLiveData(captureManager *capture.Manager) RunnerOption {
-	return func(qr *QueryRunner) {
-		qr.captureManager = captureManager
-	}
-}
 
 // WithMaxConcurrent sets a maximum number of concurrent running queries
 func WithMaxConcurrent(sem chan struct{}) RunnerOption {
@@ -426,28 +401,6 @@ func (qr *QueryRunner) RunStatement(ctx context.Context, stmt *query.Statement, 
 	result.Summary.Hits.Displayed = len(rs)
 	result.Rows = rs
 	return result, nil
-}
-
-func (qr *QueryRunner) runLiveQuery(ctx context.Context, mapChan chan hashmap.AggFlowMapWithMetadata, stmt *query.Statement) (wg *sync.WaitGroup) {
-	wg = new(sync.WaitGroup)
-
-	if !stmt.Live {
-		return
-	}
-	// If for some reason a live query was attempted without a CaptureManager running,
-	// throw an error and bail
-	if qr.captureManager == nil {
-		logging.FromContext(ctx).Error("no CaptureManager available, cannot run live query")
-		return
-	}
-
-	wg.Add(1)
-	go func() {
-		qr.captureManager.GetFlowMaps(ctx, goDB.QueryFilter(qr.query), mapChan, stmt.Ifaces...)
-		wg.Done()
-	}()
-
-	return
 }
 
 func (qr *QueryRunner) checkSemaphore(stmt *query.Statement) (func(), error) {
