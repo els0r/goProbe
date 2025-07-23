@@ -26,7 +26,6 @@ type QueryRunner struct {
 
 	keepAlive      time.Duration
 	sem            concurrency.Semaphore
-	stats          *workload.Stats
 	statsCallbacks workload.StatsFuncs
 }
 

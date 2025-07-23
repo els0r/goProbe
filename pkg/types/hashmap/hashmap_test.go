@@ -222,6 +222,29 @@ func TestMerge(t *testing.T) {
 	require.Equal(t, 60000, testMap2.Len())
 }
 
+func TestMergeWhileGrowing(t *testing.T) {
+
+	// Run often enough to ensure that we don't miss accidentally matching outputs
+	for range 32 {
+
+		// Attempt to find the "sweet spot" of the hashmap size (where growing is triggered with the next operation)
+		// as it might be different on different architectures
+		for max := range 64 {
+
+			// Fill map with _max_ elements and attempt to merge to empty map
+			mergeMap, testMap := New(), New()
+			for i := range max {
+				temp := make([]byte, 16)
+				binary.BigEndian.PutUint64(temp, uint64(i))
+				testMap.Set(temp, types.Counters{BytesRcvd: uint64(i), BytesSent: 0, PacketsRcvd: 0, PacketsSent: 0})
+			}
+
+			mergeMap.Merge(testMap)
+			require.Equal(t, testMap.Len(), mergeMap.Len())
+		}
+	}
+}
+
 func TestJSONMarshalAggFlowMap(t *testing.T) {
 
 	var ip [16]byte

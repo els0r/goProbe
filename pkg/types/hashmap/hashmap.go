@@ -337,7 +337,7 @@ next:
 		}
 		k := b.keys[offi]
 		if checkBucket != noBucket && !m2.sameSizeGrow() {
-			hash := xxh3.HashSeed(k, m.seed)
+			hash := xxh3.HashSeed(k, m2.seed)
 			if int(hash&m2.bucketMask()) != checkBucket {
 				continue
 			}
