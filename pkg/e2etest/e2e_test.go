@@ -25,7 +25,6 @@ import (
 
 	"github.com/els0r/goProbe/v4/cmd/goProbe/config"
 	"github.com/els0r/goProbe/v4/cmd/goQuery/cmd"
-	"github.com/els0r/goProbe/v4/pkg/distributed/hosts"
 	"github.com/els0r/goProbe/v4/plugins/querier/apiclient"
 	"github.com/els0r/goProbe/v4/plugins/resolver/stringresolver"
 	"github.com/els0r/telemetry/logging"
