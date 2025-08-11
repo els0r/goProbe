@@ -23,9 +23,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/els0r/goProbe/v4/cmd/global-query/pkg/hosts"
 	"github.com/els0r/goProbe/v4/cmd/goProbe/config"
 	"github.com/els0r/goProbe/v4/cmd/goQuery/cmd"
+	"github.com/els0r/goProbe/v4/pkg/distributed/hosts"
 	"github.com/els0r/goProbe/v4/plugins/querier/apiclient"
 	"github.com/els0r/telemetry/logging"
 	"github.com/prometheus/client_golang/prometheus"
