@@ -7,8 +7,9 @@ import (
 	"time"
 
 	"github.com/danielgtaylor/huma/v2/sse"
-	"github.com/els0r/goProbe/v4/cmd/global-query/pkg/hosts"
 	"github.com/els0r/goProbe/v4/pkg/api"
+	"github.com/els0r/goProbe/v4/pkg/distributed"
+	"github.com/els0r/goProbe/v4/pkg/distributed/hosts"
 	"github.com/els0r/goProbe/v4/pkg/query"
 	"github.com/els0r/goProbe/v4/pkg/results"
 	"github.com/els0r/goProbe/v4/pkg/types"
@@ -29,7 +30,7 @@ const (
 // other fields required to perform a distributed query
 type QueryRunner struct {
 	resolver hosts.Resolver
-	querier  Querier
+	querier  distributed.Querier
 	sem      concurrency.Semaphore
 }
 
@@ -44,7 +45,7 @@ func WithMaxConcurrent(sem chan struct{}) QueryOption {
 }
 
 // NewQueryRunner instantiates a new distributed query runner
-func NewQueryRunner(resolver hosts.Resolver, querier Querier, opts ...QueryOption) (qr *QueryRunner) {
+func NewQueryRunner(resolver hosts.Resolver, querier distributed.Querier, opts ...QueryOption) (qr *QueryRunner) {
 	qr = &QueryRunner{
 		resolver: resolver,
 		querier:  querier,
@@ -145,7 +146,7 @@ func (q *QueryRunner) prepareHostList(ctx context.Context, queryHosts string) (h
 
 	// Handle ANY (all hosts) case
 	if types.IsAnySelector(queryHosts) {
-		if querierAnyable, ok := q.querier.(QuerierAnyable); ok {
+		if querierAnyable, ok := q.querier.(distributed.QuerierAnyable); ok {
 			if hostList, err = querierAnyable.AllHosts(); err != nil {
 				err = fmt.Errorf("failed to extract list of all hosts: %w", err)
 			}
