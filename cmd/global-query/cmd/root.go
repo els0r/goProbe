@@ -56,7 +56,7 @@ func init() {
 	rootCmd.InitDefaultHelpCmd()
 	rootCmd.InitDefaultHelpFlag()
 
-	if err := conf.RegisterFlags(rootCmd, cfgFile); err != nil {
+	if err := conf.RegisterFlags(rootCmd, &cfgFile); err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to register flags: %v\n", err)
 		os.Exit(1)
 	}

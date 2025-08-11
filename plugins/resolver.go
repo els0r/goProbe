@@ -9,7 +9,7 @@ import (
 )
 
 // ResolverInitializer constructs a resolver, optionally using a config file.
-// Mirrors the existing QuerierInitializer pattern. :contentReference[oaicite:1]{index=1}
+// Mirrors the existing QuerierInitializer pattern
 type ResolverInitializer func(ctx context.Context, cfgPath string) (hosts.Resolver, error)
 
 // RegisterResolver is typically called from init() in a resolver package.
@@ -44,6 +44,7 @@ func InitResolver(ctx context.Context, name, cfgPath string) (hosts.Resolver, er
 	return initFn(ctx, cfgPath)
 }
 
+// getResolver returns the resolver for a given name in case it exists
 func (i *Initializer) getResolver(name string) (ResolverInitializer, bool) {
 	i.RLock()
 	initFn, exists := i.resolvers[name]

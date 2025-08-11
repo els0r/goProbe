@@ -13,6 +13,7 @@ import (
 	"github.com/els0r/goProbe/v4/pkg/query"
 	"github.com/els0r/goProbe/v4/pkg/results"
 	"github.com/els0r/goProbe/v4/pkg/types"
+	"github.com/els0r/goProbe/v4/plugins/resolver/stringresolver"
 	"github.com/els0r/telemetry/logging"
 	"github.com/els0r/telemetry/tracing"
 	"github.com/fako1024/gotools/concurrency"
@@ -78,7 +79,19 @@ func (q *QueryRunner) run(ctx context.Context, args *query.Args, send sse.Sender
 
 	// a distributed query, by definition, requires a list of hosts to query
 	if queryArgs.QueryHosts == "" {
-		return nil, fmt.Errorf("couldn't prepare query: list of target hosts is empty")
+		return nil, fmt.Errorf("couldn't prepare query: query for target hosts is empty")
+	}
+
+	// allows for overriding host resolution via a stringresolver if specified.
+	// This comes in handy when IDs are already available and will be used directly
+	// in the QueryHosts
+	//
+	// TODO: other resolvers are currently not forceable via the query args due to the
+	// complexity of their setup (e.g. a necessary config path)
+	var hostsResolver = q.resolver
+	if queryArgs.QueryHostsResolverType == stringresolver.Type {
+		hostsResolver = stringresolver.NewResolver(true)
+		logging.Logger().Info("using string resolver for hosts resolution")
 	}
 
 	ctx, span := tracing.Start(ctx, "(*distributed.QueryRunner).run", trace.WithAttributes(attribute.String("args", queryArgs.ToJSONString())))
@@ -111,7 +124,7 @@ func (q *QueryRunner) run(ctx context.Context, args *query.Args, send sse.Sender
 		return nil, err
 	}
 
-	hostList, err := q.prepareHostList(ctx, args.QueryHosts)
+	hostList, err := q.prepareHostList(ctx, hostsResolver, args.QueryHosts)
 	if err != nil {
 		return nil, err // prepareHostList() returns formatted error
 	}
@@ -140,7 +153,7 @@ func (q *QueryRunner) run(ctx context.Context, args *query.Args, send sse.Sender
 	return finalResult, nil
 }
 
-func (q *QueryRunner) prepareHostList(ctx context.Context, queryHosts string) (hostList hosts.Hosts, err error) {
+func (q *QueryRunner) prepareHostList(ctx context.Context, resolver hosts.Resolver, queryHosts string) (hostList hosts.Hosts, err error) {
 	ctx, span := tracing.Start(ctx, "(*distributed.QueryRunner).prepareHostList", trace.WithAttributes(attribute.String("hosts", queryHosts)))
 	defer span.End()
 
@@ -158,7 +171,7 @@ func (q *QueryRunner) prepareHostList(ctx context.Context, queryHosts string) (h
 	}
 
 	// Default handling via resolver
-	if hostList, err = q.resolver.Resolve(ctx, queryHosts); err != nil {
+	if hostList, err = resolver.Resolve(ctx, queryHosts); err != nil {
 		err = fmt.Errorf("failed to resolve host list: %w", err)
 	}
 

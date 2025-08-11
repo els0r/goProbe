@@ -1,6 +1,8 @@
+// package conf enumerates the configuration options for the global query service
 package conf
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -56,7 +58,7 @@ const (
 )
 
 // RegisterFlags registers all command line flags for the configuration
-func RegisterFlags(cmd *cobra.Command, cfgFile string) error {
+func RegisterFlags(cmd *cobra.Command, cfgFile *string) error {
 	pflags := cmd.PersistentFlags()
 
 	tracing.RegisterFlags(pflags)
@@ -68,7 +70,10 @@ func RegisterFlags(cmd *cobra.Command, cfgFile string) error {
 	pflags.String(QuerierConfig, "", "querier config file location")
 	pflags.Int(QuerierMaxConcurrent, 0, "maximum number of concurrent queries to hosts")
 
-	pflags.StringVar(&cfgFile, "config", "", "config file (default is $HOME/.global-query.yaml)")
+	if cfgFile == nil {
+		return errors.New("config file pointer must not be nil")
+	}
+	pflags.StringVar(cfgFile, "config", "", "config file (default is $HOME/.global-query.yaml)")
 
 	if err := viper.BindPFlags(cmd.Flags()); err != nil {
 		return fmt.Errorf("failed to bind flags: %w", err)

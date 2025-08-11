@@ -30,7 +30,7 @@ func (i *Initializer) LogValue() slog.Value {
 	)
 }
 
-// GetAvailable Plugins returns a list of all registered plugins by plugin type
+// GetAvailablePlugins returns a list of all registered plugins by plugin type
 func GetAvailablePlugins() map[string][]string {
 	return map[string][]string{
 		string(querierPlugin):  GetAvailableQuerierPlugins(),
