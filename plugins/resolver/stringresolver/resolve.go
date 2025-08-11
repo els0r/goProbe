@@ -27,9 +27,9 @@ func (r *Resolver) Resolve(_ context.Context, query string) (hostList hosts.Host
 	var hostMap = make(map[hosts.ID]struct{})
 	for _, h := range strings.Split(strings.TrimSpace(query), ",") {
 		id := strings.TrimSpace(h)
-		_, exists := hostMap[hosts.ID(id)]
+		_, exists := hostMap[id]
 		if id != "" && !exists {
-			hostMap[hosts.ID(id)] = struct{}{}
+			hostMap[id] = struct{}{}
 		}
 	}
 	hostList = make(hosts.Hosts, len(hostMap))

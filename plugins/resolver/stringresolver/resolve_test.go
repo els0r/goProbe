@@ -27,7 +27,7 @@ func TestResolver_Unsorted(t *testing.T) {
 	// Convert to set for stable checks
 	have := map[string]struct{}{}
 	for _, h := range got {
-		have[string(h)] = struct{}{}
+		have[h] = struct{}{}
 	}
 	for _, exp := range []string{"x", "y", "z"} {
 		_, ok := have[exp]

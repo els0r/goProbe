@@ -2,12 +2,12 @@ package staticresolver
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"os"
 
 	"github.com/els0r/goProbe/v4/pkg/distributed/hosts"
 	"github.com/els0r/goProbe/v4/plugins"
+	jsoniter "github.com/json-iterator/go"
 )
 
 // Config file schema: {"ids": ["hostA","hostB", ...]}
@@ -35,7 +35,7 @@ func load(cfgPath string) (*Resolver, error) {
 		return nil, err
 	}
 	var c Config
-	if err := json.Unmarshal(b, &c); err != nil {
+	if err := jsoniter.Unmarshal(b, &c); err != nil {
 		return nil, err
 	}
 	if len(c.IDs) == 0 {

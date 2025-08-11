@@ -23,9 +23,9 @@ func GetAvailableResolverPlugins() []string {
 }
 
 func (i *Initializer) getResolvers() []string {
-	plugins := make([]string, 0)
-
 	i.RLock()
+	plugins := make([]string, 0, len(i.resolvers))
+
 	for k := range i.resolvers {
 		plugins = append(plugins, k)
 	}
