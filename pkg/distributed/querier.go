@@ -3,7 +3,7 @@ package distributed
 import (
 	"context"
 
-	"github.com/els0r/goProbe/v4/cmd/global-query/pkg/hosts"
+	"github.com/els0r/goProbe/v4/pkg/distributed/hosts"
 	"github.com/els0r/goProbe/v4/pkg/query"
 	"github.com/els0r/goProbe/v4/pkg/results"
 )
@@ -14,7 +14,7 @@ type Querier interface {
 	// which the results can be read. In addition, keepalives are sent via a second channel.
 	// It is the responsibility of the implementing type to close the channels.
 	// This may become a requirement through the interface definitions in future versions.
-	Query(ctx context.Context, hosts hosts.Hosts, args *query.Args) (<-chan *results.Result, <-chan struct{})
+	Query(ctx context.Context, queryHosts hosts.Hosts, args *query.Args) (<-chan *results.Result, <-chan struct{})
 }
 
 // QuerierAnyable extends a "common" Querier with the support to retrieve a list of all hosts / targets

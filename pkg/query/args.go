@@ -44,27 +44,27 @@ func DefaultArgs() *Args {
 }
 
 // SetDefaults sets the default values for all uninitialized fields in the arguments
-func (args *Args) SetDefaults() {
-	if args.First == "" {
-		args.First = time.Now().AddDate(0, -1, 0).Format(time.ANSIC)
+func (a *Args) SetDefaults() {
+	if a.First == "" {
+		a.First = time.Now().AddDate(0, -1, 0).Format(time.ANSIC)
 	}
-	if args.Last == "" {
-		args.Last = maxTimeStr
+	if a.Last == "" {
+		a.Last = maxTimeStr
 	}
-	if args.MaxMemPct == 0 {
-		args.MaxMemPct = DefaultMaxMemPct
+	if a.MaxMemPct == 0 {
+		a.MaxMemPct = DefaultMaxMemPct
 	}
-	if args.NumResults == 0 {
-		args.NumResults = DefaultNumResults
+	if a.NumResults == 0 {
+		a.NumResults = DefaultNumResults
 	}
-	if (args.DNSResolution == DNSResolution{}) {
-		args.DNSResolution = DNSResolution{
+	if (a.DNSResolution == DNSResolution{}) {
+		a.DNSResolution = DNSResolution{
 			MaxRows: DefaultResolveRows,
 			Timeout: DefaultResolveTimeout,
 		}
 	}
-	if args.SortBy == "" {
-		args.SortBy = DefaultSortBy
+	if a.SortBy == "" {
+		a.SortBy = DefaultSortBy
 	}
 }
 
@@ -76,8 +76,10 @@ type Args struct {
 	// Ifaces: the interfaces to query
 	Ifaces string `json:"ifaces" yaml:"ifaces" query:"ifaces" doc:"Interfaces to query, can also be a regexp if wrapped into forward slashes '/eth[0-3]/'" example:"eth0,eth1" minLength:"2"`
 
-	// QueryHosts: the hosts for which data is queried (comma-separated list)
+	// QueryHosts: the hosts for which data is queried
 	QueryHosts string `json:"query_hosts,omitempty" yaml:"query_hosts,omitempty" query:"query_hosts" required:"false" doc:"Hosts for which data is queried" example:"hostA,hostB,hostC"`
+	// QueryHostsResolverType specifies the resolver type which should be used to resolve hosts (default: string, comma-separated hosts list)
+	QueryHostsResolverType string `json:"query_hosts_resolver_type,omitempty" yaml:"query_hosts_resolver_type,omitempty" query:"hosts_resolver" required:"false" doc:"Resolver type for hosts queries" example:"string"`
 
 	// Hostname: the hostname from which data is queried
 	Hostname string `json:"hostname,omitempty" yaml:"hostname,omitempty" query:"hostname" required:"false" doc:"Hostname from which data is queried" example:"hostA"`
@@ -187,7 +189,7 @@ func (d *DetailError) Pretty() string {
 		)
 	}
 
-	return fmt.Sprintf("%s", strings.Join(details, "\n"))
+	return strings.Join(details, "\n")
 }
 
 // DNSResolution contains DNS query / resolution related config arguments / parameters

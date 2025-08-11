@@ -12,9 +12,9 @@ import (
 
 	gqclient "github.com/els0r/goProbe/v4/pkg/api/globalquery/client"
 
-	"github.com/els0r/goProbe/v4/cmd/global-query/pkg/distributed"
-	"github.com/els0r/goProbe/v4/cmd/global-query/pkg/hosts"
 	"github.com/els0r/goProbe/v4/pkg/api/goprobe/client"
+	"github.com/els0r/goProbe/v4/pkg/distributed"
+	"github.com/els0r/goProbe/v4/pkg/distributed/hosts"
 	"github.com/els0r/goProbe/v4/pkg/query"
 	"github.com/els0r/goProbe/v4/pkg/results"
 	"github.com/els0r/goProbe/v4/plugins"
@@ -111,7 +111,7 @@ func (a *APIClientQuerier) prepareQueries(ctx context.Context, hostList hosts.Ho
 		logger := logging.FromContext(ctx)
 
 		for _, host := range hostList {
-			wl, err := a.createQueryWorkload(ctx, host, args, keepaliveChan)
+			wl, err := a.createQueryWorkload(ctx, string(host), args, keepaliveChan)
 			if err != nil {
 				logger.With("hostname", host).Errorf("failed to create workload: %v", err)
 			}
@@ -125,9 +125,9 @@ func (a *APIClientQuerier) prepareQueries(ctx context.Context, hostList hosts.Ho
 
 // AllHosts returns a list of all hosts / targets available to the querier
 func (a *APIClientQuerier) AllHosts() (hostList hosts.Hosts, err error) {
-	hostList = make([]string, 0, len(a.APIEndpoints))
+	hostList = make(hosts.Hosts, 0, len(a.APIEndpoints))
 	for host := range a.APIEndpoints {
-		hostList = append(hostList, host)
+		hostList = append(hostList, hosts.ID(host))
 	}
 
 	return

@@ -153,6 +153,7 @@ and I/O load)
 `,
 	)
 	flags.StringVarP(&cmdLineParams.QueryHosts, conf.QueryHostsResolution, "q", "", "Hosts resolution query\n")
+	flags.StringVar(&cmdLineParams.QueryHostsResolverType, conf.QueryHostsResolverType, "string", "Hosts resolver type\n")
 
 	// persistent flags to be also passed to children commands
 	pflags.String(conf.ProfilingOutputDir, "", "Enable and set directory to store CPU and memory profiles")

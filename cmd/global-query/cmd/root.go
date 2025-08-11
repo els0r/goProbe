@@ -5,11 +5,9 @@ import (
 	"os"
 
 	"github.com/els0r/goProbe/v4/cmd/global-query/pkg/conf"
-	"github.com/els0r/goProbe/v4/cmd/global-query/pkg/hosts"
 	"github.com/els0r/goProbe/v4/pkg/query"
 	"github.com/els0r/goProbe/v4/pkg/version"
 	"github.com/els0r/telemetry/logging"
-	"github.com/els0r/telemetry/tracing"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -58,21 +56,10 @@ func init() {
 	rootCmd.InitDefaultHelpCmd()
 	rootCmd.InitDefaultHelpFlag()
 
-	pflags := rootCmd.PersistentFlags()
-
-	tracing.RegisterFlags(pflags)
-
-	pflags.String(conf.LogLevel, conf.DefaultLogLevel, "log level for logger")
-	pflags.String(conf.LogEncoding, conf.DefaultLogEncoding, "message encoding format for logger")
-	pflags.String(conf.HostsResolverType, conf.DefaultHostsResolver, "resolver used for the hosts resolution query")
-	pflags.String(conf.QuerierType, conf.DefaultHostsQuerierType, "querier used to run queries")
-	pflags.String(conf.QuerierConfig, "", "querier config file location")
-	pflags.Int(conf.QuerierMaxConcurrent, 0, "maximum number of concurrent queries to hosts")
-
-	pflags.StringVar(&cfgFile, "config", "", "config file (default is $HOME/.global-query.yaml)")
-
-	_ = viper.BindPFlags(rootCmd.Flags())
-	_ = viper.BindPFlags(pflags)
+	if err := conf.RegisterFlags(rootCmd, &cfgFile); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to register flags: %v\n", err)
+		os.Exit(1)
+	}
 }
 
 func initLogger() {
@@ -112,16 +99,5 @@ func initConfig() {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to read in config: %v\n", err)
 		os.Exit(1)
-	}
-}
-
-func initHostListResolver() (hosts.Resolver, error) {
-	resolverType := viper.GetString(conf.HostsResolverType)
-	switch resolverType {
-	case string(hosts.StringResolverType):
-		return hosts.NewStringResolver(true), nil
-	default:
-		err := fmt.Errorf("hosts resolver type %q not supported", resolverType)
-		return nil, err
 	}
 }

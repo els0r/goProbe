@@ -23,10 +23,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/els0r/goProbe/v4/cmd/global-query/pkg/hosts"
 	"github.com/els0r/goProbe/v4/cmd/goProbe/config"
 	"github.com/els0r/goProbe/v4/cmd/goQuery/cmd"
 	"github.com/els0r/goProbe/v4/plugins/querier/apiclient"
+	"github.com/els0r/goProbe/v4/plugins/resolver/stringresolver"
 	"github.com/els0r/telemetry/logging"
 	"github.com/prometheus/client_golang/prometheus"
 
@@ -697,7 +697,7 @@ func runGlobalQuery(t *testing.T, addr string, apiEndpoints map[string]string) f
 		endpoints[k] = &client.Config{Addr: v}
 	}
 
-	apiServer := gqserver.New(addr, hosts.NewStringResolver(true), &apiclient.APIClientQuerier{
+	apiServer := gqserver.New(addr, stringresolver.NewResolver(true), &apiclient.APIClientQuerier{
 		APIEndpoints:  endpoints,
 		MaxConcurrent: 10,
 	}, server.WithNoRecursionDetection())

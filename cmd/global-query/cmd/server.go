@@ -61,9 +61,9 @@ func serverEntrypoint(cmd *cobra.Command, args []string) error {
 		logger.With("error", err).Error("failed to set up tracing")
 	}
 
-	hostListResolver, err := initHostListResolver()
+	hostListResolver, err := initResolver(ctx)
 	if err != nil {
-		logger.Errorf("failed to prepare query: %v", err)
+		logger.Errorf("failed to prepare host resolver: %v", err)
 		return err
 	}
 

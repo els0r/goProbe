@@ -4,14 +4,15 @@ package conf
 const (
 	queryKey = "query"
 
-	serverKey            = queryKey + ".server"
-	QueryServerAddr      = serverKey + ".addr"
-	QueryTimeout         = queryKey + ".timeout"
-	QueryHostsResolution = queryKey + ".hosts-resolution"
-	QueryLog             = queryKey + ".log"
-	QueryKeepAlive       = queryKey + ".keepalive"
-	QueryStats           = queryKey + ".stats"
-	QueryStreaming       = queryKey + ".streaming"
+	serverKey              = queryKey + ".server"
+	QueryServerAddr        = serverKey + ".addr"
+	QueryTimeout           = queryKey + ".timeout"
+	QueryHostsResolution   = queryKey + ".hosts-resolution"
+	QueryHostsResolverType = queryKey + ".hosts-resolver-type"
+	QueryLog               = queryKey + ".log"
+	QueryKeepAlive         = queryKey + ".keepalive"
+	QueryStats             = queryKey + ".stats"
+	QueryStreaming         = queryKey + ".streaming"
 
 	dbKey       = "db"
 	QueryDBPath = dbKey + ".path"

@@ -5,10 +5,11 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/els0r/goProbe/v4/cmd/global-query/pkg/conf"
-	"github.com/els0r/goProbe/v4/cmd/global-query/pkg/distributed"
-	"github.com/els0r/goProbe/v4/cmd/global-query/pkg/hosts"
+	gqdistributed "github.com/els0r/goProbe/v4/cmd/global-query/pkg/distributed"
 	"github.com/els0r/goProbe/v4/pkg/api"
 	"github.com/els0r/goProbe/v4/pkg/api/server"
+	"github.com/els0r/goProbe/v4/pkg/distributed"
+	"github.com/els0r/goProbe/v4/pkg/distributed/hosts"
 	"github.com/els0r/goProbe/v4/pkg/version"
 )
 
@@ -41,14 +42,14 @@ func (server *Server) registerRoutes() {
 		middlewares = append(middlewares, api.RateLimitMiddleware(rateLimiter))
 	}
 
-	opts := []distributed.QueryOption{}
+	opts := []gqdistributed.QueryOption{}
 	if maxConcurrentQueries > 0 {
 		sem := make(chan struct{}, maxConcurrentQueries)
-		opts = append(opts, distributed.WithMaxConcurrent(sem))
+		opts = append(opts, gqdistributed.WithMaxConcurrent(sem))
 	}
 	api.RegisterQueryAPI(server.API(),
 		fmt.Sprintf("global-query/%s", version.Short()),
-		distributed.NewQueryRunner(server.hostListResolver, server.querier, opts...),
+		gqdistributed.NewQueryRunner(server.hostListResolver, server.querier, opts...),
 		middlewares,
 	)
 }
