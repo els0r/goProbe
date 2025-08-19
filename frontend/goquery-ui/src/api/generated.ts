@@ -3,66 +3,63 @@
  * Do not make direct changes to the file.
  */
 
+
 /** OneOf type helpers */
-type Without<T, U> = { [P in Exclude<keyof T, keyof U>]?: never }
-type XOR<T, U> = T | U extends object ? (Without<T, U> & U) | (Without<U, T> & T) : T | U
-type OneOf<T extends any[]> = T extends [infer Only]
-  ? Only
-  : T extends [infer A, infer B, ...infer Rest]
-    ? OneOf<[XOR<A, B>, ...Rest]>
-    : never
+type Without<T, U> = { [P in Exclude<keyof T, keyof U>]?: never };
+type XOR<T, U> = (T | U) extends object ? (Without<T, U> & U) | (Without<U, T> & T) : T | U;
+type OneOf<T extends any[]> = T extends [infer Only] ? Only : T extends [infer A, infer B, ...infer Rest] ? OneOf<[XOR<A, B>, ...Rest]> : never;
 
 export interface paths {
-  '/-/health': {
+  "/-/health": {
     /**
      * Get application health
      * @description Get info whether the application is running.
      */
-    get: operations['get-health']
-  }
-  '/-/info': {
+    get: operations["get-health"];
+  };
+  "/-/info": {
     /**
      * Get application info
      * @description Get runtime information about the application.
      */
-    get: operations['get-info']
-  }
-  '/-/ready': {
+    get: operations["get-info"];
+  };
+  "/-/ready": {
     /**
      * Get application readiness
      * @description Get info whether the application is ready.
      */
-    get: operations['get-ready']
-  }
-  '/_query': {
+    get: operations["get-ready"];
+  };
+  "/_query": {
     /**
      * Run query
      * @description Runs a query based on the parameters provided in the body
      */
-    post: operations['query-post-run']
-  }
-  '/_query/sse': {
+    post: operations["query-post-run"];
+  };
+  "/_query/sse": {
     /**
      * Run query with server sent events (SSE)
      * @description Runs a query based on the parameters provided in the body. Pushes back partial results via SSE
      */
-    post: operations['query-post-run-sse']
-  }
-  '/_query/validate': {
+    post: operations["query-post-run-sse"];
+  };
+  "/_query/validate": {
     /**
      * Validate query parameters
      * @description Validates query parameters (1) for integrity (2) attempting to prepare a query statement from them
      */
-    get: operations['query-get-validate']
+    get: operations["query-get-validate"];
     /**
      * Validate query parameters
      * @description Validates query parameters (1) for integrity (2) attempting to prepare a query statement from them
      */
-    post: operations['query-post-validate']
-  }
+    post: operations["query-post-validate"];
+  };
 }
 
-export type webhooks = Record<string, never>
+export type webhooks = Record<string, never>;
 
 export interface components {
   schemas: {
@@ -72,403 +69,403 @@ export interface components {
        * @description A URL to the JSON Schema for this object.
        * @example https://example.com/schemas/Args.json
        */
-      $schema?: string
+      $schema?: string;
       /**
        * @description Caller stores who produced the arguments
        * @example goQuery
        */
-      caller?: string
+      caller?: string;
       /**
        * @description Condition to filter data by
        * @example port=80 & proto=TCP
        */
-      condition?: string
+      condition?: string;
       /** @description Configures DNS resolution of sip,dip results */
-      dns_resolution?: components['schemas']['DNSResolution']
+      dns_resolution?: components["schemas"]["DNSResolution"];
       /**
        * @description The first timestamp to query
        * @example 2020-08-12T09:47:00+02:00
        */
-      first?: string
+      first?: string;
       /**
        * @description Output format
        * @example json
        * @enum {string}
        */
-      format?: 'json' | 'txt' | 'csv'
+      format?: "json" | "txt" | "csv";
       /**
        * Format: int64
        * @description Host ID from which data is queried
        * @example 123456
        */
-      host_id?: number
+      host_id?: number;
       /**
        * @description Hostname from which data is queried
        * @example hostA
        */
-      hostname?: string
+      hostname?: string;
       /**
        * @description Interfaces to query, can also be a regexp if wrapped into forward slashes '/eth[0-3]/'
        * @example eth0,eth1
        */
-      ifaces: string
+      ifaces: string;
       /**
        * @description Only show incoming packets/bytes
        * @example false
        */
-      in?: boolean
+      in?: boolean;
       /**
        * Format: int64
        * @description Keepalive message interval (duration) for query
        * @example 2000000000
        */
-      keepalive?: number
+      keepalive?: number;
       /**
        * @description The last timestamp to query
        * @example -24h
        */
-      last?: string
+      last?: string;
       /**
        * @description Live can be used to request live flow data (in addition to DB results)
        * @example false
        */
-      live?: boolean
+      live?: boolean;
       /**
        * @description Use less memory for query processing
        * @example false
        */
-      low_mem?: boolean
+      low_mem?: boolean;
       /**
        * Format: int64
        * @description Maximum percentage of available host memory to use for query processing
        * @default 60
        * @example 80
        */
-      max_mem_pct?: number
+      max_mem_pct?: number;
       /**
        * Format: int64
        * @description Number of results to return/print
        * @default 1000
        * @example 25
        */
-      num_results?: number
+      num_results?: number;
       /**
        * @description Only show outgoing packets/bytes
        * @example false
        */
-      out?: boolean
+      out?: boolean;
       /**
        * @description Query type / Attributes to aggregate by
        * @example sip,dip,dport,proto
        */
-      query: string
+      query: string;
       /**
        * @description Hosts for which data is queried
        * @example hostA,hostB,hostC
        */
-      query_hosts?: string
+      query_hosts?: string;
       /**
        * @description Resolver type for hosts queries
        * @example string
        */
-      query_hosts_resolver_type?: string
+      query_hosts_resolver_type?: string;
       /**
        * @description Sort ascending instead of descending
        * @example false
        */
-      sort_ascending?: boolean
+      sort_ascending?: boolean;
       /**
        * @description Colum to sort by
        * @default bytes
        * @example packets
        * @enum {string}
        */
-      sort_by?: 'bytes' | 'packets'
+      sort_by?: "bytes" | "packets";
       /**
        * @description Show sum of incoming/outgoing packets/bytes
        * @example false
        */
-      sum?: boolean
-    }
+      sum?: boolean;
+    };
     Attributes: {
       /**
        * Format: ipv4
        * @description Destination IP
        * @example 8.8.8.8
        */
-      dip?: string
+      dip?: string;
       /**
        * Format: int32
        * @description Destination port
        * @example 80
        */
-      dport?: number
+      dport?: number;
       /**
        * Format: int32
        * @description IP protocol number
        * @example 6
        */
-      proto?: number
+      proto?: number;
       /**
        * Format: ipv4
        * @description Source IP
        * @example 10.81.45.1
        */
-      sip?: string
-    }
+      sip?: string;
+    };
     Counters: {
       /**
        * Format: int64
        * @description Bytes received
        * @example 1024
        */
-      br?: number
+      br?: number;
       /**
        * Format: int64
        * @description Bytes sent
        * @example 512
        */
-      bs?: number
+      bs?: number;
       /**
        * Format: int64
        * @description Packets received
        * @example 2
        */
-      pr?: number
+      pr?: number;
       /**
        * Format: int64
        * @description Packets sent
        * @example 1
        */
-      ps?: number
-    }
+      ps?: number;
+    };
     DNSResolution: {
       /**
        * @description Enable reverse DNS lookups
        * @example false
        */
-      enabled: boolean
+      enabled: boolean;
       /**
        * Format: int64
        * @description Maximum number of rows to resolve
        * @example 25
        */
-      max_rows?: number
+      max_rows?: number;
       /**
        * Format: int64
        * @description Timeout for reverse DNS lookups
        * @default 1000000000
        * @example 2000000000
        */
-      timeout?: number
-    } | null
+      timeout?: number;
+    } | null;
     DetailError: {
       /**
        * @description A human-readable explanation specific to this occurrence of the problem.
        * @example Property foo is required but is missing.
        */
-      detail?: string
+      detail?: string;
       /** @description Optional list of individual error details */
-      errors?: components['schemas']['ErrorDetail'][] | null
+      errors?: components["schemas"]["ErrorDetail"][] | null;
       /**
        * Format: uri
        * @description A URI reference that identifies the specific occurrence of the problem.
        * @example https://example.com/error-log/abc123
        */
-      instance?: string
+      instance?: string;
       /**
        * Format: int64
        * @description HTTP status code
        * @example 400
        */
-      status?: number
+      status?: number;
       /**
        * @description A short, human-readable summary of the problem type. This value should not change between occurrences of the error.
        * @example Bad Request
        */
-      title?: string
+      title?: string;
       /**
        * Format: uri
        * @description A URI reference to human-readable documentation for the error.
        * @default about:blank
        * @example https://example.com/errors/example
        */
-      type?: string
-    }
+      type?: string;
+    };
     ErrorDetail: {
       /** @description Where the error occurred, e.g. 'body.items[3].tags' or 'path.thing-id' */
-      location?: string
+      location?: string;
       /** @description Error message text */
-      message?: string
+      message?: string;
       /** @description The value at the given location */
-      value?: unknown
-    }
+      value?: unknown;
+    };
     ErrorModel: {
       /**
        * Format: uri
        * @description A URL to the JSON Schema for this object.
        * @example https://example.com/schemas/ErrorModel.json
        */
-      $schema?: string
+      $schema?: string;
       /**
        * @description A human-readable explanation specific to this occurrence of the problem.
        * @example Property foo is required but is missing.
        */
-      detail?: string
+      detail?: string;
       /** @description Optional list of individual error details */
-      errors?: components['schemas']['ErrorDetail'][] | null
+      errors?: components["schemas"]["ErrorDetail"][] | null;
       /**
        * Format: uri
        * @description A URI reference that identifies the specific occurrence of the problem.
        * @example https://example.com/error-log/abc123
        */
-      instance?: string
+      instance?: string;
       /**
        * Format: int64
        * @description HTTP status code
        * @example 400
        */
-      status?: number
+      status?: number;
       /**
        * @description A short, human-readable summary of the problem type. This value should not change between occurrences of the error.
        * @example Bad Request
        */
-      title?: string
+      title?: string;
       /**
        * Format: uri
        * @description A URI reference to human-readable documentation for the error.
        * @default about:blank
        * @example https://example.com/errors/example
        */
-      type?: string
-    }
+      type?: string;
+    };
     FinalResult: {
       /**
        * @description Hostname from which the result originated
        * @example hostA
        */
-      hostname?: string
+      hostname?: string;
       /** @description Statuses of all hosts queried */
       hosts_statuses: {
-        [key: string]: components['schemas']['Status']
-      }
+        [key: string]: components["schemas"]["Status"];
+      };
       /** @description Query which was run */
-      query: components['schemas']['Query']
+      query: components["schemas"]["Query"];
       /** @description Data rows returned */
-      rows: components['schemas']['Row'][] | null
+      rows: components["schemas"]["Row"][] | null;
       /** @description Status of the result */
-      status: components['schemas']['Status']
+      status: components["schemas"]["Status"];
       /** @description Traffic totals and query statistics */
-      summary: components['schemas']['Summary']
-    }
+      summary: components["schemas"]["Summary"];
+    };
     GetHealthOutputBody: {
       /**
        * Format: uri
        * @description A URL to the JSON Schema for this object.
        * @example https://example.com/schemas/GetHealthOutputBody.json
        */
-      $schema?: string
+      $schema?: string;
       /**
        * @description Health status of application
        * @example healthy
        */
-      status: string
-    }
+      status: string;
+    };
     GetInfoOutputBody: {
       /**
        * Format: uri
        * @description A URL to the JSON Schema for this object.
        * @example https://example.com/schemas/GetInfoOutputBody.json
        */
-      $schema?: string
+      $schema?: string;
       /**
        * @description Full git commit SHA
        * @example 824f58479a8f326cb350085b3a0e287645e11bc1
        */
-      commit?: string
+      commit?: string;
       /**
        * @description Service name
        * @example global-query
        */
-      name: string
+      name: string;
       /** @description Name of kubernetes pod (if available) */
-      pod?: string
+      pod?: string;
       /**
        * @description Service (semantic) version
        * @example 4.0.0-824f5847
        */
-      version: string
-    }
+      version: string;
+    };
     GetReadyOutputBody: {
       /**
        * Format: uri
        * @description A URL to the JSON Schema for this object.
        * @example https://example.com/schemas/GetReadyOutputBody.json
        */
-      $schema?: string
+      $schema?: string;
       /**
        * @description Ready status of application
        * @example ready
        */
-      status: string
-    }
+      status: string;
+    };
     Hits: {
       /**
        * Format: int64
        * @description Number of flow records in Rows displayed/returned
        * @example 25
        */
-      displayed: number
+      displayed: number;
       /**
        * Format: int64
        * @description Total number of flow records matching the condition
        * @example 1034
        */
-      total: number
-    }
-    Keepalive: Record<string, never>
+      total: number;
+    };
+    Keepalive: Record<string, never>;
     Labels: {
       /**
        * @description Hostname of the host on which the flow was observed
        * @example hostA
        */
-      host?: string
+      host?: string;
       /**
        * @description ID of the host on which the flow was observed
        * @example 123456
        */
-      host_id?: string
+      host_id?: string;
       /**
        * @description Interface on which the flow was observed
        * @example eth0
        */
-      iface?: string
+      iface?: string;
       /**
        * Format: date-time
        * @description Timestamp (end) of the 5-minute interval storing the flow record
        * @example 2024-04-12T03:20:00+02:00
        */
-      timestamp?: string
-    }
+      timestamp?: string;
+    };
     PartialResult: {
       /**
        * @description Hostname from which the result originated
        * @example hostA
        */
-      hostname?: string
+      hostname?: string;
       /** @description Statuses of all hosts queried */
       hosts_statuses: {
-        [key: string]: components['schemas']['Status']
-      }
+        [key: string]: components["schemas"]["Status"];
+      };
       /** @description Query which was run */
-      query: components['schemas']['Query']
+      query: components["schemas"]["Query"];
       /** @description Data rows returned */
-      rows: components['schemas']['Row'][] | null
+      rows: components["schemas"]["Row"][] | null;
       /** @description Status of the result */
-      status: components['schemas']['Status']
+      status: components["schemas"]["Status"];
       /** @description Traffic totals and query statistics */
-      summary: components['schemas']['Summary']
-    }
+      summary: components["schemas"]["Summary"];
+    };
     Query: {
       /**
        * @description Attributes which were queried
@@ -478,96 +475,96 @@ export interface components {
        *   "dport"
        * ]
        */
-      attributes: string[] | null
+      attributes: string[] | null;
       /**
        * @description Condition which was provided
        * @example port=80 && proto=TCP
        */
-      condition?: string
-    }
+      condition?: string;
+    };
     Result: {
       /**
        * Format: uri
        * @description A URL to the JSON Schema for this object.
        * @example https://example.com/schemas/Result.json
        */
-      $schema?: string
+      $schema?: string;
       /**
        * @description Hostname from which the result originated
        * @example hostA
        */
-      hostname?: string
+      hostname?: string;
       /** @description Statuses of all hosts queried */
       hosts_statuses: {
-        [key: string]: components['schemas']['Status']
-      }
+        [key: string]: components["schemas"]["Status"];
+      };
       /** @description Query which was run */
-      query: components['schemas']['Query']
+      query: components["schemas"]["Query"];
       /** @description Data rows returned */
-      rows: components['schemas']['Row'][] | null
+      rows: components["schemas"]["Row"][] | null;
       /** @description Status of the result */
-      status: components['schemas']['Status']
+      status: components["schemas"]["Status"];
       /** @description Traffic totals and query statistics */
-      summary: components['schemas']['Summary']
-    }
+      summary: components["schemas"]["Summary"];
+    };
     Row: {
       /** @description Query attributes by which flows are grouped */
-      attributes: components['schemas']['Attributes']
+      attributes: components["schemas"]["Attributes"];
       /** @description Flow counters */
-      counters: components['schemas']['Counters']
+      counters: components["schemas"]["Counters"];
       /** @description Labels / partitions the row belongs to */
-      labels?: components['schemas']['Labels']
-    }
+      labels?: components["schemas"]["Labels"];
+    };
     Stats: {
       /**
        * Format: int64
        * @description Blocks which could not be loaded or processed
        */
-      blocks_corrupted: number
+      blocks_corrupted: number;
       /**
        * Format: int64
        * @description Number of blocks loaded from disk
        */
-      blocks_processed: number
+      blocks_processed: number;
       /**
        * Format: int64
        * @description Effective block size after decompression
        */
-      bytes_decompressed: number
+      bytes_decompressed: number;
       /**
        * Format: int64
        * @description Bytes loaded from disk
        */
-      bytes_loaded: number
+      bytes_loaded: number;
       /**
        * Format: int64
        * @description Number of directories processed
        */
-      directories_processed: number
+      directories_processed: number;
       /**
        * Format: int64
        * @description Total number of workloads to be processed
        */
-      workloads: number
-    }
+      workloads: number;
+    };
     Status: {
       /**
        * @description Status code
        * @example empty
        * @enum {string}
        */
-      code: 'empty' | 'error' | 'missing_data' | 'ok'
+      code: "empty" | "error" | "missing_data" | "ok";
       /**
        * @description Optional status description
        * @example no results returned
        */
-      message?: string
-    }
+      message?: string;
+    };
     Summary: {
       /** @description Was there any data available to query at all */
-      data_available: boolean
+      data_available: boolean;
       /** @description Flow records returned in total and records present in rows */
-      hits: components['schemas']['Hits']
+      hits: components["schemas"]["Hits"];
       /**
        * @description Interfaces which were queried
        * @example [
@@ -575,382 +572,376 @@ export interface components {
        *   "eth1"
        * ]
        */
-      interfaces: string[] | null
+      interfaces: string[] | null;
       /** @description Stats tracks interactions with the underlying DB data */
-      stats?: components['schemas']['Stats']
+      stats?: components["schemas"]["Stats"];
       /**
        * Format: date-time
        * @description Start of the queried interval
        * @example 2020-08-12T09:47:00+02:00
        */
-      time_first: string
+      time_first: string;
       /**
        * Format: date-time
        * @description End of the queried interval
        * @example 2024-04-12T09:47:00+02:00
        */
-      time_last: string
+      time_last: string;
       /** @description Query runtime fields */
-      timings: components['schemas']['Timings']
+      timings: components["schemas"]["Timings"];
       /** @description Total traffic volume and packets observed over the queried time range */
-      totals: components['schemas']['Counters']
-    }
+      totals: components["schemas"]["Counters"];
+    };
     Timings: {
       /**
        * Format: int64
        * @description Query runtime in nanoseconds
        * @example 235000000
        */
-      query_duration_ns: number
+      query_duration_ns: number;
       /**
        * Format: date-time
        * @description Query start time
        */
-      query_start: string
+      query_start: string;
       /**
        * Format: int64
        * @description DNS resolution time for all IPs in nanoseconds
        * @example 515000000
        */
-      resolution?: number
-    }
-  }
-  responses: never
-  parameters: never
-  requestBodies: never
-  headers: never
-  pathItems: never
+      resolution?: number;
+    };
+  };
+  responses: never;
+  parameters: never;
+  requestBodies: never;
+  headers: never;
+  pathItems: never;
 }
 
-export type $defs = Record<string, never>
+export type $defs = Record<string, never>;
 
-export type external = Record<string, never>
+export type external = Record<string, never>;
 
 export interface operations {
+
   /**
    * Get application health
    * @description Get info whether the application is running.
    */
-  'get-health': {
+  "get-health": {
     responses: {
       /** @description OK */
       200: {
         content: {
-          'application/json': components['schemas']['GetHealthOutputBody']
-        }
-      }
+          "application/json": components["schemas"]["GetHealthOutputBody"];
+        };
+      };
       /** @description Error */
       default: {
         content: {
-          'application/problem+json': components['schemas']['ErrorModel']
-        }
-      }
-    }
-  }
+          "application/problem+json": components["schemas"]["ErrorModel"];
+        };
+      };
+    };
+  };
   /**
    * Get application info
    * @description Get runtime information about the application.
    */
-  'get-info': {
+  "get-info": {
     responses: {
       /** @description OK */
       200: {
         content: {
-          'application/json': components['schemas']['GetInfoOutputBody']
-        }
-      }
+          "application/json": components["schemas"]["GetInfoOutputBody"];
+        };
+      };
       /** @description Error */
       default: {
         content: {
-          'application/problem+json': components['schemas']['ErrorModel']
-        }
-      }
-    }
-  }
+          "application/problem+json": components["schemas"]["ErrorModel"];
+        };
+      };
+    };
+  };
   /**
    * Get application readiness
    * @description Get info whether the application is ready.
    */
-  'get-ready': {
+  "get-ready": {
     responses: {
       /** @description OK */
       200: {
         content: {
-          'application/json': components['schemas']['GetReadyOutputBody']
-        }
-      }
+          "application/json": components["schemas"]["GetReadyOutputBody"];
+        };
+      };
       /** @description Error */
       default: {
         content: {
-          'application/problem+json': components['schemas']['ErrorModel']
-        }
-      }
-    }
-  }
+          "application/problem+json": components["schemas"]["ErrorModel"];
+        };
+      };
+    };
+  };
   /**
    * Run query
    * @description Runs a query based on the parameters provided in the body
    */
-  'query-post-run': {
+  "query-post-run": {
     requestBody?: {
       content: {
-        'application/json': components['schemas']['Args']
-      }
-    }
+        "application/json": components["schemas"]["Args"];
+      };
+    };
     responses: {
       /** @description OK */
       200: {
         content: {
-          'application/json': components['schemas']['Result']
-        }
-      }
+          "application/json": components["schemas"]["Result"];
+        };
+      };
       /** @description Error */
       default: {
         content: {
-          'application/problem+json': components['schemas']['ErrorModel']
-        }
-      }
-    }
-  }
+          "application/problem+json": components["schemas"]["ErrorModel"];
+        };
+      };
+    };
+  };
   /**
    * Run query with server sent events (SSE)
    * @description Runs a query based on the parameters provided in the body. Pushes back partial results via SSE
    */
-  'query-post-run-sse': {
+  "query-post-run-sse": {
     requestBody?: {
       content: {
-        'application/json': components['schemas']['Args']
-      }
-    }
+        "application/json": components["schemas"]["Args"];
+      };
+    };
     responses: {
       /** @description OK */
       200: {
         content: {
-          'text/event-stream': OneOf<
-            [
-              {
-                data: components['schemas']['FinalResult']
-                /**
-                 * @description The event name.
-                 * @constant
-                 */
-                event: 'finalResult'
-                /** @description The event ID. */
-                id?: number
-                /** @description The retry time in milliseconds. */
-                retry?: number
-              },
-              {
-                data: components['schemas']['Keepalive']
-                /**
-                 * @description The event name.
-                 * @constant
-                 */
-                event: 'keepalive'
-                /** @description The event ID. */
-                id?: number
-                /** @description The retry time in milliseconds. */
-                retry?: number
-              },
-              {
-                data: components['schemas']['PartialResult']
-                /**
-                 * @description The event name.
-                 * @constant
-                 */
-                event: 'partialResult'
-                /** @description The event ID. */
-                id?: number
-                /** @description The retry time in milliseconds. */
-                retry?: number
-              },
-              {
-                data: components['schemas']['DetailError']
-                /**
-                 * @description The event name.
-                 * @constant
-                 */
-                event: 'queryError'
-                /** @description The event ID. */
-                id?: number
-                /** @description The retry time in milliseconds. */
-                retry?: number
-              },
-            ]
-          >[]
-        }
-      }
+          "text/event-stream": OneOf<[{
+              data: components["schemas"]["FinalResult"];
+              /**
+               * @description The event name.
+               * @constant
+               */
+              event: "finalResult";
+              /** @description The event ID. */
+              id?: number;
+              /** @description The retry time in milliseconds. */
+              retry?: number;
+            }, {
+              data: components["schemas"]["Keepalive"];
+              /**
+               * @description The event name.
+               * @constant
+               */
+              event: "keepalive";
+              /** @description The event ID. */
+              id?: number;
+              /** @description The retry time in milliseconds. */
+              retry?: number;
+            }, {
+              data: components["schemas"]["PartialResult"];
+              /**
+               * @description The event name.
+               * @constant
+               */
+              event: "partialResult";
+              /** @description The event ID. */
+              id?: number;
+              /** @description The retry time in milliseconds. */
+              retry?: number;
+            }, {
+              data: components["schemas"]["DetailError"];
+              /**
+               * @description The event name.
+               * @constant
+               */
+              event: "queryError";
+              /** @description The event ID. */
+              id?: number;
+              /** @description The retry time in milliseconds. */
+              retry?: number;
+            }]>[];
+        };
+      };
       /** @description Error */
       default: {
         content: {
-          'application/problem+json': components['schemas']['ErrorModel']
-        }
-      }
-    }
-  }
+          "application/problem+json": components["schemas"]["ErrorModel"];
+        };
+      };
+    };
+  };
   /**
    * Validate query parameters
    * @description Validates query parameters (1) for integrity (2) attempting to prepare a query statement from them
    */
-  'query-get-validate': {
+  "query-get-validate": {
     parameters: {
       query?: {
         /**
          * @description Query type / Attributes to aggregate by
          * @example sip,dip,dport,proto
          */
-        query?: string
+        query?: string;
         /**
          * @description Interfaces to query, can also be a regexp if wrapped into forward slashes '/eth[0-3]/'
          * @example eth0,eth1
          */
-        ifaces?: string
+        ifaces?: string;
         /**
          * @description Hosts for which data is queried
          * @example hostA,hostB,hostC
          */
-        query_hosts?: string
+        query_hosts?: string;
         /**
          * @description Resolver type for hosts queries
          * @example string
          */
-        hosts_resolver?: string
+        hosts_resolver?: string;
         /**
          * @description Hostname from which data is queried
          * @example hostA
          */
-        hostname?: string
+        hostname?: string;
         /**
          * @description Host ID from which data is queried
          * @example 123456
          */
-        host_id?: number
+        host_id?: number;
         /**
          * @description Condition to filter data by
          * @example port=80 & proto=TCP
          */
-        condition?: string
+        condition?: string;
         /**
          * @description Only show incoming packets/bytes
          * @example false
          */
-        in?: boolean
+        in?: boolean;
         /**
          * @description Only show outgoing packets/bytes
          * @example false
          */
-        out?: boolean
+        out?: boolean;
         /**
          * @description Show sum of incoming/outgoing packets/bytes
          * @example false
          */
-        sum?: boolean
+        sum?: boolean;
         /**
          * @description The first timestamp to query
          * @example 2020-08-12T09:47:00+02:00
          */
-        first?: string
+        first?: string;
         /**
          * @description The last timestamp to query
          * @example -24h
          */
-        last?: string
+        last?: string;
         /**
          * @description Output format
          * @example json
          */
-        format?: 'json' | 'txt' | 'csv'
+        format?: "json" | "txt" | "csv";
         /**
          * @description Colum to sort by
          * @example packets
          */
-        sort_by?: 'bytes' | 'packets'
+        sort_by?: "bytes" | "packets";
         /**
          * @description Number of results to return/print
          * @example 25
          */
-        num_results?: number
+        num_results?: number;
         /**
          * @description Sort ascending instead of descending
          * @example false
          */
-        sort_ascending?: boolean
+        sort_ascending?: boolean;
         /**
          * @description Maximum percentage of available host memory to use for query processing
          * @example 80
          */
-        max_mem_pct?: number
+        max_mem_pct?: number;
         /**
          * @description Use less memory for query processing
          * @example false
          */
-        low_mem?: boolean
+        low_mem?: boolean;
         /**
          * @description Keepalive message interval (duration) for query
          * @example 2000000000
          */
-        keepalive?: number
+        keepalive?: number;
         /**
          * @description Caller stores who produced the arguments
          * @example goQuery
          */
-        caller?: string
+        caller?: string;
         /**
          * @description Live can be used to request live flow data (in addition to DB results)
          * @example false
          */
-        live?: boolean
+        live?: boolean;
         /**
          * @description Enable reverse DNS lookups
          * @example false
          */
-        dns_enabled?: boolean
+        dns_enabled?: boolean;
         /**
          * @description Timeout for reverse DNS lookups
          * @example 2000000000
          */
-        dns_timeout?: number
+        dns_timeout?: number;
         /**
          * @description Maximum number of rows to resolve
          * @example 25
          */
-        dns_max_rows?: number
-      }
-    }
+        dns_max_rows?: number;
+      };
+    };
     responses: {
       /** @description No Content */
       204: {
-        content: never
-      }
+        content: never;
+      };
       /** @description Error */
       default: {
         content: {
-          'application/problem+json': components['schemas']['ErrorModel']
-        }
-      }
-    }
-  }
+          "application/problem+json": components["schemas"]["ErrorModel"];
+        };
+      };
+    };
+  };
   /**
    * Validate query parameters
    * @description Validates query parameters (1) for integrity (2) attempting to prepare a query statement from them
    */
-  'query-post-validate': {
+  "query-post-validate": {
     requestBody?: {
       content: {
-        'application/json': components['schemas']['Args']
-      }
-    }
+        "application/json": components["schemas"]["Args"];
+      };
+    };
     responses: {
       /** @description No Content */
       204: {
-        content: never
-      }
+        content: never;
+      };
       /** @description Error */
       default: {
         content: {
-          'application/problem+json': components['schemas']['ErrorModel']
-        }
-      }
-    }
-  }
+          "application/problem+json": components["schemas"]["ErrorModel"];
+        };
+      };
+    };
+  };
 }
