@@ -61,7 +61,7 @@ export function flattenRow(row: RowSchema): FlowRecord {
 
 export function extractFlows(result: ResultSchema | undefined | null): FlowRecord[] {
   if (!result?.rows) return []
-  const rows: RowSchema[] = ((result.rows ?? []) as unknown as RowSchema[])
+  const rows: RowSchema[] = (result.rows ?? []) as unknown as RowSchema[]
   return rows.map((r: RowSchema) => flattenRow(r))
 }
 

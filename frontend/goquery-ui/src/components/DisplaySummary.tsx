@@ -12,7 +12,8 @@ export const DisplaySummary: React.FC<DisplaySummaryProps> = ({ displayed, total
   if (total !== undefined) {
     return (
       <div className={cls}>
-        Displayed <span className="font-semibold text-white">{displayed ?? 0}</span> out of <span className="font-semibold text-white">{total}</span> results
+        Displayed <span className="font-semibold text-white">{displayed ?? 0}</span> out of{' '}
+        <span className="font-semibold text-white">{total}</span> results
       </div>
     )
   }

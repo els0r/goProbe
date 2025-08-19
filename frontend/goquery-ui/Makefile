@@ -25,6 +25,7 @@ help:
 	@echo "  make serve          - serve static files on http://localhost:$(PORT) (python simple server)"
 	@echo "  make dev            - build then instructions to run watch+serve in 2 shells"
 	@echo "  make clean          - remove dist directory"
+	@echo "  make format         - format TypeScript/JavaScript files with prettier"
 	@echo "  make generate-index - create a minimal index.html if missing"
 	@echo "  make types          - fetch OpenAPI $(VERSION) and generate TS types ($(GENERATED_TYPES))"
 	@echo "  make regen          - install + types + build"
@@ -90,6 +91,10 @@ dev: build
 .PHONY: clean
 clean:
 	rm -rf $(DIST_DIR) $(GENERATED_TYPES)
+
+.PHONY: format
+format: install
+	$(NPM) exec -- prettier --write "src/**/*.{js,jsx,ts,tsx}"
 
 .PHONY: docker-dev
 docker-dev:

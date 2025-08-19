@@ -31,11 +31,16 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({ percent, title, classN
   const effectiveTitle = title ?? `${pctLinear.toFixed(1)} %`
 
   return (
-    <div className={`mt-0.5 flex w-full items-center gap-2 ${className || ''}`.trim()} title={effectiveTitle}>
+    <div
+      className={`mt-0.5 flex w-full items-center gap-2 ${className || ''}`.trim()}
+      title={effectiveTitle}
+    >
       <div className="h-1 flex-1 rounded-full bg-surface-200 ring-1 ring-white/10 overflow-hidden">
         <div className="h-full bg-blue-500" style={{ width: pctWidth + '%' }} />
       </div>
-      <span className="text-[10px] leading-none text-primary-300 font-medium">{pctLinear.toFixed(1)}%</span>
+      <span className="text-[10px] leading-none text-primary-300 font-medium">
+        {pctLinear.toFixed(1)}%
+      </span>
     </div>
   )
 }

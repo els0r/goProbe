@@ -18,7 +18,10 @@ export function humanBytes(v: number | undefined | null): string {
   const units = ['kB', 'MB', 'GB', 'TB', 'PB']
   let x = n / 1024
   let i = 0
-  while (x >= 1024 && i < units.length - 1) { x /= 1024; i++ }
+  while (x >= 1024 && i < units.length - 1) {
+    x /= 1024
+    i++
+  }
   return x.toFixed(x >= 100 ? 0 : x >= 10 ? 1 : 2) + ' ' + units[i]
 }
 
@@ -28,7 +31,10 @@ export function humanPackets(v: number | undefined | null): string {
   const units = ['K', 'M', 'B', 'T']
   let x = n
   let i = -1
-  while (x >= 1000 && i < units.length - 1) { x /= 1000; i++ }
+  while (x >= 1000 && i < units.length - 1) {
+    x /= 1000
+    i++
+  }
   return x.toFixed(x >= 100 ? 0 : x >= 10 ? 1 : 2) + ' ' + units[i]
 }
 
@@ -39,7 +45,6 @@ export function formatDurationNs(ns: number | undefined): string {
   if (ns < 1_000_000_000) return (ns / 1_000_000).toFixed(2) + 'ms'
   return (ns / 1_000_000_000).toFixed(2) + 's'
 }
-
 
 // Convenience wrappers used in details UIs
 export function bytesOrEmpty(v: number | undefined | null): string {
