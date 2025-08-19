@@ -1,12 +1,11 @@
 # Simple Makefile for goquery-ui local development
-# Focus: install deps, build bundle, watch, serve, bazel packaging
+# Focus: install deps, build bundle, watch, serve, docker setup
 
 # configurable vars
 NPM ?= npm
 PORT ?= 8000
 DIST_DIR := dist
 WEBPACK := node_modules/.bin/webpack
-BAZEL_TARGET := //applications/network-observability/src/goquery-ui:pkg
 # optional lock file (any one). If none exists we still allow install.
 LOCKFILE := $(firstword $(wildcard package-lock.json npm-shrinkwrap.json pnpm-lock.yaml yarn.lock))
 # OpenAPI spec version (can be overridden: `make VERSION=4.1.19 types`)
@@ -26,7 +25,6 @@ help:
 	@echo "  make serve          - serve static files on http://localhost:$(PORT) (python simple server)"
 	@echo "  make dev            - build then instructions to run watch+serve in 2 shells"
 	@echo "  make clean          - remove dist directory"
-	@echo "  make bazel-pkg      - build npm package via bazel ($(BAZEL_TARGET))"
 	@echo "  make generate-index - create a minimal index.html if missing"
 	@echo "  make types          - fetch OpenAPI $(VERSION) and generate TS types ($(GENERATED_TYPES))"
 	@echo "  make regen          - install + types + build"
@@ -92,10 +90,6 @@ dev: build
 .PHONY: clean
 clean:
 	rm -rf $(DIST_DIR) $(GENERATED_TYPES)
-
-.PHONY: bazel-pkg
-bazel-pkg:
-	bazel build $(BAZEL_TARGET)
 
 .PHONY: docker-dev
 docker-dev:
