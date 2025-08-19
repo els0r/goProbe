@@ -35,7 +35,7 @@ function ErrorBanner({ error }: ErrorBannerProps) {
         {problem && (
           <button
             type="button"
-            onClick={() => setOpen(o => !o)}
+            onClick={() => setOpen((o) => !o)}
             className="text-[11px] rounded px-2 py-0.5 text-red-300 hover:text-white hover:bg-red-500/20 ring-1 ring-red-500/30"
           >
             {open ? 'Hide details' : 'Show details'}
@@ -50,19 +50,17 @@ function ErrorBanner({ error }: ErrorBannerProps) {
               {problem.errors.map((er: any, i: number) => (
                 <li key={i} className="mb-2 last:mb-0">
                   <div>
-                    <span className="font-mono text-red-300">{er.location || '(unknown)'}:</span> {er.message || 'validation error'}
+                    <span className="font-mono text-red-300">{er.location || '(unknown)'}:</span>{' '}
+                    {er.message || 'validation error'}
                   </div>
-                  {er.value !== undefined && (
-                    typeof er.value === 'object' && er.value !== null
-                      ? (
-                        <pre className="mt-1 max-h-40 overflow-auto whitespace-pre rounded bg-black/30 p-2 text-[11px] text-red-200/90 ring-1 ring-red-500/20">
-{JSON.stringify(er.value, null, 2)}
-                        </pre>
-                      )
-                      : (
-                        <div className="opacity-70">value: {formatValue(er.value)}</div>
-                      )
-                  )}
+                  {er.value !== undefined &&
+                    (typeof er.value === 'object' && er.value !== null ? (
+                      <pre className="mt-1 max-h-40 overflow-auto whitespace-pre rounded bg-black/30 p-2 text-[11px] text-red-200/90 ring-1 ring-red-500/20">
+                        {JSON.stringify(er.value, null, 2)}
+                      </pre>
+                    ) : (
+                      <div className="opacity-70">value: {formatValue(er.value)}</div>
+                    ))}
                 </li>
               ))}
             </ul>
@@ -78,13 +76,20 @@ function formatValue(v: unknown): string {
   if (v === undefined) return 'undefined'
   if (typeof v === 'string') return JSON.stringify(v)
   if (typeof v === 'number' || typeof v === 'boolean') return String(v)
-  try { return JSON.stringify(v) } catch { return '[unserializable]' }
+  try {
+    return JSON.stringify(v)
+  } catch {
+    return '[unserializable]'
+  }
 }
 
 // normalize strings for error matching: lower-case and unify curly apostrophes
 function normalizeText(s: string | undefined | null): string {
   if (!s) return ''
-  return String(s).toLowerCase().replace(/\u2019/g, "'").trim()
+  return String(s)
+    .toLowerCase()
+    .replace(/\u2019/g, "'")
+    .trim()
 }
 
 function formatTimestamp(ts: string | undefined): string {
@@ -94,7 +99,9 @@ function formatTimestamp(ts: string | undefined): string {
     if (isNaN(d.getTime())) return ts
     const pad = (n: number) => String(n).padStart(2, '0')
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
-  } catch { return ts }
+  } catch {
+    return ts
+  }
 }
 
 function humanRangeDuration(startIso?: string | null, endIso?: string | null): string {
@@ -107,9 +114,12 @@ function humanRangeDuration(startIso?: string | null, endIso?: string | null): s
   const hourMs = 60 * 60 * 1000
   const minMs = 60 * 1000
   const secMs = 1000
-  const d = Math.floor(ms / dayMs); ms -= d * dayMs
-  const h = Math.floor(ms / hourMs); ms -= h * hourMs
-  const m = Math.floor(ms / minMs); ms -= m * minMs
+  const d = Math.floor(ms / dayMs)
+  ms -= d * dayMs
+  const h = Math.floor(ms / hourMs)
+  ms -= h * hourMs
+  const m = Math.floor(ms / minMs)
+  ms -= m * minMs
   const s = Math.floor(ms / secMs)
   const parts: string[] = []
   if (d > 0) parts.push(d + 'd')
@@ -127,7 +137,9 @@ function isoToLocalInput(iso?: string | null): string {
     if (isNaN(d.getTime())) return ''
     const pad = (n: number) => String(n).padStart(2, '0')
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
-  } catch { return '' }
+  } catch {
+    return ''
+  }
 }
 
 function localInputToIso(val: string): string | undefined {
@@ -142,12 +154,16 @@ function sanitizeHostList(raw?: string | null): string | undefined {
   if (!raw) return undefined
   const items = String(raw)
     .split(',')
-    .map(s => s.trim())
+    .map((s) => s.trim())
     .filter(Boolean)
   return items.length ? items.join(',') : undefined
 }
 
-interface SummaryStatProps { label: string; value: React.ReactNode; multiline?: boolean }
+interface SummaryStatProps {
+  label: string
+  value: React.ReactNode
+  multiline?: boolean
+}
 function SummaryStat({ label, value, multiline }: SummaryStatProps) {
   const isSimple = typeof value === 'string' || typeof value === 'number'
   const valueClass = multiline
@@ -156,7 +172,9 @@ function SummaryStat({ label, value, multiline }: SummaryStatProps) {
   return (
     <div className="flex flex-col rounded-md bg-surface-200/40 px-2 py-2 ring-1 ring-white/5">
       <div className="mb-0.5 text-[10px] uppercase tracking-wide text-gray-400">{label}</div>
-      <div className={valueClass} title={isSimple ? String(value) : undefined}>{value}</div>
+      <div className={valueClass} title={isSimple ? String(value) : undefined}>
+        {value}
+      </div>
     </div>
   )
 }
@@ -218,17 +236,53 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<TabId>('table')
   const [rows, setRows] = useState<FlowRecord[]>([])
   const [summary, setSummary] = useState<SummarySchema | undefined>(undefined)
-  const [ipDetail, setIpDetail] = useState<{ ip: string; rows: FlowRecord[]; loading: boolean; error?: unknown; summary?: SummarySchema } | null>(null)
-  const [ifaceDetail, setIfaceDetail] = useState<{ host: string; iface: string; rows: FlowRecord[]; loading: boolean; error?: unknown; summary?: SummarySchema } | null>(null)
-  const [hostDetail, setHostDetail] = useState<{ hostId: string; hostName: string; rows: FlowRecord[]; loading: boolean; error?: unknown; summary?: SummarySchema } | null>(null)
-  const [temporalDetail, setTemporalDetail] = useState<{ meta: { host: string; iface: string; sip: string; dip: string; dport?: number | null; proto?: number | null }; attrsShown: string[]; rows: FlowRecord[]; loading: boolean; error?: unknown; summary?: SummarySchema } | null>(null)
+  const [ipDetail, setIpDetail] = useState<{
+    ip: string
+    rows: FlowRecord[]
+    loading: boolean
+    error?: unknown
+    summary?: SummarySchema
+  } | null>(null)
+  const [ifaceDetail, setIfaceDetail] = useState<{
+    host: string
+    iface: string
+    rows: FlowRecord[]
+    loading: boolean
+    error?: unknown
+    summary?: SummarySchema
+  } | null>(null)
+  const [hostDetail, setHostDetail] = useState<{
+    hostId: string
+    hostName: string
+    rows: FlowRecord[]
+    loading: boolean
+    error?: unknown
+    summary?: SummarySchema
+  } | null>(null)
+  const [temporalDetail, setTemporalDetail] = useState<{
+    meta: {
+      host: string
+      iface: string
+      sip: string
+      dip: string
+      dport?: number | null
+      proto?: number | null
+    }
+    attrsShown: string[]
+    rows: FlowRecord[]
+    loading: boolean
+    error?: unknown
+    summary?: SummarySchema
+  } | null>(null)
   const [loading, setLoading] = useState(false)
   const [streaming, setStreaming] = useState(false)
   const [error, setError] = useState<unknown>('')
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [streamErrors, setStreamErrors] = useState<Array<{ message?: string; host?: string }>>([])
   const [progress, setProgress] = useState<{ done?: number; total?: number }>({})
-  const [hostsStatuses, setHostsStatuses] = useState<Record<string, { code?: string; message?: string }>>({})
+  const [hostsStatuses, setHostsStatuses] = useState<
+    Record<string, { code?: string; message?: string }>
+  >({})
   const [hostErrorCount, setHostErrorCount] = useState<number>(0)
   const [hostOkCount, setHostOkCount] = useState<number>(0)
   const [ifaceDetailOpen, setIfaceDetailOpen] = useState<boolean>(false)
@@ -252,7 +306,7 @@ export default function App() {
       const saved = localStorage.getItem(LS_STREAMING_KEY)
       if (saved === '1' || saved === 'true') return true
       if (saved === '0' || saved === 'false') return false
-    } catch { }
+    } catch {}
     // fallback to runtime env default
     return !!env.SSE_ON_LOAD
   })
@@ -262,25 +316,31 @@ export default function App() {
     try {
       const saved = localStorage.getItem(LS_HOSTS_RESOLVER_KEY)
       if (typeof saved === 'string' && saved.length > 0 && opts.includes(saved)) return saved
-    } catch { }
+    } catch {}
     return opts[0] || ''
   })
   const [settingsOpen, setSettingsOpen] = useState<boolean>(false)
 
   // persist backend selection and apply to client on change
   useEffect(() => {
-    try { localStorage.setItem(LS_BACKEND_KEY, backendUrl) } catch { }
+    try {
+      localStorage.setItem(LS_BACKEND_KEY, backendUrl)
+    } catch {}
     setGlobalQueryBaseUrl(backendUrl)
   }, [backendUrl])
 
   // persist streaming preference
   useEffect(() => {
-    try { localStorage.setItem(LS_STREAMING_KEY, useStreaming ? '1' : '0') } catch { }
+    try {
+      localStorage.setItem(LS_STREAMING_KEY, useStreaming ? '1' : '0')
+    } catch {}
   }, [useStreaming])
 
   // persist hosts resolver selection
   useEffect(() => {
-    try { localStorage.setItem(LS_HOSTS_RESOLVER_KEY, hostsResolver) } catch { }
+    try {
+      localStorage.setItem(LS_HOSTS_RESOLVER_KEY, hostsResolver)
+    } catch {}
   }, [hostsResolver])
 
   // guard against stale/invalid saved value not present in env options
@@ -325,19 +385,25 @@ export default function App() {
   const attrState = parseAttributeQuery(params.query)
   function onAttributesChange(next: { values: string[]; all: boolean }) {
     const q = buildAttributeQuery(next.values, next.all)
-    setParams(p => ({ ...p, query: q }))
+    setParams((p) => ({ ...p, query: q }))
   }
   function closeAllDetails() {
-    setIpDetail(null); setIfaceDetail(null); setHostDetail(null); setTemporalDetail(null)
+    setIpDetail(null)
+    setIfaceDetail(null)
+    setHostDetail(null)
+    setTemporalDetail(null)
   }
   function commitInterfaces() {
-    setParams(p => ({ ...p, ifaces: ifacesInput.trim() }))
+    setParams((p) => ({ ...p, ifaces: ifacesInput.trim() }))
   }
   function commitHosts() {
-    setParams(p => ({ ...p, query_hosts: sanitizeHostList(hostsInput) }))
+    setParams((p) => ({ ...p, query_hosts: sanitizeHostList(hostsInput) }))
   }
   function commitCondition(next?: string) {
-    setParams(p => ({ ...p, condition: (next ?? conditionInput).trim() ? (next ?? conditionInput) : undefined }))
+    setParams((p) => ({
+      ...p,
+      condition: (next ?? conditionInput).trim() ? (next ?? conditionInput) : undefined,
+    }))
   }
 
   useEffect(() => {
@@ -350,7 +416,9 @@ export default function App() {
   const run = useCallback(async () => {
     // cancel any previous stream
     if (streamCloserRef.current) {
-      try { streamCloserRef.current.close() } catch { }
+      try {
+        streamCloserRef.current.close()
+      } catch {}
       streamCloserRef.current = null
     }
     setLoading(true)
@@ -364,13 +432,28 @@ export default function App() {
     setHostOkCount(0)
     try {
       // include any uncommitted condition input
-      const effectiveParamsBase = conditionInput !== (params.condition || '') ? { ...params, condition: conditionInput || undefined } : params
+      const effectiveParamsBase =
+        conditionInput !== (params.condition || '')
+          ? { ...params, condition: conditionInput || undefined }
+          : params
       // include uncommitted Hosts input (normalized)
-      const mergedHosts = hostsInput !== (effectiveParamsBase.query_hosts || '') ? sanitizeHostList(hostsInput) : effectiveParamsBase.query_hosts
-      const effectiveParams = mergedHosts !== effectiveParamsBase.query_hosts ? { ...effectiveParamsBase, query_hosts: mergedHosts } : effectiveParamsBase
+      const mergedHosts =
+        hostsInput !== (effectiveParamsBase.query_hosts || '')
+          ? sanitizeHostList(hostsInput)
+          : effectiveParamsBase.query_hosts
+      const effectiveParams =
+        mergedHosts !== effectiveParamsBase.query_hosts
+          ? { ...effectiveParamsBase, query_hosts: mergedHosts }
+          : effectiveParamsBase
       // normalize attributes query: when 'All', send explicit full list (backend requires min length)
-      const normalizedQuery = buildAttributeQuery(parseAttributeQuery(effectiveParams.query).values, parseAttributeQuery(effectiveParams.query).all)
-      const finalParams = normalizedQuery === effectiveParams.query ? effectiveParams : { ...effectiveParams, query: normalizedQuery }
+      const normalizedQuery = buildAttributeQuery(
+        parseAttributeQuery(effectiveParams.query).values,
+        parseAttributeQuery(effectiveParams.query).all
+      )
+      const finalParams =
+        normalizedQuery === effectiveParams.query
+          ? effectiveParams
+          : { ...effectiveParams, query: normalizedQuery }
       if (finalParams !== params) {
         // sync params state (will also update URL)
         setParams(finalParams)
@@ -381,44 +464,51 @@ export default function App() {
       setSummary(undefined)
       if (useStreaming) {
         // start SSE stream; server will send partialResult events until finalResult
-        const closer = getGlobalQueryClient().streamQueryUI({ ...finalParams, hosts_resolver: hostsResolver || undefined }, {
-          onPartial: (flows, sum) => {
-            // server may emit partial updates with rows=null (no row data yet); only replace when we actually have rows
-            if (Array.isArray(flows) && flows.length > 0) {
+        const closer = getGlobalQueryClient().streamQueryUI(
+          { ...finalParams, hosts_resolver: hostsResolver || undefined },
+          {
+            onPartial: (flows, sum) => {
+              // server may emit partial updates with rows=null (no row data yet); only replace when we actually have rows
+              if (Array.isArray(flows) && flows.length > 0) {
+                setRows(flows)
+              }
+              if (sum) setSummary(sum)
+            },
+            onFinal: (flows, sum) => {
+              // Always replace with the final, server-sorted result so sort_ascending takes effect
               setRows(flows)
-            }
-            if (sum) setSummary(sum)
-          },
-          onFinal: (flows, sum) => {
-            // Always replace with the final, server-sorted result so sort_ascending takes effect
-            setRows(flows)
-            if (sum) setSummary(sum)
-            setStreaming(false)
-            setLoading(false)
-            streamCloserRef.current = null
-          },
-          onError: (er: any) => {
-            const msg = typeof er?.message === 'string' ? er.message : 'stream error'
-            const host = typeof er?.host === 'string' ? er.host : undefined
-            setStreamErrors(prev => [...prev, { message: msg, host }])
-          },
-          onProgress: (p) => setProgress(p || {}),
-          onMeta: (meta) => {
-            if (meta?.hostsStatuses) setHostsStatuses(meta.hostsStatuses)
-            if (typeof meta?.hostErrorCount === 'number') setHostErrorCount(meta.hostErrorCount)
-            if (typeof meta?.hostOkCount === 'number') setHostOkCount(meta.hostOkCount)
-          },
-        })
+              if (sum) setSummary(sum)
+              setStreaming(false)
+              setLoading(false)
+              streamCloserRef.current = null
+            },
+            onError: (er: any) => {
+              const msg = typeof er?.message === 'string' ? er.message : 'stream error'
+              const host = typeof er?.host === 'string' ? er.host : undefined
+              setStreamErrors((prev) => [...prev, { message: msg, host }])
+            },
+            onProgress: (p) => setProgress(p || {}),
+            onMeta: (meta) => {
+              if (meta?.hostsStatuses) setHostsStatuses(meta.hostsStatuses)
+              if (typeof meta?.hostErrorCount === 'number') setHostErrorCount(meta.hostErrorCount)
+              if (typeof meta?.hostOkCount === 'number') setHostOkCount(meta.hostOkCount)
+            },
+          }
+        )
         streamCloserRef.current = closer
       } else {
         // normal non-streaming request to /_query
         try {
-          const data = await getGlobalQueryClient().runQueryUI({ ...finalParams, hosts_resolver: hostsResolver || undefined })
+          const data = await getGlobalQueryClient().runQueryUI({
+            ...finalParams,
+            hosts_resolver: hostsResolver || undefined,
+          })
           setRows(data.flows)
           setSummary(data.summary)
           if (data.hostsStatuses) {
             setHostsStatuses(data.hostsStatuses)
-            let err = 0, ok = 0
+            let err = 0,
+              ok = 0
             for (const k of Object.keys(data.hostsStatuses)) {
               const c = String((data.hostsStatuses as any)[k]?.code || '').toLowerCase()
               if (c === 'ok') ok++
@@ -434,10 +524,18 @@ export default function App() {
       }
     } catch (e: any) {
       // extract problem+json field errors to map inputs
-      if (e && typeof e === 'object' && (e as any).problem && Array.isArray((e as any).problem.errors)) {
+      if (
+        e &&
+        typeof e === 'object' &&
+        (e as any).problem &&
+        Array.isArray((e as any).problem.errors)
+      ) {
         const fe: Record<string, string> = {}
         const isLoc = (loc: string, key: string) =>
-          loc === `body.${key}` || loc.startsWith(`body.${key}.`) || loc.startsWith(`body.${key}[`) || loc === key
+          loc === `body.${key}` ||
+          loc.startsWith(`body.${key}.`) ||
+          loc.startsWith(`body.${key}[`) ||
+          loc === key
         for (const er of (e as any).problem.errors as any[]) {
           const locRaw = String(er.location || '')
           const loc = locRaw.toLowerCase()
@@ -445,22 +543,27 @@ export default function App() {
           // keep condition messages formatting (multi-line caret pointers), but capitalize first letter
           const isCondition = isLoc(loc, 'condition')
           let msg = isCondition
-            ? rawMsg.replace(/^(\s*)([a-z])/, (_m: string, ws: string, ch: string) => ws + ch.toUpperCase())
-            : (rawMsg.charAt(0).toUpperCase() + rawMsg.slice(1))
+            ? rawMsg.replace(
+                /^(\s*)([a-z])/,
+                (_m: string, ws: string, ch: string) => ws + ch.toUpperCase()
+              )
+            : rawMsg.charAt(0).toUpperCase() + rawMsg.slice(1)
           // append value context only for non-condition fields to avoid duplicating formatted output
           if (!isCondition && er.value !== undefined) msg += ` -- value: ${formatValue(er.value)}`
           // HACK: if backend returns this specific text, attribute to Hosts Query
           const normRaw = normalizeText(rawMsg)
           if (
-            normRaw === "list of target hosts is empty" ||
+            normRaw === 'list of target hosts is empty' ||
             normRaw === "couldn't prepare query: list of target hosts is empty" ||
             normRaw.includes('list of target hosts is empty')
           ) {
             fe.hosts = msg
             continue
           }
-          const isResolverField = isLoc(loc, 'query_hosts_resolver_type') || isLoc(loc, 'hosts_resolver')
-          const isHostsField = isLoc(loc, 'query_hosts') || isLoc(loc, 'hostname') || isLoc(loc, 'host_id')
+          const isResolverField =
+            isLoc(loc, 'query_hosts_resolver_type') || isLoc(loc, 'hosts_resolver')
+          const isHostsField =
+            isLoc(loc, 'query_hosts') || isLoc(loc, 'hostname') || isLoc(loc, 'host_id')
           if (isLoc(loc, 'ifaces')) fe.ifaces = msg
           // do not attach resolver field errors to any single input; keep in banner details only
           else if (!isResolverField && isHostsField) fe.hosts = msg
@@ -475,10 +578,17 @@ export default function App() {
         // Special-case: unexpected property => friendly message with location
         const errs: any[] = (e as any).problem.errors as any[]
         const first = errs[0] || {}
-        const msgText = (String(first?.message || '').toLowerCase().includes('unexpected property') && first?.location)
-          ? `Unexpected property: ${first.location}`
-          : 'API request failed: validation failed'
-        setError({ message: msgText, problem: (e as any).problem, status: (e as any).status })
+        const msgText =
+          String(first?.message || '')
+            .toLowerCase()
+            .includes('unexpected property') && first?.location
+            ? `Unexpected property: ${first.location}`
+            : 'API request failed: validation failed'
+        setError({
+          message: msgText,
+          problem: (e as any).problem,
+          status: (e as any).status,
+        })
       } else {
         // Special-case mapping: status 500 + 'list of target hosts is empty' => Hosts field
         const status = (e as any)?.status
@@ -492,7 +602,8 @@ export default function App() {
         }
         const body: any = (e as any)?.body
         if (typeof body === 'string') combined += ' ' + body
-        else if (body && typeof body === 'object' && typeof body.message === 'string') combined += ' ' + body.message
+        else if (body && typeof body === 'object' && typeof body.message === 'string')
+          combined += ' ' + body.message
         const lc = normalizeText(combined)
         if (
           lc.includes("couldn't prepare query: list of target hosts is empty") ||
@@ -500,7 +611,11 @@ export default function App() {
         ) {
           const msg = 'List of target hosts is empty'
           setFieldErrors({ hosts: msg })
-          setError({ message: 'API request failed: validation failed', problem: prob, status })
+          setError({
+            message: 'API request failed: validation failed',
+            problem: prob,
+            status,
+          })
         } else {
           setError(e)
         }
@@ -512,42 +627,69 @@ export default function App() {
 
   // Auto-run only for non-streaming; for SSE, run only when the user presses the Run button
   useEffect(() => {
-    if (!useStreaming) { void run() }
+    if (!useStreaming) {
+      void run()
+    }
   }, [run, useStreaming])
 
   // open temporal details for a specific row (shared by click and keyboard shortcut)
-  const openTemporalForRow = useCallback(async (r: FlowRecord) => {
-    const condParts: string[] = []
-    if (r.sip) condParts.push(`sip=${r.sip}`)
-    if (r.dip) condParts.push(`dip=${r.dip}`)
-    if (r.dport !== null && r.dport !== undefined) condParts.push(`dport=${r.dport}`)
-    if (r.proto !== null && r.proto !== undefined) condParts.push(`proto=${r.proto}`)
-    const condition = condParts.join(' and ')
-    const hostId = r.host_id || ''
-    const iface = r.iface || ''
-    const meta = { host: r.host || hostId, iface, sip: r.sip || '', dip: r.dip || '', dport: r.dport, proto: r.proto }
-    const attrsShown = (attrState.all
-      ? ['sip', 'dip', 'dport', 'proto']
-      : attrState.values.map(v => (v === 'protocol' ? 'proto' : v === 'port' ? 'dport' : v)))
-    closeAllDetails()
-    setTemporalDetail({ meta, attrsShown, rows: [], loading: true })
-    try {
-      const detailParams: QueryParamsUI = {
-        ...params,
-        query: 'time',
-        condition: condition || undefined,
-        query_hosts: hostId || undefined,
-        ifaces: iface || '',
-        limit: 100000,
-        sort_by: 'bytes',
-        sort_ascending: false,
+  const openTemporalForRow = useCallback(
+    async (r: FlowRecord) => {
+      const condParts: string[] = []
+      if (r.sip) condParts.push(`sip=${r.sip}`)
+      if (r.dip) condParts.push(`dip=${r.dip}`)
+      if (r.dport !== null && r.dport !== undefined) condParts.push(`dport=${r.dport}`)
+      if (r.proto !== null && r.proto !== undefined) condParts.push(`proto=${r.proto}`)
+      const condition = condParts.join(' and ')
+      const hostId = r.host_id || ''
+      const iface = r.iface || ''
+      const meta = {
+        host: r.host || hostId,
+        iface,
+        sip: r.sip || '',
+        dip: r.dip || '',
+        dport: r.dport,
+        proto: r.proto,
       }
-  const data = await getGlobalQueryClient().runQueryUI({ ...detailParams, hosts_resolver: 'string' })
-      setTemporalDetail({ meta, attrsShown, rows: data.flows, summary: data.summary, loading: false })
-    } catch (e: any) {
-      setTemporalDetail({ meta, attrsShown, rows: [], loading: false, error: e })
-    }
-  }, [params, attrState])
+      const attrsShown = attrState.all
+        ? ['sip', 'dip', 'dport', 'proto']
+        : attrState.values.map((v) => (v === 'protocol' ? 'proto' : v === 'port' ? 'dport' : v))
+      closeAllDetails()
+      setTemporalDetail({ meta, attrsShown, rows: [], loading: true })
+      try {
+        const detailParams: QueryParamsUI = {
+          ...params,
+          query: 'time',
+          condition: condition || undefined,
+          query_hosts: hostId || undefined,
+          ifaces: iface || '',
+          limit: 100000,
+          sort_by: 'bytes',
+          sort_ascending: false,
+        }
+        const data = await getGlobalQueryClient().runQueryUI({
+          ...detailParams,
+          hosts_resolver: 'string',
+        })
+        setTemporalDetail({
+          meta,
+          attrsShown,
+          rows: data.flows,
+          summary: data.summary,
+          loading: false,
+        })
+      } catch (e: any) {
+        setTemporalDetail({
+          meta,
+          attrsShown,
+          rows: [],
+          loading: false,
+          error: e,
+        })
+      }
+    },
+    [params, attrState]
+  )
 
   // Enter opens temporal details for the first row if in table view and no panel is open
   useEffect(() => {
@@ -565,45 +707,62 @@ export default function App() {
   }, [activeTab, rows, ipDetail, ifaceDetail, hostDetail, temporalDetail, openTemporalForRow])
 
   // simple saved views (localStorage)
-  const [savedViews, setSavedViews] = useState<Array<{ name: string; params: QueryParamsUI }>>(() => {
-    try {
-      const raw = JSON.parse(localStorage.getItem('goquery_ui_views') || '[]')
-      if (!Array.isArray(raw)) return []
-      return raw.map((v: any) => ({ name: String(v?.name ?? ''), params: sanitizeUIParams(v?.params) }))
-    } catch { return [] }
-  })
+  const [savedViews, setSavedViews] = useState<Array<{ name: string; params: QueryParamsUI }>>(
+    () => {
+      try {
+        const raw = JSON.parse(localStorage.getItem('goquery_ui_views') || '[]')
+        if (!Array.isArray(raw)) return []
+        return raw.map((v: any) => ({
+          name: String(v?.name ?? ''),
+          params: sanitizeUIParams(v?.params),
+        }))
+      } catch {
+        return []
+      }
+    }
+  )
   function persistViews(next: Array<{ name: string; params: QueryParamsUI }>) {
     setSavedViews(next)
-    try { localStorage.setItem('goquery_ui_views', JSON.stringify(next)) } catch { }
+    try {
+      localStorage.setItem('goquery_ui_views', JSON.stringify(next))
+    } catch {}
   }
-  const [saveViewName, setSaveViewName] = useState<string>("")
+  const [saveViewName, setSaveViewName] = useState<string>('')
   function onSaveView() {
     const name = (saveViewName || '').trim()
     if (!name) return
-    const next = [...savedViews.filter(v => v.name !== name), { name, params }]
+    const next = [...savedViews.filter((v) => v.name !== name), { name, params }]
     persistViews(next)
     setSaveViewName('')
   }
   function onLoadView(name: string) {
-    const found = savedViews.find(v => v.name === name)
+    const found = savedViews.find((v) => v.name === name)
     if (!found) return
     setParams(sanitizeUIParams(found.params))
   }
   function exportCSV() {
     if (!rows.length) return
-    const anyHost = rows.some(r => !!r.host)
-    const anyIface = rows.some(r => !!r.iface)
-    const shown = attrState.all ? ['sip', 'dip', 'dport', 'proto'] : attrState.values.map(v => (v === 'protocol' ? 'proto' : v === 'port' ? 'dport' : v))
+    const anyHost = rows.some((r) => !!r.host)
+    const anyIface = rows.some((r) => !!r.iface)
+    const shown = attrState.all
+      ? ['sip', 'dip', 'dport', 'proto']
+      : attrState.values.map((v) => (v === 'protocol' ? 'proto' : v === 'port' ? 'dport' : v))
     const headers = [
       ...(anyHost ? ['host'] : []),
       ...(anyIface ? ['iface'] : []),
       ...shown,
-      'bytes_in', 'bytes_out', 'bytes_total', 'packets_in', 'packets_out', 'packets_total'
+      'bytes_in',
+      'bytes_out',
+      'bytes_total',
+      'packets_in',
+      'packets_out',
+      'packets_total',
     ]
     const escape = (v: any) => {
       if (v === null || v === undefined) return ''
       const s = String(v)
-      if (s.includes(',') || s.includes('"') || s.includes('\n')) return '"' + s.replace(/"/g, '""') + '"'
+      if (s.includes(',') || s.includes('"') || s.includes('\n'))
+        return '"' + s.replace(/"/g, '""') + '"'
       return s
     }
     const lines = [headers.join(',')]
@@ -617,7 +776,9 @@ export default function App() {
       values.push(r.bytes_in || 0, r.bytes_out || 0, bt, r.packets_in || 0, r.packets_out || 0, pt)
       lines.push(values.map(escape).join(','))
     }
-    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' })
+    const blob = new Blob([lines.join('\n')], {
+      type: 'text/csv;charset=utf-8;',
+    })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
@@ -629,95 +790,154 @@ export default function App() {
   }
 
   // query for IP details (proto,dport) when opened
-  const openIpDetails = useCallback(async (ip: string) => {
-    // close other panels
-    setIfaceDetail(null); setHostDetail(null); setTemporalDetail(null)
-    setIpDetail({ ip, rows: [], loading: true })
-    try {
-      // honor existing condition: concatenate with AND
-      const baseCondRaw = (conditionInput || params.condition || '').trim()
-      const ipCond = `host=${ip}`
-      const combinedCond = baseCondRaw ? `(${baseCondRaw}) and (${ipCond})` : ipCond
-      const detailParams: QueryParamsUI = {
-        ...params,
-        query: 'proto,dport',
-        condition: combinedCond,
-        limit: Math.max(1, params.limit || 1),
-        sort_by: 'bytes',
-        sort_ascending: false,
+  const openIpDetails = useCallback(
+    async (ip: string) => {
+      // close other panels
+      setIfaceDetail(null)
+      setHostDetail(null)
+      setTemporalDetail(null)
+      setIpDetail({ ip, rows: [], loading: true })
+      try {
+        // honor existing condition: concatenate with AND
+        const baseCondRaw = (conditionInput || params.condition || '').trim()
+        const ipCond = `host=${ip}`
+        const combinedCond = baseCondRaw ? `(${baseCondRaw}) and (${ipCond})` : ipCond
+        const detailParams: QueryParamsUI = {
+          ...params,
+          query: 'proto,dport',
+          condition: combinedCond,
+          limit: Math.max(1, params.limit || 1),
+          sort_by: 'bytes',
+          sort_ascending: false,
+        }
+        const data = await getGlobalQueryClient().runQueryUI({
+          ...detailParams,
+          hosts_resolver: 'string',
+        })
+        setIpDetail({
+          ip,
+          rows: data.flows,
+          summary: data.summary,
+          loading: false,
+        })
+      } catch (e: any) {
+        setIpDetail({ ip, rows: [], loading: false, error: e })
       }
-  const data = await getGlobalQueryClient().runQueryUI({ ...detailParams, hosts_resolver: 'string' })
-      setIpDetail({ ip, rows: data.flows, summary: data.summary, loading: false })
-    } catch (e: any) {
-      setIpDetail({ ip, rows: [], loading: false, error: e })
-    }
-  }, [params, conditionInput])
+    },
+    [params, conditionInput]
+  )
 
   // query for Interface details: attributes iface,port,protocol; scope by host_id and selected iface
-  const openIfaceDetails = useCallback(async (hostId: string, iface: string) => {
-    // close other panels
-    setIpDetail(null); setHostDetail(null); setTemporalDetail(null)
-    if (!hostId || !iface) {
-      setIfaceDetail({ host: hostId || '(unknown)', iface: iface || '(iface)', rows: [], loading: false, error: 'Missing host or interface for details' })
-      return
-    }
-    // resolve human-readable host name from current rows for display
-    const displayHost = (rows.find(r => r.host_id === hostId)?.host) || hostId
-    setIfaceDetail({ host: displayHost, iface, rows: [], loading: true })
-    try {
-      const detailParams: QueryParamsUI = {
-        ...params,
-        // per requirements: attributes = iface,port,protocol; limit scope via host_id and selected interface inputs
-        query: 'iface,port,protocol',
-        query_hosts: hostId,
-        ifaces: iface,
-        condition: undefined,
-        limit: Math.max(1, params.limit || 1),
-        sort_by: 'bytes',
-        sort_ascending: false,
+  const openIfaceDetails = useCallback(
+    async (hostId: string, iface: string) => {
+      // close other panels
+      setIpDetail(null)
+      setHostDetail(null)
+      setTemporalDetail(null)
+      if (!hostId || !iface) {
+        setIfaceDetail({
+          host: hostId || '(unknown)',
+          iface: iface || '(iface)',
+          rows: [],
+          loading: false,
+          error: 'Missing host or interface for details',
+        })
+        return
       }
-  const data = await getGlobalQueryClient().runQueryUI({ ...detailParams, hosts_resolver: 'string' })
-      setIfaceDetail({ host: displayHost, iface, rows: data.flows, summary: data.summary, loading: false })
-    } catch (e: any) {
-      setIfaceDetail({ host: displayHost, iface, rows: [], loading: false, error: e })
-    }
-  }, [params, conditionInput, rows])
+      // resolve human-readable host name from current rows for display
+      const displayHost = rows.find((r) => r.host_id === hostId)?.host || hostId
+      setIfaceDetail({ host: displayHost, iface, rows: [], loading: true })
+      try {
+        const detailParams: QueryParamsUI = {
+          ...params,
+          // per requirements: attributes = iface,port,protocol; limit scope via host_id and selected interface inputs
+          query: 'iface,port,protocol',
+          query_hosts: hostId,
+          ifaces: iface,
+          condition: undefined,
+          limit: Math.max(1, params.limit || 1),
+          sort_by: 'bytes',
+          sort_ascending: false,
+        }
+        const data = await getGlobalQueryClient().runQueryUI({
+          ...detailParams,
+          hosts_resolver: 'string',
+        })
+        setIfaceDetail({
+          host: displayHost,
+          iface,
+          rows: data.flows,
+          summary: data.summary,
+          loading: false,
+        })
+      } catch (e: any) {
+        setIfaceDetail({
+          host: displayHost,
+          iface,
+          rows: [],
+          loading: false,
+          error: e,
+        })
+      }
+    },
+    [params, conditionInput, rows]
+  )
 
   // host details: show interfaces grouped, query attributes: ifaces, scoped by host_id
-  const openHostDetails = useCallback(async (hostId: string) => {
-    // close other panels
-    setIpDetail(null); setIfaceDetail(null); setTemporalDetail(null)
-    if (!hostId) return
-    const hostName = (rows.find(r => r.host_id === hostId)?.host) || hostId
-    setHostDetail({ hostId, hostName, rows: [], loading: true })
-    try {
-      const detailParams: QueryParamsUI = {
-        ...params,
-        query: 'iface',
-        query_hosts: hostId,
-        condition: undefined,
-        limit: Math.max(1, params.limit || 1),
-        sort_by: 'bytes',
-        sort_ascending: false,
+  const openHostDetails = useCallback(
+    async (hostId: string) => {
+      // close other panels
+      setIpDetail(null)
+      setIfaceDetail(null)
+      setTemporalDetail(null)
+      if (!hostId) return
+      const hostName = rows.find((r) => r.host_id === hostId)?.host || hostId
+      setHostDetail({ hostId, hostName, rows: [], loading: true })
+      try {
+        const detailParams: QueryParamsUI = {
+          ...params,
+          query: 'iface',
+          query_hosts: hostId,
+          condition: undefined,
+          limit: Math.max(1, params.limit || 1),
+          sort_by: 'bytes',
+          sort_ascending: false,
+        }
+        const data = await getGlobalQueryClient().runQueryUI({
+          ...detailParams,
+          hosts_resolver: 'string',
+        })
+        setHostDetail({
+          hostId,
+          hostName,
+          rows: data.flows,
+          summary: data.summary,
+          loading: false,
+        })
+      } catch (e: any) {
+        setHostDetail({ hostId, hostName, rows: [], loading: false, error: e })
       }
-  const data = await getGlobalQueryClient().runQueryUI({ ...detailParams, hosts_resolver: 'string' })
-      setHostDetail({ hostId, hostName, rows: data.flows, summary: data.summary, loading: false })
-    } catch (e: any) {
-      setHostDetail({ hostId, hostName, rows: [], loading: false, error: e })
-    }
-  }, [params, rows])
+    },
+    [params, rows]
+  )
 
   function onTimePreset(minutes: number) {
     const lastDate = new Date()
     const firstDate = new Date(lastDate.getTime() - minutes * 60 * 1000)
-    setParams(p => ({ ...p, first: firstDate.toISOString(), last: lastDate.toISOString() }))
+    setParams((p) => ({
+      ...p,
+      first: firstDate.toISOString(),
+      last: lastDate.toISOString(),
+    }))
   }
 
   return (
     <div className="min-h-screen bg-surface text-gray-200">
       <header className="border-b border-white/10 bg-surface-100/60 backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-3">
-          <div className="text-lg font-semibold tracking-tight text-white">Goquery / Network Usage</div>
+          <div className="text-lg font-semibold tracking-tight text-white">
+            Goquery / Network Usage
+          </div>
         </div>
       </header>
       <main className="mx-auto max-w-7xl px-6 py-6">
@@ -727,7 +947,9 @@ export default function App() {
             type="button"
             onClick={() => setSettingsOpen(true)}
             className="absolute right-3 top-3 rounded-md bg-surface-200 px-2 py-1 text-[12px] font-medium ring-1 ring-white/10 hover:bg-surface-300 focus:outline-none focus:ring-primary-500"
-          >Settings</button>
+          >
+            Settings
+          </button>
           <div className="space-y-4">
             {/* Row 1 */}
             <div className="grid grid-cols-12 gap-4">
@@ -739,14 +961,23 @@ export default function App() {
                   placeholder="Free text query"
                   className={
                     `rounded-md bg-surface-200 px-2 py-1 text-[13px] ring-1 focus:outline-none ` +
-                    (fieldErrors.hosts ? 'ring-red-500/40 bg-red-500/10 focus:ring-red-500/40' : 'ring-white/10 focus:ring-primary-500')
+                    (fieldErrors.hosts
+                      ? 'ring-red-500/40 bg-red-500/10 focus:ring-red-500/40'
+                      : 'ring-white/10 focus:ring-primary-500')
                   }
                   value={hostsInput}
-                  onChange={e => setHostsInput(e.target.value)}
+                  onChange={(e) => setHostsInput(e.target.value)}
                   onBlur={commitHosts}
-                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); commitHosts() } }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      commitHosts()
+                    }
+                  }}
                 />
-                {fieldErrors.hosts && <div className="mt-1 text-[11px] text-red-300">{fieldErrors.hosts}</div>}
+                {fieldErrors.hosts && (
+                  <div className="mt-1 text-[11px] text-red-300">{fieldErrors.hosts}</div>
+                )}
               </div>
               {/* Interfaces */}
               <div className="col-span-12 md:col-span-3 flex flex-col text-[11px]">
@@ -756,14 +987,23 @@ export default function App() {
                   placeholder="eth0,eth1"
                   className={
                     `rounded-md bg-surface-200 px-2 py-1 text-[13px] ring-1 focus:outline-none ` +
-                    (fieldErrors.ifaces ? 'ring-red-500/40 bg-red-500/10 focus:ring-red-500/40' : 'ring-white/10 focus:ring-primary-500')
+                    (fieldErrors.ifaces
+                      ? 'ring-red-500/40 bg-red-500/10 focus:ring-red-500/40'
+                      : 'ring-white/10 focus:ring-primary-500')
                   }
                   value={ifacesInput}
-                  onChange={e => setIfacesInput(e.target.value)}
+                  onChange={(e) => setIfacesInput(e.target.value)}
                   onBlur={commitInterfaces}
-                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); commitInterfaces() } }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      commitInterfaces()
+                    }
+                  }}
                 />
-                {fieldErrors.ifaces && <div className="mt-1 text-[11px] text-red-300">{fieldErrors.ifaces}</div>}
+                {fieldErrors.ifaces && (
+                  <div className="mt-1 text-[11px] text-red-300">{fieldErrors.ifaces}</div>
+                )}
               </div>
               {/* Attributes */}
               <div className="col-span-12 md:col-span-3 flex flex-col text-[11px]">
@@ -780,7 +1020,9 @@ export default function App() {
                   onChange={onAttributesChange}
                   hasError={!!fieldErrors.attributes}
                 />
-                {fieldErrors.attributes && <div className="mt-1 text-[11px] text-red-300">{fieldErrors.attributes}</div>}
+                {fieldErrors.attributes && (
+                  <div className="mt-1 text-[11px] text-red-300">{fieldErrors.attributes}</div>
+                )}
               </div>
               {/* spacer to keep grid alignment */}
               <div className="col-span-12 md:col-span-2" />
@@ -792,7 +1034,7 @@ export default function App() {
               <div className="col-span-12 md:col-span-4 flex flex-col text-[11px]">
                 <label className="mb-1 font-medium text-gray-400">Time Range</label>
                 <div className="grid grid-cols-6 gap-2">
-                  {[5, 10, 30, 60, 360, 720, 1440, 2880, 10080, 43200, 129600, 259200].map(m => {
+                  {[5, 10, 30, 60, 360, 720, 1440, 2880, 10080, 43200, 129600, 259200].map((m) => {
                     let label: string
                     if (m < 60) label = `${m}m`
                     else if (m === 60) label = '1h'
@@ -818,15 +1060,19 @@ export default function App() {
                       type="datetime-local"
                       className={
                         `rounded-md bg-surface-200 px-2 py-1 text-[13px] ring-1 focus:outline-none ` +
-                        (fieldErrors.first ? 'ring-red-500/40 bg-red-500/10 focus:ring-red-500/40' : 'ring-white/10 focus:ring-primary-500')
+                        (fieldErrors.first
+                          ? 'ring-red-500/40 bg-red-500/10 focus:ring-red-500/40'
+                          : 'ring-white/10 focus:ring-primary-500')
                       }
                       value={isoToLocalInput(params.first)}
-                      onChange={e => {
+                      onChange={(e) => {
                         const iso = localInputToIso(e.target.value)
-                        if (iso) setParams(p => ({ ...p, first: iso }))
+                        if (iso) setParams((p) => ({ ...p, first: iso }))
                       }}
                     />
-                    {fieldErrors.first && <div className="mt-1 text-[11px] text-red-300">{fieldErrors.first}</div>}
+                    {fieldErrors.first && (
+                      <div className="mt-1 text-[11px] text-red-300">{fieldErrors.first}</div>
+                    )}
                   </div>
                   <div className="flex flex-col flex-1">
                     <label className="mb-0.5 text-[10px] tracking-wide text-gray-400">To</label>
@@ -834,15 +1080,19 @@ export default function App() {
                       type="datetime-local"
                       className={
                         `rounded-md bg-surface-200 px-2 py-1 text-[13px] ring-1 focus:outline-none ` +
-                        (fieldErrors.last ? 'ring-red-500/40 bg-red-500/10 focus:ring-red-500/40' : 'ring-white/10 focus:ring-primary-500')
+                        (fieldErrors.last
+                          ? 'ring-red-500/40 bg-red-500/10 focus:ring-red-500/40'
+                          : 'ring-white/10 focus:ring-primary-500')
                       }
                       value={isoToLocalInput(params.last)}
-                      onChange={e => {
+                      onChange={(e) => {
                         const iso = localInputToIso(e.target.value)
-                        if (iso) setParams(p => ({ ...p, last: iso }))
+                        if (iso) setParams((p) => ({ ...p, last: iso }))
                       }}
                     />
-                    {fieldErrors.last && <div className="mt-1 text-[11px] text-red-300">{fieldErrors.last}</div>}
+                    {fieldErrors.last && (
+                      <div className="mt-1 text-[11px] text-red-300">{fieldErrors.last}</div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -852,21 +1102,36 @@ export default function App() {
                 <select
                   className={
                     `rounded-md bg-surface-200 px-2 py-1 text-[13px] ring-1 focus:outline-none ` +
-                    (fieldErrors.sort_by ? 'ring-red-500/40 bg-red-500/10 focus:ring-red-500/40' : 'ring-white/10 focus:ring-primary-500')
+                    (fieldErrors.sort_by
+                      ? 'ring-red-500/40 bg-red-500/10 focus:ring-red-500/40'
+                      : 'ring-white/10 focus:ring-primary-500')
                   }
                   value={params.sort_by}
-                  onChange={e => setParams(p => ({ ...p, sort_by: e.target.value as 'bytes' | 'packets' }))}
+                  onChange={(e) =>
+                    setParams((p) => ({
+                      ...p,
+                      sort_by: e.target.value as 'bytes' | 'packets',
+                    }))
+                  }
                 >
                   <option value="bytes">Bytes</option>
                   <option value="packets">Packets</option>
                 </select>
-                {fieldErrors.sort_by && <div className="mt-1 text-[11px] text-red-300">{fieldErrors.sort_by}</div>}
+                {fieldErrors.sort_by && (
+                  <div className="mt-1 text-[11px] text-red-300">{fieldErrors.sort_by}</div>
+                )}
                 <label className="mt-1 flex items-center gap-1 text-[11px] text-gray-400">
                   <input
                     type="checkbox"
                     checked={params.sort_ascending}
-                    onChange={e => setParams(p => ({ ...p, sort_ascending: e.target.checked }))}
-                  /> Ascending
+                    onChange={(e) =>
+                      setParams((p) => ({
+                        ...p,
+                        sort_ascending: e.target.checked,
+                      }))
+                    }
+                  />{' '}
+                  Ascending
                 </label>
               </div>
               {/* Limit under Attributes */}
@@ -878,14 +1143,25 @@ export default function App() {
                   list="limit-presets"
                   className={
                     `w-full rounded-md bg-surface-200 px-2 py-1 text-[13px] ring-1 focus:outline-none ` +
-                    (fieldErrors.limit ? 'ring-red-500/40 bg-red-500/10 focus:ring-red-500/40' : 'ring-white/10 focus:ring-primary-500')
+                    (fieldErrors.limit
+                      ? 'ring-red-500/40 bg-red-500/10 focus:ring-red-500/40'
+                      : 'ring-white/10 focus:ring-primary-500')
                   }
                   value={params.limit}
-                  onChange={e => setParams(p => ({ ...p, limit: Math.max(1, Number(e.target.value) || 1) }))}
+                  onChange={(e) =>
+                    setParams((p) => ({
+                      ...p,
+                      limit: Math.max(1, Number(e.target.value) || 1),
+                    }))
+                  }
                 />
-                {fieldErrors.limit && <div className="mt-1 text-[11px] text-red-300">{fieldErrors.limit}</div>}
+                {fieldErrors.limit && (
+                  <div className="mt-1 text-[11px] text-red-300">{fieldErrors.limit}</div>
+                )}
                 <datalist id="limit-presets">
-                  {[10, 25, 50, 100, 250, 500, 1000].map(n => <option key={n} value={n} />)}
+                  {[10, 25, 50, 100, 250, 500, 1000].map((n) => (
+                    <option key={n} value={n} />
+                  ))}
                 </datalist>
               </div>
               {/* Spacer to maintain grid alignment for Run column */}
@@ -900,10 +1176,12 @@ export default function App() {
                   rows={2}
                   className={
                     `w-full resize-y rounded-md bg-surface-200 px-2 py-1 text-[13px] ring-1 focus:outline-none ` +
-                    (fieldErrors.condition ? 'ring-red-500/40 bg-red-500/10 focus:ring-red-500/40' : 'ring-white/10 focus:ring-primary-500')
+                    (fieldErrors.condition
+                      ? 'ring-red-500/40 bg-red-500/10 focus:ring-red-500/40'
+                      : 'ring-white/10 focus:ring-primary-500')
                   }
                   value={conditionInput}
-                  onChange={e => {
+                  onChange={(e) => {
                     const v = e.target.value
                     setConditionInput(v)
                     if (v.endsWith(' ')) commitCondition(v)
@@ -922,7 +1200,7 @@ export default function App() {
         <ErrorBanner error={error} />
         <div className="mb-4 flex items-center justify-between gap-4">
           <div className="flex gap-2">
-            {tabs.map(t => (
+            {tabs.map((t) => (
               <button
                 key={t.id}
                 onClick={() => setActiveTab(t.id)}
@@ -940,22 +1218,43 @@ export default function App() {
           <div>
             <select
               className="mr-2 rounded-md bg-surface-100 px-2 py-1 text-[13px] ring-1 ring-white/10"
-              onChange={e => e.target.value && onLoadView(e.target.value)}
+              onChange={(e) => e.target.value && onLoadView(e.target.value)}
               value=""
             >
-              <option value="" disabled>Saved views…</option>
-              {savedViews.map(v => <option key={v.name} value={v.name}>{v.name}</option>)}
+              <option value="" disabled>
+                Saved views…
+              </option>
+              {savedViews.map((v) => (
+                <option key={v.name} value={v.name}>
+                  {v.name}
+                </option>
+              ))}
             </select>
             <input
               type="text"
               placeholder="View name"
               className="mr-2 rounded-md bg-surface-100 px-2 py-1 text-[13px] ring-1 ring-white/10 focus:outline-none focus:ring-primary-500"
               value={saveViewName}
-              onChange={e => setSaveViewName(e.target.value)}
+              onChange={(e) => setSaveViewName(e.target.value)}
             />
-            <button onClick={onSaveView} disabled={!saveViewName.trim()} className="mr-2 rounded-md bg-surface-100 px-2 py-1 text-[13px] ring-1 ring-white/10 hover:bg-surface-200 disabled:opacity-50">Save view</button>
-            <button onClick={exportCSV} className="mr-2 rounded-md bg-surface-100 px-2 py-1 text-[13px] ring-1 ring-white/10 hover:bg-surface-200">Export CSV</button>
-            <button onClick={() => run()} disabled={loading} className="btn btn-primary disabled:opacity-50">
+            <button
+              onClick={onSaveView}
+              disabled={!saveViewName.trim()}
+              className="mr-2 rounded-md bg-surface-100 px-2 py-1 text-[13px] ring-1 ring-white/10 hover:bg-surface-200 disabled:opacity-50"
+            >
+              Save view
+            </button>
+            <button
+              onClick={exportCSV}
+              className="mr-2 rounded-md bg-surface-100 px-2 py-1 text-[13px] ring-1 ring-white/10 hover:bg-surface-200"
+            >
+              Export CSV
+            </button>
+            <button
+              onClick={() => run()}
+              disabled={loading}
+              className="btn btn-primary disabled:opacity-50"
+            >
               {loading ? 'Running…' : 'Run'}
             </button>
           </div>
@@ -964,9 +1263,7 @@ export default function App() {
           <div className="mb-4 rounded-lg border border-white/10 bg-surface-100/60 p-4 text-[12px] relative">
             <div className="absolute right-2 top-2 flex items-center gap-2">
               <span className="text-[11px] text-gray-300">Copy results</span>
-              {copiedToast && (
-                <span className="text-[11px] text-primary-300">Table copied</span>
-              )}
+              {copiedToast && <span className="text-[11px] text-primary-300">Table copied</span>}
               <button
                 type="button"
                 className="rounded-md bg-surface-200 px-2 py-1 ring-1 ring-white/10 hover:bg-surface-300"
@@ -975,48 +1272,79 @@ export default function App() {
                   try {
                     const t: any = (summary as any)?.totals || {}
                     const text = buildTextTable(rows, {
-                      attributes: (attrState.all ? undefined : attrState.values.map(v => (v === 'protocol' ? 'proto' : v === 'port' ? 'dport' : v))),
-                      totalsBytes: (() => { const br = t.br || 0, bs = t.bs || 0; return br + bs })(),
-                      totalsPackets: (() => { const pr = t.pr || 0, ps = t.ps || 0; return pr + ps })(),
+                      attributes: attrState.all
+                        ? undefined
+                        : attrState.values.map((v) =>
+                            v === 'protocol' ? 'proto' : v === 'port' ? 'dport' : v
+                          ),
+                      totalsBytes: (() => {
+                        const br = t.br || 0,
+                          bs = t.bs || 0
+                        return br + bs
+                      })(),
+                      totalsPackets: (() => {
+                        const pr = t.pr || 0,
+                          ps = t.ps || 0
+                        return pr + ps
+                      })(),
                       meta: {
                         first: (summary as any)?.time_first,
                         last: (summary as any)?.time_last,
-                        interfacesCount: Array.isArray(summary.interfaces) ? summary.interfaces.length : 0,
+                        interfacesCount: Array.isArray(summary.interfaces)
+                          ? summary.interfaces.length
+                          : 0,
                         hostsTotal: (hostOkCount || 0) + (hostErrorCount || 0),
                         hostsOk: hostOkCount || 0,
                         hostsErrors: hostErrorCount || 0,
                         sortBy: params.sort_by,
                         hitsTotal: (summary as any)?.hits?.total,
                         durationNs: (summary as any)?.timings?.query_duration_ns,
-                        br: t.br || 0, bs: t.bs || 0, pr: t.pr || 0, ps: t.ps || 0,
-                      }
+                        br: t.br || 0,
+                        bs: t.bs || 0,
+                        pr: t.pr || 0,
+                        ps: t.ps || 0,
+                      },
                     })
                     if (navigator.clipboard?.writeText) {
                       await navigator.clipboard.writeText(text)
                     }
                     setCopiedToast(true)
                     window.setTimeout(() => setCopiedToast(false), 1500)
-                  } catch { }
+                  } catch {}
                 }}
                 aria-label="Copy text table"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4 text-gray-300">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  className="h-4 w-4 text-gray-300"
+                >
                   <path d="M16 1H4a2 2 0 0 0-2 2v12h2V3h12V1ZM20 5H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Zm0 16H8V7h12v14Z" />
                 </svg>
               </button>
             </div>
-            <div className="mb-2 text-[11px] font-semibold tracking-wide text-gray-300 uppercase">Summary</div>
-            <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
+            <div className="mb-2 text-[11px] font-semibold tracking-wide text-gray-300 uppercase">
+              Summary
+            </div>
+            <div
+              className="grid gap-3"
+              style={{
+                gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+              }}
+            >
               <SummaryStat
                 label="Time Range"
                 multiline
-                value={(
+                value={
                   <div className="flex flex-col">
                     <span>{formatTimestamp(summary.time_first)}</span>
                     <span>{formatTimestamp(summary.time_last)}</span>
-                    <span className="text-primary-300">{humanRangeDuration(summary.time_first, summary.time_last)}</span>
+                    <span className="text-primary-300">
+                      {humanRangeDuration(summary.time_first, summary.time_last)}
+                    </span>
                   </div>
-                )}
+                }
               />
               {/* Hosts panel: two-line clamp list of queried hosts with counts */}
               <SummaryStat
@@ -1028,19 +1356,26 @@ export default function App() {
                   for (const r of rows) {
                     if (r.host_id && r.host) nameById[r.host_id] = r.host
                   }
-                  const hostNames: string[] = statusEntries.length > 0
-                    ? statusEntries.map(([id]) => nameById[id] || id)
-                    : Array.from(new Set(rows.map(r => r.host).filter((h): h is string => !!h)))
+                  const hostNames: string[] =
+                    statusEntries.length > 0
+                      ? statusEntries.map(([id]) => nameById[id] || id)
+                      : Array.from(new Set(rows.map((r) => r.host).filter((h): h is string => !!h)))
                   const hostsCount = hostOkCount + hostErrorCount
                   const errors = hostErrorCount
-                  const summaryLine = errors > 0
-                    ? `${hostsCount} total, ${hostOkCount} ok, ${errors} error${errors === 1 ? '' : 's'}`
-                    : `${hostsCount} total`
+                  const summaryLine =
+                    errors > 0
+                      ? `${hostsCount} total, ${hostOkCount} ok, ${errors} error${errors === 1 ? '' : 's'}`
+                      : `${hostsCount} total`
                   return (
                     <div className="flex flex-col">
                       <span
                         className="cursor-default"
-                        style={{ display: '-webkit-box', WebkitLineClamp: 2 as any, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
+                        style={{
+                          display: '-webkit-box',
+                          WebkitLineClamp: 2 as any,
+                          WebkitBoxOrient: 'vertical',
+                          overflow: 'hidden',
+                        }}
                         title={hostNames.join(', ')}
                       >
                         {hostNames.length ? hostNames.join(', ') : '—'}
@@ -1067,7 +1402,12 @@ export default function App() {
                     <div className="flex flex-col">
                       <span
                         className="cursor-pointer hover:underline decoration-primary-400/60"
-                        style={{ display: '-webkit-box', WebkitLineClamp: 2 as any, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
+                        style={{
+                          display: '-webkit-box',
+                          WebkitLineClamp: 2 as any,
+                          WebkitBoxOrient: 'vertical',
+                          overflow: 'hidden',
+                        }}
                         title={list.join(', ')}
                         onClick={() => setIfaceDetailOpen(true)}
                       >
@@ -1088,25 +1428,42 @@ export default function App() {
               <SummaryStat
                 label="Bytes (in/out)"
                 multiline
-                value={(
+                value={
                   <div className="flex flex-col">
-                    <span>{humanBytes((summary.totals as any).br ?? 0)} / {humanBytes((summary.totals as any).bs ?? 0)}</span>
-                    <span className="text-primary-300">{humanBytes(((summary.totals as any).br ?? 0) + ((summary.totals as any).bs ?? 0))}</span>
+                    <span>
+                      {humanBytes((summary.totals as any).br ?? 0)} /{' '}
+                      {humanBytes((summary.totals as any).bs ?? 0)}
+                    </span>
+                    <span className="text-primary-300">
+                      {humanBytes(
+                        ((summary.totals as any).br ?? 0) + ((summary.totals as any).bs ?? 0)
+                      )}
+                    </span>
                   </div>
-                )}
+                }
               />
               <SummaryStat
                 label="Packets (in/out)"
                 multiline
-                value={(
+                value={
                   <div className="flex flex-col">
-                    <span>{humanPackets((summary.totals as any).pr ?? 0)} / {humanPackets((summary.totals as any).ps ?? 0)}</span>
-                    <span className="text-primary-300">{humanPackets(((summary.totals as any).pr ?? 0) + ((summary.totals as any).ps ?? 0))}</span>
+                    <span>
+                      {humanPackets((summary.totals as any).pr ?? 0)} /{' '}
+                      {humanPackets((summary.totals as any).ps ?? 0)}
+                    </span>
+                    <span className="text-primary-300">
+                      {humanPackets(
+                        ((summary.totals as any).pr ?? 0) + ((summary.totals as any).ps ?? 0)
+                      )}
+                    </span>
                   </div>
-                )}
+                }
               />
               {summary.timings.resolution !== undefined && (
-                <SummaryStat label="DNS Resolution" value={formatDurationNs(summary.timings.resolution)} />
+                <SummaryStat
+                  label="DNS Resolution"
+                  value={formatDurationNs(summary.timings.resolution)}
+                />
               )}
             </div>
           </div>
@@ -1133,21 +1490,28 @@ export default function App() {
             </div>
           )
         })()}
-    {(() => {
+        {(() => {
           const displayed = rows.length
           const total = summary?.hits?.total
           if (displayed === 0 && total === undefined) return null
           const stats: any = (summary as any)?.stats || {}
-          const blocks: number | undefined = (typeof stats.blocks_processed === 'number') ? stats.blocks_processed : undefined
-          const decBytes: number | undefined = (typeof stats.bytes_decompressed === 'number') ? stats.bytes_decompressed : undefined
+          const blocks: number | undefined =
+            typeof stats.blocks_processed === 'number' ? stats.blocks_processed : undefined
+          const decBytes: number | undefined =
+            typeof stats.bytes_decompressed === 'number' ? stats.bytes_decompressed : undefined
           const durNs: number | undefined = (summary as any)?.timings?.query_duration_ns
-          const hasLoaded = (blocks !== undefined || decBytes !== undefined || durNs !== undefined)
+          const hasLoaded = blocks !== undefined || decBytes !== undefined || durNs !== undefined
           return (
             <div className="mb-2 flex items-center justify-between text-[12px] text-gray-300">
-      <DisplaySummary displayed={displayed} total={total} />
+              <DisplaySummary displayed={displayed} total={total} />
               {hasLoaded && (
                 <div className="text-right text-[12px] text-gray-300">
-                  Loaded <span className="font-semibold text-white">{humanPackets(blocks ?? 0)}</span> blocks / <span className="font-semibold text-white">{humanBytes(decBytes ?? 0)}</span> decompressed in <span className="font-semibold text-white">{formatDurationNs(durNs ?? 0)}</span>
+                  Loaded{' '}
+                  <span className="font-semibold text-white">{humanPackets(blocks ?? 0)}</span>{' '}
+                  blocks /{' '}
+                  <span className="font-semibold text-white">{humanBytes(decBytes ?? 0)}</span>{' '}
+                  decompressed in{' '}
+                  <span className="font-semibold text-white">{formatDurationNs(durNs ?? 0)}</span>
                 </div>
               )}
             </div>
@@ -1155,7 +1519,7 @@ export default function App() {
         })()}
         <div className="relative rounded-lg ring-1 ring-white/10">
           {/* show blocking overlay only for non-streaming requests; allow partial results during streaming */}
-          {(loading && !streaming) && (
+          {loading && !streaming && (
             <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-surface-100/70 backdrop-blur-[1px]">
               <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-white" />
             </div>
@@ -1163,7 +1527,10 @@ export default function App() {
           {/* Settings detail overlay */}
           {settingsOpen && (
             <>
-              <div className="absolute inset-0 z-20 rounded-lg bg-black/50" onClick={() => setSettingsOpen(false)} />
+              <div
+                className="absolute inset-0 z-20 rounded-lg bg-black/50"
+                onClick={() => setSettingsOpen(false)}
+              />
               <div className="absolute left-1/2 top-16 z-30 w-[min(520px,90%)] -translate-x-1/2 rounded-lg border border-white/10 bg-surface-100 p-4 shadow-xl">
                 <div className="mb-2 flex items-center justify-between">
                   <div className="text-[13px] font-semibold text-gray-200">Settings</div>
@@ -1171,23 +1538,33 @@ export default function App() {
                     type="button"
                     onClick={() => setSettingsOpen(false)}
                     className="rounded-md bg-surface-200 px-2 py-1 text-[12px] ring-1 ring-white/10 hover:bg-surface-300"
-                  >Close</button>
+                  >
+                    Close
+                  </button>
                 </div>
                 <div className="space-y-3 text-[12px]">
                   <div className="flex items-center justify-between">
                     <label className="flex items-center gap-2 text-gray-300">
-                      <input type="checkbox" checked={useStreaming} onChange={e => setUseStreaming(e.target.checked)} />
+                      <input
+                        type="checkbox"
+                        checked={useStreaming}
+                        onChange={(e) => setUseStreaming(e.target.checked)}
+                      />
                       Stream results
                     </label>
                     <button
                       type="button"
                       className="text-[11px] text-gray-400 hover:text-gray-200 underline decoration-dotted"
                       onClick={() => {
-                        try { localStorage.removeItem(LS_STREAMING_KEY) } catch { }
+                        try {
+                          localStorage.removeItem(LS_STREAMING_KEY)
+                        } catch {}
                         setUseStreaming(!!env.SSE_ON_LOAD)
                       }}
                       title={`Reset to default (${env.SSE_ON_LOAD ? 'on' : 'off'})`}
-                    >Reset to default ({env.SSE_ON_LOAD ? 'on' : 'off'})</button>
+                    >
+                      Reset to default ({env.SSE_ON_LOAD ? 'on' : 'off'})
+                    </button>
                   </div>
                   <div className="flex flex-col">
                     <label className="mb-1 text-[11px] tracking-wide text-gray-400">Backend</label>
@@ -1196,20 +1573,24 @@ export default function App() {
                       placeholder={defaultBackend}
                       className="w-full rounded-md bg-surface-200 px-2 py-1 text-[13px] ring-1 ring-white/10 focus:outline-none focus:ring-primary-500"
                       value={backendUrl}
-                      onChange={e => setBackendUrl(e.target.value)}
+                      onChange={(e) => setBackendUrl(e.target.value)}
                     />
                     <div className="mt-1 text-[11px] text-gray-500">Default: {defaultBackend}</div>
                   </div>
                   <div className="flex flex-col">
-                    <label className="mb-1 text-[11px] tracking-wide text-gray-400">Hosts Resolver</label>
+                    <label className="mb-1 text-[11px] tracking-wide text-gray-400">
+                      Hosts Resolver
+                    </label>
                     {env.HOST_RESOLVER_TYPES.length > 0 ? (
                       <select
                         className="w-full rounded-md bg-surface-200 px-2 py-1 text-[13px] ring-1 ring-white/10 focus:outline-none focus:ring-primary-500"
                         value={hostsResolver}
-                        onChange={e => setHostsResolver(e.target.value)}
+                        onChange={(e) => setHostsResolver(e.target.value)}
                       >
                         {env.HOST_RESOLVER_TYPES.map((opt: string) => (
-                          <option key={opt} value={opt}>{opt}</option>
+                          <option key={opt} value={opt}>
+                            {opt}
+                          </option>
                         ))}
                       </select>
                     ) : (
@@ -1221,7 +1602,9 @@ export default function App() {
                       />
                     )}
                     {env.HOST_RESOLVER_TYPES.length === 0 && (
-                      <div className="mt-1 text-[11px] text-gray-500">No resolver types configured</div>
+                      <div className="mt-1 text-[11px] text-gray-500">
+                        No resolver types configured
+                      </div>
                     )}
                   </div>
                 </div>
@@ -1231,41 +1614,67 @@ export default function App() {
           {/* Interfaces & Host Status modal */}
           {ifaceDetailOpen && (
             <>
-              <div className="absolute inset-0 z-20 rounded-lg bg-black/50" onClick={() => setIfaceDetailOpen(false)} />
+              <div
+                className="absolute inset-0 z-20 rounded-lg bg-black/50"
+                onClick={() => setIfaceDetailOpen(false)}
+              />
               <div className="absolute left-1/2 top-16 z-30 w-[min(1000px,95%)] -translate-x-1/2 rounded-lg border border-white/10 bg-surface-100 p-4 shadow-xl">
                 <div className="mb-3 flex items-center justify-between">
-                  <div className="text-[13px] font-semibold text-gray-200">Interfaces &amp; Host Status</div>
+                  <div className="text-[13px] font-semibold text-gray-200">
+                    Interfaces &amp; Host Status
+                  </div>
                   <button
                     type="button"
                     onClick={() => setIfaceDetailOpen(false)}
                     className="rounded-md bg-surface-200 px-2 py-1 text-[12px] ring-1 ring-white/10 hover:bg-surface-300"
-                  >Close</button>
+                  >
+                    Close
+                  </button>
                 </div>
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-3 text-[12px]">
                   <div className="min-h-[180px]">
-                    <div className="mb-2 text-[11px] uppercase tracking-wide text-gray-400">Interfaces</div>
+                    <div className="mb-2 text-[11px] uppercase tracking-wide text-gray-400">
+                      Interfaces
+                    </div>
                     {(() => {
-                      const ifaces: string[] = Array.isArray(summary?.interfaces) ? (summary?.interfaces as string[]) : []
+                      const ifaces: string[] = Array.isArray(summary?.interfaces)
+                        ? (summary?.interfaces as string[])
+                        : []
                       if (ifaces.length === 0) {
-                        return <div className="rounded-md bg-surface-200/40 p-3 text-gray-400 ring-1 ring-white/5">No interfaces found.</div>
+                        return (
+                          <div className="rounded-md bg-surface-200/40 p-3 text-gray-400 ring-1 ring-white/5">
+                            No interfaces found.
+                          </div>
+                        )
                       }
                       return (
                         <ul className="max-h-64 overflow-auto rounded-md bg-surface-200/40 p-2 ring-1 ring-white/5">
-                          {ifaces.slice().sort((a: string, b: string) => a.localeCompare(b)).map((iface: string, i: number) => (
-                            <li key={i} className="mb-1 last:mb-0 break-all text-gray-100">{iface}</li>
-                          ))}
+                          {ifaces
+                            .slice()
+                            .sort((a: string, b: string) => a.localeCompare(b))
+                            .map((iface: string, i: number) => (
+                              <li key={i} className="mb-1 last:mb-0 break-all text-gray-100">
+                                {iface}
+                              </li>
+                            ))}
                         </ul>
                       )
                     })()}
                   </div>
                   <div className="min-h-[180px]">
-                    <div className="mb-2 text-[11px] uppercase tracking-wide text-gray-400">Host OK</div>
+                    <div className="mb-2 text-[11px] uppercase tracking-wide text-gray-400">
+                      Host OK
+                    </div>
                     {(() => {
                       const entries = Object.entries(hostsStatuses || {})
                         .filter(([, v]) => String(v?.code || '').toLowerCase() === 'ok')
                         .sort(([a], [b]) => a.localeCompare(b))
                       if (entries.length === 0) {
-                        return <div className="rounded-md bg-surface-200/40 p-3 text-gray-400 ring-1 ring-white/5">No OK hosts.</div>
+                        return (
+                          <div className="rounded-md bg-surface-200/40 p-3 text-gray-400 ring-1 ring-white/5">
+                            No OK hosts.
+                          </div>
+                        )
                       }
                       const nameById: Record<string, string> = {}
                       for (const r of rows) {
@@ -1277,7 +1686,9 @@ export default function App() {
                             <li key={hostId + i} className="mb-1 last:mb-0 text-gray-100">
                               {nameById[hostId] || hostId}
                               {nameById[hostId] && (
-                                <span className="ml-2 font-mono text-[11px] text-gray-400">{hostId}</span>
+                                <span className="ml-2 font-mono text-[11px] text-gray-400">
+                                  {hostId}
+                                </span>
                               )}
                             </li>
                           ))}
@@ -1286,13 +1697,19 @@ export default function App() {
                     })()}
                   </div>
                   <div className="min-h-[180px]">
-                    <div className="mb-2 text-[11px] uppercase tracking-wide text-gray-400">Host Errors</div>
+                    <div className="mb-2 text-[11px] uppercase tracking-wide text-gray-400">
+                      Host Errors
+                    </div>
                     {(() => {
                       const entries = Object.entries(hostsStatuses || {})
                         .filter(([, v]) => String(v?.code || '').toLowerCase() !== 'ok')
                         .sort(([a], [b]) => a.localeCompare(b))
                       if (entries.length === 0) {
-                        return <div className="rounded-md bg-surface-200/40 p-3 text-gray-400 ring-1 ring-white/5">No host errors.</div>
+                        return (
+                          <div className="rounded-md bg-surface-200/40 p-3 text-gray-400 ring-1 ring-white/5">
+                            No host errors.
+                          </div>
+                        )
                       }
                       const nameById: Record<string, string> = {}
                       for (const r of rows) {
@@ -1305,12 +1722,18 @@ export default function App() {
                               <div className="font-medium text-gray-100">
                                 {nameById[hostId] || hostId}
                                 {nameById[hostId] && (
-                                  <span className="ml-2 font-mono text-[11px] text-gray-400">{hostId}</span>
+                                  <span className="ml-2 font-mono text-[11px] text-gray-400">
+                                    {hostId}
+                                  </span>
                                 )}
                               </div>
                               <div className="mt-0.5 text-[11px] text-red-300">
-                                <span className="uppercase text-[10px] tracking-wide text-red-400/80">{String(st?.code || 'error')}</span>
-                                {st?.message && <span className="ml-2 text-gray-300">{st.message}</span>}
+                                <span className="uppercase text-[10px] tracking-wide text-red-400/80">
+                                  {String(st?.code || 'error')}
+                                </span>
+                                {st?.message && (
+                                  <span className="ml-2 text-gray-300">{st.message}</span>
+                                )}
                               </div>
                             </li>
                           ))}
@@ -1334,7 +1757,13 @@ export default function App() {
                 rows={rows}
                 loading={loading && !streaming}
                 streaming={streaming}
-                attributes={attrState.all ? undefined : attrState.values.map(v => (v === 'protocol' ? 'proto' : v === 'port' ? 'dport' : v))}
+                attributes={
+                  attrState.all
+                    ? undefined
+                    : attrState.values.map((v) =>
+                        v === 'protocol' ? 'proto' : v === 'port' ? 'dport' : v
+                      )
+                }
                 totalsBytes={(() => {
                   const t: any = (summary as any)?.totals || {}
                   const br = typeof t.br === 'number' ? t.br : 0
@@ -1351,7 +1780,9 @@ export default function App() {
                   const t: any = (summary as any)?.totals || {}
                   const hitsTotal = (summary as any)?.hits?.total
                   const durNs = (summary as any)?.timings?.query_duration_ns
-                  const ifacesCount = Array.isArray((summary as any)?.interfaces) ? ((summary as any)?.interfaces as any[]).length : 0
+                  const ifacesCount = Array.isArray((summary as any)?.interfaces)
+                    ? ((summary as any)?.interfaces as any[]).length
+                    : 0
                   const hostsTotal = (hostOkCount || 0) + (hostErrorCount || 0)
                   return {
                     first: params.first,
@@ -1369,7 +1800,9 @@ export default function App() {
                     ps: typeof t.ps === 'number' ? t.ps : 0,
                   }
                 })()}
-                onRowClick={(r) => { void openTemporalForRow(r) }}
+                onRowClick={(r) => {
+                  void openTemporalForRow(r)
+                }}
               />
             )}
             {activeTab === 'graph' && (
@@ -1378,9 +1811,9 @@ export default function App() {
                   rows={rows}
                   loading={loading && !streaming}
                   maxNodes={Math.max(100, params.limit || 0)}
-                  onIpClick={ip => openIpDetails(ip)}
+                  onIpClick={(ip) => openIpDetails(ip)}
                   onIfaceClick={(host, iface) => openIfaceDetails(host, iface)}
-                  onHostClick={hostId => openHostDetails(hostId)}
+                  onHostClick={(hostId) => openHostDetails(hostId)}
                 />
                 {ipDetail && (
                   <IpDetailsPanel

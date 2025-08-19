@@ -9,7 +9,13 @@ export interface InOutSummaryProps {
   className?: string
 }
 
-export const InOutSummary: React.FC<InOutSummaryProps> = ({ inBytes, inPackets, outBytes, outPackets, className }) => {
+export const InOutSummary: React.FC<InOutSummaryProps> = ({
+  inBytes,
+  inPackets,
+  outBytes,
+  outPackets,
+  className,
+}) => {
   return (
     <div className={(className ? className + ' ' : '') + 'mb-3 grid grid-cols-2 gap-2 text-[12px]'}>
       <div className="rounded-md bg-surface-200/40 p-2 ring-1 ring-white/5">

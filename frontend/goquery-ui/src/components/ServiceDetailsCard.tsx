@@ -43,4 +43,3 @@ export const ServiceDetailsCard: React.FC<ServiceDetailsCardProps> = ({
 }
 
 export default ServiceDetailsCard
-
