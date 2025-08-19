@@ -18,7 +18,9 @@ export const IfaceDetails: React.FC<IfaceDetailsProps> = ({ groups, loading }) =
   return (
     <div className="scroll-thin max-h-[45vh] overflow-auto pr-1">
       {loading && <div className="py-8 text-center text-[12px] text-gray-400">Loading…</div>}
-      {!loading && groups.length === 0 && <div className="py-8 text-center text-[12px] text-gray-400">No interfaces</div>}
+      {!loading && groups.length === 0 && (
+        <div className="py-8 text-center text-[12px] text-gray-400">No interfaces</div>
+      )}
       <div className="space-y-2">
         {groups.map((g, i) => (
           <div key={i}>

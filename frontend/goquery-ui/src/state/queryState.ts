@@ -28,15 +28,23 @@ export function parseParams(search: string): Partial<QueryParamsUI> {
     return Number.isFinite(n) ? n : undefined
   }
   const out: Partial<QueryParamsUI> = {}
-  const first = sp.get('first'); if (first) out.first = first
-  const last = sp.get('last'); if (last) out.last = last
-  const ifaces = sp.get('ifaces'); if (ifaces) out.ifaces = ifaces
-  const query = sp.get('query'); if (query) out.query = query
-  const query_hosts = sp.get('query_hosts'); if (query_hosts) out.query_hosts = query_hosts
-  const limit = getNum('limit'); if (limit !== undefined) out.limit = limit
-  const sort_by = sp.get('sort_by'); if (sort_by === 'bytes' || sort_by === 'packets') out.sort_by = sort_by
+  const first = sp.get('first')
+  if (first) out.first = first
+  const last = sp.get('last')
+  if (last) out.last = last
+  const ifaces = sp.get('ifaces')
+  if (ifaces) out.ifaces = ifaces
+  const query = sp.get('query')
+  if (query) out.query = query
+  const query_hosts = sp.get('query_hosts')
+  if (query_hosts) out.query_hosts = query_hosts
+  const limit = getNum('limit')
+  if (limit !== undefined) out.limit = limit
+  const sort_by = sp.get('sort_by')
+  if (sort_by === 'bytes' || sort_by === 'packets') out.sort_by = sort_by
   if (sp.get('sort_ascending')) out.sort_ascending = bool('sort_ascending')
-  const condition = sp.get('condition'); if (condition) out.condition = condition
+  const condition = sp.get('condition')
+  if (condition) out.condition = condition
   if (bool('in')) out.in_only = true
   if (bool('out')) out.out_only = true
   if (bool('sum')) out.sum = true

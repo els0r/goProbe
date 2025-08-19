@@ -1,4 +1,11 @@
-import { ApiError, FlowRecord, extractFlows, QueryParamsUI, ErrorModelSchema, SummarySchema } from './domain'
+import {
+  ApiError,
+  FlowRecord,
+  extractFlows,
+  QueryParamsUI,
+  ErrorModelSchema,
+  SummarySchema,
+} from './domain'
 import { getApiBaseUrl } from '../env'
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore generated after `make types`
@@ -27,8 +34,12 @@ export class GlobalQueryClient {
   async runQueryUI(
     params: QueryParamsUI,
     signal?: AbortSignal
-  ): Promise<{ flows: FlowRecord[]; summary?: SummarySchema; hostsStatuses?: Record<string, { code?: string; message?: string }> }> {
-  const args = buildArgs(params)
+  ): Promise<{
+    flows: FlowRecord[]
+    summary?: SummarySchema
+    hostsStatuses?: Record<string, { code?: string; message?: string }>
+  }> {
+    const args = buildArgs(params)
     const url = `${this.baseUrl}/_query`
     const controller = !signal ? new AbortController() : undefined
     const timeout = setTimeout(() => controller?.abort(), this.timeout)
@@ -43,14 +54,24 @@ export class GlobalQueryClient {
         const body = await safeJson(res)
         // attempt to detect problem+json structure
         let problem: ErrorModelSchema | undefined
-        if (body && typeof body === 'object' && ('detail' in (body as any) || 'errors' in (body as any))) {
+        if (
+          body &&
+          typeof body === 'object' &&
+          ('detail' in (body as any) || 'errors' in (body as any))
+        ) {
           problem = body as ErrorModelSchema
         }
         throw apiError(res.status, body, problem)
       }
-  const json = (await res.json()) as ResultSchema
-  const hostsStatuses = (json as any)?.hosts_statuses as Record<string, { code?: string; message?: string }> | undefined
-  return { flows: extractFlows(json), summary: json?.summary as any, hostsStatuses }
+      const json = (await res.json()) as ResultSchema
+      const hostsStatuses = (json as any)?.hosts_statuses as
+        | Record<string, { code?: string; message?: string }>
+        | undefined
+      return {
+        flows: extractFlows(json),
+        summary: json?.summary as any,
+        hostsStatuses,
+      }
     } catch (e: any) {
       if (e.name === 'AbortError') throw abortError()
       if (isApiError(e)) throw e
@@ -73,10 +94,14 @@ export class GlobalQueryClient {
       onFinal?: (flows: FlowRecord[], summary?: SummarySchema) => void
       onError?: (err: ApiError | { message?: string; [k: string]: unknown }) => void
       onProgress?: (p: { done?: number; total?: number }) => void
-      onMeta?: (meta: { hostsStatuses?: Record<string, { code?: string; message?: string }>; hostErrorCount?: number; hostOkCount?: number }) => void
+      onMeta?: (meta: {
+        hostsStatuses?: Record<string, { code?: string; message?: string }>
+        hostErrorCount?: number
+        hostOkCount?: number
+      }) => void
     }
   ): { close: () => void } {
-  const args = buildArgs(params)
+    const args = buildArgs(params)
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), this.timeout)
     let closed = false
@@ -114,45 +139,61 @@ export class GlobalQueryClient {
       const name = (evt.event || 'message').trim()
       const lname = name.toLowerCase()
       const raw = evt.data || ''
-      const data = (() => { try { return raw ? JSON.parse(raw) : undefined } catch { return undefined } })()
-    if (lname === 'partialresult' || lname === 'partial' || lname === 'message') {
+      const data = (() => {
+        try {
+          return raw ? JSON.parse(raw) : undefined
+        } catch {
+          return undefined
+        }
+      })()
+      if (lname === 'partialresult' || lname === 'partial' || lname === 'message') {
         if (!data) return
         try {
           const payload: any = unwrapPayload(data)
-      const flows = extractFlows(payload as ResultSchema)
-      const summary = (data as any)?.summary ?? (payload as any)?.summary
-      const statuses = (data as any)?.hosts_statuses ?? (payload as any)?.hosts_statuses
-      if (statuses && typeof statuses === 'object') {
-        let err = 0, ok = 0
-        for (const k of Object.keys(statuses)) {
-          const c = String((statuses as any)[k]?.code || '').toLowerCase()
-          if (c === 'ok') ok++
-          else err++
-        }
-        handlers.onMeta?.({ hostsStatuses: statuses as any, hostErrorCount: err, hostOkCount: ok })
-      }
-      handlers.onPartial?.(flows, summary as any)
+          const flows = extractFlows(payload as ResultSchema)
+          const summary = (data as any)?.summary ?? (payload as any)?.summary
+          const statuses = (data as any)?.hosts_statuses ?? (payload as any)?.hosts_statuses
+          if (statuses && typeof statuses === 'object') {
+            let err = 0,
+              ok = 0
+            for (const k of Object.keys(statuses)) {
+              const c = String((statuses as any)[k]?.code || '').toLowerCase()
+              if (c === 'ok') ok++
+              else err++
+            }
+            handlers.onMeta?.({
+              hostsStatuses: statuses as any,
+              hostErrorCount: err,
+              hostOkCount: ok,
+            })
+          }
+          handlers.onPartial?.(flows, summary as any)
         } catch (e) {
           handlers.onError?.(unknownError(e))
         }
         return
       }
-    if (lname === 'finalresult' || lname === 'final') {
+      if (lname === 'finalresult' || lname === 'final') {
         try {
           const payload: any = unwrapPayload(data)
-      const flows = extractFlows(payload as ResultSchema)
-      const summary = (data as any)?.summary ?? (payload as any)?.summary
-      const statuses = (data as any)?.hosts_statuses ?? (payload as any)?.hosts_statuses
-      if (statuses && typeof statuses === 'object') {
-        let err = 0, ok = 0
-        for (const k of Object.keys(statuses)) {
-          const c = String((statuses as any)[k]?.code || '').toLowerCase()
-          if (c === 'ok') ok++
-          else err++
-        }
-        handlers.onMeta?.({ hostsStatuses: statuses as any, hostErrorCount: err, hostOkCount: ok })
-      }
-      handlers.onFinal?.(flows, summary as any)
+          const flows = extractFlows(payload as ResultSchema)
+          const summary = (data as any)?.summary ?? (payload as any)?.summary
+          const statuses = (data as any)?.hosts_statuses ?? (payload as any)?.hosts_statuses
+          if (statuses && typeof statuses === 'object') {
+            let err = 0,
+              ok = 0
+            for (const k of Object.keys(statuses)) {
+              const c = String((statuses as any)[k]?.code || '').toLowerCase()
+              if (c === 'ok') ok++
+              else err++
+            }
+            handlers.onMeta?.({
+              hostsStatuses: statuses as any,
+              hostErrorCount: err,
+              hostOkCount: ok,
+            })
+          }
+          handlers.onFinal?.(flows, summary as any)
         } finally {
           // caller's close will abort; we also clear timeout here
           clearTimeout(timeout)
@@ -171,9 +212,9 @@ export class GlobalQueryClient {
         return
       }
       // heuristic fallback: if payload includes rows, treat as partial; if it signals completion, treat as final
-    if (data && typeof data === 'object') {
+      if (data && typeof data === 'object') {
         try {
-      const payload: any = unwrapPayload(data)
+          const payload: any = unwrapPayload(data)
           const rows = (payload as any)?.rows
           const isRowsArray = Array.isArray(rows)
           const isFinal = !!((payload as any)?.final || (data as any)?.final)
@@ -201,16 +242,20 @@ export class GlobalQueryClient {
         const res = await fetch(`${this.baseUrl}/_query/sse`, {
           method: 'POST',
           headers: {
-            'accept': 'text/event-stream',
+            accept: 'text/event-stream',
             'content-type': 'application/json',
           },
           body: JSON.stringify(args),
           signal: controller.signal,
         })
-  if (!res.ok) {
+        if (!res.ok) {
           const body = await safeJson(res)
           let problem: ErrorModelSchema | undefined
-          if (body && typeof body === 'object' && ('detail' in (body as any) || 'errors' in (body as any))) {
+          if (
+            body &&
+            typeof body === 'object' &&
+            ('detail' in (body as any) || 'errors' in (body as any))
+          ) {
             problem = body as ErrorModelSchema
           }
           throw apiError(res.status, body, problem)
@@ -280,7 +325,10 @@ export class GlobalQueryClient {
 
     return {
       close: () => {
-        try { clearTimeout(timeout); controller.abort() } catch {}
+        try {
+          clearTimeout(timeout)
+          controller.abort()
+        } catch {}
         closed = true
       },
     }
@@ -298,14 +346,17 @@ export function getGlobalQueryClient(): GlobalQueryClient {
 // allow UI to change backend dynamically
 export function setGlobalQueryBaseUrl(baseUrl: string, timeoutMs?: number): GlobalQueryClient {
   const base = (baseUrl || '').replace(/\/$/, '')
-  _defaultClient = new GlobalQueryClient({ baseUrl: base || getApiBaseUrl(), timeoutMs })
+  _defaultClient = new GlobalQueryClient({
+    baseUrl: base || getApiBaseUrl(),
+    timeoutMs,
+  })
   return _defaultClient
 }
 
 function buildArgs(p: QueryParamsUI): Args {
   return {
     query: p.query,
-  query_hosts: p.query_hosts,
+    query_hosts: p.query_hosts,
     ifaces: p.ifaces,
     first: p.first,
     last: p.last,
@@ -316,8 +367,8 @@ function buildArgs(p: QueryParamsUI): Args {
     num_results: p.limit,
     sort_by: p.sort_by,
     sort_ascending: p.sort_ascending,
-  // forward UI-selected hosts resolver to backend schema field
-  query_hosts_resolver_type: p.hosts_resolver || undefined,
+    // forward UI-selected hosts resolver to backend schema field
+    query_hosts_resolver_type: p.hosts_resolver || undefined,
     format: 'json',
   }
 }
@@ -329,7 +380,7 @@ function apiError(status: number, body: unknown, problem?: ErrorModelSchema): Ap
     status,
     category: status >= 500 ? 'network' : 'client',
     body,
-  problem,
+    problem,
   }
 }
 
@@ -355,7 +406,11 @@ function isApiError(e: any): e is ApiError {
 }
 
 async function safeJson(res: Response): Promise<unknown> {
-  try { return await res.json() } catch { return undefined }
+  try {
+    return await res.json()
+  } catch {
+    return undefined
+  }
 }
 
 // build query string from Args for GET /sse

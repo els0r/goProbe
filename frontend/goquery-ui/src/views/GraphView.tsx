@@ -66,12 +66,18 @@ const IFACE_R = 12
 
 // simple responsive container size hook
 function useRect(ref: React.RefObject<HTMLElement>) {
-  const [rect, setRect] = useState<{ width: number; height: number }>({ width: 800, height: 500 })
+  const [rect, setRect] = useState<{ width: number; height: number }>({
+    width: 800,
+    height: 500,
+  })
   useEffect(() => {
     if (!ref.current) return
-    const obs = new ResizeObserver(entries => {
+    const obs = new ResizeObserver((entries) => {
       const r = entries[0].contentRect
-      setRect({ width: Math.max(600, r.width), height: Math.max(400, r.height) })
+      setRect({
+        width: Math.max(600, r.width),
+        height: Math.max(400, r.height),
+      })
     })
     obs.observe(ref.current)
     return () => obs.disconnect()
@@ -79,7 +85,14 @@ function useRect(ref: React.RefObject<HTMLElement>) {
   return rect
 }
 
-export function GraphView({ rows, loading, maxNodes, onIpClick, onIfaceClick, onHostClick }: GraphViewProps) {
+export function GraphView({
+  rows,
+  loading,
+  maxNodes,
+  onIpClick,
+  onIfaceClick,
+  onHostClick,
+}: GraphViewProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const { width, height } = useRect(containerRef)
   const [hoverIP, setHoverIP] = useState<string | null>(null)
@@ -92,7 +105,10 @@ export function GraphView({ rows, loading, maxNodes, onIpClick, onIfaceClick, on
     try {
       while (el) {
         const bg = getComputedStyle(el).backgroundColor
-        if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') { found = bg; break }
+        if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') {
+          found = bg
+          break
+        }
         el = el.parentElement as HTMLElement | null
       }
     } catch {
@@ -107,7 +123,12 @@ export function GraphView({ rows, loading, maxNodes, onIpClick, onIfaceClick, on
     if (!ip) return false
     if (ip.includes(':')) {
       const lower = ip.toLowerCase()
-      return lower.startsWith('fc') || lower.startsWith('fd') || lower.startsWith('fe80') || lower === '::1'
+      return (
+        lower.startsWith('fc') ||
+        lower.startsWith('fd') ||
+        lower.startsWith('fe80') ||
+        lower === '::1'
+      )
     }
     const m = ip.match(/^(\d{1,3})\.(\d{1,3})\./)
     if (!m) return false
@@ -123,10 +144,15 @@ export function GraphView({ rows, loading, maxNodes, onIpClick, onIfaceClick, on
 
   // build graph data with node budget and weighting
   const { nodes, edges, infoMsg, ipTotals, hostTotals } = useMemo(() => {
-    if (!rows || rows.length === 0) return { nodes: [] as Node[], edges: [] as Edge[], infoMsg: 'No graph data' }
+    if (!rows || rows.length === 0)
+      return {
+        nodes: [] as Node[],
+        edges: [] as Edge[],
+        infoMsg: 'No graph data',
+      }
 
     // sort flows by total bytes, descending, so heavier edges are preferred
-    const flows = [...rows].sort((a, b) => (b.bytes_in + b.bytes_out) - (a.bytes_in + a.bytes_out))
+    const flows = [...rows].sort((a, b) => b.bytes_in + b.bytes_out - (a.bytes_in + a.bytes_out))
 
     const nodeMap = new Map<string, Node>()
     const ipTotalsMap = new Map<string, { bytes: number; packets: number }>()
@@ -135,7 +161,14 @@ export function GraphView({ rows, loading, maxNodes, onIpClick, onIfaceClick, on
     let edgeIndex = 0
 
     // helper to add/find nodes while keeping within budget
-    const ensureNode = (id: string, label: string, type: NodeType, host?: string, iface?: string, hostId?: string): Node | null => {
+    const ensureNode = (
+      id: string,
+      label: string,
+      type: NodeType,
+      host?: string,
+      iface?: string,
+      hostId?: string
+    ): Node | null => {
       const exist = nodeMap.get(id)
       if (exist) return exist
       if (nodeMap.size + 1 > maxNodes) return null
@@ -172,14 +205,17 @@ export function GraphView({ rows, loading, maxNodes, onIpClick, onIfaceClick, on
       const bytes = r.bytes_in + r.bytes_out
       const packets = r.packets_in + r.packets_out
       const sipTot = ipTotalsMap.get(r.sip) || { bytes: 0, packets: 0 }
-      sipTot.bytes += bytes; sipTot.packets += packets
+      sipTot.bytes += bytes
+      sipTot.packets += packets
       ipTotalsMap.set(r.sip, sipTot)
       const dipTot = ipTotalsMap.get(r.dip) || { bytes: 0, packets: 0 }
-      dipTot.bytes += bytes; dipTot.packets += packets
+      dipTot.bytes += bytes
+      dipTot.packets += packets
       ipTotalsMap.set(r.dip, dipTot)
       if (r.host) {
         const hTot = hostTotalsMap.get(r.host) || { bytes: 0, packets: 0 }
-        hTot.bytes += bytes; hTot.packets += packets
+        hTot.bytes += bytes
+        hTot.packets += packets
         hostTotalsMap.set(r.host, hTot)
       }
 
@@ -187,7 +223,7 @@ export function GraphView({ rows, loading, maxNodes, onIpClick, onIfaceClick, on
     }
 
     // build edges: sip -> iface, iface -> dip (initial, per-flow)
-    const maxBytes = Math.max(1, ...included.map(rr => rr.bytes_in + rr.bytes_out))
+    const maxBytes = Math.max(1, ...included.map((rr) => rr.bytes_in + rr.bytes_out))
     for (const r of included) {
       const totalB = r.bytes_in + r.bytes_out
       const w = edgeWidth01(totalB / maxBytes)
@@ -198,8 +234,30 @@ export function GraphView({ rows, loading, maxNodes, onIpClick, onIfaceClick, on
       const ifaceId2 = `iface:${ifaceKey2}`
       const packetsTotal = r.packets_in + r.packets_out
       const title = `${r.sip} → ${r.dip} (${r.iface || 'iface'} on ${r.host || 'host'})\nbytes in/out: ${r.bytes_in} / ${r.bytes_out}\npackets in/out: ${r.packets_in} / ${r.packets_out}`
-      edgesOut.push({ id: `e:${edgeIndex++}:${sipId2}->${ifaceId2}`, from: sipId2, to: ifaceId2, color, width: w, title, sip: r.sip, dip: r.dip, bytesTotal: totalB, packetsTotal })
-      edgesOut.push({ id: `e:${edgeIndex++}:${ifaceId2}->${dipId2}`, from: ifaceId2, to: dipId2, color, width: w, title, sip: r.sip, dip: r.dip, bytesTotal: totalB, packetsTotal })
+      edgesOut.push({
+        id: `e:${edgeIndex++}:${sipId2}->${ifaceId2}`,
+        from: sipId2,
+        to: ifaceId2,
+        color,
+        width: w,
+        title,
+        sip: r.sip,
+        dip: r.dip,
+        bytesTotal: totalB,
+        packetsTotal,
+      })
+      edgesOut.push({
+        id: `e:${edgeIndex++}:${ifaceId2}->${dipId2}`,
+        from: ifaceId2,
+        to: dipId2,
+        color,
+        width: w,
+        title,
+        sip: r.sip,
+        dip: r.dip,
+        bytesTotal: totalB,
+        packetsTotal,
+      })
     }
 
     // aggregate duplicate edges between same nodes (e.g., multiple flows sharing sip→iface)
@@ -219,7 +277,7 @@ export function GraphView({ rows, loading, maxNodes, onIpClick, onIfaceClick, on
         }
       }
       // recompute widths based on aggregated totals
-      const maxEdgeBytes = Math.max(1, ...Array.from(byPair.values()).map(x => x.bytesTotal))
+      const maxEdgeBytes = Math.max(1, ...Array.from(byPair.values()).map((x) => x.bytesTotal))
       const aggregated: Edge[] = []
       let idx = 0
       for (const [key, v] of Array.from(byPair.entries())) {
@@ -250,7 +308,8 @@ export function GraphView({ rows, loading, maxNodes, onIpClick, onIfaceClick, on
     const vol = (n: Node) => ipTotalsMap.get(n.label)?.bytes || 0
     // sort ips by volume desc within their final groups later
     hostNodes.sort((a, b) => a.label.localeCompare(b.label))
-    for (const arr of ifaceNodesByHost.values()) arr.sort((a, b) => (a.iface || '').localeCompare(b.iface || ''))
+    for (const arr of ifaceNodesByHost.values())
+      arr.sort((a, b) => (a.iface || '').localeCompare(b.iface || ''))
 
     const padding = 40
     const colX = {
@@ -260,29 +319,36 @@ export function GraphView({ rows, loading, maxNodes, onIpClick, onIfaceClick, on
     }
 
     // scatter IPs half on left (sources) and half on right (dests) based on roles in included flows
-    const sourceSet = new Set(included.map(r => r.sip))
-    const destSet = new Set(included.map(r => r.dip))
-    const leftIPsAll = ipNodes.filter(n => sourceSet.has(n.label) && !destSet.has(n.label))
-    const rightIPsAll = ipNodes.filter(n => destSet.has(n.label) && !sourceSet.has(n.label))
-    const bothIPs = ipNodes.filter(n => sourceSet.has(n.label) && destSet.has(n.label))
+    const sourceSet = new Set(included.map((r) => r.sip))
+    const destSet = new Set(included.map((r) => r.dip))
+    const leftIPsAll = ipNodes.filter((n) => sourceSet.has(n.label) && !destSet.has(n.label))
+    const rightIPsAll = ipNodes.filter((n) => destSet.has(n.label) && !sourceSet.has(n.label))
+    const bothIPs = ipNodes.filter((n) => sourceSet.has(n.label) && destSet.has(n.label))
     // split "both" across sides to balance
     const half = Math.ceil(bothIPs.length / 2)
     const leftIPs = [...leftIPsAll, ...bothIPs.slice(0, half)]
     const rightIPs = [...rightIPsAll, ...bothIPs.slice(half)]
 
     // group into private/public and sort by volume (desc) within each group
-    const sortDesc = (arr: Node[]) => arr.sort((a, b) => vol(b) - vol(a) || a.label.localeCompare(b.label))
-    const leftPriv = sortDesc(leftIPs.filter(n => isPrivateIP(n.label)))
-    const leftPub = sortDesc(leftIPs.filter(n => !isPrivateIP(n.label)))
-    const rightPriv = sortDesc(rightIPs.filter(n => isPrivateIP(n.label)))
-    const rightPub = sortDesc(rightIPs.filter(n => !isPrivateIP(n.label)))
+    const sortDesc = (arr: Node[]) =>
+      arr.sort((a, b) => vol(b) - vol(a) || a.label.localeCompare(b.label))
+    const leftPriv = sortDesc(leftIPs.filter((n) => isPrivateIP(n.label)))
+    const leftPub = sortDesc(leftIPs.filter((n) => !isPrivateIP(n.label)))
+    const rightPriv = sortDesc(rightIPs.filter((n) => isPrivateIP(n.label)))
+    const rightPub = sortDesc(rightIPs.filter((n) => !isPrivateIP(n.label)))
 
     // ensure at least MIN_IP_GAP between nodes; ensure GROUP_GAP between
     // private/public groups; prune from the tail if needed (lowest volume)
     const MIN_IP_GAP = 2 * IP_R + 8 // center-to-center spacing within a group (>= 8px edge gap)
     const GROUP_EDGE_GAP = 16 // minimum edge-to-edge gap between private and public groups
     const GROUP_CENTER_GAP = 2 * IP_R + GROUP_EDGE_GAP // convert to center-to-center spacing
-    const distributeGrouped = (priv: Node[], pub: Node[], x: number, top: number, bottom: number) => {
+    const distributeGrouped = (
+      priv: Node[],
+      pub: Node[],
+      x: number,
+      top: number,
+      bottom: number
+    ) => {
       const span = Math.max(0, bottom - top)
       const havePriv = priv.length > 0
       const havePub = pub.length > 0
@@ -290,26 +356,40 @@ export function GraphView({ rows, loading, maxNodes, onIpClick, onIfaceClick, on
       if (havePriv && !havePub) {
         const maxFit = Math.max(1, Math.floor(span / MIN_IP_GAP) + 1)
         if (priv.length > maxFit) priv.length = maxFit
-        if (priv.length === 1) { priv[0].x = x; priv[0].y = (top + bottom) / 2; return }
+        if (priv.length === 1) {
+          priv[0].x = x
+          priv[0].y = (top + bottom) / 2
+          return
+        }
         const step = Math.max(MIN_IP_GAP, span / (priv.length - 1))
         const needed = step * (priv.length - 1)
         const start = top + Math.max(0, (span - needed) / 2)
-        priv.forEach((n, i) => { n.x = x; n.y = start + i * step })
+        priv.forEach((n, i) => {
+          n.x = x
+          n.y = start + i * step
+        })
         return
       }
       if (!havePriv && havePub) {
         const maxFit = Math.max(1, Math.floor(span / MIN_IP_GAP) + 1)
         if (pub.length > maxFit) pub.length = maxFit
-        if (pub.length === 1) { pub[0].x = x; pub[0].y = (top + bottom) / 2; return }
+        if (pub.length === 1) {
+          pub[0].x = x
+          pub[0].y = (top + bottom) / 2
+          return
+        }
         const step = Math.max(MIN_IP_GAP, span / (pub.length - 1))
         const needed = step * (pub.length - 1)
         const start = top + Math.max(0, (span - needed) / 2)
-        pub.forEach((n, i) => { n.x = x; n.y = start + i * step })
+        pub.forEach((n, i) => {
+          n.x = x
+          n.y = start + i * step
+        })
         return
       }
       // both groups present
       const canFit = () => {
-        const gaps = (priv.length - 1) + (pub.length - 1)
+        const gaps = priv.length - 1 + (pub.length - 1)
         const minH = (gaps > 0 ? gaps * MIN_IP_GAP : 0) + GROUP_CENTER_GAP
         return minH <= span
       }
@@ -319,19 +399,27 @@ export function GraphView({ rows, loading, maxNodes, onIpClick, onIfaceClick, on
         else if (priv.length > pub.length) priv.pop()
         else pub.pop() // prefer pruning public on ties
       }
-      const gaps = (priv.length - 1) + (pub.length - 1)
+      const gaps = priv.length - 1 + (pub.length - 1)
       if (gaps <= 0) {
         const start = top + Math.max(0, (span - GROUP_CENTER_GAP) / 2)
-        priv[0].x = x; priv[0].y = start
-        pub[0].x = x; pub[0].y = start + GROUP_CENTER_GAP
+        priv[0].x = x
+        priv[0].y = start
+        pub[0].x = x
+        pub[0].y = start + GROUP_CENTER_GAP
         return
       }
       const step = Math.max(MIN_IP_GAP, (span - GROUP_CENTER_GAP) / gaps)
       const used = gaps * step + GROUP_CENTER_GAP
       const start = top + Math.max(0, (span - used) / 2)
-      priv.forEach((n, i) => { n.x = x; n.y = start + i * step })
+      priv.forEach((n, i) => {
+        n.x = x
+        n.y = start + i * step
+      })
       const lastPrivY = start + (priv.length - 1) * step
-      pub.forEach((n, i) => { n.x = x; n.y = lastPrivY + GROUP_CENTER_GAP + i * step })
+      pub.forEach((n, i) => {
+        n.x = x
+        n.y = lastPrivY + GROUP_CENTER_GAP + i * step
+      })
     }
 
     const top = padding
@@ -340,7 +428,9 @@ export function GraphView({ rows, loading, maxNodes, onIpClick, onIfaceClick, on
     distributeGrouped(rightPriv, rightPub, colX.right, top, bottom)
 
     // Remove IP nodes that couldn't be placed due to spacing constraints
-    const keepIpIds = new Set<string>([...leftPriv, ...leftPub, ...rightPriv, ...rightPub].map(n => n.id))
+    const keepIpIds = new Set<string>(
+      [...leftPriv, ...leftPub, ...rightPriv, ...rightPub].map((n) => n.id)
+    )
     for (const n of ipNodes) {
       if (!keepIpIds.has(n.id)) nodeMap.delete(n.id)
     }
@@ -351,7 +441,17 @@ export function GraphView({ rows, loading, maxNodes, onIpClick, onIfaceClick, on
     }
 
     // Hosts vertically stacked in the middle; each host gets a bubble; interfaces distributed on bubble edge
-    const hostOrder = hostNodes.length ? hostNodes : [{ id: 'host:(unknown)', label: '(unknown)', type: 'host', x: 0, y: 0 } as Node]
+    const hostOrder = hostNodes.length
+      ? hostNodes
+      : [
+          {
+            id: 'host:(unknown)',
+            label: '(unknown)',
+            type: 'host',
+            x: 0,
+            y: 0,
+          } as Node,
+        ]
     // first pass: compute radius per host, factoring text width and iface count
     const MIN_HOST_GAP = 8
     hostOrder.forEach((h) => {
@@ -361,14 +461,24 @@ export function GraphView({ rows, loading, maxNodes, onIpClick, onIfaceClick, on
       let radius = Math.min(200, Math.max(80, 36 + N * 18))
       // ensure enough space for host label + totals centered
       const totals = hostTotalsMap.get(h.label) || { bytes: 0, packets: 0 }
-      const bytesStr = formatBytesIEC(totals.bytes, totals.bytes >= 1024 * 1024 * 100 ? 0 : totals.bytes >= 1024 * 1024 * 10 ? 1 : 2)
-        .replace('KiB', 'kB').replace('MiB', 'MB').replace('GiB', 'GB').replace('TiB', 'TB')
+      const bytesStr = formatBytesIEC(
+        totals.bytes,
+        totals.bytes >= 1024 * 1024 * 100 ? 0 : totals.bytes >= 1024 * 1024 * 10 ? 1 : 2
+      )
+        .replace('KiB', 'kB')
+        .replace('MiB', 'MB')
+        .replace('GiB', 'GB')
+        .replace('TiB', 'TB')
       const pktStr = (() => {
         const v = totals.packets
         if (v < 1000) return String(v)
         const units = ['K', 'M', 'B', 'T']
-        let n = v, i = -1
-        while (n >= 1000 && i < units.length - 1) { n /= 1000; i++ }
+        let n = v,
+          i = -1
+        while (n >= 1000 && i < units.length - 1) {
+          n /= 1000
+          i++
+        }
         return n.toFixed(n >= 100 ? 0 : n >= 10 ? 1 : 2) + ' ' + units[i]
       })()
       const label = h.label || 'host'
@@ -399,26 +509,34 @@ export function GraphView({ rows, loading, maxNodes, onIpClick, onIfaceClick, on
         cur.y = y
       }
       // place interfaces on the edge of each host circle
-      hostOrder.forEach(h => {
+      hostOrder.forEach((h) => {
         const ifaces = ifaceNodesByHost.get(h.label) || []
         const N = Math.max(1, ifaces.length)
         const r = h.radius || 100
         ifaces.forEach((n, i) => {
           const angle = (i / N) * Math.PI * 2
-          n.x = (h.x) + Math.cos(angle) * r
-          n.y = (h.y) + Math.sin(angle) * r
+          n.x = h.x + Math.cos(angle) * r
+          n.y = h.y + Math.sin(angle) * r
         })
       })
     }
 
-    const infoMsg = rows.length > included.length
-      ? `Graph limited to ${nodeMap.size} nodes across ${included.length} flows (of ${rows.length})`
-      : undefined
+    const infoMsg =
+      rows.length > included.length
+        ? `Graph limited to ${nodeMap.size} nodes across ${included.length} flows (of ${rows.length})`
+        : undefined
 
-    return { nodes: Array.from(nodeMap.values()), edges: edgesOut, infoMsg, ipTotals: ipTotalsMap, hostTotals: hostTotalsMap }
+    return {
+      nodes: Array.from(nodeMap.values()),
+      edges: edgesOut,
+      infoMsg,
+      ipTotals: ipTotalsMap,
+      hostTotals: hostTotalsMap,
+    }
   }, [rows, maxNodes, width, height])
 
-  if (loading && rows.length === 0) return <div className="p-4 text-sm text-gray-400">Loading graph…</div>
+  if (loading && rows.length === 0)
+    return <div className="p-4 text-sm text-gray-400">Loading graph…</div>
   if (!rows.length) return <div className="p-4 text-sm text-gray-400">No graph data</div>
 
   // helper to trim lines to circle edges
@@ -426,7 +544,8 @@ export function GraphView({ rows, loading, maxNodes, onIpClick, onIfaceClick, on
   // (values kept in sync)
   // const IP_R = 16
   // const IFACE_R = 12
-  const getRadius = (n: Node | undefined) => !n ? 0 : (n.type === 'ip' ? IP_R : n.type === 'iface' ? IFACE_R : 0)
+  const getRadius = (n: Node | undefined) =>
+    !n ? 0 : n.type === 'ip' ? IP_R : n.type === 'iface' ? IFACE_R : 0
   const shorten = (a: Node | undefined, b: Node | undefined) => {
     if (!a || !b) return { x1: a?.x || 0, y1: a?.y || 0, x2: b?.x || 0, y2: b?.y || 0 }
     const dx = b.x - a.x
@@ -450,37 +569,66 @@ export function GraphView({ rows, loading, maxNodes, onIpClick, onIfaceClick, on
 
   // filter edges to those touching the hovered interface (if any), otherwise hovered IP
   const edgesToRender: Edge[] = hoverIface
-    ? edges.filter(e => e.from === hoverIface || e.to === hoverIface)
-    : (hoverIP ? edges.filter(e => e.sip === hoverIP || e.dip === hoverIP) : [])
+    ? edges.filter((e) => e.from === hoverIface || e.to === hoverIface)
+    : hoverIP
+      ? edges.filter((e) => e.sip === hoverIP || e.dip === hoverIP)
+      : []
   const connectedNodeIds = new Set<string>()
-  for (const e of edgesToRender) { connectedNodeIds.add(e.from); connectedNodeIds.add(e.to) }
+  for (const e of edgesToRender) {
+    connectedNodeIds.add(e.from)
+    connectedNodeIds.add(e.to)
+  }
 
   return (
     <div ref={containerRef} className="relative h-[70vh]">
-      {infoMsg && <div className="absolute left-2 top-2 z-10 rounded bg-surface-100/70 px-2 py-1 text-[11px] text-gray-300 ring-1 ring-white/10">{infoMsg}</div>}
+      {infoMsg && (
+        <div className="absolute left-2 top-2 z-10 rounded bg-surface-100/70 px-2 py-1 text-[11px] text-gray-300 ring-1 ring-white/10">
+          {infoMsg}
+        </div>
+      )}
       <svg width="100%" height="100%" viewBox={`0 0 ${width} ${height}`}>
-
         {/* scale-to-fit group */}
         {(() => {
           // compute bounding box of all nodes, including label extents so nothing leaks out
-          let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+          let minX = Infinity,
+            minY = Infinity,
+            maxX = -Infinity,
+            maxY = -Infinity
           const approx = (s: string, fs: number) => s.length * fs * 0.6
           const pktStr = (v: number) => {
             if (v < 1000) return String(v)
             const units = ['K', 'M', 'B', 'T']
-            let n = v, i = -1
-            while (n >= 1000 && i < units.length - 1) { n /= 1000; i++ }
+            let n = v,
+              i = -1
+            while (n >= 1000 && i < units.length - 1) {
+              n /= 1000
+              i++
+            }
             return n.toFixed(n >= 100 ? 0 : n >= 10 ? 1 : 2) + ' ' + units[i]
           }
           const measureNode = (n: Node) => {
             if (n.type === 'host') {
               const r = n.radius || 100
-              return { minX: n.x - r, maxX: n.x + r, minY: n.y - r, maxY: n.y + r }
+              return {
+                minX: n.x - r,
+                maxX: n.x + r,
+                minY: n.y - r,
+                maxY: n.y + r,
+              }
             }
             if (n.type === 'ip') {
-              const totals = (safeIpTotals && safeIpTotals.get(n.label)) || { bytes: 0, packets: 0 }
-              const totalStr = formatBytesIEC(totals.bytes, totals.bytes >= 1024 * 1024 * 100 ? 0 : totals.bytes >= 1024 * 1024 * 10 ? 1 : 2)
-                .replace('KiB', 'kB').replace('MiB', 'MB').replace('GiB', 'GB').replace('TiB', 'TB')
+              const totals = (safeIpTotals && safeIpTotals.get(n.label)) || {
+                bytes: 0,
+                packets: 0,
+              }
+              const totalStr = formatBytesIEC(
+                totals.bytes,
+                totals.bytes >= 1024 * 1024 * 100 ? 0 : totals.bytes >= 1024 * 1024 * 10 ? 1 : 2
+              )
+                .replace('KiB', 'kB')
+                .replace('MiB', 'MB')
+                .replace('GiB', 'GB')
+                .replace('TiB', 'TB')
               const pStr = pktStr(totals.packets)
               const textW = Math.max(approx(n.label, 12), approx(`${totalStr} / ${pStr}`, 12))
               // labels are side-aligned now: extend bbox to the left or right only
@@ -501,17 +649,22 @@ export function GraphView({ rows, loading, maxNodes, onIpClick, onIfaceClick, on
             const maxY = n.y + IFACE_R
             return { minX, maxX, minY, maxY }
           }
-          nodes.forEach(n => {
+          nodes.forEach((n) => {
             const b = measureNode(n)
-            minX = Math.min(minX, b.minX); maxX = Math.max(maxX, b.maxX)
-            minY = Math.min(minY, b.minY); maxY = Math.max(maxY, b.maxY)
+            minX = Math.min(minX, b.minX)
+            maxX = Math.max(maxX, b.maxX)
+            minY = Math.min(minY, b.minY)
+            maxY = Math.max(maxY, b.maxY)
           })
           if (!isFinite(minX) || !isFinite(minY) || !isFinite(maxX) || !isFinite(maxY)) {
-            minX = 0; minY = 0; maxX = width; maxY = height
+            minX = 0
+            minY = 0
+            maxX = width
+            maxY = height
           }
           const pad = 10
-          const contentW = (maxX - minX) + pad
-          const contentH = (maxY - minY) + pad
+          const contentW = maxX - minX + pad
+          const contentH = maxY - minY + pad
           const sx = (width - pad) / Math.max(1, contentW)
           const sy = (height - pad) / Math.max(1, contentH)
           const scale = Math.min(1, sx, sy)
@@ -520,34 +673,71 @@ export function GraphView({ rows, loading, maxNodes, onIpClick, onIfaceClick, on
           return (
             <g transform={`translate(${tx},${ty}) scale(${scale})`}>
               {/* host bubbles with centered label and totals */}
-              {nodes.filter(n => n.type === 'host').map(h => {
-                const r = h.radius || 100
-                const totals = safeHostTotals.get(h.label) || { bytes: 0, packets: 0 }
-                const bytesStr = formatBytesIEC(totals.bytes, totals.bytes >= 1024 * 1024 * 100 ? 0 : totals.bytes >= 1024 * 1024 * 10 ? 1 : 2)
-                  .replace('KiB', 'kB').replace('MiB', 'MB').replace('GiB', 'GB').replace('TiB', 'TB')
-                const pktStr = (() => {
-                  const v = totals.packets
-                  if (v < 1000) return String(v)
-                  const units = ['K', 'M', 'B', 'T']
-                  let n = v, i = -1
-                  while (n >= 1000 && i < units.length - 1) { n /= 1000; i++ }
-                  return n.toFixed(n >= 100 ? 0 : n >= 10 ? 1 : 2) + ' ' + units[i]
-                })()
-                return (
-                  <g key={h.id} onClick={() => onHostClick?.(h.hostId || h.label)} style={{ cursor: 'pointer' }}>
-                    <circle cx={h.x} cy={h.y} r={r} fill={HOST_FILL} stroke={HOST_STROKE} />
-                    <text x={h.x} y={h.y - 3} textAnchor="middle" fontSize={14} fill="#ffffff" opacity={0.95}>{h.label || 'host'}</text>
-                    <text x={h.x} y={h.y + 13} textAnchor="middle" fontSize={12} fill="#93c5fd" opacity={0.95}>{bytesStr} / {pktStr}</text>
-                  </g>
-                )
-              })}
+              {nodes
+                .filter((n) => n.type === 'host')
+                .map((h) => {
+                  const r = h.radius || 100
+                  const totals = safeHostTotals.get(h.label) || {
+                    bytes: 0,
+                    packets: 0,
+                  }
+                  const bytesStr = formatBytesIEC(
+                    totals.bytes,
+                    totals.bytes >= 1024 * 1024 * 100 ? 0 : totals.bytes >= 1024 * 1024 * 10 ? 1 : 2
+                  )
+                    .replace('KiB', 'kB')
+                    .replace('MiB', 'MB')
+                    .replace('GiB', 'GB')
+                    .replace('TiB', 'TB')
+                  const pktStr = (() => {
+                    const v = totals.packets
+                    if (v < 1000) return String(v)
+                    const units = ['K', 'M', 'B', 'T']
+                    let n = v,
+                      i = -1
+                    while (n >= 1000 && i < units.length - 1) {
+                      n /= 1000
+                      i++
+                    }
+                    return n.toFixed(n >= 100 ? 0 : n >= 10 ? 1 : 2) + ' ' + units[i]
+                  })()
+                  return (
+                    <g
+                      key={h.id}
+                      onClick={() => onHostClick?.(h.hostId || h.label)}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <circle cx={h.x} cy={h.y} r={r} fill={HOST_FILL} stroke={HOST_STROKE} />
+                      <text
+                        x={h.x}
+                        y={h.y - 3}
+                        textAnchor="middle"
+                        fontSize={14}
+                        fill="#ffffff"
+                        opacity={0.95}
+                      >
+                        {h.label || 'host'}
+                      </text>
+                      <text
+                        x={h.x}
+                        y={h.y + 13}
+                        textAnchor="middle"
+                        fontSize={12}
+                        fill="#93c5fd"
+                        opacity={0.95}
+                      >
+                        {bytesStr} / {pktStr}
+                      </text>
+                    </g>
+                  )
+                })}
 
               {/* edges (only those connected to hovered IP). Draw a small midpoint arrow indicating direction (sip→dip) */}
-              {edgesToRender.map(e => (
+              {edgesToRender.map((e) => (
                 <g key={e.id} pointerEvents="none">
                   {(() => {
-                    const a = nodes.find(n => n.id === e.from)
-                    const b = nodes.find(n => n.id === e.to)
+                    const a = nodes.find((n) => n.id === e.from)
+                    const b = nodes.find((n) => n.id === e.to)
                     const p = shorten(a, b)
                     // midpoint arrow geometry
                     const mx = (p.x1 + p.x2) / 2
@@ -562,26 +752,42 @@ export function GraphView({ rows, loading, maxNodes, onIpClick, onIfaceClick, on
                     // label text: totals, centered at midpoint, rotated parallel to edge
                     const textX = mx
                     const textY = my
-                    const angleDeg = Math.atan2(dy, dx) * 180 / Math.PI
-                    const bytesStr = formatBytesIEC(e.bytesTotal, e.bytesTotal >= 1024 * 1024 * 100 ? 0 : e.bytesTotal >= 1024 * 1024 * 10 ? 1 : 2)
-                      .replace('KiB', 'kB').replace('MiB', 'MB').replace('GiB', 'GB').replace('TiB', 'TB')
+                    const angleDeg = (Math.atan2(dy, dx) * 180) / Math.PI
+                    const bytesStr = formatBytesIEC(
+                      e.bytesTotal,
+                      e.bytesTotal >= 1024 * 1024 * 100
+                        ? 0
+                        : e.bytesTotal >= 1024 * 1024 * 10
+                          ? 1
+                          : 2
+                    )
+                      .replace('KiB', 'kB')
+                      .replace('MiB', 'MB')
+                      .replace('GiB', 'GB')
+                      .replace('TiB', 'TB')
                     const pktStr = (() => {
                       const v = e.packetsTotal
                       if (v < 1000) return String(v)
                       const units = ['K', 'M', 'B', 'T']
-                      let n = v, i = -1
-                      while (n >= 1000 && i < units.length - 1) { n /= 1000; i++ }
+                      let n = v,
+                        i = -1
+                      while (n >= 1000 && i < units.length - 1) {
+                        n /= 1000
+                        i++
+                      }
                       return n.toFixed(n >= 100 ? 0 : n >= 10 ? 1 : 2) + ' ' + units[i]
                     })()
                     // draw a small rounded rect background aligned to edge
                     const label = `${bytesStr} / ${pktStr}`
                     const fs = 11
                     const textW = Math.max(40, label.length * fs * 0.55)
-                    const padX = 6, padY = 4, rxy = 4
+                    const padX = 6,
+                      padY = 4,
+                      rxy = 4
                     const rectW = textW + padX * 2
                     const rectH = fs + padY * 2
-                    const rectCx = textX - (rectW / 2)
-                    const rectCy = textY - (rectH / 2)
+                    const rectCx = textX - rectW / 2
+                    const rectCy = textY - rectH / 2
                     // compute arrowhead positioned 16px to the right (forward) of the label box
                     const gap = 16
                     // stronger scaling with width; keep a small clearance from the label
@@ -600,15 +806,49 @@ export function GraphView({ rows, loading, maxNodes, onIpClick, onIfaceClick, on
                     const pts = `${leftX},${leftY} ${apexX},${apexY} ${rightX},${rightY}`
                     return (
                       <g>
-                        <line x1={p.x1} y1={p.y1} x2={p.x2} y2={p.y2} stroke={e.color} strokeWidth={e.width} strokeLinecap="butt" opacity={0.9} />
+                        <line
+                          x1={p.x1}
+                          y1={p.y1}
+                          x2={p.x2}
+                          y2={p.y2}
+                          stroke={e.color}
+                          strokeWidth={e.width}
+                          strokeLinecap="butt"
+                          opacity={0.9}
+                        />
                         <g transform={`rotate(${angleDeg}, ${textX}, ${textY})`}>
-                          <rect x={rectCx} y={rectCy} width={rectW} height={rectH} rx={rxy} ry={rxy}
-                            fill={panelBg} opacity={0.98} stroke={panelBg} strokeWidth={1} />
-                          <text x={textX} y={textY} textAnchor="middle" dominantBaseline="middle" fontSize={fs} fill={e.color} opacity={0.98}>
+                          <rect
+                            x={rectCx}
+                            y={rectCy}
+                            width={rectW}
+                            height={rectH}
+                            rx={rxy}
+                            ry={rxy}
+                            fill={panelBg}
+                            opacity={0.98}
+                            stroke={panelBg}
+                            strokeWidth={1}
+                          />
+                          <text
+                            x={textX}
+                            y={textY}
+                            textAnchor="middle"
+                            dominantBaseline="middle"
+                            fontSize={fs}
+                            fill={e.color}
+                            opacity={0.98}
+                          >
                             {label}
                           </text>
                         </g>
-                        <polygon points={pts} fill={e.color} opacity={0.98} stroke={e.color} strokeWidth={0.6} strokeLinejoin="round" />
+                        <polygon
+                          points={pts}
+                          fill={e.color}
+                          opacity={0.98}
+                          stroke={e.color}
+                          strokeWidth={0.6}
+                          strokeLinejoin="round"
+                        />
                       </g>
                     )
                   })()}
@@ -617,54 +857,116 @@ export function GraphView({ rows, loading, maxNodes, onIpClick, onIfaceClick, on
               ))}
 
               {/* interface nodes (circles) */}
-              {nodes.filter(n => n.type === 'iface').map(n => (
-                <g key={n.id}
-                  onMouseEnter={() => setHoverIface(n.id)}
-                  onMouseLeave={() => setHoverIface(null)}
-                  onClick={() => onIfaceClick?.(n.hostId || n.host || '', n.iface || n.label)}
-                  style={{ cursor: 'pointer' }}>
-                  <circle cx={n.x} cy={n.y} r={IFACE_R} fill="#1f2937" stroke="#93c5fd" strokeWidth={2}
-                    opacity={connectedNodeIds.size ? (connectedNodeIds.has(n.id) ? 1 : 0.2) : 1} />
-                  <text x={n.x} y={n.y - (IFACE_R + 4)} textAnchor="middle" fontSize={11} fill="#93c5fd"
-                    opacity={connectedNodeIds.size ? (connectedNodeIds.has(n.id) ? 1 : 0.2) : 1}>{n.iface || n.label}</text>
-                </g>
-              ))}
+              {nodes
+                .filter((n) => n.type === 'iface')
+                .map((n) => (
+                  <g
+                    key={n.id}
+                    onMouseEnter={() => setHoverIface(n.id)}
+                    onMouseLeave={() => setHoverIface(null)}
+                    onClick={() => onIfaceClick?.(n.hostId || n.host || '', n.iface || n.label)}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <circle
+                      cx={n.x}
+                      cy={n.y}
+                      r={IFACE_R}
+                      fill="#1f2937"
+                      stroke="#93c5fd"
+                      strokeWidth={2}
+                      opacity={connectedNodeIds.size ? (connectedNodeIds.has(n.id) ? 1 : 0.2) : 1}
+                    />
+                    <text
+                      x={n.x}
+                      y={n.y - (IFACE_R + 4)}
+                      textAnchor="middle"
+                      fontSize={11}
+                      fill="#93c5fd"
+                      opacity={connectedNodeIds.size ? (connectedNodeIds.has(n.id) ? 1 : 0.2) : 1}
+                    >
+                      {n.iface || n.label}
+                    </text>
+                  </g>
+                ))}
 
               {/* IP nodes (blue scheme). Label and totals (bytes / packets) beside node; align to side */}
-              {nodes.filter(n => n.type === 'ip').map(n => {
-                const dim = connectedNodeIds.size ? (connectedNodeIds.has(n.id) ? 1 : 0.4) : 1
-                const totals = (safeIpTotals && safeIpTotals.get(n.label)) || { bytes: 0, packets: 0 }
-                const totalStr = formatBytesIEC(totals.bytes, totals.bytes >= 1024 * 1024 * 100 ? 0 : totals.bytes >= 1024 * 1024 * 10 ? 1 : 2)
-                  .replace('KiB', 'kB').replace('MiB', 'MB').replace('GiB', 'GB').replace('TiB', 'TB')
-                const pktStr = (() => {
-                  const v = totals.packets
-                  if (v < 1000) return String(v)
-                  const units = ['K', 'M', 'B', 'T']
-                  let n2 = v, i = -1
-                  while (n2 >= 1000 && i < units.length - 1) { n2 /= 1000; i++ }
-                  return n2.toFixed(n2 >= 100 ? 0 : n2 >= 10 ? 1 : 2) + ' ' + units[i]
-                })()
-                // determine which side of the canvas this IP is on to align labels
-                const isLeft = n.x < width / 2
-                // Left column: label to the left of node, right-aligned
-                // Right column: label to the right of node, left-aligned
-                const labelX = isLeft ? (n.x - IP_R - 8) : (n.x + IP_R + 8)
-                const anchor: 'start' | 'end' = isLeft ? 'end' : 'start'
-                const isPriv = isPrivateIP(n.label)
-                const fillColor = isPriv ? PRIVATE_FILL : PUBLIC_FILL
-                const strokeColor = isPriv ? PRIVATE_STROKE : PUBLIC_STROKE
-                return (
-                  <g key={n.id}
-                    onMouseEnter={() => setHoverIP(n.label)}
-                    onMouseLeave={() => setHoverIP(null)}
-                    onClick={() => onIpClick?.(n.label)}
-                    style={{ cursor: 'pointer' }}>
-                    <circle cx={n.x} cy={n.y} r={IP_R} fill={fillColor} opacity={0.22 * dim} stroke={strokeColor} strokeWidth={1.5} />
-                    <text x={labelX} y={n.y - 3} textAnchor={anchor as any} fontSize={12} fill="#e5e7eb" opacity={dim}>{n.label}</text>
-                    <text x={labelX} y={n.y + 12} textAnchor={anchor as any} fontSize={12} fill="#60a5fa" opacity={dim}>{totalStr} / {pktStr}</text>
-                  </g>
-                )
-              })}
+              {nodes
+                .filter((n) => n.type === 'ip')
+                .map((n) => {
+                  const dim = connectedNodeIds.size ? (connectedNodeIds.has(n.id) ? 1 : 0.4) : 1
+                  const totals = (safeIpTotals && safeIpTotals.get(n.label)) || {
+                    bytes: 0,
+                    packets: 0,
+                  }
+                  const totalStr = formatBytesIEC(
+                    totals.bytes,
+                    totals.bytes >= 1024 * 1024 * 100 ? 0 : totals.bytes >= 1024 * 1024 * 10 ? 1 : 2
+                  )
+                    .replace('KiB', 'kB')
+                    .replace('MiB', 'MB')
+                    .replace('GiB', 'GB')
+                    .replace('TiB', 'TB')
+                  const pktStr = (() => {
+                    const v = totals.packets
+                    if (v < 1000) return String(v)
+                    const units = ['K', 'M', 'B', 'T']
+                    let n2 = v,
+                      i = -1
+                    while (n2 >= 1000 && i < units.length - 1) {
+                      n2 /= 1000
+                      i++
+                    }
+                    return n2.toFixed(n2 >= 100 ? 0 : n2 >= 10 ? 1 : 2) + ' ' + units[i]
+                  })()
+                  // determine which side of the canvas this IP is on to align labels
+                  const isLeft = n.x < width / 2
+                  // Left column: label to the left of node, right-aligned
+                  // Right column: label to the right of node, left-aligned
+                  const labelX = isLeft ? n.x - IP_R - 8 : n.x + IP_R + 8
+                  const anchor: 'start' | 'end' = isLeft ? 'end' : 'start'
+                  const isPriv = isPrivateIP(n.label)
+                  const fillColor = isPriv ? PRIVATE_FILL : PUBLIC_FILL
+                  const strokeColor = isPriv ? PRIVATE_STROKE : PUBLIC_STROKE
+                  return (
+                    <g
+                      key={n.id}
+                      onMouseEnter={() => setHoverIP(n.label)}
+                      onMouseLeave={() => setHoverIP(null)}
+                      onClick={() => onIpClick?.(n.label)}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <circle
+                        cx={n.x}
+                        cy={n.y}
+                        r={IP_R}
+                        fill={fillColor}
+                        opacity={0.22 * dim}
+                        stroke={strokeColor}
+                        strokeWidth={1.5}
+                      />
+                      <text
+                        x={labelX}
+                        y={n.y - 3}
+                        textAnchor={anchor as any}
+                        fontSize={12}
+                        fill="#e5e7eb"
+                        opacity={dim}
+                      >
+                        {n.label}
+                      </text>
+                      <text
+                        x={labelX}
+                        y={n.y + 12}
+                        textAnchor={anchor as any}
+                        fontSize={12}
+                        fill="#60a5fa"
+                        opacity={dim}
+                      >
+                        {totalStr} / {pktStr}
+                      </text>
+                    </g>
+                  )
+                })}
             </g>
           )
         })()}
