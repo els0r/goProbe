@@ -1,0 +1,51 @@
+volumes:
+  env_run: {}
+  caddy_data: {}
+  caddy_config: {}
+
+services:
+  dev:
+    profiles: ["dev"]
+    image: node:20-bookworm-slim
+    working_dir: /app
+    command: sh -c "npm ci && npm run dev"
+    ports:
+      - "5173:5173"
+    environment:
+      NODE_ENV: development
+    volumes:
+      - ./:/app:delegated
+      - /app/node_modules
+
+  env-writer:
+    profiles: ['prod']
+    image: debian:bookworm-slim
+    command: bash /scripts/write-env.sh
+    environment:
+      GQ_API_BASE_URL: ${GQ_API_BASE_URL:-http://localhost:8081}
+      HOST_RESOLVER_TYPES: ${HOST_RESOLVER_TYPES:-string}
+      SSE_ON_LOAD: ${SSE_ON_LOAD:-true}
+    volumes:
+      - env_run:/var/run/env
+      - ./scripts:/scripts:ro
+
+  web:
+    profiles: ['prod']
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: goquery-ui:caddy-local
+    depends_on:
+      env-writer:
+        condition: service_completed_successfully
+    ports:
+      - '8080:8080'
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - env_run:/var/run/env
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      NODE_ENV: production
