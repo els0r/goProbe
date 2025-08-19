@@ -2,20 +2,27 @@
 // Falls back to process.env (compile-time) and sensible defaults for local dev.
 
 declare global {
-  interface Window { __ENV__?: Record<string, string | undefined> }
+  interface Window {
+    __ENV__?: Record<string, string | undefined>
+  }
 }
 
 const raw = (typeof window !== 'undefined' ? window.__ENV__ : undefined) || {}
 // guard access to process.env in browser bundles
-const procEnv: Record<string, string | undefined> = (typeof process !== 'undefined' && (process as any)?.env) || {}
+const procEnv: Record<string, string | undefined> =
+  (typeof process !== 'undefined' && (process as any)?.env) || {}
 
 const str = (v: unknown, d?: string): string => {
   if (v === undefined || v === null) return d ?? ''
   return String(v)
 }
 
-const toBool = (v?: string) => ["true","1","yes","on"].includes(String(v).trim().toLowerCase())
-const toArray = (v?: string) => String(v ?? "").split(",").map(s => s.trim()).filter(Boolean)
+const toBool = (v?: string) => ['true', '1', 'yes', 'on'].includes(String(v).trim().toLowerCase())
+const toArray = (v?: string) =>
+  String(v ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
 
 // prefer runtime window.__ENV__, then compile-time process.env, then default
 const envGet = (key: string, dflt?: string): string => {
