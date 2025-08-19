@@ -1,0 +1,34 @@
+{
+  "name": "goquery-ui",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Network observability flow exploration UI (table + graph)",
+  "scripts": {
+  "build": "webpack --config webpack.config.js",
+  "dev": "webpack serve --config webpack.config.js",
+    "typecheck": "tsc --noEmit",
+    "generate:types": "openapi-typescript global-query_4.1.17_openapi.yaml --output src/api/generated.ts"
+  },
+  "dependencies": {
+    "react": "18.2.0",
+    "react-dom": "18.2.0"
+  },
+  "devDependencies": {
+    "typescript": "5.3.3",
+    "@types/react": "18.2.21",
+    "@types/react-dom": "18.2.7",
+    "webpack": "5.94.0",
+    "webpack-cli": "5.1.4",
+    "ts-loader": "9.5.0",
+    "openapi-typescript": "6.7.0",
+    "tailwindcss": "3.4.7",
+    "postcss": "8.4.31",
+    "autoprefixer": "10.4.16",
+    "postcss-loader": "7.3.3",
+    "css-loader": "6.7.2",
+  "style-loader": "3.3.3",
+  "dotenv": "16.4.5",
+  "webpack-dev-server": "4.15.1",
+  "html-webpack-plugin": "5.6.0"
+  }
+}
