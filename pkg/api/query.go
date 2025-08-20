@@ -1,3 +1,4 @@
+// Package api provides the API definitions and handlers for the query service
 package api
 
 import (
@@ -28,7 +29,7 @@ func OnResult(res *results.Result, send sse.Sender) error {
 	return send.Data(&PartialResult{res})
 }
 
-// OnResultFn is a generic handler / function that sends a keepalive signal via an SSE sender
+// OnKeepalive is a generic handler / function that sends a keepalive signal via an SSE sender
 // to the client(s)
 func OnKeepalive(send sse.Sender) error {
 	return send.Data(&Keepalive{})

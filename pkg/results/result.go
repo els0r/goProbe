@@ -184,20 +184,22 @@ func (r *Result) Start() {
 // End prepares the end of the result
 func (r *Result) End() {
 	r.Summary.Timings.QueryDuration = time.Since(r.Summary.Timings.QueryStart)
-	if len(r.Rows) == 0 {
-		if r.Summary.DataAvailable {
-			r.Status = Status{
-				Code:    types.StatusEmpty,
-				Message: ErrorNoResults.Error(),
-			}
-		} else {
-			r.Status = Status{
-				Code:    types.StatusMissingData,
-				Message: ErrorDataMissing.Error(),
-			}
-		}
-	}
+	r.Summary.Hits.Displayed = len(r.Rows)
 	sort.Strings(r.Summary.Interfaces)
+	if len(r.Rows) != 0 {
+		return
+	}
+	if r.Summary.DataAvailable {
+		r.Status = Status{
+			Code:    types.StatusEmpty,
+			Message: ErrorNoResults.Error(),
+		}
+		return
+	}
+	r.Status = Status{
+		Code:    types.StatusMissingData,
+		Message: ErrorDataMissing.Error(),
+	}
 }
 
 // Summary returns a summary of the interfaces without listing them explicitly

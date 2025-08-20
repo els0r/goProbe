@@ -1,3 +1,4 @@
+// Package types provides the common types and utilities for querying data
 package types
 
 import (
@@ -63,7 +64,7 @@ type Status string
 const (
 	StatusError           Status = "error"
 	StatusEmpty           Status = "empty"
-	StatusMissingData     Status = "missing_data"
+	StatusMissingData     Status = "missing data"
 	StatusTooManyRequests Status = "too many requests"
 	StatusOK              Status = "ok"
 )
