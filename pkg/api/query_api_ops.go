@@ -13,6 +13,13 @@ var queryTags = []string{"Query"}
 
 // RegisterQueryAPI registers all query related endpoints
 func RegisterQueryAPI(a huma.API, caller string, querier query.Runner, middlewares huma.Middlewares) {
+	// register routes specific to distributed querying
+	dqr, ok := querier.(SSEQueryRunner)
+	if ok {
+		registerDistributedQueryAPI(a, caller, dqr, middlewares)
+		return
+	}
+
 	// validation
 	huma.Register(a,
 		huma.Operation{
@@ -37,13 +44,6 @@ func RegisterQueryAPI(a huma.API, caller string, querier query.Runner, middlewar
 		getParamsValidationHandler(),
 	)
 
-	// register routes specific to distributed querying
-	dqr, ok := querier.(SSEQueryRunner)
-	if ok {
-		registerDistributedQueryAPI(a, caller, dqr, middlewares)
-		return
-	}
-
 	// query running in case it isn't a distributed API (e.g. goProbe's query endpoint)
 	huma.Register(a,
 		huma.Operation{
@@ -60,6 +60,47 @@ func RegisterQueryAPI(a huma.API, caller string, querier query.Runner, middlewar
 }
 
 func registerDistributedQueryAPI(a huma.API, caller string, qr SSEQueryRunner, middlewares huma.Middlewares) {
+	distributedValidation := func(args *query.Args) error {
+		if args.QueryHosts != "" {
+			return &huma.ErrorModel{
+				Status: http.StatusUnprocessableEntity,
+				Detail: "Incomplete query parameters",
+				Errors: []*huma.ErrorDetail{
+					{
+						Message:  "No hosts to query",
+						Location: "body.query_hosts",
+						Value:    args.QueryHosts,
+					},
+				},
+			}
+		}
+		return nil
+	}
+
+	// validation
+	huma.Register(a,
+		huma.Operation{
+			OperationID: "query-post-validate",
+			Method:      http.MethodPost,
+			Path:        ValidationRoute,
+			Summary:     "Validate query parameters",
+			Description: "Validates query parameters (1) for integrity (2) attempting to prepare a query statement from them",
+			Tags:        queryTags,
+		},
+		getBodyValidationHandler(distributedValidation),
+	)
+	huma.Register(a,
+		huma.Operation{
+			OperationID: "query-get-validate",
+			Method:      http.MethodGet,
+			Summary:     "Validate query parameters",
+			Path:        ValidationRoute,
+			Description: "Validates query parameters (1) for integrity (2) attempting to prepare a query statement from them",
+			Tags:        queryTags,
+		},
+		getParamsValidationHandler(distributedValidation),
+	)
+
 	// query running
 	huma.Register(a,
 		huma.Operation{
