@@ -400,10 +400,162 @@ export default function App() {
     setParams((p) => ({ ...p, query_hosts: sanitizeHostList(hostsInput) }))
   }
   function commitCondition(next?: string) {
+    const raw = next ?? conditionInput
     setParams((p) => ({
       ...p,
-      condition: (next ?? conditionInput).trim() ? (next ?? conditionInput) : undefined,
+      condition: raw.trim() ? raw : undefined,
     }))
+    // Trigger validation immediately when committing from SPACE/blur
+    void validateCurrent({ conditionOverride: raw })
+  }
+
+  // --- Validation helpers ---
+  const validateAbortRef = useRef<AbortController | null>(null)
+
+  // Map API error to field errors and a banner error, mirroring run() behavior
+  const mapValidationError = useCallback(
+    (e: any): { fields: Record<string, string>; banner: any } => {
+      const fields: Record<string, string> = {}
+      let banner: any = e
+      if (
+        e &&
+        typeof e === 'object' &&
+        (e as any).problem &&
+        Array.isArray((e as any).problem.errors)
+      ) {
+        const isLoc = (loc: string, key: string) =>
+          loc === `body.${key}` ||
+          loc.startsWith(`body.${key}.`) ||
+          loc.startsWith(`body.${key}[`) ||
+          loc === key
+        for (const er of (e as any).problem.errors as any[]) {
+          const locRaw = String(er.location || '')
+          const loc = locRaw.toLowerCase()
+          const rawMsg = String(er.message || 'validation error').trim()
+          const isCondition = isLoc(loc, 'condition')
+          let msg = isCondition
+            ? rawMsg.replace(
+                /^(\s*)([a-z])/,
+                (_m: string, ws: string, ch: string) => ws + ch.toUpperCase()
+              )
+            : rawMsg.charAt(0).toUpperCase() + rawMsg.slice(1)
+          if (!isCondition && er.value !== undefined) msg += ` -- value: ${formatValue(er.value)}`
+          const normRaw = normalizeText(rawMsg)
+          if (
+            normRaw === 'list of target hosts is empty' ||
+            normRaw === "couldn't prepare query: list of target hosts is empty" ||
+            normRaw.includes('list of target hosts is empty')
+          ) {
+            fields.hosts = msg
+            continue
+          }
+          const isResolverField =
+            isLoc(loc, 'query_hosts_resolver_type') || isLoc(loc, 'hosts_resolver')
+          const isHostsField =
+            isLoc(loc, 'query_hosts') || isLoc(loc, 'hostname') || isLoc(loc, 'host_id')
+          if (isLoc(loc, 'ifaces')) fields.ifaces = msg
+          else if (!isResolverField && isHostsField) fields.hosts = msg
+          else if (isLoc(loc, 'query') || isLoc(loc, 'attributes')) fields.attributes = msg
+          else if (isCondition) fields.condition = msg
+          else if (isLoc(loc, 'first')) fields.first = msg
+          else if (isLoc(loc, 'last')) fields.last = msg
+          else if (isLoc(loc, 'num_results')) fields.limit = msg
+          else if (isLoc(loc, 'sort_by')) fields.sort_by = msg
+        }
+        const errs: any[] = (e as any).problem.errors as any[]
+        const first = errs[0] || {}
+        const msgText =
+          String(first?.message || '')
+            .toLowerCase()
+            .includes('unexpected property') && first?.location
+            ? `Unexpected property: ${first.location}`
+            : 'API request failed: validation failed'
+        banner = { message: msgText, problem: (e as any).problem, status: (e as any).status }
+      } else {
+        // Special-case mapping for non-problem errors
+        const status = (e as any)?.status
+        let combined = ''
+        const prob: any = (e as any)?.problem
+        if (prob) {
+          if (typeof prob.detail === 'string') combined += ' ' + prob.detail
+          if (Array.isArray(prob.errors)) {
+            combined += ' ' + prob.errors.map((er: any) => String(er?.message || '')).join(' ')
+          }
+        }
+        const body: any = (e as any)?.body
+        if (typeof body === 'string') combined += ' ' + body
+        else if (body && typeof body === 'object' && typeof body.message === 'string')
+          combined += ' ' + body.message
+        const lc = normalizeText(combined)
+        if (
+          lc.includes("couldn't prepare query: list of target hosts is empty") ||
+          (status === 500 && lc.includes('list of target hosts is empty'))
+        ) {
+          fields.hosts = 'List of target hosts is empty'
+          banner = { message: 'API request failed: validation failed', problem: prob, status }
+        }
+      }
+      return { fields, banner }
+    },
+    []
+  )
+
+  // Build effective params merging uncommitted inputs and normalizing attribute query
+  const computeFinalParams = useCallback(
+    (over?: { conditionOverride?: string; hostsOverride?: string }): QueryParamsUI => {
+      // include any uncommitted condition input
+      const effectiveParamsBase =
+        (over?.conditionOverride ?? conditionInput) !== (params.condition || '')
+          ? { ...params, condition: (over?.conditionOverride ?? conditionInput) || undefined }
+          : params
+      // include uncommitted Hosts input (normalized)
+      const mergedHosts =
+        (over?.hostsOverride ?? hostsInput) !== (effectiveParamsBase.query_hosts || '')
+          ? sanitizeHostList(over?.hostsOverride ?? hostsInput)
+          : effectiveParamsBase.query_hosts
+      const effectiveParams =
+        mergedHosts !== effectiveParamsBase.query_hosts
+          ? { ...effectiveParamsBase, query_hosts: mergedHosts }
+          : effectiveParamsBase
+      // normalize attributes query: when 'All', send explicit full list (backend requires min length)
+      const normalizedQuery = buildAttributeQuery(
+        parseAttributeQuery(effectiveParams.query).values,
+        parseAttributeQuery(effectiveParams.query).all
+      )
+      const finalParams =
+        normalizedQuery === effectiveParams.query
+          ? effectiveParams
+          : { ...effectiveParams, query: normalizedQuery }
+      return finalParams
+    },
+    [params, conditionInput, hostsInput]
+  )
+
+  async function validateCurrent(over?: { conditionOverride?: string; hostsOverride?: string }) {
+    try {
+      const finalParams = computeFinalParams(over)
+      // set backend dynamically for the validator as well
+      setGlobalQueryBaseUrl(backendUrl)
+      // abort any in-flight validation
+      try {
+        validateAbortRef.current?.abort()
+      } catch {}
+      const ctrl = new AbortController()
+      validateAbortRef.current = ctrl
+      await getGlobalQueryClient().validateQueryUI(
+        { ...finalParams, hosts_resolver: hostsResolver || undefined },
+        ctrl.signal
+      )
+      // success: clear field and banner errors
+      setFieldErrors({})
+      setError('')
+      return true
+    } catch (e: any) {
+      const mapped = mapValidationError(e)
+      if (Object.keys(mapped.fields).length > 0) setFieldErrors(mapped.fields)
+      setError(mapped.banner)
+      return false
+    }
   }
 
   useEffect(() => {
@@ -423,37 +575,14 @@ export default function App() {
     }
     setLoading(true)
     setStreaming(!!useStreaming)
-    setError('')
-    setFieldErrors({})
+    // don't clear errors yet; wait for validation OK
     setStreamErrors([])
     setProgress({})
     setHostsStatuses({})
     setHostErrorCount(0)
     setHostOkCount(0)
     try {
-      // include any uncommitted condition input
-      const effectiveParamsBase =
-        conditionInput !== (params.condition || '')
-          ? { ...params, condition: conditionInput || undefined }
-          : params
-      // include uncommitted Hosts input (normalized)
-      const mergedHosts =
-        hostsInput !== (effectiveParamsBase.query_hosts || '')
-          ? sanitizeHostList(hostsInput)
-          : effectiveParamsBase.query_hosts
-      const effectiveParams =
-        mergedHosts !== effectiveParamsBase.query_hosts
-          ? { ...effectiveParamsBase, query_hosts: mergedHosts }
-          : effectiveParamsBase
-      // normalize attributes query: when 'All', send explicit full list (backend requires min length)
-      const normalizedQuery = buildAttributeQuery(
-        parseAttributeQuery(effectiveParams.query).values,
-        parseAttributeQuery(effectiveParams.query).all
-      )
-      const finalParams =
-        normalizedQuery === effectiveParams.query
-          ? effectiveParams
-          : { ...effectiveParams, query: normalizedQuery }
+      const finalParams = computeFinalParams()
       if (finalParams !== params) {
         // sync params state (will also update URL)
         setParams(finalParams)
@@ -462,6 +591,16 @@ export default function App() {
       setGlobalQueryBaseUrl(backendUrl)
       setRows([])
       setSummary(undefined)
+      // Preflight validate; only proceed when valid
+      const valid = await validateCurrent()
+      if (!valid) {
+        setLoading(false)
+        setStreaming(false)
+        return
+      }
+      // clear any leftover errors now that validation passed
+      setError('')
+      setFieldErrors({})
       if (useStreaming) {
         // start SSE stream; server will send partialResult events until finalResult
         const closer = getGlobalQueryClient().streamQueryUI(

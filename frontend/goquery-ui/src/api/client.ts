@@ -30,6 +30,43 @@ export class GlobalQueryClient {
     this.timeout = cfg.timeoutMs ?? DEFAULT_TIMEOUT_MS
   }
 
+  // validate a query without running it. Returns void on success (HTTP 204), throws ApiError on failure
+  async validateQueryUI(params: QueryParamsUI, signal?: AbortSignal): Promise<void> {
+    const args = buildArgs(params)
+    const url = `${this.baseUrl}/_query/validate`
+    const controller = !signal ? new AbortController() : undefined
+    const timeout = setTimeout(() => controller?.abort(), this.timeout)
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(args),
+        signal: signal ?? controller?.signal,
+      })
+      if (res.status === 204) return
+      if (!res.ok) {
+        const body = await safeJson(res)
+        let problem: ErrorModelSchema | undefined
+        if (
+          body &&
+          typeof body === 'object' &&
+          ('detail' in (body as any) || 'errors' in (body as any))
+        ) {
+          problem = body as ErrorModelSchema
+        }
+        throw apiError(res.status, body, problem)
+      }
+      // some servers may reply 200 with a body; treat as success
+      return
+    } catch (e: any) {
+      if (e.name === 'AbortError') throw abortError()
+      if (isApiError(e)) throw e
+      throw unknownError(e)
+    } finally {
+      clearTimeout(timeout)
+    }
+  }
+
   // run a query from UI params and return flattened flows
   async runQueryUI(
     params: QueryParamsUI,
