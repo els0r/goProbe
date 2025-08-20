@@ -1,3 +1,4 @@
+// Package distributed handles distributed queries across multiple hosts
 package distributed
 
 import (
@@ -309,6 +310,6 @@ func finalizeResult(res *results.Result, stmt *query.Statement, rowMap results.R
 
 	// truncate by limit
 	if limit < uint64(len(res.Rows)) {
-		res.Rows = res.Rows[:stmt.NumResults]
+		res.Rows = res.Rows[:limit]
 	}
 }

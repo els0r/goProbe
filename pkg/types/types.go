@@ -1,3 +1,4 @@
+// Package types provides the common types and utilities for querying data
 package types
 
 import (

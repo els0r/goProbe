@@ -1,3 +1,4 @@
+// Package server provides the API server implementation for the global-query service
 package server
 
 import (

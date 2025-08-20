@@ -1,3 +1,4 @@
+// Package api provides the API definitions and handlers for the query service
 package api
 
 import (
