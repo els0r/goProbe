@@ -61,13 +61,13 @@ func RegisterQueryAPI(a huma.API, caller string, querier query.Runner, middlewar
 
 func registerDistributedQueryAPI(a huma.API, caller string, qr SSEQueryRunner, middlewares huma.Middlewares) {
 	distributedValidation := func(args *query.Args) error {
-		if args.QueryHosts != "" {
+		if args.QueryHosts == "" {
 			return &huma.ErrorModel{
 				Status: http.StatusUnprocessableEntity,
-				Detail: "Incomplete query parameters",
+				Detail: "Incomplete distributed query parameters",
 				Errors: []*huma.ErrorDetail{
 					{
-						Message:  "No hosts to query",
+						Message:  "Empty host query",
 						Location: "body.query_hosts",
 						Value:    args.QueryHosts,
 					},
