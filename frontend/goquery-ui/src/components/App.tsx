@@ -769,7 +769,9 @@ export default function App() {
     if (!useStreaming) {
       void run()
     }
-  }, [run, useStreaming])
+    // We intentionally exclude `run` and `conditionInput` to avoid validating on every keystroke.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params, backendUrl, hostsResolver, useStreaming])
 
   // open temporal details for a specific row (shared by click and keyboard shortcut)
   const openTemporalForRow = useCallback(

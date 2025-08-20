@@ -450,26 +450,3 @@ async function safeJson(res: Response): Promise<unknown> {
   }
 }
 
-// build query string from Args for GET /sse
-function toQueryString(args: Args): string {
-  const qp = new URLSearchParams()
-  const push = (k: string, v: unknown) => {
-    if (v === undefined || v === null || v === '') return
-    qp.set(k, String(v))
-  }
-  push('query', (args as any).query)
-  push('query_hosts', (args as any).query_hosts)
-  push('ifaces', (args as any).ifaces)
-  push('first', (args as any).first)
-  push('last', (args as any).last)
-  push('condition', (args as any).condition)
-  push('in', (args as any).in)
-  push('out', (args as any).out)
-  push('sum', (args as any).sum)
-  push('num_results', (args as any).num_results)
-  push('sort_by', (args as any).sort_by)
-  push('sort_ascending', (args as any).sort_ascending)
-  push('query_hosts_resolver_type', (args as any).query_hosts_resolver_type)
-  push('format', 'json')
-  return qp.toString()
-}
