@@ -120,7 +120,11 @@ func registerDistributedQueryAPI(a huma.API, caller string, qr SSEQueryRunner, m
 			Method:      http.MethodPost,
 			Path:        SSEQueryRoute,
 			Summary:     "Run query with server sent events (SSE)",
-			Description: "Runs a query based on the parameters provided in the body. Pushes back partial results via SSE",
+			Description: `Runs a query based on the parameters provided in the body.
+
+Pushes back partial results via SSE. Partial results will be truncated to the first 100 items to save bandwidth on larger queries.
+
+The final result will honor the limit parameter passed in the query args.`,
 			Middlewares: middlewares,
 			Tags:        queryTags,
 		},

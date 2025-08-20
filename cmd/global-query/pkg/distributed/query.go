@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2/sse"
@@ -25,6 +26,8 @@ const (
 	// DefaultSemTimeout is the default / fallback amount of time to wait for acquisition
 	// of a semaphore when performing concurrent queries
 	DefaultSemTimeout = time.Second
+	// maxLimitStreaming is the maximum number of results to return in a streaming query's partialResult
+	maxLimitStreaming = 100
 )
 
 // QueryRunner denotes a query runner / executor, wrapping a Querier interface instance with
@@ -142,14 +145,6 @@ func (q *QueryRunner) run(ctx context.Context, args *query.Args, send sse.Sender
 		resChan, send,
 	)
 
-	finalResult.End()
-
-	// truncate results based on the limit
-	if queryArgs.NumResults < uint64(len(finalResult.Rows)) {
-		finalResult.Rows = finalResult.Rows[:queryArgs.NumResults]
-	}
-	finalResult.Summary.Hits.Displayed = len(finalResult.Rows)
-
 	return finalResult, nil
 }
 
@@ -223,10 +218,7 @@ func aggregateResults(ctx context.Context, stmt *query.Statement, queryResults <
 	)
 
 	defer func() {
-		if len(rowMap) > 0 {
-			finalResult.Rows = rowMap.ToRowsSorted(results.By(stmt.SortBy, stmt.Direction, stmt.SortAscending))
-		}
-		finalResult.End()
+		finalizeResult(finalResult, stmt, rowMap)
 	}()
 
 	for {
@@ -237,13 +229,12 @@ func aggregateResults(ctx context.Context, stmt *query.Statement, queryResults <
 			if !open {
 				return
 			}
-
-			aggregateSingleResult(ctx, qr, finalResult, ifaceMap, rowMap, send)
+			aggregateSingleResult(ctx, qr, finalResult, stmt, ifaceMap, rowMap, send)
 		}
 	}
 }
 
-func aggregateSingleResult(ctx context.Context, qr, finalResult *results.Result, ifaceMap map[string]struct{}, rowMap results.RowsMap, send sse.Sender) {
+func aggregateSingleResult(ctx context.Context, qr, finalResult *results.Result, stmt *query.Statement, ifaceMap map[string]struct{}, rowMap results.RowsMap, send sse.Sender) {
 	logger := logging.FromContext(ctx).With("hostname", qr.Hostname)
 	if qr.Err() != nil {
 		// unwrap the error if it's possible
@@ -260,9 +251,7 @@ func aggregateSingleResult(ctx context.Context, qr, finalResult *results.Result,
 
 	res := qr
 
-	for host, status := range res.HostsStatuses {
-		finalResult.HostsStatuses[host] = status
-	}
+	maps.Copy(finalResult.HostsStatuses, res.HostsStatuses)
 
 	// for the final result, the hostname is only set if the result was from a single host
 	if len(finalResult.HostsStatuses) > 0 {
@@ -293,13 +282,33 @@ func aggregateSingleResult(ctx context.Context, qr, finalResult *results.Result,
 	// different systems, the overlap has to be deducted from the total
 	finalResult.Summary.Hits.Total += res.Summary.Hits.Total - merged
 
-	// if SSE callback is provided, run i
 	if send == nil {
 		return
 	}
 
+	// for streaming, partial results must already include the current "final" state
+	finalizeResult(finalResult, stmt, rowMap)
+
+	// if SSE callback is provided, run it
 	err := api.OnResult(finalResult, send)
 	if err != nil {
 		logger.With("error", err).Error("failed to call results callback")
+	}
+}
+
+func finalizeResult(res *results.Result, stmt *query.Statement, rowMap results.RowsMap) {
+	defer res.End()
+	if len(rowMap) == 0 {
+		return
+	}
+
+	// assign the rows to the result
+	res.Rows = rowMap.ToRowsSorted(results.By(stmt.SortBy, stmt.Direction, stmt.SortAscending))
+
+	limit := min(stmt.NumResults, maxLimitStreaming)
+
+	// truncate by limit
+	if limit < uint64(len(res.Rows)) {
+		res.Rows = res.Rows[:stmt.NumResults]
 	}
 }
