@@ -85,8 +85,10 @@ func runQuerySSE(ctx context.Context, caller string, args *query.Args, querier S
 	return querier.RunStreaming(ctx, args, send)
 }
 
+type validationFunc func(*query.Args) error
+
 // getBodyValidationHandler returns the query args validation handler
-func getBodyValidationHandler() func(context.Context, *ArgsInput) (*struct{}, error) {
+func getBodyValidationHandler(extraValidation ...validationFunc) func(context.Context, *ArgsInput) (*struct{}, error) {
 	return func(ctx context.Context, input *ArgsInput) (*struct{}, error) {
 		args := input.Body
 
@@ -100,13 +102,24 @@ func getBodyValidationHandler() func(context.Context, *ArgsInput) (*struct{}, er
 			return nil, err
 		}
 
-		// 204 No Content is added since no data is returned and no error is returned
+		if len(extraValidation) == 0 {
+			// 204 No Content is added since no data is returned and no error is returned
+			return nil, nil
+		}
+
+		for _, validate := range extraValidation {
+			if err := validate(args); err != nil {
+				logger.With("error", err).Error("extra validation: invalid query args")
+				return nil, err
+			}
+		}
+
 		return nil, nil
 	}
 }
 
 // getParamsValidationHandler returns the query args validation handler
-func getParamsValidationHandler() func(context.Context, *ArgsParamsInput) (*struct{}, error) {
+func getParamsValidationHandler(extraValidation ...validationFunc) func(context.Context, *ArgsParamsInput) (*struct{}, error) {
 	return func(ctx context.Context, input *ArgsParamsInput) (*struct{}, error) {
 		args := input.Args
 		args.DNSResolution = input.DNSResolution
@@ -121,7 +134,18 @@ func getParamsValidationHandler() func(context.Context, *ArgsParamsInput) (*stru
 			return nil, err
 		}
 
-		// 204 No Content is added since no data is returned and no error is returned
+		if len(extraValidation) == 0 {
+			// 204 No Content is added since no data is returned and no error is returned
+			return nil, nil
+		}
+
+		for _, validate := range extraValidation {
+			if err := validate(&args); err != nil {
+				logger.With("error", err).Error("extra validation: invalid query args")
+				return nil, err
+			}
+		}
+
 		return nil, nil
 	}
 }
