@@ -43,6 +43,8 @@ interface Edge {
   // Membership of source/destination IPs touched by this (possibly aggregated) edge
   sips: string[]
   dips: string[]
+  // Directionality category: 'bi' for bidirectional flows, 'uni' for unidirectional flows
+  dircat: 'bi' | 'uni'
 }
 
 // map a 0..1 value to stroke width 1..8px in 12.5% buckets
@@ -230,7 +232,8 @@ export function GraphView({
     for (const r of included) {
       const totalB = r.bytes_in + r.bytes_out
       const w = edgeWidth01(totalB / maxBytes)
-      const color = r.bidirectional ? BLUE : RED
+  const color = r.bidirectional ? BLUE : RED
+  const dircat: 'bi' | 'uni' = r.bidirectional ? 'bi' : 'uni'
       const sipId2 = `ip:${r.sip}`
       const dipId2 = `ip:${r.dip}`
       const ifaceKey2 = r.iface ? `${r.host || 'host'}:${r.iface}` : 'unknown'
@@ -249,7 +252,8 @@ export function GraphView({
         bytesTotal: totalB,
         packetsTotal,
         sips: [r.sip],
-        dips: [r.dip],
+  dips: [r.dip],
+  dircat,
       })
       edgesOut.push({
         id: `e:${edgeIndex++}:${ifaceId2}->${dipId2}`,
@@ -263,7 +267,8 @@ export function GraphView({
         bytesTotal: totalB,
         packetsTotal,
         sips: [r.sip],
-        dips: [r.dip],
+  dips: [r.dip],
+  dircat,
       })
     }
 
@@ -271,14 +276,13 @@ export function GraphView({
     if (edgesOut.length) {
       const byPair = new Map<string, Edge & { count: number }>()
       for (const e of edgesOut) {
-        const key = `${e.from}|${e.to}`
+        const key = `${e.from}|${e.to}|${e.dircat}`
         const acc = byPair.get(key)
         if (acc) {
           acc.bytesTotal += e.bytesTotal
           acc.packetsTotal += e.packetsTotal
           acc.count += 1
-          // if any flow is red (uni-directional), keep red
-          if (e.color === RED) acc.color = RED
+          // keep color of this category (no mixing bi/uni in same bucket)
           // merge membership (unique)
           const addUniq = (arr: string[], v: string) => {
             if (!arr.includes(v)) arr.push(v)
