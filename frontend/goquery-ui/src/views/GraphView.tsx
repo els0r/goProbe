@@ -40,6 +40,9 @@ interface Edge {
   dip: string
   bytesTotal: number
   packetsTotal: number
+  // Membership of source/destination IPs touched by this (possibly aggregated) edge
+  sips: string[]
+  dips: string[]
 }
 
 // map a 0..1 value to stroke width 1..8px in 12.5% buckets
@@ -245,6 +248,8 @@ export function GraphView({
         dip: r.dip,
         bytesTotal: totalB,
         packetsTotal,
+        sips: [r.sip],
+        dips: [r.dip],
       })
       edgesOut.push({
         id: `e:${edgeIndex++}:${ifaceId2}->${dipId2}`,
@@ -257,6 +262,8 @@ export function GraphView({
         dip: r.dip,
         bytesTotal: totalB,
         packetsTotal,
+        sips: [r.sip],
+        dips: [r.dip],
       })
     }
 
@@ -272,6 +279,12 @@ export function GraphView({
           acc.count += 1
           // if any flow is red (uni-directional), keep red
           if (e.color === RED) acc.color = RED
+          // merge membership (unique)
+          const addUniq = (arr: string[], v: string) => {
+            if (!arr.includes(v)) arr.push(v)
+          }
+          for (const s of e.sips) addUniq(acc.sips, s)
+          for (const d of e.dips) addUniq(acc.dips, d)
         } else {
           byPair.set(key, { ...e, count: 1 })
         }
@@ -571,7 +584,7 @@ export function GraphView({
   const edgesToRender: Edge[] = hoverIface
     ? edges.filter((e) => e.from === hoverIface || e.to === hoverIface)
     : hoverIP
-      ? edges.filter((e) => e.sip === hoverIP || e.dip === hoverIP)
+      ? edges.filter((e) => (e.sips && e.sips.includes(hoverIP)) || (e.dips && e.dips.includes(hoverIP)))
       : []
   const connectedNodeIds = new Set<string>()
   for (const e of edgesToRender) {
@@ -580,6 +593,35 @@ export function GraphView({
   }
   // detect reciprocal edges (A->B and B->A) so we can offset them apart for readability
   const edgeDirSet = new Set(edgesToRender.map((e) => `${e.from}|${e.to}`))
+  // Build width map per unordered pair to decide which direction is thicker
+  const pairWidths = new Map<string, { wMinMax: number; wMaxMin: number }>()
+  for (const e of edgesToRender) {
+    const minId = e.from < e.to ? e.from : e.to
+    const maxId = e.from < e.to ? e.to : e.from
+    const key = `${minId}|${maxId}`
+    const entry = pairWidths.get(key) || { wMinMax: 0, wMaxMin: 0 }
+    if (e.from === minId && e.to === maxId) entry.wMinMax = Math.max(entry.wMinMax, e.width)
+    else entry.wMaxMin = Math.max(entry.wMaxMin, e.width)
+    pairWidths.set(key, entry)
+  }
+  // z-ordering: draw edges towards IP first (under), then edges away from IP (over)
+  const edgesToRenderSorted = edgesToRender.slice().sort((e1, e2) => {
+    const nFrom1 = nodes.find((n) => n.id === e1.from)
+    const nTo1 = nodes.find((n) => n.id === e1.to)
+    const nFrom2 = nodes.find((n) => n.id === e2.from)
+    const nTo2 = nodes.find((n) => n.id === e2.to)
+    const pri = (from?: Node, to?: Node) => {
+      if (from?.type === 'ip' && to?.type === 'iface') return 1 // away from IP (top)
+      if (from?.type === 'iface' && to?.type === 'ip') return 0 // towards IP (bottom)
+      return 0
+    }
+    const p1 = pri(nFrom1, nTo1)
+    const p2 = pri(nFrom2, nTo2)
+    if (p1 !== p2) return p1 - p2
+    // stable fallback: thicker last (slightly on top within same group)
+    if (e1.width !== e2.width) return e1.width - e2.width
+    return e1.id.localeCompare(e2.id)
+  })
 
   return (
     <div ref={containerRef} className="relative h-[70vh]">
@@ -735,36 +777,67 @@ export function GraphView({
                 })}
 
               {/* edges (only those connected to hovered IP). Draw a small midpoint arrow indicating direction (sip→dip) */}
-      {edgesToRender.map((e) => (
+                  {edgesToRenderSorted.map((e) => (
                 <g key={e.id} pointerEvents="none">
                   {(() => {
                     const a = nodes.find((n) => n.id === e.from)
                     const b = nodes.find((n) => n.id === e.to)
-        const p = shorten(a, b)
-                    // midpoint arrow geometry
-        const dx = p.x2 - p.x1
-        const dy = p.y2 - p.y1
-                    const len = Math.hypot(dx, dy) || 1
-                    const ux = dx / len
-                    const uy = dy / len
-                    const px = -uy
-                    const py = ux
-        // if there's an opposite-direction edge between the same endpoints, offset this edge
-        const hasReciprocal = edgeDirSet.has(`${e.to}|${e.from}`)
-        const sign = e.from < e.to ? 1 : -1 // deterministic opposite signs
-        const sep = hasReciprocal ? Math.max(4, 3.5 + 0.8 * e.width) : 0
-        const ox = px * sep * sign
-        const oy = py * sep * sign
-        const sx1 = p.x1 + ox
-        const sy1 = p.y1 + oy
-        const sx2 = p.x2 + ox
-        const sy2 = p.y2 + oy
-        const mx = (sx1 + sx2) / 2
-        const my = (sy1 + sy2) / 2
-                    // label text: totals, centered at midpoint, rotated parallel to edge
-                    const textX = mx
-                    const textY = my
-        const angleDeg = (Math.atan2(dy, dx) * 180) / Math.PI
+                        const p = shorten(a, b)
+                        // base vectors
+                            const dx = p.x2 - p.x1
+                            const dy = p.y2 - p.y1
+                            const len = Math.hypot(dx, dy) || 1
+                            const ux = dx / len
+                            const uy = dy / len
+                            // reciprocal detection -> draw as mirrored arcs using a quadratic Bezier
+                            const hasReciprocal = edgeDirSet.has(`${e.to}|${e.from}`)
+                            // Compute a stable base normal using the unordered pair (minId -> maxId)
+                            const minId = e.from < e.to ? e.from : e.to
+                            const maxId = e.from < e.to ? e.to : e.from
+                            const nMin = nodes.find((n) => n.id === minId)
+                            const nMax = nodes.find((n) => n.id === maxId)
+                            const pBase = shorten(nMin, nMax)
+                            const bdx = pBase.x2 - pBase.x1
+                            const bdy = pBase.y2 - pBase.y1
+                            const blen = Math.hypot(bdx, bdy) || 1
+                            const bnx = -bdy / blen
+                            const bny = bdx / blen
+                            // decide heavy vs light direction for this pair
+                            const pairKey = `${minId}|${maxId}`
+                            const pw = pairWidths.get(pairKey) || { wMinMax: 0, wMaxMin: 0 }
+                            const thisIsMinToMax = e.from === minId && e.to === maxId
+                            const heavyIsMinToMax = pw.wMinMax >= pw.wMaxMin
+                            const thisIsHeavy = thisIsMinToMax === heavyIsMinToMax
+                            // control point around the base chord midpoint
+                            const midX = (p.x1 + p.x2) / 2
+                            const midY = (p.y1 + p.y2) / 2
+                        // curvature magnitude: scale with edge width and segment length, clamped
+                            const pairMaxW = Math.max(pw.wMinMax, pw.wMaxMin)
+                            const curvMag = hasReciprocal
+                              ? Math.max(12, Math.min(120, (Math.min(len, 320) * 0.18) + 2.5 * pairMaxW))
+                              : 0
+                            // heavy and light go to opposite sides of the base normal
+                            const sgn = thisIsHeavy ? 1 : -1
+                            const cx = midX + bnx * curvMag * sgn
+                            const cy = midY + bny * curvMag * sgn
+                        // label position at t=0.5 on the quadratic Bezier
+                        const tLabel = 0.5
+                        const oneMinusT = 1 - tLabel
+                        const qx = oneMinusT * oneMinusT * p.x1 + 2 * oneMinusT * tLabel * cx + tLabel * tLabel * p.x2
+                        const qy = oneMinusT * oneMinusT * p.y1 + 2 * oneMinusT * tLabel * cy + tLabel * tLabel * p.y2
+                        // tangent (derivative) at t for rotation and arrow orientation
+                        const dxdt = 2 * oneMinusT * (cx - p.x1) + 2 * tLabel * (p.x2 - cx)
+                        const dydt = 2 * oneMinusT * (cy - p.y1) + 2 * tLabel * (p.y2 - cy)
+                        const tLen = Math.hypot(dxdt, dydt) || 1
+                        const tux = dxdt / tLen
+                        const tuy = dydt / tLen
+                        const tnx = -tuy
+                        const tny = tux
+                        // label center
+                        const textX = qx
+                        const textY = qy
+                        const angleDegRaw = (Math.atan2(dydt, dxdt) * 180) / Math.PI
+                        const angleDeg = angleDegRaw > 90 || angleDegRaw < -90 ? angleDegRaw + 180 : angleDegRaw
                     const bytesStr = formatBytesIEC(
                       e.bytesTotal,
                       e.bytesTotal >= 1024 * 1024 * 100
@@ -805,29 +878,40 @@ export function GraphView({
                     // stronger scaling with width; keep a small clearance from the label
                     const clearance = 4
                     const triBack = Math.min(gap - clearance, 2 + 2.2 * e.width)
-                    const apexX = textX + ux * (rectW / 2 + gap)
-                    const apexY = textY + uy * (rectW / 2 + gap)
-                    const baseX = apexX - ux * triBack
-                    const baseY = apexY - uy * triBack
+                        const apexX = textX + tux * (rectW / 2 + gap)
+                        const apexY = textY + tuy * (rectW / 2 + gap)
+                        const baseX = apexX - tux * triBack
+                        const baseY = apexY - tuy * triBack
                     // base width scales with edge width and triangle length for visibility
-                    const halfBase = Math.max(e.width, triBack * 0.55)
-                    const leftX = baseX + px * halfBase
-                    const leftY = baseY + py * halfBase
-                    const rightX = baseX - px * halfBase
-                    const rightY = baseY - py * halfBase
+                        const halfBase = Math.max(e.width, triBack * 0.55)
+                        const leftX = baseX + tnx * halfBase
+                        const leftY = baseY + tny * halfBase
+                        const rightX = baseX - tnx * halfBase
+                        const rightY = baseY - tny * halfBase
                     const pts = `${leftX},${leftY} ${apexX},${apexY} ${rightX},${rightY}`
                     return (
                       <g>
-                        <line
-          x1={sx1}
-          y1={sy1}
-          x2={sx2}
-          y2={sy2}
-                          stroke={e.color}
-                          strokeWidth={e.width}
-                          strokeLinecap="butt"
-                          opacity={0.9}
-                        />
+                            {hasReciprocal ? (
+                              <path
+                                d={`M ${p.x1},${p.y1} Q ${cx},${cy} ${p.x2},${p.y2}`}
+                                fill="none"
+                                stroke={e.color}
+                                strokeWidth={e.width}
+                                strokeLinecap="butt"
+                                opacity={0.9}
+                              />
+                            ) : (
+                              <line
+                                x1={p.x1}
+                                y1={p.y1}
+                                x2={p.x2}
+                                y2={p.y2}
+                                stroke={e.color}
+                                strokeWidth={e.width}
+                                strokeLinecap="butt"
+                                opacity={0.9}
+                              />
+                            )}
                         <g transform={`rotate(${angleDeg}, ${textX}, ${textY})`}>
                           <rect
                             x={rectCx}
