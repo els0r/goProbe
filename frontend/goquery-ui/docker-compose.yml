@@ -11,6 +11,8 @@ services:
     command: sh -c "npm ci && npm run dev"
     ports:
       - "5173:5173"
+    env_file:
+      - .env.development
     environment:
       NODE_ENV: development
     volumes:

@@ -411,10 +411,22 @@ export default function App() {
 
   // --- Validation helpers ---
   const validateAbortRef = useRef<AbortController | null>(null)
+  // Abort controller for non-streaming runs
+  const runAbortRef = useRef<AbortController | null>(null)
+  // Small cooldown to avoid racing a new request onto a just-aborted connection
+  const lastCancelAtRef = useRef<number>(0)
 
   // Map API error to field errors and a banner error, mirroring run() behavior
   const mapValidationError = useCallback(
     (e: any): { fields: Record<string, string>; banner: any } => {
+      // Ignore user-initiated aborts: don't surface as banner errors
+      try {
+        const name = String((e as any)?.name || '')
+        const msg = String((e as any)?.message || '')
+        if (name === 'AbortError' || normalizeText(msg) === 'request aborted') {
+          return { fields: {}, banner: '' }
+        }
+      } catch {}
       const fields: Record<string, string> = {}
       let banner: any = e
       if (
@@ -566,12 +578,24 @@ export default function App() {
   }, [params])
 
   const run = useCallback(async () => {
+    // if we just canceled, wait a brief moment to let the transport settle
+    const sinceCancel = Date.now() - (lastCancelAtRef.current || 0)
+    if (sinceCancel >= 0 && sinceCancel < 120) {
+      await new Promise((r) => setTimeout(r, 120 - sinceCancel))
+    }
     // cancel any previous stream
     if (streamCloserRef.current) {
       try {
         streamCloserRef.current.close()
       } catch {}
       streamCloserRef.current = null
+    }
+    // cancel any previous non-streaming request
+    if (runAbortRef.current) {
+      try {
+        runAbortRef.current.abort()
+      } catch {}
+      runAbortRef.current = null
     }
     setLoading(true)
     setStreaming(!!useStreaming)
@@ -638,10 +662,15 @@ export default function App() {
       } else {
         // normal non-streaming request to /_query
         try {
-          const data = await getGlobalQueryClient().runQueryUI({
-            ...finalParams,
-            hosts_resolver: hostsResolver || undefined,
-          })
+          const ctrl = new AbortController()
+          runAbortRef.current = ctrl
+          const data = await getGlobalQueryClient().runQueryUI(
+            {
+              ...finalParams,
+              hosts_resolver: hostsResolver || undefined,
+            },
+            ctrl.signal
+          )
           setRows(data.flows)
           setSummary(data.summary)
           if (data.hostsStatuses) {
@@ -657,6 +686,7 @@ export default function App() {
             setHostOkCount(ok)
           }
         } finally {
+          runAbortRef.current = null
           setLoading(false)
           setStreaming(false)
         }
@@ -728,41 +758,47 @@ export default function App() {
           problem: (e as any).problem,
           status: (e as any).status,
         })
-      } else {
-        // Special-case mapping: status 500 + 'list of target hosts is empty' => Hosts field
-        const status = (e as any)?.status
-        let combined = ''
-        const prob: any = (e as any)?.problem
-        if (prob) {
-          if (typeof prob.detail === 'string') combined += ' ' + prob.detail
-          if (Array.isArray(prob.errors)) {
-            combined += ' ' + prob.errors.map((er: any) => String(er?.message || '')).join(' ')
-          }
-        }
-        const body: any = (e as any)?.body
-        if (typeof body === 'string') combined += ' ' + body
-        else if (body && typeof body === 'object' && typeof body.message === 'string')
-          combined += ' ' + body.message
-        const lc = normalizeText(combined)
-        if (
-          lc.includes("couldn't prepare query: list of target hosts is empty") ||
-          (status === 500 && lc.includes('list of target hosts is empty'))
-        ) {
-          const msg = 'List of target hosts is empty'
-          setFieldErrors({ hosts: msg })
-          setError({
-            message: 'API request failed: validation failed',
-            problem: prob,
-            status,
-          })
-        } else {
-          setError(e)
-        }
       }
     } finally {
       // if in streaming mode, final handler turns off; otherwise already cleared
     }
   }, [params, conditionInput, hostsInput, backendUrl, useStreaming, hostsResolver])
+
+  // Allow user to cancel an in-flight query (both streaming and non-streaming)
+  const cancelRun = useCallback(() => {
+    lastCancelAtRef.current = Date.now()
+    try {
+      // stop SSE stream if active
+      if (streamCloserRef.current) {
+        streamCloserRef.current.close()
+        streamCloserRef.current = null
+      }
+    } catch {}
+    try {
+      // abort fetch for non-streaming
+      if (runAbortRef.current) {
+        runAbortRef.current.abort()
+        runAbortRef.current = null
+      }
+    } catch {}
+    try {
+      // abort any in-flight validation to avoid surfacing an AbortError banner
+      if (validateAbortRef.current) {
+        validateAbortRef.current.abort()
+        validateAbortRef.current = null
+      }
+    } catch {}
+    // clear transient UI state
+    setError('')
+    setFieldErrors({})
+    setStreamErrors([])
+    setProgress({})
+    setHostsStatuses({})
+    setHostErrorCount(0)
+    setHostOkCount(0)
+    setLoading(false)
+    setStreaming(false)
+  }, [])
 
   // Auto-run only for non-streaming; for SSE, run only when the user presses the Run button
   useEffect(() => {
@@ -1391,13 +1427,19 @@ export default function App() {
             >
               Export CSV
             </button>
-            <button
-              onClick={() => run()}
-              disabled={loading}
-              className="btn btn-primary disabled:opacity-50"
-            >
-              {loading ? 'Running…' : 'Run'}
-            </button>
+            {loading ? (
+              <button
+                onClick={() => cancelRun()}
+                className="inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium bg-red-500/10 text-red-200 ring-1 ring-red-500/40 hover:bg-red-500/20 focus:outline-none focus:ring-2 focus:ring-red-500/40"
+                title="Cancel the running query"
+              >
+                Cancel
+              </button>
+            ) : (
+              <button onClick={() => run()} className="btn btn-primary" title="Run the query">
+                Run
+              </button>
+            )}
           </div>
         </div>
         {summary && (
