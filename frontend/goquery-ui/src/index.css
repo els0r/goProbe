@@ -17,6 +17,9 @@ body {
 .btn-primary {
   @apply bg-primary-500 hover:bg-primary-400 text-white;
 }
+.btn-danger {
+  @apply bg-red-500 hover:bg-red-400 text-white ring-1 ring-red-500/30;
+}
 .card {
   @apply rounded-lg bg-surface-100 ring-1 ring-white/10 shadow-sm;
 }
