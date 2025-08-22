@@ -979,10 +979,19 @@ export default function App() {
         const baseCondRaw = (conditionInput || params.condition || '').trim()
         const ipCond = `host=${ip}`
         const combinedCond = baseCondRaw ? `(${baseCondRaw}) and (${ipCond})` : ipCond
+        // Determine all host IDs that have a vertex connected to this IP (as sip or dip)
+        // We use the current result rows to infer which hosts are relevant for this IP.
+        const hostIdSet = new Set<string>()
+        for (const r of rows) {
+          if ((r.sip === ip || r.dip === ip) && r.host_id) hostIdSet.add(r.host_id)
+        }
+        const hostIds = Array.from(hostIdSet)
         const detailParams: QueryParamsUI = {
           ...params,
           query: 'proto,dport',
           condition: combinedCond,
+          // Override hosts scoping for IP details: restrict to connected hosts only
+          query_hosts: hostIds.length ? hostIds.join(',') : undefined,
           limit: Math.max(1, params.limit || 1),
           sort_by: 'bytes',
           sort_ascending: false,
@@ -1001,7 +1010,7 @@ export default function App() {
         setIpDetail({ ip, rows: [], loading: false, error: e })
       }
     },
-    [params, conditionInput]
+    [params, conditionInput, rows]
   )
 
   // query for Interface details: attributes iface,port,protocol; scope by host_id and selected iface
