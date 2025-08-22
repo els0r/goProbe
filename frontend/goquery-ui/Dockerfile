@@ -21,8 +21,6 @@ RUN apk add --no-cache ca-certificates
 COPY --from=caddy-builder /usr/bin/caddy /usr/bin/caddy
 
 # Create a non-root user for running Caddy
-RUN groupadd -g 1001 caddy && \
-# Create a non-root user for running Caddy
 RUN addgroup -g 1001 caddy && \
     adduser -D -u 1001 -G caddy -h /var/lib/caddy -s /sbin/nologin caddy
 RUN mkdir -p /var/run/env /opt/app/www /etc/caddy /data /config && \
