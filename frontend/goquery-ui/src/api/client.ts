@@ -30,41 +30,84 @@ export class GlobalQueryClient {
     this.timeout = cfg.timeoutMs ?? DEFAULT_TIMEOUT_MS
   }
 
+  private bustUrl(path: string): string {
+    try {
+      const url = new URL(path, this.baseUrl)
+      url.searchParams.set('_ts', String(Date.now()))
+      return url.toString()
+    } catch {
+      // Fallback: naive concat
+      const sep = path.includes('?') ? '&' : '?'
+      return `${this.baseUrl.replace(/\/$/, '')}${path}${sep}_ts=${Date.now()}`
+    }
+  }
+
+  private async delay(ms: number) {
+    return new Promise((res) => setTimeout(res, ms))
+  }
+
+  private isLikelyConnReset(err: any): boolean {
+    try {
+      const name = String(err?.name || '')
+      const msg = String(err?.message || '')
+      const bodyMsg = String((err?.body as any)?.message || '')
+      const s = (msg + ' ' + bodyMsg).toLowerCase()
+      // heuristics for Chromium/WebKit/Gecko
+      return (
+        name === 'TypeError' ||
+        s.includes('err_connection_reset') ||
+        s.includes('networkerror') ||
+        s.includes('network error')
+      )
+    } catch {
+      return false
+    }
+  }
+
   // validate a query without running it. Returns void on success (HTTP 204), throws ApiError on failure
   async validateQueryUI(params: QueryParamsUI, signal?: AbortSignal): Promise<void> {
     const args = buildArgs(params)
-    const url = `${this.baseUrl}/_query/validate`
-    const controller = !signal ? new AbortController() : undefined
-    const timeout = setTimeout(() => controller?.abort(), this.timeout)
-    try {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(args),
-        signal: signal ?? controller?.signal,
-      })
-      if (res.status === 204) return
-      if (!res.ok) {
-        const body = await safeJson(res)
-        let problem: ErrorModelSchema | undefined
-        if (
-          body &&
-          typeof body === 'object' &&
-          ('detail' in (body as any) || 'errors' in (body as any))
-        ) {
-          problem = body as ErrorModelSchema
+    const url = this.bustUrl('/_query/validate')
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const controller = !signal ? new AbortController() : undefined
+      const timeout = setTimeout(() => controller?.abort(), this.timeout)
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(args),
+          signal: signal ?? controller?.signal,
+          cache: 'no-store',
+        } as RequestInit)
+        if (res.status === 204) return
+        if (!res.ok) {
+          const body = await safeJson(res)
+          let problem: ErrorModelSchema | undefined
+          if (
+            body &&
+            typeof body === 'object' &&
+            ('detail' in (body as any) || 'errors' in (body as any))
+          ) {
+            problem = body as ErrorModelSchema
+          }
+          throw apiError(res.status, body, problem)
         }
-        throw apiError(res.status, body, problem)
+        // treat as success
+        return
+      } catch (e: any) {
+        if (e?.name === 'AbortError') throw abortError()
+        if (attempt === 0 && this.isLikelyConnReset(e)) {
+          await this.delay(150)
+          continue
+        }
+        if (isApiError(e)) throw e
+        throw unknownError(e)
+      } finally {
+        clearTimeout(timeout)
       }
-      // some servers may reply 200 with a body; treat as success
-      return
-    } catch (e: any) {
-      if (e.name === 'AbortError') throw abortError()
-      if (isApiError(e)) throw e
-      throw unknownError(e)
-    } finally {
-      clearTimeout(timeout)
     }
+    // should not reach here; both attempts failed with thrown errors above
+    throw unknownError(new Error('validate failed'))
   }
 
   // run a query from UI params and return flattened flows
@@ -77,45 +120,53 @@ export class GlobalQueryClient {
     hostsStatuses?: Record<string, { code?: string; message?: string }>
   }> {
     const args = buildArgs(params)
-    const url = `${this.baseUrl}/_query`
-    const controller = !signal ? new AbortController() : undefined
-    const timeout = setTimeout(() => controller?.abort(), this.timeout)
-    try {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(args),
-        signal: signal ?? controller?.signal,
-      })
-      if (!res.ok) {
-        const body = await safeJson(res)
-        // attempt to detect problem+json structure
-        let problem: ErrorModelSchema | undefined
-        if (
-          body &&
-          typeof body === 'object' &&
-          ('detail' in (body as any) || 'errors' in (body as any))
-        ) {
-          problem = body as ErrorModelSchema
+    const url = this.bustUrl('/_query')
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const controller = !signal ? new AbortController() : undefined
+      const timeout = setTimeout(() => controller?.abort(), this.timeout)
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(args),
+          signal: signal ?? controller?.signal,
+          cache: 'no-store',
+        } as RequestInit)
+        if (!res.ok) {
+          const body = await safeJson(res)
+          let problem: ErrorModelSchema | undefined
+          if (
+            body &&
+            typeof body === 'object' &&
+            ('detail' in (body as any) || 'errors' in (body as any))
+          ) {
+            problem = body as ErrorModelSchema
+          }
+          throw apiError(res.status, body, problem)
         }
-        throw apiError(res.status, body, problem)
+        const json = (await res.json()) as ResultSchema
+        const hostsStatuses = (json as any)?.hosts_statuses as
+          | Record<string, { code?: string; message?: string }>
+          | undefined
+        return {
+          flows: extractFlows(json),
+          summary: json?.summary as any,
+          hostsStatuses,
+        }
+      } catch (e: any) {
+        if (e?.name === 'AbortError') throw abortError()
+        if (attempt === 0 && this.isLikelyConnReset(e)) {
+          await this.delay(150)
+          continue
+        }
+        if (isApiError(e)) throw e
+        throw unknownError(e)
+      } finally {
+        clearTimeout(timeout)
       }
-      const json = (await res.json()) as ResultSchema
-      const hostsStatuses = (json as any)?.hosts_statuses as
-        | Record<string, { code?: string; message?: string }>
-        | undefined
-      return {
-        flows: extractFlows(json),
-        summary: json?.summary as any,
-        hostsStatuses,
-      }
-    } catch (e: any) {
-      if (e.name === 'AbortError') throw abortError()
-      if (isApiError(e)) throw e
-      throw unknownError(e)
-    } finally {
-      clearTimeout(timeout)
     }
+    // should not reach here; both attempts failed with thrown errors above
+    throw unknownError(new Error('request failed'))
   }
 
   // stream query results via Server-Sent Events (POST /_query/sse). The server emits named events:
@@ -142,6 +193,7 @@ export class GlobalQueryClient {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), this.timeout)
     let closed = false
+    let readerRef: ReadableStreamDefaultReader<Uint8Array> | undefined
 
     const unwrapPayload = (data: any): any => {
       if (!data) return data
@@ -275,16 +327,33 @@ export class GlobalQueryClient {
 
     // kick off POST fetch that returns text/event-stream
     ;(async () => {
+      let triedReconnect = false
       try {
-        const res = await fetch(`${this.baseUrl}/_query/sse`, {
-          method: 'POST',
-          headers: {
-            accept: 'text/event-stream',
-            'content-type': 'application/json',
-          },
-          body: JSON.stringify(args),
-          signal: controller.signal,
-        })
+        const connect = async () =>
+          await fetch(this.bustUrl('/_query/sse'), {
+            method: 'POST',
+            headers: {
+              accept: 'text/event-stream',
+              'content-type': 'application/json',
+            },
+            body: JSON.stringify(args),
+            signal: controller.signal,
+            cache: 'no-store',
+          } as RequestInit)
+        let res = await connect()
+        // if server closed connection aggressively, attempt one quick reconnect
+        if (!res.ok) {
+          const body = await safeJson(res)
+          let problem: ErrorModelSchema | undefined
+          if (
+            body &&
+            typeof body === 'object' &&
+            ('detail' in (body as any) || 'errors' in (body as any))
+          ) {
+            problem = body as ErrorModelSchema
+          }
+          throw apiError(res.status, body, problem)
+        }
         if (!res.ok) {
           const body = await safeJson(res)
           let problem: ErrorModelSchema | undefined
@@ -299,6 +368,7 @@ export class GlobalQueryClient {
         }
         const reader = res.body?.getReader()
         if (!reader) throw unknownError(new Error('no response body'))
+        readerRef = reader
         const decoder = new TextDecoder('utf-8')
         let buf = ''
         while (true) {
@@ -349,9 +419,70 @@ export class GlobalQueryClient {
           }
         }
       } catch (e: any) {
-        if (e?.name === 'AbortError') {
-          // timed out or manual close; report as abort to onError so UI can reflect non-fatal end
-          handlers.onError?.(abortError())
+        if (!closed && !triedReconnect && this.isLikelyConnReset(e)) {
+          triedReconnect = true
+          try {
+            await this.delay(150)
+            const res = await fetch(this.bustUrl('/_query/sse'), {
+              method: 'POST',
+              headers: {
+                accept: 'text/event-stream',
+                'content-type': 'application/json',
+              },
+              body: JSON.stringify(args),
+              signal: controller.signal,
+              cache: 'no-store',
+            } as RequestInit)
+            if (!res.ok) {
+              const body = await safeJson(res)
+              let problem: ErrorModelSchema | undefined
+              if (
+                body &&
+                typeof body === 'object' &&
+                ('detail' in (body as any) || 'errors' in (body as any))
+              ) {
+                problem = body as ErrorModelSchema
+              }
+              throw apiError(res.status, body, problem)
+            }
+            const reader = res.body?.getReader()
+            if (!reader) throw unknownError(new Error('no response body'))
+            readerRef = reader
+            // fall-through to normal loop by rethrowing a sentinel is complex; instead, we simply return and let caller re-run stream
+            // However, to keep current API, if reconnect succeeds we proceed with the same reading loop
+            const decoder = new TextDecoder('utf-8')
+            let buf = ''
+            while (true) {
+              const { value, done } = await reader.read()
+              if (done) break
+              buf += decoder.decode(value, { stream: true })
+              buf = buf.replace(/\r\n/g, '\n')
+              let idx
+              while ((idx = buf.indexOf('\n\n')) >= 0) {
+                const rawEvt = buf.slice(0, idx)
+                buf = buf.slice(idx + 2)
+                const evt: { event?: string; data?: string } = {}
+                const lines = rawEvt.split('\n')
+                for (const ln of lines) {
+                  if (!ln) continue
+                  if (ln.startsWith(':')) continue
+                  const m = ln.match(/^(\w+):\s?(.*)$/)
+                  if (!m) continue
+                  const k = m[1]
+                  const v = m[2]
+                  if (k === 'event') evt.event = v
+                  else if (k === 'data') evt.data = (evt.data ? evt.data + '\n' : '') + v
+                }
+                processEvent(evt)
+                if (closed) return
+              }
+            }
+            return
+          } catch (re) {
+            if (!closed) handlers.onError?.(isApiError(re) ? (re as any) : unknownError(re))
+          }
+        } else if (e?.name === 'AbortError') {
+          if (!closed) handlers.onError?.(abortError())
         } else if (!closed) {
           handlers.onError?.(isApiError(e) ? e : unknownError(e))
         }
@@ -364,9 +495,14 @@ export class GlobalQueryClient {
       close: () => {
         try {
           clearTimeout(timeout)
+          // mark closed first to prevent catch handler from reporting AbortError
+          closed = true
+          // proactively cancel the reader to close the stream
+          try {
+            readerRef?.cancel()
+          } catch {}
           controller.abort()
         } catch {}
-        closed = true
       },
     }
   }
@@ -449,4 +585,3 @@ async function safeJson(res: Response): Promise<unknown> {
     return undefined
   }
 }
-
