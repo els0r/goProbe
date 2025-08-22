@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useEffect, useState } from 'react'
 import { FlowRecord } from '../api/domain'
-import { formatBytesIEC } from '../utils/format'
+import { formatBytesIEC, humanBytes, humanPackets } from '../utils/format'
 
 export interface GraphViewProps {
   rows: FlowRecord[]
@@ -57,6 +57,9 @@ function edgeWidth01(v01: number): number {
 const BLUE = '#60a5fa' // tailwind blue-400 (also used for edge/label accents)
 const RED = '#f87171' // tailwind red-400 (matches table row accent)
 const BLUE_STROKE = '#93c5fd' // blue-300 (legacy default)
+// Label metrics (used for rect height and spacing guarantees)
+const LABEL_FS = 11
+const LABEL_PADY = 4
 // Stronger visual separation for IP node fills/strokes
 const PUBLIC_FILL = '#3b82f6' // blue-500
 const PUBLIC_STROKE = '#60a5fa' // blue-400
@@ -232,8 +235,8 @@ export function GraphView({
     for (const r of included) {
       const totalB = r.bytes_in + r.bytes_out
       const w = edgeWidth01(totalB / maxBytes)
-  const color = r.bidirectional ? BLUE : RED
-  const dircat: 'bi' | 'uni' = r.bidirectional ? 'bi' : 'uni'
+      const color = r.bidirectional ? BLUE : RED
+      const dircat: 'bi' | 'uni' = r.bidirectional ? 'bi' : 'uni'
       const sipId2 = `ip:${r.sip}`
       const dipId2 = `ip:${r.dip}`
       const ifaceKey2 = r.iface ? `${r.host || 'host'}:${r.iface}` : 'unknown'
@@ -252,8 +255,8 @@ export function GraphView({
         bytesTotal: totalB,
         packetsTotal,
         sips: [r.sip],
-  dips: [r.dip],
-  dircat,
+        dips: [r.dip],
+        dircat,
       })
       edgesOut.push({
         id: `e:${edgeIndex++}:${ifaceId2}->${dipId2}`,
@@ -267,8 +270,8 @@ export function GraphView({
         bytesTotal: totalB,
         packetsTotal,
         sips: [r.sip],
-  dips: [r.dip],
-  dircat,
+        dips: [r.dip],
+        dircat,
       })
     }
 
@@ -478,26 +481,8 @@ export function GraphView({
       let radius = Math.min(200, Math.max(80, 36 + N * 18))
       // ensure enough space for host label + totals centered
       const totals = hostTotalsMap.get(h.label) || { bytes: 0, packets: 0 }
-      const bytesStr = formatBytesIEC(
-        totals.bytes,
-        totals.bytes >= 1024 * 1024 * 100 ? 0 : totals.bytes >= 1024 * 1024 * 10 ? 1 : 2
-      )
-        .replace('KiB', 'kB')
-        .replace('MiB', 'MB')
-        .replace('GiB', 'GB')
-        .replace('TiB', 'TB')
-      const pktStr = (() => {
-        const v = totals.packets
-        if (v < 1000) return String(v)
-        const units = ['K', 'M', 'B', 'T']
-        let n = v,
-          i = -1
-        while (n >= 1000 && i < units.length - 1) {
-          n /= 1000
-          i++
-        }
-        return n.toFixed(n >= 100 ? 0 : n >= 10 ? 1 : 2) + ' ' + units[i]
-      })()
+      const bytesStr = humanBytes(totals.bytes)
+      const pktStr = humanPackets(totals.packets)
       const label = h.label || 'host'
       const approx = (s: string, fs: number) => s.length * fs * 0.6
       // reduced font sizes: name 14, totals 12
@@ -588,7 +573,9 @@ export function GraphView({
   const edgesToRender: Edge[] = hoverIface
     ? edges.filter((e) => e.from === hoverIface || e.to === hoverIface)
     : hoverIP
-      ? edges.filter((e) => (e.sips && e.sips.includes(hoverIP)) || (e.dips && e.dips.includes(hoverIP)))
+      ? edges.filter(
+          (e) => (e.sips && e.sips.includes(hoverIP)) || (e.dips && e.dips.includes(hoverIP))
+        )
       : []
   const connectedNodeIds = new Set<string>()
   for (const e of edgesToRender) {
@@ -622,10 +609,40 @@ export function GraphView({
     const p1 = pri(nFrom1, nTo1)
     const p2 = pri(nFrom2, nTo2)
     if (p1 !== p2) return p1 - p2
+    // Within same direction group, render uni-directional above bi-directional
+    if (e1.dircat !== e2.dircat) {
+      if (e1.dircat === 'bi' && e2.dircat === 'uni') return -1
+      if (e1.dircat === 'uni' && e2.dircat === 'bi') return 1
+    }
     // stable fallback: thicker last (slightly on top within same group)
     if (e1.width !== e2.width) return e1.width - e2.width
     return e1.id.localeCompare(e2.id)
   })
+  // Group by direction (from|to) to separate multiple categories on same direction
+  const dirGroups = new Map<string, Edge[]>()
+  for (const e of edgesToRenderSorted) {
+    const k = `${e.from}|${e.to}`
+    const arr = dirGroups.get(k) || []
+    arr.push(e)
+    dirGroups.set(k, arr)
+  }
+  // Sort groups by width desc and build index lookup so thinner edges tuck closer to the base chord
+  const dirIndexById = new Map<string, number>()
+  const dirCountByKey = new Map<string, number>()
+  for (const [k, arr] of dirGroups.entries()) {
+    arr.sort((a, b) => b.width - a.width || a.id.localeCompare(b.id))
+    dirCountByKey.set(k, arr.length)
+    arr.forEach((edge, i) => dirIndexById.set(edge.id, i))
+  }
+  // Track which categories exist per direction (from|to)
+  const dirCatsByKey = new Map<string, { bi: boolean; uni: boolean }>()
+  for (const e of edgesToRenderSorted) {
+    const k = `${e.from}|${e.to}`
+    const entry = dirCatsByKey.get(k) || { bi: false, uni: false }
+    if (e.dircat === 'bi') entry.bi = true
+    else entry.uni = true
+    dirCatsByKey.set(k, entry)
+  }
 
   return (
     <div ref={containerRef} className="relative h-[70vh]">
@@ -669,15 +686,8 @@ export function GraphView({
                 bytes: 0,
                 packets: 0,
               }
-              const totalStr = formatBytesIEC(
-                totals.bytes,
-                totals.bytes >= 1024 * 1024 * 100 ? 0 : totals.bytes >= 1024 * 1024 * 10 ? 1 : 2
-              )
-                .replace('KiB', 'kB')
-                .replace('MiB', 'MB')
-                .replace('GiB', 'GB')
-                .replace('TiB', 'TB')
-              const pStr = pktStr(totals.packets)
+              const totalStr = humanBytes(totals.bytes)
+              const pStr = humanPackets(totals.packets)
               const textW = Math.max(approx(n.label, 12), approx(`${totalStr} / ${pStr}`, 12))
               // labels are side-aligned now: extend bbox to the left or right only
               // We can't know side here, so assume worst case to both sides
@@ -781,91 +791,93 @@ export function GraphView({
                 })}
 
               {/* edges (only those connected to hovered IP). Draw a small midpoint arrow indicating direction (sip→dip) */}
-                  {edgesToRenderSorted.map((e) => (
+              {edgesToRenderSorted.map((e) => (
                 <g key={e.id} pointerEvents="none">
                   {(() => {
                     const a = nodes.find((n) => n.id === e.from)
                     const b = nodes.find((n) => n.id === e.to)
-                        const p = shorten(a, b)
-                        // base vectors
-                            const dx = p.x2 - p.x1
-                            const dy = p.y2 - p.y1
-                            const len = Math.hypot(dx, dy) || 1
-                            const ux = dx / len
-                            const uy = dy / len
-                            // reciprocal detection -> draw as mirrored arcs using a quadratic Bezier
-                            const hasReciprocal = edgeDirSet.has(`${e.to}|${e.from}`)
-                            // Compute a stable base normal using the unordered pair (minId -> maxId)
-                            const minId = e.from < e.to ? e.from : e.to
-                            const maxId = e.from < e.to ? e.to : e.from
-                            const nMin = nodes.find((n) => n.id === minId)
-                            const nMax = nodes.find((n) => n.id === maxId)
-                            const pBase = shorten(nMin, nMax)
-                            const bdx = pBase.x2 - pBase.x1
-                            const bdy = pBase.y2 - pBase.y1
-                            const blen = Math.hypot(bdx, bdy) || 1
-                            const bnx = -bdy / blen
-                            const bny = bdx / blen
-                            // decide heavy vs light direction for this pair
-                            const pairKey = `${minId}|${maxId}`
-                            const pw = pairWidths.get(pairKey) || { wMinMax: 0, wMaxMin: 0 }
-                            const thisIsMinToMax = e.from === minId && e.to === maxId
-                            const heavyIsMinToMax = pw.wMinMax >= pw.wMaxMin
-                            const thisIsHeavy = thisIsMinToMax === heavyIsMinToMax
-                            // control point around the base chord midpoint
-                            const midX = (p.x1 + p.x2) / 2
-                            const midY = (p.y1 + p.y2) / 2
-                        // curvature magnitude: scale with edge width and segment length, clamped
-                            const pairMaxW = Math.max(pw.wMinMax, pw.wMaxMin)
-                            const curvMag = hasReciprocal
-                              ? Math.max(12, Math.min(120, (Math.min(len, 320) * 0.18) + 2.5 * pairMaxW))
-                              : 0
-                            // heavy and light go to opposite sides of the base normal
-                            const sgn = thisIsHeavy ? 1 : -1
-                            const cx = midX + bnx * curvMag * sgn
-                            const cy = midY + bny * curvMag * sgn
-                        // label position at t=0.5 on the quadratic Bezier
-                        const tLabel = 0.5
-                        const oneMinusT = 1 - tLabel
-                        const qx = oneMinusT * oneMinusT * p.x1 + 2 * oneMinusT * tLabel * cx + tLabel * tLabel * p.x2
-                        const qy = oneMinusT * oneMinusT * p.y1 + 2 * oneMinusT * tLabel * cy + tLabel * tLabel * p.y2
-                        // tangent (derivative) at t for rotation and arrow orientation
-                        const dxdt = 2 * oneMinusT * (cx - p.x1) + 2 * tLabel * (p.x2 - cx)
-                        const dydt = 2 * oneMinusT * (cy - p.y1) + 2 * tLabel * (p.y2 - cy)
-                        const tLen = Math.hypot(dxdt, dydt) || 1
-                        const tux = dxdt / tLen
-                        const tuy = dydt / tLen
-                        const tnx = -tuy
-                        const tny = tux
-                        // label center
-                        const textX = qx
-                        const textY = qy
-                        const angleDegRaw = (Math.atan2(dydt, dxdt) * 180) / Math.PI
-                        const angleDeg = angleDegRaw > 90 || angleDegRaw < -90 ? angleDegRaw + 180 : angleDegRaw
-                    const bytesStr = formatBytesIEC(
-                      e.bytesTotal,
-                      e.bytesTotal >= 1024 * 1024 * 100
-                        ? 0
-                        : e.bytesTotal >= 1024 * 1024 * 10
-                          ? 1
-                          : 2
-                    )
-                      .replace('KiB', 'kB')
-                      .replace('MiB', 'MB')
-                      .replace('GiB', 'GB')
-                      .replace('TiB', 'TB')
-                    const pktStr = (() => {
-                      const v = e.packetsTotal
-                      if (v < 1000) return String(v)
-                      const units = ['K', 'M', 'B', 'T']
-                      let n = v,
-                        i = -1
-                      while (n >= 1000 && i < units.length - 1) {
-                        n /= 1000
-                        i++
-                      }
-                      return n.toFixed(n >= 100 ? 0 : n >= 10 ? 1 : 2) + ' ' + units[i]
-                    })()
+                    const p = shorten(a, b)
+                    // base vectors
+                    const dx = p.x2 - p.x1
+                    const dy = p.y2 - p.y1
+                    const len = Math.hypot(dx, dy) || 1
+                    const ux = dx / len
+                    const uy = dy / len
+                    // reciprocal detection -> draw as mirrored arcs using a quadratic Bezier
+                    const hasReciprocal = edgeDirSet.has(`${e.to}|${e.from}`)
+                    // Compute a stable base normal using the unordered pair (minId -> maxId)
+                    const minId = e.from < e.to ? e.from : e.to
+                    const maxId = e.from < e.to ? e.to : e.from
+                    const nMin = nodes.find((n) => n.id === minId)
+                    const nMax = nodes.find((n) => n.id === maxId)
+                    const pBase = shorten(nMin, nMax)
+                    const bdx = pBase.x2 - pBase.x1
+                    const bdy = pBase.y2 - pBase.y1
+                    const blen = Math.hypot(bdx, bdy) || 1
+                    const bnx = -bdy / blen
+                    const bny = bdx / blen
+                    // pair max width for curvature scaling
+                    const pairKey = `${minId}|${maxId}`
+                    const pw = pairWidths.get(pairKey) || { wMinMax: 0, wMaxMin: 0 }
+                    // control point around the base chord midpoint
+                    const midX = (p.x1 + p.x2) / 2
+                    const midY = (p.y1 + p.y2) / 2
+                    // curvature magnitude: scale with edge width and segment length, clamped
+                    const pairMaxW = Math.max(pw.wMinMax, pw.wMaxMin)
+                    // Decide whether to curve: reciprocal present OR multiple edges share the same direction
+                    const dirKey = `${e.from}|${e.to}`
+                    const dirCount = dirCountByKey.get(dirKey) || 0
+                    const shouldCurve = hasReciprocal || dirCount > 1
+                    const baseCurv = shouldCurve
+                      ? Math.max(12, Math.min(120, Math.min(len, 320) * 0.18 + 2.5 * pairMaxW))
+                      : 0
+                    // Category-based inner/outer: UNI = inner, BI = outer
+                    // Enforce spacing >= label height + 4px between arcs (both across categories and within-category)
+                    const cats = dirCatsByKey.get(dirKey) || { bi: false, uni: false }
+                    const LABEL_HEIGHT = LABEL_FS + LABEL_PADY * 2
+                    const MIN_ARC_GAP = LABEL_HEIGHT + 24
+                    const dirArr = dirGroups.get(dirKey) || []
+                    const sameCat = dirArr.filter((x) => x.dircat === e.dircat)
+                    const idxInCat = sameCat.findIndex((x) => x.id === e.id)
+                    // uni is inner (closer to chord); bi is outer by one MIN_ARC_GAP when both exist
+                    const catBaseOffset =
+                      cats.bi && cats.uni ? (e.dircat === 'bi' ? MIN_ARC_GAP : 0) : 0
+                    // stagger additional edges within category by MIN_ARC_GAP each to avoid overlap
+                    const catSpanOffset = Math.max(0, idxInCat) * MIN_ARC_GAP
+                    const totalOffset = catBaseOffset + catSpanOffset
+                    // Only apply curvature when needed; otherwise keep control on the chord to align label/arrow with straight edge
+                    const curvMag = shouldCurve ? Math.max(8, baseCurv + totalOffset) : 0
+                    // Side selection per direction (stable): min->max on +normal, max->min on -normal
+                    const sgn = e.from === minId ? 1 : -1
+                    const cx = midX + bnx * curvMag * sgn
+                    const cy = midY + bny * curvMag * sgn
+                    // label position at t=0.5 on the quadratic Bezier
+                    const tLabel = 0.5
+                    const oneMinusT = 1 - tLabel
+                    const qx =
+                      oneMinusT * oneMinusT * p.x1 +
+                      2 * oneMinusT * tLabel * cx +
+                      tLabel * tLabel * p.x2
+                    const qy =
+                      oneMinusT * oneMinusT * p.y1 +
+                      2 * oneMinusT * tLabel * cy +
+                      tLabel * tLabel * p.y2
+                    // tangent (derivative) at t for rotation and arrow orientation
+                    const dxdt = 2 * oneMinusT * (cx - p.x1) + 2 * tLabel * (p.x2 - cx)
+                    const dydt = 2 * oneMinusT * (cy - p.y1) + 2 * tLabel * (p.y2 - cy)
+                    const tLen = Math.hypot(dxdt, dydt) || 1
+                    const tux = dxdt / tLen
+                    const tuy = dydt / tLen
+                    const tnx = -tuy
+                    const tny = tux
+                    // label center
+                    const textX = qx
+                    const textY = qy
+                    const angleDegRaw = (Math.atan2(dydt, dxdt) * 180) / Math.PI
+                    const angleDeg =
+                      angleDegRaw > 90 || angleDegRaw < -90 ? angleDegRaw + 180 : angleDegRaw
+                    const bytesStr = humanBytes(e.bytesTotal)
+                    const pktStr = humanPackets(e.packetsTotal)
                     // draw a small rounded rect background aligned to edge
                     const label = `${bytesStr} / ${pktStr}`
                     const fs = 11
@@ -877,45 +889,59 @@ export function GraphView({
                     const rectH = fs + padY * 2
                     const rectCx = textX - rectW / 2
                     const rectCy = textY - rectH / 2
-                    // compute arrowhead positioned 16px to the right (forward) of the label box
-                    const gap = 16
-                    // stronger scaling with width; keep a small clearance from the label
-                    const clearance = 4
-                    const triBack = Math.min(gap - clearance, 2 + 2.2 * e.width)
-                        const apexX = textX + tux * (rectW / 2 + gap)
-                        const apexY = textY + tuy * (rectW / 2 + gap)
-                        const baseX = apexX - tux * triBack
-                        const baseY = apexY - tuy * triBack
-                    // base width scales with edge width and triangle length for visibility
-                        const halfBase = Math.max(e.width, triBack * 0.55)
-                        const leftX = baseX + tnx * halfBase
-                        const leftY = baseY + tny * halfBase
-                        const rightX = baseX - tnx * halfBase
-                        const rightY = baseY - tny * halfBase
+                    // Arrowhead: place apex directly on the curve, rotated to the tangent at that point
+                    const tArrow = 0.7 // move arrow closer to destination along the curve
+                    const oneMinusTA = 1 - tArrow
+                    const ax =
+                      oneMinusTA * oneMinusTA * p.x1 +
+                      2 * oneMinusTA * tArrow * cx +
+                      tArrow * tArrow * p.x2
+                    const ay =
+                      oneMinusTA * oneMinusTA * p.y1 +
+                      2 * oneMinusTA * tArrow * cy +
+                      tArrow * tArrow * p.y2
+                    const dxdtA = 2 * oneMinusTA * (cx - p.x1) + 2 * tArrow * (p.x2 - cx)
+                    const dydtA = 2 * oneMinusTA * (cy - p.y1) + 2 * tArrow * (p.y2 - cy)
+                    const tLenA = Math.hypot(dxdtA, dydtA) || 1
+                    const tuxA = dxdtA / tLenA
+                    const tuyA = dydtA / tLenA
+                    const tnxA = -tuyA
+                    const tnyA = tuxA
+                    // triangle dimensions scale with edge width
+                    const triBack = 6 + 2.4 * e.width
+                    const halfBase = Math.max(e.width, triBack * 0.55)
+                    const apexX = ax
+                    const apexY = ay
+                    const baseX = apexX - tuxA * triBack
+                    const baseY = apexY - tuyA * triBack
+                    const leftX = baseX + tnxA * halfBase
+                    const leftY = baseY + tnyA * halfBase
+                    const rightX = baseX - tnxA * halfBase
+                    const rightY = baseY - tnyA * halfBase
                     const pts = `${leftX},${leftY} ${apexX},${apexY} ${rightX},${rightY}`
                     return (
                       <g>
-                            {hasReciprocal ? (
-                              <path
-                                d={`M ${p.x1},${p.y1} Q ${cx},${cy} ${p.x2},${p.y2}`}
-                                fill="none"
-                                stroke={e.color}
-                                strokeWidth={e.width}
-                                strokeLinecap="butt"
-                                opacity={0.9}
-                              />
-                            ) : (
-                              <line
-                                x1={p.x1}
-                                y1={p.y1}
-                                x2={p.x2}
-                                y2={p.y2}
-                                stroke={e.color}
-                                strokeWidth={e.width}
-                                strokeLinecap="butt"
-                                opacity={0.9}
-                              />
-                            )}
+                        {shouldCurve ? (
+                          <path
+                            d={`M ${p.x1},${p.y1} Q ${cx},${cy} ${p.x2},${p.y2}`}
+                            fill="none"
+                            stroke={e.color}
+                            strokeWidth={e.width}
+                            strokeLinecap="butt"
+                            opacity={0.9}
+                          />
+                        ) : (
+                          <line
+                            x1={p.x1}
+                            y1={p.y1}
+                            x2={p.x2}
+                            y2={p.y2}
+                            stroke={e.color}
+                            strokeWidth={e.width}
+                            strokeLinecap="butt"
+                            opacity={0.9}
+                          />
+                        )}
                         <g transform={`rotate(${angleDeg}, ${textX}, ${textY})`}>
                           <rect
                             x={rectCx}
@@ -925,9 +951,7 @@ export function GraphView({
                             rx={rxy}
                             ry={rxy}
                             fill={panelBg}
-                            opacity={0.98}
-                            stroke={panelBg}
-                            strokeWidth={1}
+                            fillOpacity={1}
                           />
                           <text
                             x={textX}
@@ -936,7 +960,7 @@ export function GraphView({
                             dominantBaseline="middle"
                             fontSize={fs}
                             fill={e.color}
-                            opacity={0.98}
+                            opacity={1}
                           >
                             {label}
                           </text>
