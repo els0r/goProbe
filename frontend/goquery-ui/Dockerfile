@@ -37,7 +37,7 @@ COPY --chown=caddy:caddy deploy/Caddyfile /etc/caddy/Caddyfile
 # Switch to non-root user
 USER caddy
 
-EXPOSE 8080
+EXPOSE 5137
 
 # default command
 CMD ["caddy", "run", "--config", "/etc/caddy/Caddyfile"]
