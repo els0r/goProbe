@@ -578,6 +578,8 @@ export function GraphView({
     connectedNodeIds.add(e.from)
     connectedNodeIds.add(e.to)
   }
+  // detect reciprocal edges (A->B and B->A) so we can offset them apart for readability
+  const edgeDirSet = new Set(edgesToRender.map((e) => `${e.from}|${e.to}`))
 
   return (
     <div ref={containerRef} className="relative h-[70vh]">
@@ -733,26 +735,36 @@ export function GraphView({
                 })}
 
               {/* edges (only those connected to hovered IP). Draw a small midpoint arrow indicating direction (sip→dip) */}
-              {edgesToRender.map((e) => (
+      {edgesToRender.map((e) => (
                 <g key={e.id} pointerEvents="none">
                   {(() => {
                     const a = nodes.find((n) => n.id === e.from)
                     const b = nodes.find((n) => n.id === e.to)
-                    const p = shorten(a, b)
+        const p = shorten(a, b)
                     // midpoint arrow geometry
-                    const mx = (p.x1 + p.x2) / 2
-                    const my = (p.y1 + p.y2) / 2
-                    const dx = p.x2 - p.x1
-                    const dy = p.y2 - p.y1
+        const dx = p.x2 - p.x1
+        const dy = p.y2 - p.y1
                     const len = Math.hypot(dx, dy) || 1
                     const ux = dx / len
                     const uy = dy / len
                     const px = -uy
                     const py = ux
+        // if there's an opposite-direction edge between the same endpoints, offset this edge
+        const hasReciprocal = edgeDirSet.has(`${e.to}|${e.from}`)
+        const sign = e.from < e.to ? 1 : -1 // deterministic opposite signs
+        const sep = hasReciprocal ? Math.max(4, 3.5 + 0.8 * e.width) : 0
+        const ox = px * sep * sign
+        const oy = py * sep * sign
+        const sx1 = p.x1 + ox
+        const sy1 = p.y1 + oy
+        const sx2 = p.x2 + ox
+        const sy2 = p.y2 + oy
+        const mx = (sx1 + sx2) / 2
+        const my = (sy1 + sy2) / 2
                     // label text: totals, centered at midpoint, rotated parallel to edge
                     const textX = mx
                     const textY = my
-                    const angleDeg = (Math.atan2(dy, dx) * 180) / Math.PI
+        const angleDeg = (Math.atan2(dy, dx) * 180) / Math.PI
                     const bytesStr = formatBytesIEC(
                       e.bytesTotal,
                       e.bytesTotal >= 1024 * 1024 * 100
@@ -807,10 +819,10 @@ export function GraphView({
                     return (
                       <g>
                         <line
-                          x1={p.x1}
-                          y1={p.y1}
-                          x2={p.x2}
-                          y2={p.y2}
+          x1={sx1}
+          y1={sy1}
+          x2={sx2}
+          y2={sy2}
                           stroke={e.color}
                           strokeWidth={e.width}
                           strokeLinecap="butt"
