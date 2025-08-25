@@ -20,16 +20,14 @@ import (
 	_ "github.com/els0r/goProbe/plugins/contrib/v4" // Include third-party plugins (if enabled, see README)
 )
 
-// serverCmd represents the server command
-var serverCmd = &cobra.Command{
-	Use:   "server",
-	Short: "Run global-query in server mode",
-	Long:  "Run global-query in server mode",
-	RunE:  serverEntrypoint,
-}
-
-func init() {
-	rootCmd.AddCommand(serverCmd)
+// serverCommand represents the server command
+func serverCommand() (*cobra.Command, error) {
+	serverCmd := &cobra.Command{
+		Use:   "server",
+		Short: "Run global-query in server mode",
+		Long:  "Run global-query in server mode",
+		RunE:  serverEntrypoint,
+	}
 
 	pflags := serverCmd.PersistentFlags()
 
@@ -41,10 +39,15 @@ func init() {
 	// telemetry
 	pflags.Bool(conf.ProfilingEnabled, false, "enable profiling endpoints")
 
-	_ = viper.BindPFlags(pflags)
+	err := viper.BindPFlags(pflags)
+	if err != nil {
+		return nil, err
+	}
+
+	return serverCmd, nil
 }
 
-func serverEntrypoint(cmd *cobra.Command, args []string) error {
+func serverEntrypoint(_ *cobra.Command, _ []string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	defer stop()
 

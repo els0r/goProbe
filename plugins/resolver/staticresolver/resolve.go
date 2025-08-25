@@ -7,12 +7,12 @@ import (
 
 	"github.com/els0r/goProbe/v4/pkg/distributed/hosts"
 	"github.com/els0r/goProbe/v4/plugins"
-	jsoniter "github.com/json-iterator/go"
+	"gopkg.in/yaml.v3"
 )
 
-// Config file schema: {"ids": ["hostA","hostB", ...]}
+// Config file schema
 type Config struct {
-	IDs []string `json:"ids"`
+	IDs []string `yaml:"ids"`
 }
 
 // Resolver holds the pre-loaded host IDs from the configuration
@@ -35,7 +35,7 @@ func load(cfgPath string) (*Resolver, error) {
 		return nil, err
 	}
 	var c Config
-	if err := jsoniter.Unmarshal(b, &c); err != nil {
+	if err := yaml.Unmarshal(b, &c); err != nil {
 		return nil, err
 	}
 	if len(c.IDs) == 0 {

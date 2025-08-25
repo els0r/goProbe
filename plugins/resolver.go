@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sort"
 
 	"github.com/els0r/goProbe/v4/pkg/distributed/hosts"
@@ -14,6 +15,17 @@ import (
 type ResolverConfig struct {
 	Type   string `mapstructure:"type"`   // Type is the type of the resolver (e.g. the name)
 	Config string `mapstructure:"config"` // Config is the path to the configuration file
+}
+
+// LogValue returns the log representation of the resolver config
+func (rc *ResolverConfig) LogValue() slog.Value {
+	attrs := []slog.Attr{
+		slog.String("type", rc.Type),
+	}
+	if rc.Config != "" {
+		attrs = append(attrs, slog.String("config", rc.Config))
+	}
+	return slog.GroupValue(attrs...)
 }
 
 // HostResolverConfig holds all resolver configuration
@@ -77,7 +89,12 @@ func InitResolvers(ctx context.Context, cfg *HostResolverConfig) (*hosts.Resolve
 			logger.Warn("nil resolver config found")
 			continue
 		}
-		logger.WithGroup("resolver").With("type", resolverCfg.Type, "config", resolverCfg.Config).Info("initializing resolver")
+		_, exists := rm.Get(resolverCfg.Type)
+		if exists {
+			continue
+		}
+
+		logger.With("resolver", resolverCfg).Info("initializing resolver")
 
 		name := resolverCfg.Type
 		initFn, exists := GetInitializer().getResolver(name)

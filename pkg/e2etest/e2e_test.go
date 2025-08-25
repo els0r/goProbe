@@ -34,6 +34,7 @@ import (
 	"github.com/els0r/goProbe/v4/pkg/api/goprobe/client"
 	gpserver "github.com/els0r/goProbe/v4/pkg/api/goprobe/server"
 	"github.com/els0r/goProbe/v4/pkg/api/server"
+	"github.com/els0r/goProbe/v4/pkg/distributed/hosts"
 
 	"github.com/els0r/goProbe/v4/pkg/capture"
 	"github.com/els0r/goProbe/v4/pkg/capture/capturetypes"
@@ -697,7 +698,10 @@ func runGlobalQuery(t *testing.T, addr string, apiEndpoints map[string]string) f
 		endpoints[k] = &client.Config{Addr: v}
 	}
 
-	apiServer := gqserver.New(addr, stringresolver.NewResolver(true), &apiclient.APIClientQuerier{
+	resolvers := hosts.NewResolverMap()
+	resolvers.Set(stringresolver.NewResolver(true))
+
+	apiServer := gqserver.New(addr, resolvers, &apiclient.APIClientQuerier{
 		APIEndpoints:  endpoints,
 		MaxConcurrent: 10,
 	}, server.WithNoRecursionDetection())
