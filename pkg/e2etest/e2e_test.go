@@ -699,7 +699,7 @@ func runGlobalQuery(t *testing.T, addr string, apiEndpoints map[string]string) f
 	}
 
 	resolvers := hosts.NewResolverMap()
-	resolvers.Set(stringresolver.NewResolver(true))
+	resolvers.Set(stringresolver.Type, stringresolver.NewResolver(true))
 
 	apiServer := gqserver.New(addr, resolvers, &apiclient.APIClientQuerier{
 		APIEndpoints:  endpoints,
