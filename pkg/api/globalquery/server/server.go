@@ -16,18 +16,18 @@ import (
 
 // Server runs a global-query API server
 type Server struct {
-	hostListResolver hosts.Resolver
-	querier          distributed.Querier
+	hostListResolvers *hosts.ResolverMap
+	querier           distributed.Querier
 
 	*server.DefaultServer
 }
 
 // New creates a new global-query API server
-func New(addr string, resolver hosts.Resolver, querier distributed.Querier, opts ...server.Option) *Server {
+func New(addr string, resolvers *hosts.ResolverMap, querier distributed.Querier, opts ...server.Option) *Server {
 	server := &Server{
-		hostListResolver: resolver,
-		querier:          querier,
-		DefaultServer:    server.NewDefault(conf.ServiceName, addr, opts...),
+		hostListResolvers: resolvers,
+		querier:           querier,
+		DefaultServer:     server.NewDefault(conf.ServiceName, addr, opts...),
 	}
 
 	server.registerRoutes()
@@ -50,7 +50,7 @@ func (server *Server) registerRoutes() {
 	}
 	api.RegisterQueryAPI(server.API(),
 		fmt.Sprintf("global-query/%s", version.Short()),
-		gqdistributed.NewQueryRunner(server.hostListResolver, server.querier, opts...),
+		gqdistributed.NewQueryRunner(server.hostListResolvers, server.querier, opts...),
 		middlewares,
 	)
 }

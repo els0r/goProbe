@@ -61,7 +61,7 @@ func serverEntrypoint(cmd *cobra.Command, args []string) error {
 		logger.With("error", err).Error("failed to set up tracing")
 	}
 
-	hostListResolver, err := initResolver(ctx)
+	hostListResolvers, err := initResolvers(ctx)
 	if err != nil {
 		logger.Errorf("failed to prepare host resolver: %v", err)
 		return err
@@ -79,7 +79,7 @@ func serverEntrypoint(cmd *cobra.Command, args []string) error {
 
 	// set up the API server
 	addr := viper.GetString(conf.ServerAddr)
-	apiServer := gqserver.New(addr, hostListResolver, querier,
+	apiServer := gqserver.New(addr, hostListResolvers, querier,
 		// Set the release mode of GIN depending on the log level
 		server.WithDebugMode(
 			logging.LevelFromString(viper.GetString(conf.LogLevel)) == logging.LevelDebug,

@@ -43,12 +43,12 @@ func load(cfgPath string) (*Resolver, error) {
 	}
 	out := make(hosts.Hosts, 0, len(c.IDs))
 	for _, s := range c.IDs {
-		out = append(out, hosts.ID(s))
+		out = append(out, s)
 	}
 	return &Resolver{ids: out}, nil
 }
 
-func init() {
+func init() { //nolint:gochecknoinits
 	plugins.RegisterResolver("static", func(_ context.Context, cfgPath string) (hosts.Resolver, error) {
 		return load(cfgPath)
 	})

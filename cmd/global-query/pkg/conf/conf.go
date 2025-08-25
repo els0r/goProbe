@@ -16,7 +16,7 @@ const (
 	ServiceName = "global_query"
 )
 
-// Definnitions for command line parameters / arguments
+// Definitions for command line parameters / arguments
 const (
 	loggingKey  = "logging"
 	LogLevel    = loggingKey + ".level"
