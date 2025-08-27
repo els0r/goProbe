@@ -149,7 +149,7 @@ const (
 	StreamEventKeepalive     StreamEventType = "keepalive"
 )
 
-// ArgsBodyInput stores the query args to be validated in the body
+// ArgsInput stores the query args to be validated in the body
 type ArgsInput struct {
 	Body *query.Args
 }

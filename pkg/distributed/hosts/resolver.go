@@ -1,3 +1,4 @@
+// Package hosts defines the host resolution contracts for distributed queries
 package hosts
 
 import (
@@ -19,20 +20,19 @@ type Resolver interface {
 
 // ResolverMap is a concurrency-safe map of named resolvers
 type ResolverMap struct {
-	mu        *sync.RWMutex
+	mu        sync.RWMutex
 	resolvers map[string]Resolver
 }
 
 // NewResolverMap creates a new ResolverMap
 func NewResolverMap() *ResolverMap {
 	return &ResolverMap{
-		mu:        &sync.RWMutex{},
 		resolvers: make(map[string]Resolver),
 	}
 }
 
 // Get returns the resolver for a given name in case it exists
-func (rm ResolverMap) Get(name string) (Resolver, bool) {
+func (rm *ResolverMap) Get(name string) (Resolver, bool) {
 	rm.mu.RLock()
 	resolver, ok := rm.resolvers[name]
 	rm.mu.RUnlock()
@@ -40,14 +40,14 @@ func (rm ResolverMap) Get(name string) (Resolver, bool) {
 }
 
 // Set sets the resolver for a given name
-func (rm ResolverMap) Set(name string, resolver Resolver) {
+func (rm *ResolverMap) Set(name string, resolver Resolver) {
 	rm.mu.Lock()
 	rm.resolvers[name] = resolver
 	rm.mu.Unlock()
 }
 
 // Delete deletes an entry from the map
-func (rm ResolverMap) Delete(name string) {
+func (rm *ResolverMap) Delete(name string) {
 	rm.mu.Lock()
 	delete(rm.resolvers, name)
 	rm.mu.Unlock()

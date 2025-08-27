@@ -30,6 +30,8 @@ const (
 	maxLimitStreaming = 100
 )
 
+var errQuerierTypeAllNotSupported = errors.New("querier type does not support querying all hosts")
+
 // QueryRunner denotes a query runner / executor, wrapping a Querier interface instance with
 // other fields required to perform a distributed query
 type QueryRunner struct {
@@ -138,7 +140,7 @@ func (q *QueryRunner) run(ctx context.Context, args *query.Args, send sse.Sender
 
 	resChan, keepaliveChan := q.querier.Query(ctx, hostList, &queryArgs)
 	if send != nil && queryArgs.KeepAlive > 0 {
-		q.forwardKeepalives(keepaliveChan, send, queryArgs.KeepAlive)
+		q.forwardKeepalives(ctx, keepaliveChan, send, queryArgs.KeepAlive)
 	}
 	finalResult := aggregateResults(ctx, stmt,
 		resChan, send,
@@ -155,7 +157,7 @@ func (q *QueryRunner) prepareHostList(ctx context.Context, resolver hosts.Resolv
 	if types.IsAnySelector(queryHosts) {
 		querierAnyable, ok := q.querier.(distributed.QuerierAnyable)
 		if !ok {
-			return nil, errors.New("querier type does not support querying all hosts")
+			return nil, errQuerierTypeAllNotSupported
 		}
 		if hostList, err = querierAnyable.AllHosts(); err != nil {
 			return nil, fmt.Errorf("failed to extract list of all hosts: %w", err)
@@ -187,14 +189,18 @@ func (q *QueryRunner) checkSemaphore(stmt *query.Statement) (func(), error) {
 	return q.sem.TryAddFor(semTimeout)
 }
 
-func (*QueryRunner) forwardKeepalives(keepaliveChan <-chan struct{}, send sse.Sender, keepaliveInterval time.Duration) {
+func (*QueryRunner) forwardKeepalives(ctx context.Context, keepaliveChan <-chan struct{}, send sse.Sender, keepaliveInterval time.Duration) {
+	logger := logging.FromContext(ctx).With("keepalive_interval", keepaliveInterval)
 	go func() {
 		lastKeepalive := time.Now()
 		for range keepaliveChan {
 			// assess time since last keepalive emission and act accordingly
 			if time.Since(lastKeepalive) > keepaliveInterval {
 				lastKeepalive = time.Now()
-				_ = api.OnKeepalive(send)
+				err := api.OnKeepalive(send)
+				if err != nil {
+					logger.With("error", err).Error("failed to handle keepalive event")
+				}
 			}
 		}
 	}()

@@ -1,6 +1,7 @@
 //go:build !slimcap_nomock
 // +build !slimcap_nomock
 
+// Package e2etests runs the end-to-end tests for the goProbe/goQuery application-suite
 package e2etest
 
 import (
