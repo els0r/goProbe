@@ -72,7 +72,7 @@ func GetServiceInfoHandler(serviceName string) func(context.Context, *struct{}) 
 	}
 }
 
-// HealthOutput returns the output of the health command
+// GetHealthOutput returns the output of the health command
 type GetHealthOutput struct {
 	Body struct {
 		Status string `json:"status" doc:"Health status of application" example:"healthy"`

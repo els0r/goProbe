@@ -15,7 +15,6 @@ import (
 	"github.com/els0r/goProbe/v4/pkg/query"
 	"github.com/els0r/goProbe/v4/pkg/results"
 	"github.com/els0r/goProbe/v4/pkg/types"
-	"github.com/els0r/goProbe/v4/plugins/resolver/stringresolver"
 	"github.com/els0r/telemetry/logging"
 	"github.com/els0r/telemetry/tracing"
 	"github.com/fako1024/gotools/concurrency"
@@ -31,12 +30,14 @@ const (
 	maxLimitStreaming = 100
 )
 
+var errQuerierTypeAllNotSupported = errors.New("querier type does not support querying all hosts")
+
 // QueryRunner denotes a query runner / executor, wrapping a Querier interface instance with
 // other fields required to perform a distributed query
 type QueryRunner struct {
-	resolver hosts.Resolver
-	querier  distributed.Querier
-	sem      concurrency.Semaphore
+	resolvers *hosts.ResolverMap
+	querier   distributed.Querier
+	sem       concurrency.Semaphore
 }
 
 // QueryOption configures the query runner
@@ -50,15 +51,15 @@ func WithMaxConcurrent(sem chan struct{}) QueryOption {
 }
 
 // NewQueryRunner instantiates a new distributed query runner
-func NewQueryRunner(resolver hosts.Resolver, querier distributed.Querier, opts ...QueryOption) (qr *QueryRunner) {
+func NewQueryRunner(resolvers *hosts.ResolverMap, querier distributed.Querier, opts ...QueryOption) (qr *QueryRunner) {
 	qr = &QueryRunner{
-		resolver: resolver,
-		querier:  querier,
+		resolvers: resolvers,
+		querier:   querier,
 	}
 	for _, opt := range opts {
 		opt(qr)
 	}
-	return
+	return qr
 }
 
 // Run executes / runs the query and creates the final result structure
@@ -86,16 +87,15 @@ func (q *QueryRunner) run(ctx context.Context, args *query.Args, send sse.Sender
 		return nil, fmt.Errorf("couldn't prepare query: query for target hosts is empty")
 	}
 
-	// allows for overriding host resolution via a stringresolver if specified.
-	// This comes in handy when IDs are already available and will be used directly
-	// in the QueryHosts
-	//
-	// TODO: other resolvers are currently not forceable via the query args due to the
-	// complexity of their setup (e.g. a necessary config path)
-	var hostsResolver = q.resolver
-	if queryArgs.QueryHostsResolverType == stringresolver.Type {
-		hostsResolver = stringresolver.NewResolver(true)
-		logging.Logger().Info("using string resolver for hosts resolution")
+	// select hosts resolver based on query configuration. Will always fall back to the strings resolver in case none
+	// is selected
+	resolverType := "string"
+	if queryArgs.QueryHostsResolverType != "" {
+		resolverType = queryArgs.QueryHostsResolverType
+	}
+	hostsResolver, ok := q.resolvers.Get(resolverType)
+	if !ok {
+		return nil, fmt.Errorf("hosts resolver type %q not available", resolverType)
 	}
 
 	ctx, span := tracing.Start(ctx, "(*distributed.QueryRunner).run", trace.WithAttributes(attribute.String("args", queryArgs.ToJSONString())))
@@ -140,7 +140,7 @@ func (q *QueryRunner) run(ctx context.Context, args *query.Args, send sse.Sender
 
 	resChan, keepaliveChan := q.querier.Query(ctx, hostList, &queryArgs)
 	if send != nil && queryArgs.KeepAlive > 0 {
-		q.forwardKeepalives(keepaliveChan, send, queryArgs.KeepAlive)
+		q.forwardKeepalives(ctx, keepaliveChan, send, queryArgs.KeepAlive)
 	}
 	finalResult := aggregateResults(ctx, stmt,
 		resChan, send,
@@ -155,23 +155,24 @@ func (q *QueryRunner) prepareHostList(ctx context.Context, resolver hosts.Resolv
 
 	// Handle ANY (all hosts) case
 	if types.IsAnySelector(queryHosts) {
-		if querierAnyable, ok := q.querier.(distributed.QuerierAnyable); ok {
-			if hostList, err = querierAnyable.AllHosts(); err != nil {
-				err = fmt.Errorf("failed to extract list of all hosts: %w", err)
-			}
-		} else {
-			err = errors.New("querier type does not support querying all hosts")
+		querierAnyable, ok := q.querier.(distributed.QuerierAnyable)
+		if !ok {
+			return nil, errQuerierTypeAllNotSupported
+		}
+		if hostList, err = querierAnyable.AllHosts(); err != nil {
+			return nil, fmt.Errorf("failed to extract list of all hosts: %w", err)
 		}
 
-		return
+		return hostList, nil
 	}
 
 	// Default handling via resolver
 	if hostList, err = resolver.Resolve(ctx, queryHosts); err != nil {
 		err = fmt.Errorf("failed to resolve host list: %w", err)
+		return nil, err
 	}
 
-	return
+	return hostList, nil
 }
 
 func (q *QueryRunner) checkSemaphore(stmt *query.Statement) (func(), error) {
@@ -188,15 +189,18 @@ func (q *QueryRunner) checkSemaphore(stmt *query.Statement) (func(), error) {
 	return q.sem.TryAddFor(semTimeout)
 }
 
-func (q *QueryRunner) forwardKeepalives(keepaliveChan <-chan struct{}, send sse.Sender, keepaliveInterval time.Duration) {
+func (*QueryRunner) forwardKeepalives(ctx context.Context, keepaliveChan <-chan struct{}, send sse.Sender, keepaliveInterval time.Duration) {
+	logger := logging.FromContext(ctx).With("keepalive_interval", keepaliveInterval)
 	go func() {
 		lastKeepalive := time.Now()
 		for range keepaliveChan {
-
 			// assess time since last keepalive emission and act accordingly
 			if time.Since(lastKeepalive) > keepaliveInterval {
 				lastKeepalive = time.Now()
-				api.OnKeepalive(send)
+				err := api.OnKeepalive(send)
+				if err != nil {
+					logger.With("error", err).Error("failed to handle keepalive event")
+				}
 			}
 		}
 	}()
@@ -219,16 +223,16 @@ func aggregateResults(ctx context.Context, stmt *query.Statement, queryResults <
 	)
 
 	defer func() {
-		finalizeResult(finalResult, stmt, rowMap)
+		finalizeResult(finalResult, stmt, rowMap, stmt.NumResults) // fully honors the limit
 	}()
 
 	for {
 		select {
 		case <-ctx.Done():
-			return
+			return finalResult
 		case qr, open := <-queryResults:
 			if !open {
-				return
+				return finalResult
 			}
 			aggregateSingleResult(ctx, qr, finalResult, stmt, ifaceMap, rowMap, send)
 		}
@@ -288,7 +292,7 @@ func aggregateSingleResult(ctx context.Context, qr, finalResult *results.Result,
 	}
 
 	// for streaming, partial results must already include the current "final" state
-	finalizeResult(finalResult, stmt, rowMap)
+	finalizeResult(finalResult, stmt, rowMap, maxLimitStreaming) // caps the limit if it exceeds maxLimitStreaming
 
 	// if SSE callback is provided, run it
 	err := api.OnResult(finalResult, send)
@@ -297,7 +301,7 @@ func aggregateSingleResult(ctx context.Context, qr, finalResult *results.Result,
 	}
 }
 
-func finalizeResult(res *results.Result, stmt *query.Statement, rowMap results.RowsMap) {
+func finalizeResult(res *results.Result, stmt *query.Statement, rowMap results.RowsMap, limitUpperBound uint64) {
 	defer res.End()
 	if len(rowMap) == 0 {
 		return
@@ -306,7 +310,7 @@ func finalizeResult(res *results.Result, stmt *query.Statement, rowMap results.R
 	// assign the rows to the result
 	res.Rows = rowMap.ToRowsSorted(results.By(stmt.SortBy, stmt.Direction, stmt.SortAscending))
 
-	limit := min(stmt.NumResults, maxLimitStreaming)
+	limit := min(stmt.NumResults, limitUpperBound)
 
 	// truncate by limit
 	if limit < uint64(len(res.Rows)) {

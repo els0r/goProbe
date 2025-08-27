@@ -1,3 +1,4 @@
+// Package cmd provides the runnable commands for global query
 package cmd
 
 import (
@@ -5,52 +6,28 @@ import (
 	"os"
 
 	"github.com/els0r/goProbe/v4/cmd/global-query/pkg/conf"
-	"github.com/els0r/goProbe/v4/pkg/query"
 	"github.com/els0r/goProbe/v4/pkg/version"
 	"github.com/els0r/telemetry/logging"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
 
-var cfgFile string
-
-var (
-	cmdLineParams = &query.Args{}
-	argsLocation  string
-)
-
-var shortText = "Query server for running distributed goQuery queries and aggregating the results"
-
-// rootCmd represents the base command when called without any subcommands
-var rootCmd = &cobra.Command{
-	Use:           "global-query [flags] [" + supportedCmds + "]",
-	Short:         helpBase,
-	Long:          helpBase,
-	RunE:          func(cmd *cobra.Command, args []string) error { return nil },
-	SilenceErrors: true,
-	SilenceUsage:  true,
-}
-
 // Execute is the main entrypoint and runs the CLI tool
-func Execute() {
-	err := rootCmd.Execute()
-	if err != nil {
-		logger, logErr := logging.New(logging.LevelError, logging.EncodingPlain,
-			logging.WithOutput(os.Stderr),
-		)
-		if logErr != nil {
-			fmt.Fprintf(os.Stderr, "Failed to instantiate CLI logger: %v\n", logErr)
+func Execute() error {
+	var cfgFile string
 
-			fmt.Fprintf(os.Stderr, "Error running query: %s\n", err)
-			os.Exit(1)
-		}
-		logger.Fatalf("Error running query: %s", err)
+	// rootCmd represents the base command when called without any subcommands
+	var rootCmd = &cobra.Command{
+		Use:   "global-query [flags] [" + supportedCmds + "]",
+		Short: helpBase,
+		Long:  helpBase,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			cmd.Help()
+			return nil
+		},
+		SilenceErrors: true,
+		SilenceUsage:  true,
 	}
-}
-
-func init() {
-	cobra.OnInitialize(initConfig)
-	cobra.OnInitialize(initLogger)
 
 	// help commands
 	rootCmd.InitDefaultHelpCmd()
@@ -60,6 +37,17 @@ func init() {
 		fmt.Fprintf(os.Stderr, "Failed to register flags: %v\n", err)
 		os.Exit(1)
 	}
+
+	serverCmd, err := serverCommand()
+	if err != nil {
+		return err
+	}
+	rootCmd.AddCommand(serverCmd)
+
+	cobra.OnInitialize(func() { initConfig(&cfgFile) })
+	cobra.OnInitialize(initLogger)
+
+	return rootCmd.Execute()
 }
 
 func initLogger() {
@@ -77,10 +65,10 @@ func initLogger() {
 }
 
 // initConfig reads in config file and ENV variables if set.
-func initConfig() {
-	if cfgFile != "" {
+func initConfig(cfgFile *string) {
+	if cfgFile != nil {
 		// Use config file from the flag.
-		viper.SetConfigFile(cfgFile)
+		viper.SetConfigFile(*cfgFile)
 	} else {
 		// Find home directory.
 		home, err := os.UserHomeDir()

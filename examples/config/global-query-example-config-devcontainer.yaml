@@ -2,8 +2,10 @@ logging:
   level: debug
   encoding: logfmt
 hosts:
-  resolver:
-    type: string
+  resolvers:
+    - type: string
+    - type: static
+      config: ./examples/config/global-query-static-resolver-example-config-devcontainer.yaml
 querier:
   type: api
   max_concurrent: 64

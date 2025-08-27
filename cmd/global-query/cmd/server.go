@@ -20,16 +20,14 @@ import (
 	_ "github.com/els0r/goProbe/plugins/contrib/v4" // Include third-party plugins (if enabled, see README)
 )
 
-// serverCmd represents the server command
-var serverCmd = &cobra.Command{
-	Use:   "server",
-	Short: "Run global-query in server mode",
-	Long:  "Run global-query in server mode",
-	RunE:  serverEntrypoint,
-}
-
-func init() {
-	rootCmd.AddCommand(serverCmd)
+// serverCommand represents the server command
+func serverCommand() (*cobra.Command, error) {
+	serverCmd := &cobra.Command{
+		Use:   "server",
+		Short: "Run global-query in server mode",
+		Long:  "Run global-query in server mode",
+		RunE:  serverEntrypoint,
+	}
 
 	pflags := serverCmd.PersistentFlags()
 
@@ -41,10 +39,15 @@ func init() {
 	// telemetry
 	pflags.Bool(conf.ProfilingEnabled, false, "enable profiling endpoints")
 
-	_ = viper.BindPFlags(pflags)
+	err := viper.BindPFlags(pflags)
+	if err != nil {
+		return nil, err
+	}
+
+	return serverCmd, nil
 }
 
-func serverEntrypoint(cmd *cobra.Command, args []string) error {
+func serverEntrypoint(_ *cobra.Command, _ []string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	defer stop()
 
@@ -61,7 +64,7 @@ func serverEntrypoint(cmd *cobra.Command, args []string) error {
 		logger.With("error", err).Error("failed to set up tracing")
 	}
 
-	hostListResolver, err := initResolver(ctx)
+	hostListResolvers, err := initResolvers(ctx)
 	if err != nil {
 		logger.Errorf("failed to prepare host resolver: %v", err)
 		return err
@@ -79,7 +82,7 @@ func serverEntrypoint(cmd *cobra.Command, args []string) error {
 
 	// set up the API server
 	addr := viper.GetString(conf.ServerAddr)
-	apiServer := gqserver.New(addr, hostListResolver, querier,
+	apiServer := gqserver.New(addr, hostListResolvers, querier,
 		// Set the release mode of GIN depending on the log level
 		server.WithDebugMode(
 			logging.LevelFromString(viper.GetString(conf.LogLevel)) == logging.LevelDebug,

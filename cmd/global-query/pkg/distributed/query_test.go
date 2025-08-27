@@ -88,9 +88,10 @@ func baseArgs() *query.Args {
 }
 
 func TestRun_ErrorWhenQueryHostsEmpty(t *testing.T) {
-	mr := &mockResolver{}
+	// Resolver map can be empty; early error occurs before resolver lookup
+	rm := hosts.NewResolverMap()
 	mq := &mockQuerier{}
-	qr := NewQueryRunner(mr, mq)
+	qr := NewQueryRunner(rm, mq)
 
 	args := baseArgs()
 	args.QueryHosts = ""
@@ -99,16 +100,18 @@ func TestRun_ErrorWhenQueryHostsEmpty(t *testing.T) {
 	require.Nil(t, res)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "query for target hosts is empty")
-	require.Equal(t, 0, mr.calls)
+	// resolver not looked up/called
 }
 
 func TestRun_UsesResolverAndAggregatesResults(t *testing.T) {
 	mr := &mockResolver{out: hosts.Hosts{"h1", "h2"}}
+	rm := hosts.NewResolverMap()
+	rm.Set("string", mr)
 	mq := &mockQuerier{results: []*results.Result{
 		makeResult("h1", "eth0", 10, 1),
 		makeResult("h2", "eth0", 20, 2),
 	}}
-	qr := NewQueryRunner(mr, mq)
+	qr := NewQueryRunner(rm, mq)
 
 	args := baseArgs()
 	args.QueryHosts = "h1,h2"
@@ -129,12 +132,15 @@ func TestRun_UsesResolverAndAggregatesResults(t *testing.T) {
 }
 
 func TestRun_AnySelector_UsesQuerierAnyable(t *testing.T) {
+	// Include a "string" resolver but it should not be used for Any selector
 	mr := &mockResolver{out: hosts.Hosts{"should-not-be-used"}}
+	rm := hosts.NewResolverMap()
+	rm.Set("string", mr)
 	mq := &mockQuerier{anyHosts: hosts.Hosts{"any1", "any2"}, results: []*results.Result{
 		makeResult("any1", "eth0", 5, 1),
 		makeResult("any2", "eth0", 7, 1),
 	}}
-	qr := NewQueryRunner(mr, mq)
+	qr := NewQueryRunner(rm, mq)
 
 	args := baseArgs()
 	args.QueryHosts = types.AnySelector
@@ -143,16 +149,17 @@ func TestRun_AnySelector_UsesQuerierAnyable(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, res)
 
-	// Resolver should not have been called
+	// Resolver should not have been called for Any selector
 	require.Equal(t, 0, mr.calls)
 	require.ElementsMatch(t, mq.anyHosts, mq.lastHosts)
 }
 
 func TestRun_StringResolverOverride(t *testing.T) {
-	// panicResolver ensures QueryRunner uses the string resolver override
-	panicResolver := &mockResolver{out: nil}
+	// Use the real string resolver to validate sorting & deduplication
+	rm := hosts.NewResolverMap()
+	rm.Set(stringresolver.Type, stringresolver.NewResolver(true))
 	mq := &mockQuerier{results: []*results.Result{makeResult("a", "eth0", 1, 1)}}
-	qr := NewQueryRunner(panicResolver, mq)
+	qr := NewQueryRunner(rm, mq)
 
 	args := baseArgs()
 	args.QueryHosts = "b, a, a"
@@ -164,8 +171,6 @@ func TestRun_StringResolverOverride(t *testing.T) {
 
 	// The used hosts should be sorted & de-duplicated by string resolver
 	require.ElementsMatch(t, hosts.Hosts{"a", "b"}, mq.lastHosts)
-	// Original resolver should not be called
-	require.Equal(t, 0, panicResolver.calls)
 }
 
 // captureSender captures SSE messages via the Sender function
@@ -208,8 +213,10 @@ func (sq *scriptedQuerier) Query(_ context.Context, _ hosts.Hosts, _ *query.Args
 func TestRunStreaming_PartialResults_IncludeRows(t *testing.T) {
 	// Arrange
 	mr := &mockResolver{out: hosts.Hosts{"h1", "h2"}}
+	rm := hosts.NewResolverMap()
+	rm.Set("string", mr)
 	sq := &scriptedQuerier{rc: make(chan *results.Result, 2), kc: make(chan struct{}, 1)}
-	qr := NewQueryRunner(mr, sq)
+	qr := NewQueryRunner(rm, sq)
 
 	args := baseArgs()
 	args.QueryHosts = "h1,h2"
@@ -243,11 +250,13 @@ func TestRunStreaming_PartialResults_IncludeRows(t *testing.T) {
 func TestRunStreaming_Keepalives_AreEmitted(t *testing.T) {
 	// Arrange
 	mr := &mockResolver{out: hosts.Hosts{"h1"}}
+	rm := hosts.NewResolverMap()
+	rm.Set("string", mr)
 	// unbuffered result channel to keep aggregation running while we emit keepalives
 	rc := make(chan *results.Result)
 	kc := make(chan struct{}, 8)
 	sq := &scriptedQuerier{rc: rc, kc: kc}
-	qr := NewQueryRunner(mr, sq)
+	qr := NewQueryRunner(rm, sq)
 
 	args := baseArgs()
 	args.QueryHosts = "h1"

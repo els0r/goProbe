@@ -2,11 +2,41 @@ package plugins
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log/slog"
 	"sort"
 
 	"github.com/els0r/goProbe/v4/pkg/distributed/hosts"
+	"github.com/els0r/telemetry/logging"
 )
+
+// ResolverConfig is the configuration relevant for resolver plugin configuration
+type ResolverConfig struct {
+	Type   string `mapstructure:"type"`   // Type is the type of the resolver (e.g. the name)
+	Config string `mapstructure:"config"` // Config is the path to the configuration file
+}
+
+// LogValue returns the log representation of the resolver config
+func (rc *ResolverConfig) LogValue() slog.Value {
+	attrs := []slog.Attr{
+		slog.String("type", rc.Type),
+	}
+	if rc.Config != "" {
+		attrs = append(attrs, slog.String("config", rc.Config))
+	}
+	return slog.GroupValue(attrs...)
+}
+
+// HostResolverConfig holds all resolver configuration
+type HostResolverConfig struct {
+	Resolvers []*ResolverConfig `mapstructure:"resolvers"`
+}
+
+// AppConfig holds the application configuration configurable through viper only
+type AppConfig struct {
+	Hosts *HostResolverConfig `mapstructure:"hosts"`
+}
 
 // ResolverInitializer constructs a resolver, optionally using a config file.
 // Mirrors the existing QuerierInitializer pattern
@@ -42,6 +72,42 @@ func InitResolver(ctx context.Context, name, cfgPath string) (hosts.Resolver, er
 		return nil, fmt.Errorf("resolver plugin %q not registered", name)
 	}
 	return initFn(ctx, cfgPath)
+}
+
+// InitResolvers initializes all registered resolver plugins
+func InitResolvers(ctx context.Context, cfg *HostResolverConfig) (*hosts.ResolverMap, error) {
+	logger := logging.FromContext(ctx)
+
+	if cfg == nil {
+		return nil, errors.New("host resolver config is nil")
+	}
+
+	var rm = hosts.NewResolverMap()
+
+	for _, resolverCfg := range cfg.Resolvers {
+		if resolverCfg == nil {
+			logger.Warn("nil resolver config found")
+			continue
+		}
+		_, exists := rm.Get(resolverCfg.Type)
+		if exists {
+			continue
+		}
+
+		logger.With("resolver", resolverCfg).Info("initializing resolver")
+
+		name := resolverCfg.Type
+		initFn, exists := GetInitializer().getResolver(name)
+		if !exists {
+			return nil, fmt.Errorf("resolver plugin %q not registered", name)
+		}
+		resolver, err := initFn(ctx, resolverCfg.Config)
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize resolver %q: %w", name, err)
+		}
+		rm.Set(name, resolver)
+	}
+	return rm, nil
 }
 
 // getResolver returns the resolver for a given name in case it exists
