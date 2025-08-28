@@ -15,7 +15,7 @@ import (
 	"github.com/fako1024/gotools/concurrency"
 	"github.com/fako1024/slimcap/capture"
 	"github.com/fako1024/slimcap/capture/afpacket/afring"
-	"github.com/fako1024/slimcap/link"
+	"github.com/fako1024/slimcap/filter"
 )
 
 const (
@@ -33,7 +33,7 @@ var (
 
 	defaultSourceInitFn = func(c *Capture) (Source, error) {
 		return afring.NewSource(c.iface,
-			afring.CaptureLength(link.CaptureLengthMinimalIPv6Transport),
+			afring.CaptureLength(filter.CaptureLengthMinimalIPv6Transport),
 			afring.BufferSize(c.config.RingBuffer.BlockSize, c.config.RingBuffer.NumBlocks),
 			afring.Promiscuous(c.config.Promisc),
 			afring.IgnoreVLANs(c.config.IgnoreVLANs),
