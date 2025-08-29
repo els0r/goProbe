@@ -119,7 +119,7 @@ func (p *parser) die(description string, args ...any) {
 }
 
 func newParseError(tokens []string, pos int, description string, args ...any) *types.ParseError {
-	return types.NewParseError(tokens, pos, " ", description, args...)
+	return types.NewParseErrorf(tokens, pos, " ", description, args...)
 }
 
 // Returns the token at the current position in the token stream

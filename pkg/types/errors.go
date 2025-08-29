@@ -48,7 +48,17 @@ type boundsError struct {
 }
 
 // NewParseError creates a new ParseError. The parameter "sep" will guide how tokens are re-assembled
-func NewParseError(tokens []string, pos int, sep, description string, args ...any) *ParseError {
+func NewParseError(tokens []string, pos int, sep, description string) *ParseError {
+	return &ParseError{
+		Tokens:      tokens,
+		Pos:         pos,
+		Description: description,
+		Sep:         sep,
+	}
+}
+
+// NewParseErrorf creates a new ParseError. The parameter "sep" will guide how tokens are re-assembled (including formatting)
+func NewParseErrorf(tokens []string, pos int, sep, description string, args ...any) *ParseError {
 	return &ParseError{
 		Tokens:      tokens,
 		Pos:         pos,
