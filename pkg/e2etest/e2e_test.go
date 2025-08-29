@@ -50,7 +50,7 @@ import (
 	slimcap "github.com/fako1024/slimcap/capture"
 	"github.com/fako1024/slimcap/capture/afpacket/afring"
 	"github.com/fako1024/slimcap/capture/pcap"
-	"github.com/fako1024/slimcap/link"
+	"github.com/fako1024/slimcap/filter"
 )
 
 const (
@@ -124,7 +124,7 @@ func testStartStop(t *testing.T) {
 		Interfaces: ifaces,
 	}, capture.WithSourceInitFn(func(c *capture.Capture) (capture.Source, error) {
 		mockSrc, err := afring.NewMockSource(c.Iface(),
-			afring.CaptureLength(link.CaptureLengthMinimalIPv6Transport),
+			afring.CaptureLength(filter.CaptureLengthMinimalIPv6Transport),
 			afring.Promiscuous(false),
 			afring.BufferSize(1024*1024, 4),
 		)
@@ -761,7 +761,7 @@ func newPcapSource(t testing.TB, name string, data []byte) (res *mockIface) {
 		})
 
 		mockSrc, err := afring.NewMockSource(c.Iface(),
-			afring.CaptureLength(link.CaptureLengthMinimalIPv6Transport),
+			afring.CaptureLength(filter.CaptureLengthMinimalIPv6Transport),
 			afring.Promiscuous(false),
 			afring.BufferSize(1024*1024, 4),
 		)
@@ -936,7 +936,7 @@ func newPcapSource(t testing.TB, name string, data []byte) (res *mockIface) {
 // 		defer res.Unlock()
 
 // 		mockSrc, err := afring.NewMockSource(c.Iface(),
-// 			afring.CaptureLength(link.CaptureLengthMinimalIPv6Transport),
+// 			afring.CaptureLength(filter.CaptureLengthMinimalIPv6Transport),
 // 			afring.Promiscuous(false),
 // 			afring.BufferSize(1024*1024, 4),
 // 		)

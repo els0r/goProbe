@@ -26,7 +26,7 @@ import (
 	"github.com/fako1024/gotools/concurrency"
 	"github.com/fako1024/slimcap/capture"
 	"github.com/fako1024/slimcap/capture/afpacket/afring"
-	"github.com/fako1024/slimcap/link"
+	"github.com/fako1024/slimcap/filter"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/ipv4"
 )
@@ -242,7 +242,7 @@ func TestMockPacketCapturePerformance(t *testing.T) {
 	require.Nil(t, err)
 
 	mockSrc, err := afring.NewMockSourceNoDrain("mock",
-		afring.CaptureLength(link.CaptureLengthMinimalIPv4Transport),
+		afring.CaptureLength(filter.CaptureLengthMinimalIPv4Transport),
 	)
 	require.Nil(t, err)
 	mockC := newMockCapture(mockSrc)
@@ -472,7 +472,7 @@ func testDeadlockLowTraffic(t *testing.T, maxPkts int) {
 	require.Nil(t, err)
 
 	mockSrc, err := afring.NewMockSource("mock",
-		afring.CaptureLength(link.CaptureLengthMinimalIPv4Transport),
+		afring.CaptureLength(filter.CaptureLengthMinimalIPv4Transport),
 	)
 	require.Nil(t, err)
 
@@ -524,7 +524,7 @@ func testDeadlockHighTraffic(t *testing.T) {
 	require.Nil(t, err)
 
 	mockSrc, err := afring.NewMockSourceNoDrain("mock",
-		afring.CaptureLength(link.CaptureLengthMinimalIPv4Transport),
+		afring.CaptureLength(filter.CaptureLengthMinimalIPv4Transport),
 	)
 	require.Nil(t, err)
 	mockC := newMockCapture(mockSrc)
@@ -598,7 +598,7 @@ func initMockSrc(t *testing.T, iface string) (*afring.MockSourceNoDrain, <-chan 
 	require.Nil(t, err)
 
 	mockSrc, err := afring.NewMockSourceNoDrain(iface,
-		afring.CaptureLength(link.CaptureLengthMinimalIPv4Transport),
+		afring.CaptureLength(filter.CaptureLengthMinimalIPv4Transport),
 	)
 	require.Nil(t, err)
 	for mockSrc.CanAddPackets() {

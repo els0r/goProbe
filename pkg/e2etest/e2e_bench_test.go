@@ -24,7 +24,7 @@ import (
 	"github.com/els0r/goProbe/v4/pkg/goprobe/writeout"
 	"github.com/fako1024/slimcap/capture/afpacket/afring"
 	"github.com/fako1024/slimcap/capture/pcap"
-	"github.com/fako1024/slimcap/link"
+	"github.com/fako1024/slimcap/filter"
 	"github.com/stretchr/testify/require"
 
 	slimcap "github.com/fako1024/slimcap/capture"
@@ -119,7 +119,7 @@ func setupSyntheticUnblockingSource(t testing.TB, randomize, addReturn bool) fun
 	return func(c *capture.Capture) (capture.Source, error) {
 
 		mockSrc, err := afring.NewMockSourceNoDrain(c.Iface(),
-			afring.CaptureLength(link.CaptureLengthMinimalIPv6Transport),
+			afring.CaptureLength(filter.CaptureLengthMinimalIPv6Transport),
 			afring.Promiscuous(false),
 			afring.BufferSize(1024*1024, 4),
 		)
@@ -201,7 +201,7 @@ func setupDataUnblockingSource(t testing.TB) func(c *capture.Capture) (capture.S
 		require.Nil(t, err)
 
 		mockSrc, err := afring.NewMockSourceNoDrain(c.Iface(),
-			afring.CaptureLength(link.CaptureLengthMinimalIPv6Transport),
+			afring.CaptureLength(filter.CaptureLengthMinimalIPv6Transport),
 			afring.Promiscuous(false),
 			afring.BufferSize(1024*1024, 4),
 		)
