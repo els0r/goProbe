@@ -50,6 +50,7 @@ func getBodyQueryRunnerHandler(caller string, querier query.Runner) func(context
 
 		res, err := runQuery(ctx, caller, input.Body, querier)
 		if err != nil {
+			logging.FromContext(ctx).With("args", input.Body).With("error", err).Error("error running plain query")
 			return nil, err
 		}
 		output.Body = res
@@ -62,6 +63,7 @@ func getSSEBodyQueryRunnerHandler(caller string, querier SSEQueryRunner) func(co
 	return func(ctx context.Context, input *ArgsInput, send sse.Sender) {
 		res, err := runQuerySSE(ctx, caller, input.Body, querier, send)
 		if err != nil {
+			logging.FromContext(ctx).With("args", input.Body).With("error", err).Error("error running SSE query")
 			_ = send.Data(query.NewDetailError(http.StatusInternalServerError, err))
 			return
 		}

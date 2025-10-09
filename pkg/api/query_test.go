@@ -94,6 +94,16 @@ func TestValidatePOST_Distributed_WithHosts_Valid(t *testing.T) {
 	require.Equal(t, http.StatusNoContent, resp.Code)
 }
 
+func TestValidatePOST_Distributed_WithHosts_InvalidHostSyntax(t *testing.T) {
+	_, api := humatest.New(t)
+	RegisterQueryAPI(api, "test", sseRunner{}, nil)
+
+	body := query.Args{Query: "sip", Ifaces: "eth0", Format: "json", QueryHosts: "hostA	       "}
+	resp := api.Post(ValidationRoute, "Content-Type: application/json", body)
+
+	require.Equal(t, http.StatusNoContent, resp.Code)
+}
+
 func TestValidateGET_Distributed_MissingHosts_Returns422(t *testing.T) {
 	_, api := humatest.New(t)
 	RegisterQueryAPI(api, "test", sseRunner{}, nil)
