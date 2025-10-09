@@ -310,6 +310,11 @@ func SanitizeQueryType(query string) string {
 	return strings.Join(Tokenize(query), AttrSep)
 }
 
+// SanitizeQueryHosts will ensure that the given host query is well-formed
+func SanitizeQueryHosts(hosts string) string {
+	return strings.TrimSpace(hosts)
+}
+
 // ParseQueryType parses the given query type into a list of attributes.
 // The returned list is guaranteed to have no duplicates.
 // A valid query type can either be a comma-separated list of

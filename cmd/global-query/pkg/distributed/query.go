@@ -86,6 +86,7 @@ func (q *QueryRunner) run(ctx context.Context, args *query.Args, send sse.Sender
 	if queryArgs.QueryHosts == "" {
 		return nil, fmt.Errorf("couldn't prepare query: query for target hosts is empty")
 	}
+	queryArgs.QueryHosts = types.SanitizeQueryHosts(queryArgs.QueryHosts)
 
 	// select hosts resolver based on query configuration. Will always fall back to the strings resolver in case none
 	// is selected
