@@ -98,8 +98,8 @@ func TestValidatePOST_Distributed_WithHosts_InvalidHostSyntax(t *testing.T) {
 	_, api := humatest.New(t)
 	RegisterQueryAPI(api, "test", sseRunner{}, nil)
 
-	body := query.Args{Query: "sip", Ifaces: "eth0", Format: "json", QueryHosts: "hostA	       "}
-	resp := api.Post(ValidationRoute, "Content-Type: application/json", body)
+	body := query.Args{Query: "sip", Ifaces: "eth0", Format: "json", QueryHosts: "\thostA1	"}
+	resp := api.Post(QueryRoute, "Content-Type: application/json", body)
 
 	require.Equal(t, http.StatusNoContent, resp.Code)
 }
