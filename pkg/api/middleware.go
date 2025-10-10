@@ -82,7 +82,7 @@ func RequestLoggingMiddleware() gin.HandlerFunc {
 			slog.Int("size", size),
 		))
 
-		// If an error was signified via RFX9457 content type, include the body (i.e. the error message) in the log
+		// If an error was signified via RFC9457 content type, include the body (i.e. the error message) in the log
 		if strings.EqualFold(c.Writer.Header().Get(contentTypeHeaderKey), contentTypeHeaderValRFC9457) {
 			logger = logger.With("error", blw.body.String())
 		}
