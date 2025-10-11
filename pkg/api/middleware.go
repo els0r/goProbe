@@ -1,9 +1,11 @@
 package api
 
 import (
+	"bytes"
 	"errors"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -14,7 +16,21 @@ import (
 	"golang.org/x/time/rate"
 )
 
-const traceIDKey = "traceID"
+const (
+	traceIDKey                  = "traceID"
+	contentTypeHeaderKey        = "Content-Type"
+	contentTypeHeaderValRFC9457 = "application/problem+json"
+)
+
+type bodyLogWriter struct {
+	gin.ResponseWriter
+	body *bytes.Buffer
+}
+
+func (w bodyLogWriter) Write(b []byte) (int, error) {
+	w.body.Write(b)
+	return w.ResponseWriter.Write(b)
+}
 
 // TraceIDMiddleware injects a context into a request managed by [go-gin](https://github.com/gin-gonic/gin)
 // from which logger/traces can be derived
@@ -42,8 +58,11 @@ func RequestLoggingMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		logger := logging.FromContext(c.Request.Context())
 
-		// call next handlers
+		// call next handlers (duplicate the writer to capture the body)
 		start := time.Now()
+		blw := &bodyLogWriter{body: bytes.NewBufferString(""), ResponseWriter: c.Writer}
+		c.Writer = blw
+
 		c.Next()
 		duration := time.Since(start)
 
@@ -62,6 +81,11 @@ func RequestLoggingMiddleware() gin.HandlerFunc {
 			slog.Int("status_code", statusCode),
 			slog.Int("size", size),
 		))
+
+		// If an error was signified via RFC9457 content type, include the body (i.e. the error message) in the log
+		if strings.EqualFold(c.Writer.Header().Get(contentTypeHeaderKey), contentTypeHeaderValRFC9457) {
+			logger = logger.With("error", blw.body.String())
+		}
 
 		switch {
 		case 200 <= statusCode && statusCode < 300:

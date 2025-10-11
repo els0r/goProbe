@@ -65,7 +65,7 @@ func GetServiceInfoHandler(serviceName string) func(context.Context, *struct{}) 
 		}
 	}
 
-	return func(ctx context.Context, _ *struct{}) (*GetInfoOutput, error) {
+	return func(context.Context, *struct{}) (*GetInfoOutput, error) {
 		output := &GetInfoOutput{}
 		output.Body.ServiceInfo = info
 		return output, nil
@@ -93,7 +93,7 @@ func GetHealthOperation() huma.Operation {
 
 // GetHealthHandler returns a handler that returns the application readiness state
 func GetHealthHandler() func(context.Context, *struct{}) (*GetHealthOutput, error) {
-	return func(ctx context.Context, _ *struct{}) (*GetHealthOutput, error) {
+	return func(context.Context, *struct{}) (*GetHealthOutput, error) {
 		output := &GetHealthOutput{}
 		output.Body.Status = healthy
 		return output, nil
@@ -121,7 +121,7 @@ func GetReadyOperation() huma.Operation {
 
 // GetReadyHandler returns a handler that returns the application readiness state
 func GetReadyHandler() func(context.Context, *struct{}) (*GetReadyOutput, error) {
-	return func(ctx context.Context, _ *struct{}) (*GetReadyOutput, error) {
+	return func(context.Context, *struct{}) (*GetReadyOutput, error) {
 		output := &GetReadyOutput{}
 		output.Body.Status = ready
 		return output, nil
