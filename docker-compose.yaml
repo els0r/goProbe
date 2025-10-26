@@ -1,0 +1,36 @@
+services:
+  sensor:
+    image: goprobe/sensor:${VERSION:-latest}
+    build:
+      target: sensor
+      context: .
+    restart: unless-stopped
+    container_name: sensor
+    network_mode: host
+    environment:
+      - CONFIG_PATH=/app/goprobe.yaml
+    volumes:
+      - ./examples/docker/goprobe.example.yaml:/app/goprobe.yaml:ro
+      - db:/usr/local/goProbe/db
+
+  query:
+    image: goprobe/query:${VERSION:-latest}
+    build:
+      target: query
+      context: .
+    restart: unless-stopped
+    container_name: query
+    network_mode: host
+    environment:
+      - CONFIG_PATH=/app/query.yaml
+    volumes:
+      - ./examples/docker/query.example.yaml:/app/query.yaml:ro
+      - ./examples/docker/querier.example.yaml:/app/goprobe-global-querier.yaml:ro
+
+volumes:
+  db:
+    driver: local
+    driver_opts:
+      type: 'none'
+      o: 'bind'
+      device: '/tmp/goprobe_db'
