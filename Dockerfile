@@ -29,21 +29,25 @@ FROM alpine:3.22 AS sensor
 # Download system package dependencies
 RUN apk add libcap zstd-dev lz4-dev
 
+# Add user
 RUN set -ex \
- && adduser -G netdev -H -u 1000 -D appuser
+ && adduser -G netdev -H -u 1000 -D goprobe
 
+# Transfer binaries from build context
 COPY --from=build /app/goProbe /bin/goProbe
 COPY --from=build /app/goQuery /bin/goQuery
 
+# Set ownership
 RUN set -ex \
  && chmod 750 /bin/goProbe /bin/goQuery \
- && chown appuser /bin/goProbe /bin/goQuery \
+ && chown goprobe /bin/goProbe /bin/goQuery \
  && chgrp netdev /bin/goProbe /bin/goQuery
 
+# Add inheritable NET_RAW capabilities to goProbe binary
 RUN setcap cap_net_raw=eip /bin/goProbe
 
-USER appuser
-
+# De-escalate privileges and define entrypoint
+USER goprobe
 ENTRYPOINT /bin/goProbe -config "$CONFIG_PATH"
 
 ###########################################################################
@@ -53,11 +57,13 @@ FROM alpine:3.22 AS query
 # Download system package dependencies
 RUN apk add libcap zstd-dev lz4-dev
 
+# Add user
 RUN set -ex \
- && adduser -H -u 1000 -D appuser
+ && adduser -H -u 1000 -D goprobe
 
+# Transfer binaries from build context
 COPY --from=build /app/global-query /bin/global-query
 
-USER appuser
-
+# De-escalate privileges and define entrypoint
+USER goprobe
 ENTRYPOINT /bin/global-query --config "$CONFIG_PATH" server
