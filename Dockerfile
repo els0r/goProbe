@@ -18,7 +18,7 @@ RUN go mod download
 COPY . .
 
 # Build all binaries
-RUN go build -tags jsoniter -o goProbe -pgo=auto ./cmd/goProbe
+RUN go build -tags jsoniter,slimcap_nomock -o goProbe -pgo=auto ./cmd/goProbe
 RUN go build -tags jsoniter -o global-query -pgo=auto ./cmd/global-query
 RUN go build -o goQuery -pgo=auto ./cmd/goQuery
 
@@ -27,7 +27,7 @@ RUN go build -o goQuery -pgo=auto ./cmd/goQuery
 FROM alpine:3.22 AS sensor
 
 # Download system package dependencies
-RUN apk add libcap zstd-dev lz4-dev
+RUN apk add libcap zstd lz4
 
 # Add user
 RUN set -ex \
@@ -55,7 +55,7 @@ ENTRYPOINT /bin/goProbe -config "$CONFIG_PATH"
 FROM alpine:3.22 AS query
 
 # Download system package dependencies
-RUN apk add libcap zstd-dev lz4-dev
+RUN apk add libcap zstd lz4
 
 # Add user
 RUN set -ex \
