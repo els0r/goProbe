@@ -15,12 +15,12 @@ jobs:
         run: |
           echo "RELEASE_VERSION=v4.1.21-rc" >> $GITHUB_ENV
           echo "COMMIT_SHA=${GITHUB_SHA}" >> $GITHUB_ENV
-    # TODO: Enable once variable / secret is available
-    #   - name: Login to Docker Hub
-    #     uses: docker/login-action@v3
-    #     with:
-    #       username: goprobe
-    #       password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: goprobe
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -31,11 +31,11 @@ jobs:
       - name: Build and push sensor image
         uses: docker/build-push-action@v6
         with:
-          push: false
+          push: true
           tags: goprobe/sensor:${{ env.COMMIT_SHA }},goprobe/sensor:${{ env.RELEASE_VERSION }},goprobe/sensor:latest
 
       - name: Build and push query image
         uses: docker/build-push-action@v6
         with:
-          push: false
+          push: true
           tags: goprobe/query:${{ env.COMMIT_SHA }},goprobe/query:${{ env.RELEASE_VERSION }},goprobe/query:latest
