@@ -18,44 +18,44 @@ RUN go mod download
 COPY . .
 
 # Build all binaries
-RUN go build -tags jsoniter,slimcap_nomock -o goProbe -pgo=auto ./cmd/goProbe
-RUN go build -tags jsoniter -o global-query -pgo=auto ./cmd/global-query
-RUN go build -o goQuery -pgo=auto ./cmd/goQuery
+RUN nice -15 go build -tags jsoniter,slimcap_nomock -o goprobe -pgo=auto ./cmd/goProbe
+RUN nice -15 go build -tags jsoniter -o global-query -pgo=auto ./cmd/global-query
+RUN nice -15 go build -o goquery -pgo=auto ./cmd/goQuery
 
 ###########################################################################
 
 FROM alpine:3.22 AS sensor
 
 # Download system package dependencies
-RUN apk add libcap zstd lz4
+RUN apk add libcap zstd-libs lz4-libs
 
 # Add user
 RUN set -ex \
  && adduser -G netdev -H -u 1000 -D goprobe
 
 # Transfer binaries from build context
-COPY --from=build /app/goProbe /bin/goProbe
-COPY --from=build /app/goQuery /bin/goQuery
+COPY --from=build /app/goprobe /bin/goprobe
+COPY --from=build /app/goquery /bin/goquery
 
 # Set ownership
 RUN set -ex \
- && chmod 750 /bin/goProbe /bin/goQuery \
- && chown goprobe /bin/goProbe /bin/goQuery \
- && chgrp netdev /bin/goProbe /bin/goQuery
+ && chmod 750 /bin/goprobe /bin/goquery \
+ && chown goprobe /bin/goprobe /bin/goquery \
+ && chgrp netdev /bin/goprobe /bin/goquery
 
-# Add inheritable NET_RAW capabilities to goProbe binary
-RUN setcap cap_net_raw=eip /bin/goProbe
+# Add inheritable NET_RAW capabilities to goprobe binary
+RUN setcap cap_net_raw=eip /bin/goprobe
 
 # De-escalate privileges and define entrypoint
 USER goprobe
-ENTRYPOINT /bin/goProbe -config "$CONFIG_PATH"
+ENTRYPOINT /bin/goprobe -config "$CONFIG_PATH"
 
 ###########################################################################
 
 FROM alpine:3.22 AS query
 
 # Download system package dependencies
-RUN apk add libcap zstd lz4
+RUN apk add libcap zstd-libs lz4-libs
 
 # Add user
 RUN set -ex \

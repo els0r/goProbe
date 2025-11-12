@@ -1,22 +1,16 @@
-{
-   "local_buffers" : {
-     "size_limit": 33554432,
-     "num_buffers": 1,
-   },
-   "interfaces" : {
-      "lo": {
-         "ring_buffer": {
-           "block_size": 1048576,
-           "num_blocks": 4
-         }
-      }
-   },
-   "api": {
-     "addr": "127.0.0.1:3005",
-     "metrics": true,
-     "profiling": false
-   },
-   "keys" : [
-      "48fd01fa8f8b12a31fdc614c27c6c273459fe7755a141e9e8deed9f65123f97d"
-   ]
-}
+db:
+  path: /usr/local/goProbe/db
+local_buffers:
+  size_limit: 33554432
+  num_buffers: 1
+interfaces:
+  lo:
+    ring_buffer:
+      block_size: 1048576
+      num_blocks: 4
+api:
+  addr: 127.0.0.1:3005
+  metrics: true
+  profiling: false
+  keys:
+    - 48fd01fa8f8b12a31fdc614c27c6c273459fe7755a141e9e8deed9f65123f97d
