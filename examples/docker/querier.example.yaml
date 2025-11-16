@@ -1,0 +1,4 @@
+localhost:
+  addr: 127.0.0.1:3005
+  timeout: 60s
+  log: true

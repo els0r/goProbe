@@ -10,4 +10,8 @@
 
 ### Configuration
 
-* [config](./config/) - example configurations for the binaries provided by this repository
+* [config](./config/) - example configuration files for the binaries provided by this repository
+
+### Docker Config
+
+* [docker](./docker/) - example configuration files (working) for a Docker / Compose setup

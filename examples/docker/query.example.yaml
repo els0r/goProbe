@@ -1,0 +1,12 @@
+logging:
+  level: info
+  encoding: logfmt
+hosts:
+  resolver:
+    type: string
+querier:
+  type: api
+  max_concurrent: 32
+  config: /app/goprobe-global-querier.yaml
+server:
+  addr: 127.0.0.1:8146

@@ -90,6 +90,13 @@ All of the above can be combined arbitrarily.
 > [!WARNING]
 > Depending on OS / architecture using native compression can incur a significant performance penalty (in particular for write operations). While allowing for greater portability / ease of use it is not recommended in heavy load / throughput production environments.
 
+### Docker deployment
+
+Both `goProbe` and the distributed query component can be deployed using Docker or Docker Compose. In addition to the provided [docker-compose.yaml](docker-compose.yaml) in the repository root, all releases are also published as Docker images on Docker Hub. For further information, please refer to the documentation of the respective components:
+
+* [goprobe/sensor](https://hub.docker.com/repository/docker/goprobe/sensor)
+* [goprobe/query](https://hub.docker.com/repository/docker/goprobe/query)
+
 ### Bash autocompletion
 
 `goQuery` has extensive support for bash autocompletion. To enable autocompletion, you need to tell bash that it should use the `goquery_completion` program for completing `goquery` commands.  How to do this depends on your distribution. On Debian derivatives, it is recommended to create a file `goquery` in `/etc/bash_completion.d` with the following contents:
