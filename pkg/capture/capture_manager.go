@@ -15,6 +15,7 @@ import (
 	"github.com/els0r/goProbe/v4/pkg/types/hashmap"
 	"github.com/els0r/telemetry/logging"
 	"github.com/fako1024/gotools/concurrency"
+	"github.com/fako1024/gotools/link"
 )
 
 const allowedWriteoutDurationFraction = 0.1
@@ -306,6 +307,12 @@ func (cm *Manager) Update(ctx context.Context, ifaces config.Ifaces) (enabled, u
 
 	logger, t0 := logging.FromContext(ctx), time.Now()
 
+	if defaultConfig, hasAutodetect := ifaces.HasAutoDetect(); hasAutodetect {
+		if ifaces, err = cm.autodetectIfaces(ifaces, defaultConfig); err != nil {
+			return
+		}
+	}
+
 	// Build set of interfaces to enable / disable
 	var (
 		ifaceSet                                  = make(map[string]struct{})
@@ -421,6 +428,24 @@ func (cm *Manager) update(ctx context.Context, ifaces config.Ifaces, enable, dis
 		})
 	}
 	rg.Wait()
+}
+
+func (cm *Manager) autodetectIfaces(ifaces config.Ifaces, defaultConfig config.CaptureConfig) (config.Ifaces, error) {
+	allLinks, err := link.HostLinks()
+	if err != nil {
+		return nil, err
+	}
+
+	detectedIfaces := config.Ifaces{}
+	for _, l := range allLinks {
+
+		// If the interface exists in the provided configuration, skip it (disabled), otherwise add it
+		if _, exists := ifaces[l.Name]; !exists {
+			detectedIfaces[l.Name] = defaultConfig
+		}
+	}
+
+	return detectedIfaces, nil
 }
 
 // GetFlowMaps extracts a copy of all active flows and sends them on the provided channel (compatible with normal query

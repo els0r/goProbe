@@ -170,6 +170,65 @@ func TestValidate(t *testing.T) {
 			},
 			errorInvalidAPIQueryRateLimit,
 		},
+		{"capture disabled with other settings",
+			&Config{
+				DB: DBConfig{Path: defaults.DBPath},
+				Interfaces: Ifaces{
+					"eth0": CaptureConfig{
+						Disable:    true,
+						Promisc:    true,
+						RingBuffer: &RingBufferConfig{BlockSize: 1024 * 1024, NumBlocks: 2},
+					},
+				},
+			},
+			errorSettingsWithCaptureDisabled,
+		},
+		{"capture disabled without other settings",
+			&Config{
+				DB: DBConfig{Path: defaults.DBPath},
+				Interfaces: Ifaces{
+					"eth0": CaptureConfig{
+						Disable: true,
+					},
+				},
+			},
+			nil,
+		},
+		{"autodetect interface validates configuration",
+			&Config{
+				DB: DBConfig{Path: defaults.DBPath},
+				Interfaces: Ifaces{
+					InterfaceAuto: CaptureConfig{
+						RingBuffer: &RingBufferConfig{BlockSize: 1024 * 1024, NumBlocks: 2},
+					},
+					"eth0": CaptureConfig{Disable: true},
+				},
+			},
+			nil,
+		},
+		{"autodetect requires other interfaces to be disabled",
+			&Config{
+				DB: DBConfig{Path: defaults.DBPath},
+				Interfaces: Ifaces{
+					InterfaceAuto: CaptureConfig{
+						RingBuffer: &RingBufferConfig{BlockSize: 1024 * 1024, NumBlocks: 2},
+					},
+					"eth0": CaptureConfig{
+						RingBuffer: &RingBufferConfig{BlockSize: 1024 * 1024, NumBlocks: 2},
+					},
+				},
+			},
+			errorIfaceMustBeDisabledWithAuto,
+		},
+		{"autodetect missing ring buffer",
+			&Config{
+				DB: DBConfig{Path: defaults.DBPath},
+				Interfaces: Ifaces{
+					InterfaceAuto: CaptureConfig{},
+				},
+			},
+			errorNoRingBufferConfig,
+		},
 	}
 
 	// run tests

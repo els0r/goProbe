@@ -33,6 +33,9 @@ const (
 	// ServiceName is the name of the service as it will show up in telemetry such as metrics, logs, traces, etc.
 	ServiceName = "goprobe"
 
+	// InterfaceAuto denotes the special (fake) interface name to auto-detect interfaces
+	InterfaceAuto = "autodetect"
+
 	maxConfigSize = 16 * 1024 * 1024 // 16 MiB
 )
 
@@ -77,6 +80,8 @@ type CaptureConfig struct {
 	RingBuffer *RingBufferConfig `json:"ring_buffer" yaml:"ring_buffer" doc:"Kernel ring buffer configuration for interface"`
 	// ExtraBPFFilters: allows setting additional BPF filter instructions during capture
 	ExtraBPFFilters []bpf.RawInstruction `json:"extra_bpf_filters" yaml:"extra_bpf_filters" doc:"Extra BPF filter instructions to be applied during capture"`
+	// Disable: explicitly disables capture on this interface (e.g. in conjunction with the `autodetect` option)
+	Disable bool `json:"disable" yaml:"disable" doc:"Explicitly disables capture on this interface" example:"true"`
 }
 
 // LocalBufferConfig stores the shared local in-memory buffer configuration
@@ -199,10 +204,22 @@ func (l LocalBufferConfig) validate() error {
 }
 
 var (
-	errorNoRingBufferConfig = errors.New("no ring buffer configuration specified")
+	errorNoRingBufferConfig          = errors.New("no ring buffer configuration specified")
+	errorSettingsWithCaptureDisabled = errors.New("capture settings specified, but capture is disabled")
 )
 
 func (c CaptureConfig) validate() error {
+
+	// Ensure no other settings are set when capture is disabled
+	if c.Disable {
+		if c.RingBuffer != nil ||
+			len(c.ExtraBPFFilters) > 0 ||
+			c.Promisc || c.IgnoreVLANs {
+			return errorSettingsWithCaptureDisabled
+		}
+		return nil
+	}
+
 	if c.RingBuffer == nil {
 		return errorNoRingBufferConfig
 	}
@@ -239,7 +256,8 @@ func (r *RingBufferConfig) Equals(cfg *RingBufferConfig) bool {
 }
 
 var (
-	errorNoInterfacesSpecified = errors.New("no interfaces specified")
+	errorNoInterfacesSpecified       = errors.New("no interfaces specified")
+	errorIfaceMustBeDisabledWithAuto = errors.New("interface must be disabled when autodetect interface is configured")
 )
 
 func (i Ifaces) validate() error {
@@ -247,10 +265,16 @@ func (i Ifaces) validate() error {
 		return errorNoInterfacesSpecified
 	}
 
+	// Ensure that other interfaces are disabled (veto-only) when auto-detect is used
+	_, hasAuto := i.HasAutoDetect()
 	for iface, cc := range i {
 		err := cc.validate()
 		if err != nil {
 			return fmt.Errorf("%s: %w", iface, err)
+		}
+
+		if hasAuto && iface != InterfaceAuto && !cc.Disable {
+			return fmt.Errorf("%s: %w", iface, errorIfaceMustBeDisabledWithAuto)
 		}
 	}
 	return nil
@@ -259,6 +283,12 @@ func (i Ifaces) validate() error {
 // Validate validates the interfaces configuration
 func (i Ifaces) Validate() error {
 	return i.validate()
+}
+
+// HasAutoDetect returns true if c matches the auto-detect default configuration
+func (i Ifaces) HasAutoDetect() (CaptureConfig, bool) {
+	config, exists := i[InterfaceAuto]
+	return config, exists
 }
 
 var (
