@@ -297,8 +297,8 @@ func (i Ifaces) HasAutoDetect() (CaptureConfig, bool) {
 	return config, exists
 }
 
-// Matchers creates an IfaceMatcher from the Ifaces configuration
-func (i Ifaces) Matchers() (*IfaceMatcher, bool, error) {
+// Matcher creates an IfaceMatcher from the Ifaces configuration
+func (i Ifaces) Matcher() (*IfaceMatcher, bool, error) {
 	matcher := IfaceMatcher{
 		Ifaces:         i,
 		regexpMatchers: make(map[*regexp.Regexp]CaptureConfig),

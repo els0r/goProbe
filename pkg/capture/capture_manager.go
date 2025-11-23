@@ -309,7 +309,7 @@ func (cm *Manager) Update(ctx context.Context, ifaces config.Ifaces) (enabled, u
 	}
 
 	// Extract any regexp matchers from the provided configuration
-	matcher, hasRe, err := ifaces.Matchers()
+	matcher, hasRe, err := ifaces.Matcher()
 	if err != nil {
 		return
 	}

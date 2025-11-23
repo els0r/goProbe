@@ -22,7 +22,7 @@ func TestAutodetectIfaces(t *testing.T) {
 		"/enp[0-9]+/":        {Disable: true},
 	}
 
-	matcher, _, err := ifaces.Matchers()
+	matcher, _, err := ifaces.Matcher()
 	require.NoError(t, err)
 
 	stubLinks := link.Links{
@@ -55,7 +55,7 @@ func TestFilterMatchingIfaces(t *testing.T) {
 		"/enp[0-9]+/": regexCfg,
 	}
 
-	matcher, _, err := ifaces.Matchers()
+	matcher, _, err := ifaces.Matcher()
 	require.NoError(t, err)
 
 	stubLinks := link.Links{

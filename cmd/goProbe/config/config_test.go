@@ -438,7 +438,7 @@ func TestHasRegexpMatching(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			matcher, found, err := test.ifaces.Matchers()
+			matcher, found, err := test.ifaces.Matcher()
 			if test.expectedErrContain != "" {
 				assert.Error(t, err)
 				assert.Contains(t, err.Error(), test.expectedErrContain)
