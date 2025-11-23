@@ -482,7 +482,7 @@ func (cm *Manager) filterMatchingIfaces(matcher *config.IfaceMatcher) (config.If
 	matchingIfaces := config.Ifaces{}
 	for _, l := range allLinks {
 
-		// If the interface explicitly or via regexp exists in the provided configuration,, add it to the list
+		// If the interface explicitly or via regexp exists in the provided configuration, add it to the list
 		if cfg, exists := matcher.FindCaptureConfig(l.Name); exists {
 			matchingIfaces[l.Name] = cfg
 		}
