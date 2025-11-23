@@ -18,6 +18,8 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"sync"
 
 	jsoniter "github.com/json-iterator/go"
@@ -111,8 +113,12 @@ const (
 	DefaultLocalBufferNumBuffers int = 1                // DefaultLocalBufferNumBuffers : 1 (should suffice)
 )
 
-// Ifaces stores the per-interface configuration
-type Ifaces map[string]CaptureConfig
+// IfaceName denotes the name of a network interface
+// Can also be a regexp matcher (e.g. "/^eth[0-9]+$/")
+type IfaceName = string
+
+// Ifaces maps interface names to their capture configuration
+type Ifaces map[IfaceName]CaptureConfig
 
 // LogConfig stores the logging configuration
 type LogConfig struct {
@@ -291,6 +297,52 @@ func (i Ifaces) HasAutoDetect() (CaptureConfig, bool) {
 	return config, exists
 }
 
+// Matchers creates an IfaceMatcher from the Ifaces configuration
+func (i Ifaces) Matchers() (*IfaceMatcher, bool, error) {
+	matcher := IfaceMatcher{
+		Ifaces:         i,
+		regexpMatchers: make(map[*regexp.Regexp]CaptureConfig),
+	}
+
+	for k := range i {
+		if IsRegexpInterfaceMatcher(k) {
+			re, err := regexp.Compile(k[1 : len(k)-1])
+			if err != nil {
+				return nil, false, fmt.Errorf("invalid regexp interface matcher '%s': %w", k, err)
+			}
+
+			matcher.regexpMatchers[re] = i[k]
+		}
+	}
+
+	return &matcher, len(matcher.regexpMatchers) > 0, nil
+}
+
+// IfaceMatcher stores the per-interface configuration (including regexp matchers)
+type IfaceMatcher struct {
+	Ifaces
+
+	regexpMatchers map[*regexp.Regexp]CaptureConfig
+}
+
+// FindCaptureConfig attempts to find a matching interface configuration for the given interface name
+func (m *IfaceMatcher) FindCaptureConfig(iface string) (CaptureConfig, bool) {
+
+	// first check for direct match
+	if cfg, exists := m.Ifaces[iface]; exists {
+		return cfg, true
+	}
+
+	// then check regexp matchers
+	for re, cfg := range m.regexpMatchers {
+		if re.MatchString(iface) {
+			return cfg, true
+		}
+	}
+
+	return CaptureConfig{}, false
+}
+
 var (
 	errorEmptyDBPath = errors.New("database path must not be empty")
 )
@@ -383,6 +435,11 @@ func Parse(src io.Reader) (*Config, error) {
 	}
 
 	return config, nil
+}
+
+// IsRegexpInterfaceMatcher determines if the given interface name is a regexp matcher
+func IsRegexpInterfaceMatcher(iface IfaceName) bool {
+	return strings.HasPrefix(iface, "/") && strings.HasSuffix(iface, "/")
 }
 
 func checkKeyConstraints(key string) error {

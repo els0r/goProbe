@@ -20,6 +20,9 @@ import (
 
 const allowedWriteoutDurationFraction = 0.1
 
+// local function variable to allow mocking in tests
+var hostLinks = link.HostLinks
+
 // Manager manages a set of Capture instances.
 // Each interface can be associated with up to one Capture.
 type Manager struct {
@@ -305,13 +308,33 @@ func (cm *Manager) Update(ctx context.Context, ifaces config.Ifaces) (enabled, u
 		return
 	}
 
-	logger, t0 := logging.FromContext(ctx), time.Now()
+	// Extract any regexp matchers from the provided configuration
+	matcher, hasRe, err := ifaces.Matchers()
+	if err != nil {
+		return
+	}
 
+	// Autodetect interfaces if required
 	if defaultConfig, hasAutodetect := ifaces.HasAutoDetect(); hasAutodetect {
-		if ifaces, err = cm.autodetectIfaces(ifaces, defaultConfig); err != nil {
+		if ifaces, err = cm.autodetectIfaces(matcher, defaultConfig); err != nil {
+			return
+		}
+		return cm.updateSelected(ctx, ifaces)
+	}
+
+	// If there are regexp matchers, find all matching interfaces and add them to the list
+	if hasRe {
+		if ifaces, err = cm.filterMatchingIfaces(matcher); err != nil {
 			return
 		}
 	}
+
+	return cm.updateSelected(ctx, ifaces)
+}
+
+func (cm *Manager) updateSelected(ctx context.Context, ifaces config.Ifaces) (enabled, updated, disabled capturetypes.IfaceChanges, err error) {
+
+	logger, t0 := logging.FromContext(ctx), time.Now()
 
 	// Build set of interfaces to enable / disable
 	var (
@@ -357,7 +380,6 @@ func (cm *Manager) Update(ctx context.Context, ifaces config.Ifaces) (enabled, u
 	).Info("updated interface configuration")
 
 	return enableIfaces, updateIfaces, disableIfaces, nil
-
 }
 
 func (cm *Manager) update(ctx context.Context, ifaces config.Ifaces, enable, disable capturetypes.IfaceChanges) {
@@ -430,8 +452,8 @@ func (cm *Manager) update(ctx context.Context, ifaces config.Ifaces, enable, dis
 	rg.Wait()
 }
 
-func (cm *Manager) autodetectIfaces(ifaces config.Ifaces, defaultConfig config.CaptureConfig) (config.Ifaces, error) {
-	allLinks, err := link.HostLinks()
+func (cm *Manager) autodetectIfaces(matcher *config.IfaceMatcher, defaultConfig config.CaptureConfig) (config.Ifaces, error) {
+	allLinks, err := hostLinks()
 	if err != nil {
 		return nil, err
 	}
@@ -439,13 +461,34 @@ func (cm *Manager) autodetectIfaces(ifaces config.Ifaces, defaultConfig config.C
 	detectedIfaces := config.Ifaces{}
 	for _, l := range allLinks {
 
-		// If the interface exists in the provided configuration, skip it (disabled), otherwise add it
-		if _, exists := ifaces[l.Name]; !exists {
-			detectedIfaces[l.Name] = defaultConfig
+		// If the interface explicitly or via regexp exists in the provided configuration, skip it
+		if _, exists := matcher.FindCaptureConfig(l.Name); exists {
+			continue
 		}
+
+		// Otherwise, add it to the list of interfaces to capture on
+		detectedIfaces[l.Name] = defaultConfig
 	}
 
 	return detectedIfaces, nil
+}
+
+func (cm *Manager) filterMatchingIfaces(matcher *config.IfaceMatcher) (config.Ifaces, error) {
+	allLinks, err := hostLinks()
+	if err != nil {
+		return nil, err
+	}
+
+	matchingIfaces := config.Ifaces{}
+	for _, l := range allLinks {
+
+		// If the interface explicitly or via regexp exists in the provided configuration,, add it to the list
+		if cfg, exists := matcher.FindCaptureConfig(l.Name); exists {
+			matchingIfaces[l.Name] = cfg
+		}
+	}
+
+	return matchingIfaces, nil
 }
 
 // GetFlowMaps extracts a copy of all active flows and sends them on the provided channel (compatible with normal query

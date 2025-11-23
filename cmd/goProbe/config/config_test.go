@@ -1,6 +1,7 @@
 package config
 
 import (
+	"sort"
 	"strings"
 	"testing"
 
@@ -229,6 +230,45 @@ func TestValidate(t *testing.T) {
 			},
 			errorNoRingBufferConfig,
 		},
+		{"regex matcher interface valid",
+			&Config{
+				DB: DBConfig{Path: defaults.DBPath},
+				Interfaces: Ifaces{
+					"/eth[0-9]/": CaptureConfig{
+						RingBuffer: &RingBufferConfig{BlockSize: 1024 * 1024, NumBlocks: 2},
+					},
+				},
+			},
+			nil,
+		},
+		{"regex matcher requires disable when autodetect present",
+			&Config{
+				DB: DBConfig{Path: defaults.DBPath},
+				Interfaces: Ifaces{
+					InterfaceAuto: CaptureConfig{
+						RingBuffer: &RingBufferConfig{BlockSize: 1024 * 1024, NumBlocks: 2},
+					},
+					"/eth[0-9]/": CaptureConfig{
+						RingBuffer: &RingBufferConfig{BlockSize: 1024 * 1024, NumBlocks: 2},
+					},
+				},
+			},
+			errorIfaceMustBeDisabledWithAuto,
+		},
+		{"regex matcher disabled with autodetect",
+			&Config{
+				DB: DBConfig{Path: defaults.DBPath},
+				Interfaces: Ifaces{
+					InterfaceAuto: CaptureConfig{
+						RingBuffer: &RingBufferConfig{BlockSize: 1024 * 1024, NumBlocks: 2},
+					},
+					"/eth[0-9]/": CaptureConfig{
+						Disable: true,
+					},
+				},
+			},
+			nil,
+		},
 	}
 
 	// run tests
@@ -264,21 +304,21 @@ interfaces:
 		{
 			"valid config JSON",
 			`
-{
-	"db": {
-		"path": "/var/lib/goprobe/goprobe.db"
-	},
-	"interfaces": {
-		"eth0": {
-			"promisc": true,
-			"ring_buffer": {
-				"block_size": 1048576,
-				"num_blocks": 2
+	{
+		"db": {
+			"path": "/var/lib/goprobe/goprobe.db"
+		},
+		"interfaces": {
+			"eth0": {
+				"promisc": true,
+				"ring_buffer": {
+					"block_size": 1048576,
+					"num_blocks": 2
+				}
 			}
 		}
 	}
-}
-`,
+	`,
 			nil,
 		},
 		{"malformed",
@@ -298,6 +338,127 @@ interfaces:
 		t.Run(test.name, func(t *testing.T) {
 			_, err := Parse(strings.NewReader(test.input))
 			assert.ErrorIs(t, err, test.expectedErr)
+		})
+	}
+}
+
+func TestIsRegexpInterfaceMatcher(t *testing.T) {
+	var tests = []struct {
+		name     string
+		iface    IfaceName
+		expected bool
+	}{
+		{
+			name:     "plain interface name",
+			iface:    "eth0",
+			expected: false,
+		},
+		{
+			name:     "no closing slash",
+			iface:    "/eth[0-9]",
+			expected: false,
+		},
+		{
+			name:     "no opening slash",
+			iface:    "eth[0-9]/",
+			expected: false,
+		},
+		{
+			name:     "valid regex",
+			iface:    "/eth[0-9]/",
+			expected: true,
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.expected, IsRegexpInterfaceMatcher(test.iface))
+		})
+	}
+}
+
+func TestHasRegexpMatching(t *testing.T) {
+	var tests = []struct {
+		name               string
+		ifaces             Ifaces
+		expectedMatch      string
+		expectedFound      bool
+		expectedErrContain string
+	}{
+		{
+			name: "no regex matchers",
+			ifaces: Ifaces{
+				"eth0": CaptureConfig{
+					RingBuffer: &RingBufferConfig{BlockSize: 1024 * 1024, NumBlocks: 2},
+				},
+			},
+			expectedMatch:      "",
+			expectedFound:      false,
+			expectedErrContain: "",
+		},
+		{
+			name: "single regex matcher",
+			ifaces: Ifaces{
+				"/eth[0-9]/": CaptureConfig{
+					RingBuffer: &RingBufferConfig{BlockSize: 1024 * 1024, NumBlocks: 2},
+				},
+			},
+			expectedMatch:      "eth[0-9]",
+			expectedFound:      true,
+			expectedErrContain: "",
+		},
+		{
+			name: "multiple regex matchers",
+			ifaces: Ifaces{
+				"/eth[0-9]/": CaptureConfig{
+					RingBuffer: &RingBufferConfig{BlockSize: 1024 * 1024, NumBlocks: 2},
+				},
+				"/wlan[0-9]/": CaptureConfig{
+					RingBuffer: &RingBufferConfig{BlockSize: 1024 * 1024, NumBlocks: 2},
+				},
+			},
+			expectedMatch:      "eth[0-9]|wlan[0-9]",
+			expectedFound:      true,
+			expectedErrContain: "",
+		},
+		{
+			name: "invalid regex matcher",
+			ifaces: Ifaces{
+				"/eth[0-9/": CaptureConfig{
+					RingBuffer: &RingBufferConfig{BlockSize: 1024 * 1024, NumBlocks: 2},
+				},
+			},
+			expectedMatch:      "eth[0-9",
+			expectedFound:      true,
+			expectedErrContain: "missing closing ]",
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			matcher, found, err := test.ifaces.Matchers()
+			if test.expectedErrContain != "" {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), test.expectedErrContain)
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, test.expectedFound, found)
+			if test.expectedFound {
+				// There may be multiple regex matchers, join them for comparison
+				var patterns []string
+				for re := range matcher.regexpMatchers {
+					patterns = append(patterns, re.String())
+				}
+				// Sort patterns for deterministic comparison
+				sort.Strings(patterns)
+				assert.Equal(t, test.expectedMatch, strings.Join(patterns, "|"))
+			} else {
+				assert.NotNil(t, matcher)
+				assert.Equal(t, 0, len(matcher.regexpMatchers))
+			}
 		})
 	}
 }
