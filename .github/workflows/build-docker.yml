@@ -32,10 +32,12 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           push: true
+          target: sensor
           tags: goprobe/sensor:${{ env.COMMIT_SHA }},goprobe/sensor:${{ env.RELEASE_VERSION }},goprobe/sensor:latest
 
       - name: Build and push query image
         uses: docker/build-push-action@v6
         with:
           push: true
+          target: query
           tags: goprobe/query:${{ env.COMMIT_SHA }},goprobe/query:${{ env.RELEASE_VERSION }},goprobe/query:latest
