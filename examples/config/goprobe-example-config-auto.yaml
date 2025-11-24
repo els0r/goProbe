@@ -1,20 +1,13 @@
 ---
-# This file describes the necessary configuration defaults to run
-# goprobe v4 and its associated CLI tools goquery and gpctl
-db:
-  # path of the goDB database written by goprobe and read by goquery
-  path: /usr/local/goProbe/db
-# local_buffers sets the local buffer configuration used during rotation of a capture
-local_buffers:
-  # size_limit is the buffer held for packet capture during flow rotation
-  # the unit is bytes
-  size_limit: 67108864
-  # num_buffers denotes the number of buffers (and hence maximum concurrency of Status() calls)
-  # NOTE: do not change unless absolutely necessary
-  num_buffers: 1
+# This file describes the necessary / optional configuration defaults to run
+# goprobe v4 and its associated CLI tools goquery and gpctl (auto-detection mode)
+
 # interfaces stores the configuration for the interfaces that goprobe will capture on
 interfaces:
-  eth0:
+  # autodetect is a special interface name enabling auto-detection of all available interfaces
+  # upon startup and during interface / config / flow rotation
+  # NOTE: The configuration under autodetect will be applied to all interfaces
+  autodetect:
     # promisc runs capturing in promiscuous mode in order to also capture
     # VLAN traffic
     promisc: true
@@ -33,18 +26,24 @@ interfaces:
       # block_size of 1 MB should be enough for interfaces with much traffic
       block_size: 1048576
   tun0:
-    # there is no need for capturing in promsicuous mode on tunnel interfaces
-    promisc: false
-    ring_buffer:
-      num_blocks: 4
-      # the traffic on a tunnel interface is always smaller than the traffic
-      # on, e.g. external interfaces. A smaller buffer should be sufficient
-      block_size: 524288
-  # inclusion via regex is also possible
-  '/enx.*/':
-    ring_buffer:
-      num_blocks: 4
-      block_size: 524288
+    # in autodetect mode interfaces can only be disabled (excluding them)
+    disable: true
+  '/veth.*/':
+    # exclusion via regex is also possible
+    disable: true
+
+##### Standrd configuration options below #####
+db:
+  # path of the goDB database written by goprobe and read by goquery
+  path: /usr/local/goProbe/db
+# local_buffers sets the local buffer configuration used during rotation of a capture
+local_buffers:
+  # size_limit is the buffer held for packet capture during flow rotation
+  # the unit is bytes
+  size_limit: 67108864
+  # num_buffers denotes the number of buffers (and hence maximum concurrency of Status() calls)
+  # NOTE: do not change unless absolutely necessary
+  num_buffers: 1
 # api configures goProbe's API server for control and querying
 api:
   # addr defines what the API server binds to. This may also be a unix
