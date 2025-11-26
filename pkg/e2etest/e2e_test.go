@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -83,8 +84,6 @@ var defaultCaptureConfig = config.CaptureConfig{
 }
 
 var promMetrics = capture.NewMetrics()
-
-var externalPCAPPath string
 
 var valFilters = []*node.ValFilterNode{
 	nil,
@@ -709,6 +708,9 @@ func runGlobalQuery(t *testing.T, addr string, apiEndpoints map[string]string) f
 		require.ErrorIs(t, apiServer.Serve(), http.ErrServerClosed)
 	}()
 
+	// Wait for server to become available
+	checkConn(t, addr)
+
 	return func() error {
 		return apiServer.Shutdown(context.Background())
 	}
@@ -1036,9 +1038,15 @@ func newPcapSource(t testing.TB, name string, data []byte) (res *mockIface) {
 // 	return
 // }
 
+var (
+	externalPCAPPath string
+	skipBenchmarks   bool
+)
+
 func TestMain(m *testing.M) {
 
 	flag.StringVar(&externalPCAPPath, "ext-pcap-data", "", "path to external pcap file(s) for E2E tests (can be a single file or directory)")
+	flag.BoolVar(&skipBenchmarks, "skip-benchmarks", false, "skip benchmark tests")
 	flag.Parse()
 
 	if err := logging.Init(logging.LevelWarn, logging.EncodingLogfmt,
@@ -1056,4 +1064,24 @@ func TestMain(m *testing.M) {
 	}
 
 	os.Exit(res)
+}
+
+func checkConn(t *testing.T, addr string) {
+	timeout := time.After(10 * time.Second)
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-timeout:
+			t.Fatal("global-query server failed to become available within 10 seconds")
+		case <-ticker.C:
+			conn, err := net.Dial("tcp", addr)
+
+			if err == nil {
+				conn.Close()
+				return
+			}
+		}
+	}
 }
