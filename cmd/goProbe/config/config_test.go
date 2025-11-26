@@ -40,8 +40,7 @@ func TestValidate(t *testing.T) {
 						RingBuffer: &RingBufferConfig{BlockSize: 1024 * 1024, NumBlocks: 2},
 					},
 				},
-				Logging: LogConfig{Level: "debug", Encoding: "logfmt"},
-				API: &APIConfig{
+				API: APIConfig{
 					Addr: "unix:/var/run/goprobe.sock",
 					Keys: []string{"testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest"},
 				},
@@ -102,7 +101,7 @@ func TestValidate(t *testing.T) {
 			},
 			errorRingBufferNumBlocks,
 		},
-		{"missing API addr",
+		{"missing API addr (don't parse API if not set)",
 			&Config{
 				DB: DBConfig{Path: defaults.DBPath},
 				Interfaces: Ifaces{
@@ -110,12 +109,11 @@ func TestValidate(t *testing.T) {
 						RingBuffer: &RingBufferConfig{BlockSize: 1024 * 1024, NumBlocks: 2},
 					},
 				},
-				Logging: LogConfig{Level: "debug", Encoding: "logfmt"},
-				API: &APIConfig{
+				API: APIConfig{
 					Keys: []string{"testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest"},
 				},
 			},
-			errorNoAPIAddrSpecified,
+			nil,
 		},
 		{"invalid / missing rate limit continuous rate value",
 			&Config{
@@ -125,8 +123,7 @@ func TestValidate(t *testing.T) {
 						RingBuffer: &RingBufferConfig{BlockSize: 1024 * 1024, NumBlocks: 2},
 					},
 				},
-				Logging: LogConfig{Level: "debug", Encoding: "logfmt"},
-				API: &APIConfig{
+				API: APIConfig{
 					Addr: "unix:/var/run/goprobe.sock",
 					QueryRateLimit: QueryRateLimitConfig{
 						MaxBurst: 3,
@@ -143,8 +140,7 @@ func TestValidate(t *testing.T) {
 						RingBuffer: &RingBufferConfig{BlockSize: 1024 * 1024, NumBlocks: 2},
 					},
 				},
-				Logging: LogConfig{Level: "debug", Encoding: "logfmt"},
-				API: &APIConfig{
+				API: APIConfig{
 					Addr: "unix:/var/run/goprobe.sock",
 					QueryRateLimit: QueryRateLimitConfig{
 						MaxReqPerSecond: 1.0,
@@ -161,8 +157,7 @@ func TestValidate(t *testing.T) {
 						RingBuffer: &RingBufferConfig{BlockSize: 1024 * 1024, NumBlocks: 2},
 					},
 				},
-				Logging: LogConfig{Level: "debug", Encoding: "logfmt"},
-				API: &APIConfig{
+				API: APIConfig{
 					Addr: "unix:/var/run/goprobe.sock",
 					QueryRateLimit: QueryRateLimitConfig{
 						MaxConcurrent: -10,

@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/devcontainers/go:1.24-bullseye
+FROM mcr.microsoft.com/devcontainers/go:1.25-bookworm
 
 RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
     && apt-get -y install git \
@@ -6,7 +6,7 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
     curl
 
 # compression libs
-RUN apt install liblz4-dev libzstd-dev
+RUN apt install -y liblz4-dev libzstd-dev
 
 # convenience tools
 RUN apt install -y vim inetutils-ping
