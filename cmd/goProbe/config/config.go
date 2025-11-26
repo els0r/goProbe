@@ -57,53 +57,53 @@ type validator interface {
 // Config stores goProbe's configuration
 type Config struct {
 	sync.Mutex
-	DB           DBConfig           `json:"db" yaml:"db"`
-	Interfaces   Ifaces             `json:"interfaces" yaml:"interfaces"`
-	SyslogFlows  bool               `json:"syslog_flows" yaml:"syslog_flows"`
-	Logging      LogConfig          `json:"logging" yaml:"logging"`
-	API          *APIConfig         `json:"api" yaml:"api"`
-	LocalBuffers *LocalBufferConfig `json:"local_buffers" yaml:"local_buffers"`
+	DB            DBConfig            `json:"db" yaml:"db" mapstructure:"db"`
+	AutoDetection AutoDetectionConfig `json:"autodetection" yaml:"autodetection" mapstructure:"autodetection" doc:"Configures auto-detection of interfaces"`
+	Interfaces    Ifaces              `json:"interfaces" yaml:"interfaces" mapstructure:"interfaces"`
+	SyslogFlows   bool                `json:"syslog_flows" yaml:"syslog_flows" mapstructure:"syslog_flows"`
+	API           APIConfig           `json:"api" yaml:"api" mapstructure:"api"`
+	LocalBuffers  LocalBufferConfig   `json:"local_buffers" yaml:"local_buffers" mapstructure:"local_buffers"`
 }
 
 // DBConfig stores the local on-disk database configuration
 type DBConfig struct {
-	Path        string      `json:"path" yaml:"path"`
-	EncoderType string      `json:"encoder_type" yaml:"encoder_type"`
-	Permissions fs.FileMode `json:"permissions" yaml:"permissions"`
+	Path        string      `json:"path" yaml:"path" mapstructure:"path"`
+	EncoderType string      `json:"encoder_type" yaml:"encoder_type" mapstructure:"encoder_type"`
+	Permissions fs.FileMode `json:"permissions" yaml:"permissions" mapstructure:"permissions"`
 }
 
 // CaptureConfig stores the capture / buffer related configuration for an individual interface
 type CaptureConfig struct {
 	// IgnoreVLANs: enables / disables skipping of VLAN-tagged packets
-	IgnoreVLANs bool `json:"ignore_vlans" yaml:"ignore_vlans" doc:"Enables / disables skipping of VLAN-tagged packets on interface" example:"true"`
+	IgnoreVLANs bool `json:"ignore_vlans" yaml:"ignore_vlans" mapstructure:"ignore_vlans" doc:"Enables / disables skipping of VLAN-tagged packets on interface" example:"true"`
 	// Promisc: enables / disables promiscuous capture mode
-	Promisc bool `json:"promisc" yaml:"promisc" doc:"Enables / disables promiscuous capture mode on interface" example:"true"`
+	Promisc bool `json:"promisc" yaml:"promisc" mapstructure:"promisc" doc:"Enables / disables promiscuous capture mode on interface" example:"true"`
 	// RingBuffer: denotes the kernel ring buffer configuration of this interface
-	RingBuffer *RingBufferConfig `json:"ring_buffer" yaml:"ring_buffer" doc:"Kernel ring buffer configuration for interface"`
+	RingBuffer *RingBufferConfig `json:"ring_buffer" yaml:"ring_buffer" mapstructure:"ring_buffer" doc:"Kernel ring buffer configuration for interface"`
 	// ExtraBPFFilters: allows setting additional BPF filter instructions during capture
-	ExtraBPFFilters []bpf.RawInstruction `json:"extra_bpf_filters" yaml:"extra_bpf_filters" doc:"Extra BPF filter instructions to be applied during capture"`
+	ExtraBPFFilters []bpf.RawInstruction `json:"extra_bpf_filters" yaml:"extra_bpf_filters" mapstructure:"extra_bpf_filters" doc:"Extra BPF filter instructions to be applied during capture"`
 	// Disable: explicitly disables capture on this interface (e.g. in conjunction with the `autodetect` option)
-	Disable bool `json:"disable" yaml:"disable" doc:"Explicitly disables capture on this interface" example:"true"`
+	Disable bool `json:"disable" yaml:"disable" mapstructure:"disable" doc:"Explicitly disables capture on this interface" example:"true"`
 }
 
 // LocalBufferConfig stores the shared local in-memory buffer configuration
 type LocalBufferConfig struct {
 	// SizeLimit denotes the maximum size of the local buffers (globally)
 	// used to continue capturing while the capture is (b)locked
-	SizeLimit int `json:"size_limit" yaml:"size_limit"`
+	SizeLimit int `json:"size_limit" yaml:"size_limit" mapstructure:"size_limit"`
 
 	// NumBuffers denotes the number of buffers (and hence maximum concurrency
 	// of Status() calls). This should be left at default unless absolutely required
-	NumBuffers int `json:"num_buffers" yaml:"num_buffers"`
+	NumBuffers int `json:"num_buffers" yaml:"num_buffers" mapstructure:"num_buffers"`
 }
 
 // RingBufferConfig stores the kernel ring buffer related configuration for an individual interface
 type RingBufferConfig struct {
 	// BlockSize: specifies the size of a block, which defines how many packets can be held within a block
-	BlockSize int `json:"block_size" yaml:"block_size" doc:"Size of a block, which defines how many packets can be held within a block" example:"1048576" minimum:"1"`
+	BlockSize int `json:"block_size" yaml:"block_size" mapstructure:"block_size" doc:"Size of a block, which defines how many packets can be held within a block" example:"1048576" minimum:"1"`
 
 	// NumBlocks: guides how many blocks are part of the ring buffer
-	NumBlocks int `json:"num_blocks" yaml:"num_blocks" doc:"Guides how many blocks are part of the ring buffer" example:"4" minimum:"1"`
+	NumBlocks int `json:"num_blocks" yaml:"num_blocks" mapstructure:"num_blocks" doc:"Guides how many blocks are part of the ring buffer" example:"4" minimum:"1"`
 }
 
 const (
@@ -120,29 +120,41 @@ type IfaceName = string
 // Ifaces maps interface names to their capture configuration
 type Ifaces map[IfaceName]CaptureConfig
 
+// InterfaceConfigs stores the configuration for all interfaces
+type InterfaceConfigs struct {
+}
+
+// AutoDetectionConfig stores the auto-detection configuration for interfaces
+type AutoDetectionConfig struct {
+	// Enabled: enables / disables auto-detection of interfaces
+	Enabled bool `json:"enabled" yaml:"enabled" mapstructure:"enabled" doc:"Enables / disables auto-detection of interfaces" example:"true"`
+	// Exclude: a list of interface names to exclude from auto-detection
+	Exclude []IfaceName `json:"exclude" yaml:"exclude" mapstructure:"exclude" doc:"A list of interface names to exclude from auto-detection" example:"eth0,lo"`
+}
+
 // LogConfig stores the logging configuration
 type LogConfig struct {
-	Destination string `json:"destination" yaml:"destination"`
-	Level       string `json:"level" yaml:"level"`
-	Encoding    string `json:"encoding" yaml:"encoding"`
+	Destination string `json:"destination" yaml:"destination" mapstructure:"destination"`
+	Level       string `json:"level" yaml:"level" mapstructure:"level"`
+	Encoding    string `json:"encoding" yaml:"encoding" mapstructure:"encoding"`
 }
 
 // QueryRateLimitConfig contains query rate limiting related config arguments / parameters
 type QueryRateLimitConfig struct {
-	MaxReqPerSecond rate.Limit `json:"max_req_per_sec" yaml:"max_req_per_sec"`
-	MaxBurst        int        `json:"max_burst" yaml:"max_burst"`
-	MaxConcurrent   int        `json:"max_concurrent" yaml:"max_concurrent"`
+	MaxReqPerSecond rate.Limit `json:"max_req_per_sec" yaml:"max_req_per_sec" mapstructure:"max_req_per_sec"`
+	MaxBurst        int        `json:"max_burst" yaml:"max_burst" mapstructure:"max_burst"`
+	MaxConcurrent   int        `json:"max_concurrent" yaml:"max_concurrent" mapstructure:"max_concurrent"`
 }
 
 // APIConfig stores goProbe's API configuration
 type APIConfig struct {
-	Addr                string               `json:"addr" yaml:"addr"`
-	Metrics             bool                 `json:"metrics" yaml:"metrics"`
-	DisableIfaceMetrics bool                 `json:"disable_iface_metrics" yaml:"disable_iface_metrics"`
-	Profiling           bool                 `json:"profiling" yaml:"profiling"`
-	Timeout             int                  `json:"request_timeout" yaml:"request_timeout"`
-	Keys                []string             `json:"keys" yaml:"keys"`
-	QueryRateLimit      QueryRateLimitConfig `json:"query_rate_limit" yaml:"query_rate_limit"`
+	Addr                string               `json:"addr" yaml:"addr" mapstructure:"addr"`
+	Metrics             bool                 `json:"metrics" yaml:"metrics" mapstructure:"metrics"`
+	DisableIfaceMetrics bool                 `json:"disable_iface_metrics" yaml:"disable_iface_metrics" mapstructure:"disable_iface_metrics"`
+	Profiling           bool                 `json:"profiling" yaml:"profiling" mapstructure:"profiling"`
+	Timeout             int                  `json:"request_timeout" yaml:"request_timeout" mapstructure:"request_timeout"`
+	Keys                []string             `json:"keys" yaml:"keys" mapstructure:"keys"`
+	QueryRateLimit      QueryRateLimitConfig `json:"query_rate_limit" yaml:"query_rate_limit" mapstructure:"query_rate_limit"`
 }
 
 // newDefault creates a new configuration struct with default settings
@@ -153,10 +165,6 @@ func newDefault() *Config {
 			EncoderType: "lz4",
 		},
 		Interfaces: make(Ifaces),
-		Logging: LogConfig{
-			Encoding: "logfmt",
-			Level:    "info",
-		},
 	}
 }
 
@@ -165,15 +173,15 @@ func (l LogConfig) validate() error {
 }
 
 var (
-	errorNoAPIAddrSpecified       = errors.New("no API address specified")
 	errorInvalidAPITimeout        = errors.New("the request timeout must be a positive number")
 	errorInvalidAPIQueryRateLimit = errors.New("the query rate limit values must both be positive numbers")
 )
 
 func (a APIConfig) validate() error {
 	if a.Addr == "" {
-		return errorNoAPIAddrSpecified
+		return nil
 	}
+
 	if (a.QueryRateLimit.MaxReqPerSecond <= 0. && a.QueryRateLimit.MaxBurst > 0) ||
 		(a.QueryRateLimit.MaxReqPerSecond > 0. && a.QueryRateLimit.MaxBurst <= 0) {
 		return errorInvalidAPIQueryRateLimit
@@ -200,10 +208,13 @@ var (
 )
 
 func (l LocalBufferConfig) validate() error {
-	if l.SizeLimit <= 0 {
+	if l.NumBuffers == 0 && l.SizeLimit == 0 {
+		return nil
+	}
+	if l.SizeLimit < 0 {
 		return errorLocalBufferSize
 	}
-	if l.NumBuffers <= 0 {
+	if l.NumBuffers < 0 {
 		return errorLocalBufferNumBuffers
 	}
 	return nil
@@ -364,7 +375,8 @@ func (c *Config) Validate() error {
 	for _, section := range []validator{
 		c.DB,
 		c.Interfaces,
-		c.Logging,
+		c.API,
+		c.LocalBuffers,
 	} {
 		err := section.validate()
 		if err != nil {
@@ -372,20 +384,6 @@ func (c *Config) Validate() error {
 		}
 	}
 
-	// run all config subsection validators for optional sections
-	optValidators := []validator{}
-	if c.API != nil {
-		optValidators = append(optValidators, c.API)
-	}
-	if c.LocalBuffers != nil {
-		optValidators = append(optValidators, c.LocalBuffers)
-	}
-	for _, section := range optValidators {
-		err := section.validate()
-		if err != nil {
-			return err
-		}
-	}
 	return nil
 }
 

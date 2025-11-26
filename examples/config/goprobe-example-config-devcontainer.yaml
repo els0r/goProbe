@@ -1,6 +1,7 @@
 ---
 db:
   path: /usr/local/goProbe/db
+  encoder_type: lz4
 local_buffers:
   size_limit: 67108864
   num_buffers: 1
