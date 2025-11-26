@@ -36,7 +36,7 @@ var benchBuf = bytes.NewBuffer(nil)
 
 func TestBenchmarkCaptureThroughput(t *testing.T) {
 
-	if testing.Short() {
+	if testing.Short() || skipBenchmarks {
 		t.SkipNow()
 	}
 

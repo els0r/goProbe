@@ -21,25 +21,65 @@ jobs:
     - name: Build for AMD64
       run: GOOS=linux GOARCH=amd64 go build -tags jsoniter -v ./...
 
-    - name: Build for AMD64 (Production Mode)
-      run: GOOS=linux GOARCH=amd64 go build -tags jsoniter,slimcap_nomock -v ./...
-
-    - name: Build for AMD64 (No-GCO Mode)
-      run: GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -tags jsoniter -v ./...
-
     - name: Test
       run: go test -tags jsoniter -v ./...
 
-    - name: Test (No-CGO Mode)
-      run: |
-        CGO_ENABLED=0 go test -tags jsoniter -v ./...
+  build-linux-prod:
+    name: Build / Test on Linux (Production Mode)
+    runs-on: ubuntu-latest
+    steps:
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ^1.25
+      id: go
+
+    - name: Check out code into the Go module directory
+      uses: actions/checkout@v4
+
+    - name: Build for AMD64 (Production Mode)
+      run: GOOS=linux GOARCH=amd64 go build -tags jsoniter,slimcap_nomock -v ./...
 
     - name: Test (Production Mode)
       run: |
         go test -tags jsoniter,slimcap_nomock -v ./...
 
-    - name: Race Detector
+  build-linux-nocgo:
+    name: Build / Test on Linux (No-CGO Mode)
+    runs-on: ubuntu-latest
+    steps:
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ^1.25
+      id: go
+
+    - name: Check out code into the Go module directory
+      uses: actions/checkout@v4
+
+    - name: Build for AMD64 (No-GCO Mode)
+      run: GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -tags jsoniter -v ./...
+
+    - name: Test (No-CGO Mode)
+      run: |
+        CGO_ENABLED=0 go test -tags jsoniter -v ./...
+
+  build-linux-race-detector:
+    name: Build / Test on Linux (Race Detector)
+    runs-on: ubuntu-latest
+    steps:
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ^1.25
+      id: go
+
+    - name: Check out code into the Go module directory
+      uses: actions/checkout@v4
+
+    - name: Build for AMD64
+      run: GOOS=linux GOARCH=amd64 go build -tags jsoniter -v ./...
+
+    - name: Test (Race Detector enabled)
       run: |
         go test -tags jsoniter -race -v ./...
-
-
