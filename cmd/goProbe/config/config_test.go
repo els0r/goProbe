@@ -190,40 +190,19 @@ func TestValidate(t *testing.T) {
 			},
 			nil,
 		},
-		{"autodetect interface validates configuration",
+		{"autodetect requires other interfaces to not be configured",
 			&Config{
 				DB: DBConfig{Path: defaults.DBPath},
-				Interfaces: Ifaces{
-					InterfaceAuto: CaptureConfig{
-						RingBuffer: &RingBufferConfig{BlockSize: 1024 * 1024, NumBlocks: 2},
-					},
-					"eth0": CaptureConfig{Disable: true},
+				AutoDetection: AutoDetectionConfig{
+					Enabled: true,
 				},
-			},
-			nil,
-		},
-		{"autodetect requires other interfaces to be disabled",
-			&Config{
-				DB: DBConfig{Path: defaults.DBPath},
 				Interfaces: Ifaces{
-					InterfaceAuto: CaptureConfig{
-						RingBuffer: &RingBufferConfig{BlockSize: 1024 * 1024, NumBlocks: 2},
-					},
 					"eth0": CaptureConfig{
 						RingBuffer: &RingBufferConfig{BlockSize: 1024 * 1024, NumBlocks: 2},
 					},
 				},
 			},
-			errorIfaceMustBeDisabledWithAuto,
-		},
-		{"autodetect missing ring buffer",
-			&Config{
-				DB: DBConfig{Path: defaults.DBPath},
-				Interfaces: Ifaces{
-					InterfaceAuto: CaptureConfig{},
-				},
-			},
-			errorNoRingBufferConfig,
+			errorInterfaceConfigPresentWithAutoDetectionEnabled,
 		},
 		{"regex matcher interface valid",
 			&Config{
@@ -239,30 +218,16 @@ func TestValidate(t *testing.T) {
 		{"regex matcher requires disable when autodetect present",
 			&Config{
 				DB: DBConfig{Path: defaults.DBPath},
+				AutoDetection: AutoDetectionConfig{
+					Enabled: true,
+				},
 				Interfaces: Ifaces{
-					InterfaceAuto: CaptureConfig{
-						RingBuffer: &RingBufferConfig{BlockSize: 1024 * 1024, NumBlocks: 2},
-					},
 					"/eth[0-9]/": CaptureConfig{
 						RingBuffer: &RingBufferConfig{BlockSize: 1024 * 1024, NumBlocks: 2},
 					},
 				},
 			},
-			errorIfaceMustBeDisabledWithAuto,
-		},
-		{"regex matcher disabled with autodetect",
-			&Config{
-				DB: DBConfig{Path: defaults.DBPath},
-				Interfaces: Ifaces{
-					InterfaceAuto: CaptureConfig{
-						RingBuffer: &RingBufferConfig{BlockSize: 1024 * 1024, NumBlocks: 2},
-					},
-					"/eth[0-9]/": CaptureConfig{
-						Disable: true,
-					},
-				},
-			},
-			nil,
+			errorInterfaceConfigPresentWithAutoDetectionEnabled,
 		},
 	}
 
