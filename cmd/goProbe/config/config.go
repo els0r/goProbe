@@ -35,9 +35,6 @@ const (
 	// ServiceName is the name of the service as it will show up in telemetry such as metrics, logs, traces, etc.
 	ServiceName = "goprobe"
 
-	// InterfaceAuto denotes the special (fake) interface name to auto-detect interfaces
-	InterfaceAuto = "autodetect"
-
 	maxConfigSize = 16 * 1024 * 1024 // 16 MiB
 )
 
@@ -226,7 +223,6 @@ var (
 )
 
 func (c CaptureConfig) validate() error {
-
 	// Ensure no other settings are set when capture is disabled
 	if c.Disable {
 		if c.RingBuffer != nil ||
@@ -273,8 +269,7 @@ func (r *RingBufferConfig) Equals(cfg *RingBufferConfig) bool {
 }
 
 var (
-	errorNoInterfacesSpecified       = errors.New("no interfaces specified")
-	errorIfaceMustBeDisabledWithAuto = errors.New("interface must be disabled when autodetect interface is configured")
+	errorNoInterfacesSpecified = errors.New("no interfaces specified")
 )
 
 func (i Ifaces) validate() error {
@@ -282,16 +277,10 @@ func (i Ifaces) validate() error {
 		return errorNoInterfacesSpecified
 	}
 
-	// Ensure that other interfaces are disabled (veto-only) when auto-detect is used
-	_, hasAuto := i.HasAutoDetect()
 	for iface, cc := range i {
 		err := cc.validate()
 		if err != nil {
 			return fmt.Errorf("%s: %w", iface, err)
-		}
-
-		if hasAuto && iface != InterfaceAuto && !cc.Disable {
-			return fmt.Errorf("%s: %w", iface, errorIfaceMustBeDisabledWithAuto)
 		}
 	}
 	return nil
@@ -300,12 +289,6 @@ func (i Ifaces) validate() error {
 // Validate validates the interfaces configuration
 func (i Ifaces) Validate() error {
 	return i.validate()
-}
-
-// HasAutoDetect returns true if c matches the auto-detect default configuration
-func (i Ifaces) HasAutoDetect() (CaptureConfig, bool) {
-	config, exists := i[InterfaceAuto]
-	return config, exists
 }
 
 // Matcher creates an IfaceMatcher from the Ifaces configuration
@@ -369,22 +352,32 @@ func (d DBConfig) validate() error {
 	return nil
 }
 
+var (
+	errorInterfaceConfigPresentWithAutoDetectionEnabled = errors.New("cannot have interface configurations present when auto-detection is enabled")
+)
+
 // Validate checks all config parameters
 func (c *Config) Validate() error {
 	// run all config subsection validators
-	for _, section := range []validator{
+	validators := []validator{
 		c.DB,
-		c.Interfaces,
 		c.API,
 		c.LocalBuffers,
-	} {
+	}
+
+	for _, section := range validators {
 		err := section.validate()
 		if err != nil {
 			return err
 		}
 	}
 
-	return nil
+	// check for conflicting interface configuration
+	if c.AutoDetection.Enabled && len(c.Interfaces) > 0 {
+		return errorInterfaceConfigPresentWithAutoDetectionEnabled
+	}
+
+	return c.Interfaces.validate()
 }
 
 // ParseFile reads in a configuration from a file at `path`.
