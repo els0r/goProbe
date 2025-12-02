@@ -291,7 +291,7 @@ func run(ctx context.Context, cfg *gpconf.Config) error {
 	config = configMonitor.GetConfig()
 
 	// It doesn't make sense to monitor zero interfaces
-	if len(config.Interfaces) == 0 {
+	if len(config.Interfaces) == 0 && !config.AutoDetection.Enabled {
 		return fmt.Errorf("no interfaces have been detected for monitoring")
 	}
 
