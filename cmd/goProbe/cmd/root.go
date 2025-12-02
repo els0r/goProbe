@@ -199,7 +199,7 @@ func initConfig(cfg *gpconf.Config) error {
 
 func initLogging() error {
 	// Initialize logger
-	appVersion := version.Version()
+	appVersion := version.Short()
 	loggerOpts := []logging.Option{
 		logging.WithVersion(appVersion),
 	}
