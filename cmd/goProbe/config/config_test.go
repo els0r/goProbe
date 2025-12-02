@@ -190,7 +190,7 @@ func TestValidate(t *testing.T) {
 			},
 			nil,
 		},
-		{"autodetect requires other interfaces to not be configured",
+		{"autodetection requires other interfaces to not be configured",
 			&Config{
 				DB: DBConfig{Path: defaults.DBPath},
 				AutoDetection: AutoDetectionConfig{
@@ -203,6 +203,15 @@ func TestValidate(t *testing.T) {
 				},
 			},
 			errorInterfaceConfigPresentWithAutoDetectionEnabled,
+		},
+		{"valid autodetection settings",
+			&Config{
+				DB: DBConfig{Path: defaults.DBPath},
+				AutoDetection: AutoDetectionConfig{
+					Enabled: true,
+				},
+			},
+			nil,
 		},
 		{"regex matcher interface valid",
 			&Config{

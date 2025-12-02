@@ -10,24 +10,21 @@ import (
 )
 
 func TestAutodetectIfaces(t *testing.T) {
-	cm := &Manager{}
-
-	defaultCfg := config.CaptureConfig{
-		RingBuffer: &config.RingBufferConfig{BlockSize: 1024, NumBlocks: 2},
+	cm := &Manager{
+		autoDetectionEnabled: true,
+		autoDetectionExclusionSet: map[string]struct{}{
+			"eth2": {},
+			"eth0": {},
+			"enp5": {},
+		},
 	}
 
-	ifaces := config.Ifaces{
-		config.InterfaceAuto: defaultCfg,
-		"eth0":               {Disable: true},
-		"/enp[0-9]+/":        {Disable: true},
-	}
-
-	matcher, _, err := ifaces.Matcher()
-	require.NoError(t, err)
+	defaultCfg := config.DefaultCaptureConfig()
 
 	stubLinks := link.Links{
 		&link.Link{Name: "eth0"},
 		&link.Link{Name: "eth1"},
+		&link.Link{Name: "eth2"},
 		&link.Link{Name: "enp5"},
 	}
 
@@ -37,7 +34,7 @@ func TestAutodetectIfaces(t *testing.T) {
 	}
 	t.Cleanup(func() { hostLinks = originalHostLinks })
 
-	detected, err := cm.autodetectIfaces(matcher, defaultCfg)
+	detected, err := cm.autodetectIfaces(stubLinks, defaultCfg)
 	require.NoError(t, err)
 
 	expected := config.Ifaces{"eth1": defaultCfg}
@@ -61,6 +58,8 @@ func TestFilterMatchingIfaces(t *testing.T) {
 	stubLinks := link.Links{
 		&link.Link{Name: "eth0"},
 		&link.Link{Name: "enp3"},
+		&link.Link{Name: "enp4"},
+		&link.Link{Name: "enp42"},
 		&link.Link{Name: "lo"},
 	}
 
@@ -70,12 +69,14 @@ func TestFilterMatchingIfaces(t *testing.T) {
 	}
 	t.Cleanup(func() { hostLinks = originalHostLinks })
 
-	matched, err := cm.filterMatchingIfaces(matcher)
+	matched, err := cm.filterMatchingIfaces(stubLinks, matcher)
 	require.NoError(t, err)
 
 	expected := config.Ifaces{
-		"eth0": directCfg,
-		"enp3": regexCfg,
+		"eth0":  directCfg,
+		"enp3":  regexCfg,
+		"enp4":  regexCfg,
+		"enp42": regexCfg,
 	}
 
 	assert.Equal(t, expected, matched)
