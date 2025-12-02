@@ -34,6 +34,9 @@ type Manager struct {
 
 	lastAppliedConfig config.Ifaces
 
+	autoDetectionEnabled      bool
+	autoDetectionExclusionSet map[string]struct{}
+
 	lastRotation time.Time
 	startedAt    time.Time
 
@@ -46,7 +49,6 @@ type Manager struct {
 // InitManager initializes a CaptureManager and the underlying writeout logic
 // Used as primary entrypoint for the goProbe binary and E2E tests
 func InitManager(ctx context.Context, config *config.Config, opts ...ManagerOption) (*Manager, error) {
-
 	// Setup database compression and permissions
 	encoderType, err := encoders.GetTypeByString(config.DB.EncoderType)
 	if err != nil {
@@ -64,6 +66,11 @@ func InitManager(ctx context.Context, config *config.Config, opts ...ManagerOpti
 
 	// Initialize the CaptureManager
 	captureManager := NewManager(writeoutHandler, opts...)
+	captureManager.autoDetectionEnabled = config.AutoDetection.Enabled
+	captureManager.autoDetectionExclusionSet = make(map[string]struct{})
+	for _, exclude := range config.AutoDetection.Exclude {
+		captureManager.autoDetectionExclusionSet[exclude] = struct{}{}
+	}
 
 	// Initialize local buffer
 	if err := captureManager.setLocalBuffers(); err != nil {
@@ -74,7 +81,7 @@ func InitManager(ctx context.Context, config *config.Config, opts ...ManagerOpti
 	// DB writeouts
 	_, _, _, err = captureManager.Update(ctx, config.Interfaces)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("initial manager update failed: %w", err)
 	}
 
 	// this is the first time the capture manager is started and is important to report program runtime
@@ -302,6 +309,20 @@ func (cm *Manager) Status(ctx context.Context, ifaces ...string) (statusmap capt
 
 // Update the configuration for all (or a set of) interfaces
 func (cm *Manager) Update(ctx context.Context, ifaces config.Ifaces) (enabled, updated, disabled capturetypes.IfaceChanges, err error) {
+	allLinks, err := hostLinks()
+	if err != nil {
+		err = fmt.Errorf("failed to get host links: %w", err)
+		return
+	}
+
+	// Autodetect interfaces if required
+	if cm.autoDetectionEnabled {
+		if ifaces, err = cm.autodetectIfaces(allLinks, config.DefaultCaptureConfig()); err != nil {
+			return
+		}
+		return cm.updateSelected(ctx, ifaces)
+	}
+
 	// Validate the config before doing anything else
 	err = ifaces.Validate()
 	if err != nil {
@@ -314,17 +335,9 @@ func (cm *Manager) Update(ctx context.Context, ifaces config.Ifaces) (enabled, u
 		return
 	}
 
-	// Autodetect interfaces if required
-	if defaultConfig, hasAutodetect := ifaces.HasAutoDetect(); hasAutodetect {
-		if ifaces, err = cm.autodetectIfaces(matcher, defaultConfig); err != nil {
-			return
-		}
-		return cm.updateSelected(ctx, ifaces)
-	}
-
 	// If there are regexp matchers, find all matching interfaces and add them to the list
 	if hasRe {
-		if ifaces, err = cm.filterMatchingIfaces(matcher); err != nil {
+		if ifaces, err = cm.filterMatchingIfaces(allLinks, matcher); err != nil {
 			return
 		}
 	}
@@ -452,36 +465,26 @@ func (cm *Manager) update(ctx context.Context, ifaces config.Ifaces, enable, dis
 	rg.Wait()
 }
 
-func (cm *Manager) autodetectIfaces(matcher *config.IfaceMatcher, defaultConfig config.CaptureConfig) (config.Ifaces, error) {
-	allLinks, err := hostLinks()
-	if err != nil {
-		return nil, err
+func (cm *Manager) autodetectIfaces(allLinks link.Links, defaultConfig config.CaptureConfig) (config.Ifaces, error) {
+	detectedIfaces := config.Ifaces{}
+	if !cm.autoDetectionEnabled {
+		return detectedIfaces, nil
 	}
 
-	detectedIfaces := config.Ifaces{}
 	for _, l := range allLinks {
-
-		// If the interface explicitly or via regexp exists in the provided configuration, skip it
-		if _, exists := matcher.FindCaptureConfig(l.Name); exists {
+		if _, excluded := cm.autoDetectionExclusionSet[l.Name]; excluded {
 			continue
 		}
 
 		// Otherwise, add it to the list of interfaces to capture on
 		detectedIfaces[l.Name] = defaultConfig
 	}
-
 	return detectedIfaces, nil
 }
 
-func (cm *Manager) filterMatchingIfaces(matcher *config.IfaceMatcher) (config.Ifaces, error) {
-	allLinks, err := hostLinks()
-	if err != nil {
-		return nil, err
-	}
-
+func (cm *Manager) filterMatchingIfaces(allLinks link.Links, matcher *config.IfaceMatcher) (config.Ifaces, error) {
 	matchingIfaces := config.Ifaces{}
 	for _, l := range allLinks {
-
 		// If the interface explicitly or via regexp exists in the provided configuration, add it to the list
 		if cfg, exists := matcher.FindCaptureConfig(l.Name); exists {
 			matchingIfaces[l.Name] = cfg

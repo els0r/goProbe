@@ -83,6 +83,13 @@ type CaptureConfig struct {
 	Disable bool `json:"disable" yaml:"disable" mapstructure:"disable" doc:"Explicitly disables capture on this interface" example:"true"`
 }
 
+// DefaultCaptureConfig returns the default capture configuration
+func DefaultCaptureConfig() CaptureConfig {
+	return CaptureConfig{
+		RingBuffer: &RingBufferConfig{BlockSize: DefaultRingBufferBlockSize, NumBlocks: DefaultRingBufferNumBlocks},
+	}
+}
+
 // LocalBufferConfig stores the shared local in-memory buffer configuration
 type LocalBufferConfig struct {
 	// SizeLimit denotes the maximum size of the local buffers (globally)
@@ -373,8 +380,11 @@ func (c *Config) Validate() error {
 	}
 
 	// check for conflicting interface configuration
-	if c.AutoDetection.Enabled && len(c.Interfaces) > 0 {
-		return errorInterfaceConfigPresentWithAutoDetectionEnabled
+	if c.AutoDetection.Enabled {
+		if len(c.Interfaces) > 0 {
+			return errorInterfaceConfigPresentWithAutoDetectionEnabled
+		}
+		return nil
 	}
 
 	return c.Interfaces.validate()
