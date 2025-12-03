@@ -8,9 +8,15 @@ services:
     container_name: sensor
     network_mode: host
     environment:
-      - CONFIG_PATH=/app/goprobe.yaml
+      - DB_PATH=/usr/local/goProbe/db
+      - LOCAL__BUFFERS_SIZE__LIMIT=33554432
+      - LOCAL__BUFFERS_NUM__BUFFERS=1
+      - AUTODETECTION_ENABLED=1
+      - API_ADDR=127.0.0.1:3005
+      - API_METRICS=1
+      - API_PROFILING=0
+      - API_KEYS=48fd01fa8f8b12a31fdc614c27c6c273459fe7755a141e9e8deed9f65123f97d
     volumes:
-      - ./examples/docker/goprobe.example.yaml:/app/goprobe.yaml:ro
       - db:/usr/local/goProbe/db
 
   query:
@@ -22,9 +28,12 @@ services:
     container_name: query
     network_mode: host
     environment:
-      - CONFIG_PATH=/app/query.yaml
+      - SERVER_ADDR=127.0.0.1:8146
+      - HOSTS_RESOLVER_TYPE=string
+      - QUERIER_TYPE=api
+      - QUERIER_MAX_CONCURRENT=32
+      - QUERIER_CONFIG=/app/goprobe-global-querier.yaml
     volumes:
-      - ./examples/docker/query.example.yaml:/app/query.yaml:ro
       - ./examples/docker/querier.example.yaml:/app/goprobe-global-querier.yaml:ro
 
 volumes:
