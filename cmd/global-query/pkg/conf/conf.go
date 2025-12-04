@@ -73,7 +73,7 @@ func RegisterFlags(cmd *cobra.Command, cfgFile *string) error {
 	if cfgFile == nil {
 		return errors.New("config file pointer must not be nil")
 	}
-	pflags.StringVar(cfgFile, "config", "", "config file (default is $HOME/.global-query.yaml)")
+	pflags.StringVarP(cfgFile, "config", "c", "", "config file (default is $HOME/.global-query.yaml)")
 
 	if err := viper.BindPFlags(cmd.Flags()); err != nil {
 		return fmt.Errorf("failed to bind flags: %w", err)
