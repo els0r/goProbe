@@ -69,11 +69,6 @@ func RegisterFlags(cmd *cobra.Command) error {
 	pflags.String(QuerierConfig, "", "querier config file location")
 	pflags.Int(QuerierMaxConcurrent, 0, "maximum number of concurrent queries to hosts")
 
-	if cfgFile == nil {
-		return errors.New("config file pointer must not be nil")
-	}
-	pflags.StringVarP(cfgFile, "config", "c", "", "config file (default is $HOME/.global-query.yaml)")
-
 	if err := viper.BindPFlags(cmd.Flags()); err != nil {
 		return fmt.Errorf("failed to bind flags: %w", err)
 	}
