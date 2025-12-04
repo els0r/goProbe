@@ -35,8 +35,10 @@ func TestNewRootCmd(t *testing.T) {
 				"--api.addr=127.0.0.1:8080",
 				"--api.metrics=true",
 				"--api.profiling=true",
-				"--api.keys=key1,key2",
+				"--api.keys=59436af63ebf98a39de763d56220edb90267debaa4180b864811c7a44ad35bc8",
 				"--api.query_rate_limit.max_req_per_sec=10.5",
+				"--api.query_rate_limit.max_burst=1",
+				"--api.query_rate_limit.max_concurrent=1",
 				"--local_buffers.size_limit=1048576",
 				"--local_buffers.num_buffers=4",
 			},
@@ -57,11 +59,11 @@ func TestNewRootCmd(t *testing.T) {
 					DisableIfaceMetrics: false,
 					Profiling:           true,
 					Timeout:             0,
-					Keys:                []string{"key1", "key2"},
+					Keys:                []string{"59436af63ebf98a39de763d56220edb90267debaa4180b864811c7a44ad35bc8"},
 					QueryRateLimit: gpconf.QueryRateLimitConfig{
 						MaxReqPerSecond: rate.Limit(10.5),
-						MaxBurst:        0,
-						MaxConcurrent:   0,
+						MaxBurst:        1,
+						MaxConcurrent:   1,
 					},
 				},
 				LocalBuffers: gpconf.LocalBufferConfig{
@@ -74,27 +76,22 @@ func TestNewRootCmd(t *testing.T) {
 			expectError:     false,
 		},
 		{
-			name: "database flags only",
+			name: "basic invocation (db path + autodetection)",
 			args: []string{
-				"--db.path=/var/goprobe",
-				"--db.encoder_type=gzip",
-				"--db.permissions=0644",
+				"--db.path=/var/lib/goprobe/db",
+				"--autodetection.enabled=true",
 			},
 			expectedCfg: &gpconf.Config{
 				DB: gpconf.DBConfig{
-					Path:        "/var/goprobe",
-					EncoderType: "gzip",
-					Permissions: 0644,
+					Path: "/var/lib/goprobe/db",
 				},
 				AutoDetection: gpconf.AutoDetectionConfig{
-					Enabled: false,
+					Enabled: true,
 					Exclude: []string{},
 				},
 				API: gpconf.APIConfig{
 					Keys: []string{},
 				},
-				SyslogFlows: false,
-				Interfaces:  make(gpconf.Ifaces),
 			},
 			expectedCfgFile: "",
 			expectError:     false,
@@ -108,11 +105,6 @@ db:
   path: /test/db/path
   encoder_type: lz4
   permissions: 0750
-autodetection:
-  enabled: true
-  exclude:
-  - lo
-  - docker0
 syslog_flows: true
 api:
   addr: 192.168.1.1:8888
@@ -120,6 +112,9 @@ api:
 interfaces:
   eth0:
     promisc: true
+    ring_buffer:
+      num_blocks: 8
+      block_size: 2048
 `,
 			expectedCfg: &gpconf.Config{
 				DB: gpconf.DBConfig{
@@ -128,8 +123,8 @@ interfaces:
 					Permissions: 0750,
 				},
 				AutoDetection: gpconf.AutoDetectionConfig{
-					Enabled: true,
-					Exclude: []string{"lo", "docker0"},
+					Enabled: false,
+					Exclude: []string{},
 				},
 				SyslogFlows: true,
 				API: gpconf.APIConfig{
@@ -148,6 +143,10 @@ interfaces:
 				Interfaces: gpconf.Ifaces{
 					"eth0": gpconf.CaptureConfig{
 						Promisc: true,
+						RingBuffer: &gpconf.RingBufferConfig{
+							NumBlocks: 8,
+							BlockSize: 2048,
+						},
 					},
 				},
 			},

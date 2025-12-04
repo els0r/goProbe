@@ -48,7 +48,7 @@ RUN setcap cap_net_raw=eip /bin/goprobe
 
 # De-escalate privileges and define entrypoint
 USER goprobe
-ENTRYPOINT /bin/goprobe -config "$CONFIG_PATH"
+ENTRYPOINT /bin/goprobe
 
 ###########################################################################
 
@@ -66,4 +66,4 @@ COPY --from=build /app/global-query /bin/global-query
 
 # De-escalate privileges and define entrypoint
 USER goprobe
-ENTRYPOINT /bin/global-query --config "$CONFIG_PATH" server
+ENTRYPOINT /bin/global-query server

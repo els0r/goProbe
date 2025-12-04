@@ -59,6 +59,10 @@ func newRootCmd(run runFunc) (*cobra.Command, error) {
 				return fmt.Errorf("failed to initialize configuration: %w", err)
 			}
 
+			if err := cfg.Validate(); err != nil {
+				return fmt.Errorf("invalid configuration: %w", err)
+			}
+
 			return initLogging()
 		},
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -195,7 +199,7 @@ func initConfig(cfg *gpconf.Config) error {
 
 func initLogging() error {
 	// Initialize logger
-	appVersion := version.Version()
+	appVersion := version.Short()
 	loggerOpts := []logging.Option{
 		logging.WithVersion(appVersion),
 	}
@@ -248,16 +252,6 @@ func run(ctx context.Context, cfg *gpconf.Config) error {
 		os.Exit(0)
 	}
 
-	// It doesn't make sense to monitor zero interfaces
-	if len(config.Interfaces) == 0 {
-		return fmt.Errorf("no interfaces have been specified in the configuration file")
-	}
-
-	// Limit the number of interfaces
-	if len(config.Interfaces) > capture.MaxIfaces {
-		return fmt.Errorf("cannot monitor more than %d interfaces", capture.MaxIfaces)
-	}
-
 	// We quit on encountering SIGTERM or SIGINT (see further down)
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	defer stop()
@@ -293,6 +287,18 @@ func run(ctx context.Context, cfg *gpconf.Config) error {
 
 	// Initialize constant monitoring / reloading of the config file
 	configMonitor.Start(ctx, captureManager.Update)
+
+	config = configMonitor.GetConfig()
+
+	// It doesn't make sense to monitor zero interfaces
+	if len(config.Interfaces) == 0 && !config.AutoDetection.Enabled {
+		return fmt.Errorf("no interfaces have been detected for monitoring")
+	}
+
+	// Limit the number of interfaces
+	if len(config.Interfaces) > capture.MaxIfaces {
+		return fmt.Errorf("cannot monitor more than %d interfaces", capture.MaxIfaces)
+	}
 
 	// configure api server
 	var apiServer *gpserver.Server
