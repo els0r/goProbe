@@ -35,13 +35,19 @@ func WithReloadInterval(interval time.Duration) MonitorOption {
 	}
 }
 
+// WithInitialConfig sets an initial configuration for the monitor. It will override the one read from `path` in NewMonitor
+func WithInitialConfig(cfg *Config) MonitorOption {
+	return func(m *Monitor) {
+		m.config = cfg
+	}
+}
+
 // NewMonitor instantiates a new config monitor and performs an initial read of the
 // provided config file
 func NewMonitor(path string, opts ...MonitorOption) (*Monitor, error) {
-	config, err := ParseFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load config file: %w", err)
-	}
+	var (
+		config *Config
+	)
 
 	obj := &Monitor{
 		path:           path,
@@ -87,9 +93,17 @@ func (m *Monitor) Start(ctx context.Context, fn CallbackFn) {
 
 // Reload triggers a config reload from disk and triggers the execution of the provided callback (if any)
 func (m *Monitor) Reload(ctx context.Context, fn CallbackFn) (enabled, updated, disabled capturetypes.IfaceChanges, err error) {
+	if m.path == "" {
+		return
+	}
+
 	cfg, perr := ParseFile(m.path)
 	if perr != nil {
-		err = fmt.Errorf("failed to reload config file: %w", err)
+		err = fmt.Errorf("failed to reload config file: %w", perr)
+		return
+	}
+	if err = cfg.Validate(); err != nil {
+		err = fmt.Errorf("reloaded config file is invalid: %w", err)
 		return
 	}
 

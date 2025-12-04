@@ -40,8 +40,7 @@ func TestValidate(t *testing.T) {
 						RingBuffer: &RingBufferConfig{BlockSize: 1024 * 1024, NumBlocks: 2},
 					},
 				},
-				Logging: LogConfig{Level: "debug", Encoding: "logfmt"},
-				API: &APIConfig{
+				API: APIConfig{
 					Addr: "unix:/var/run/goprobe.sock",
 					Keys: []string{"testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest"},
 				},
@@ -102,7 +101,7 @@ func TestValidate(t *testing.T) {
 			},
 			errorRingBufferNumBlocks,
 		},
-		{"missing API addr",
+		{"missing API addr (don't parse API if not set)",
 			&Config{
 				DB: DBConfig{Path: defaults.DBPath},
 				Interfaces: Ifaces{
@@ -110,12 +109,11 @@ func TestValidate(t *testing.T) {
 						RingBuffer: &RingBufferConfig{BlockSize: 1024 * 1024, NumBlocks: 2},
 					},
 				},
-				Logging: LogConfig{Level: "debug", Encoding: "logfmt"},
-				API: &APIConfig{
+				API: APIConfig{
 					Keys: []string{"testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest"},
 				},
 			},
-			errorNoAPIAddrSpecified,
+			nil,
 		},
 		{"invalid / missing rate limit continuous rate value",
 			&Config{
@@ -125,8 +123,7 @@ func TestValidate(t *testing.T) {
 						RingBuffer: &RingBufferConfig{BlockSize: 1024 * 1024, NumBlocks: 2},
 					},
 				},
-				Logging: LogConfig{Level: "debug", Encoding: "logfmt"},
-				API: &APIConfig{
+				API: APIConfig{
 					Addr: "unix:/var/run/goprobe.sock",
 					QueryRateLimit: QueryRateLimitConfig{
 						MaxBurst: 3,
@@ -143,8 +140,7 @@ func TestValidate(t *testing.T) {
 						RingBuffer: &RingBufferConfig{BlockSize: 1024 * 1024, NumBlocks: 2},
 					},
 				},
-				Logging: LogConfig{Level: "debug", Encoding: "logfmt"},
-				API: &APIConfig{
+				API: APIConfig{
 					Addr: "unix:/var/run/goprobe.sock",
 					QueryRateLimit: QueryRateLimitConfig{
 						MaxReqPerSecond: 1.0,
@@ -161,8 +157,7 @@ func TestValidate(t *testing.T) {
 						RingBuffer: &RingBufferConfig{BlockSize: 1024 * 1024, NumBlocks: 2},
 					},
 				},
-				Logging: LogConfig{Level: "debug", Encoding: "logfmt"},
-				API: &APIConfig{
+				API: APIConfig{
 					Addr: "unix:/var/run/goprobe.sock",
 					QueryRateLimit: QueryRateLimitConfig{
 						MaxConcurrent: -10,
@@ -195,40 +190,28 @@ func TestValidate(t *testing.T) {
 			},
 			nil,
 		},
-		{"autodetect interface validates configuration",
+		{"autodetection requires other interfaces to not be configured",
 			&Config{
 				DB: DBConfig{Path: defaults.DBPath},
-				Interfaces: Ifaces{
-					InterfaceAuto: CaptureConfig{
-						RingBuffer: &RingBufferConfig{BlockSize: 1024 * 1024, NumBlocks: 2},
-					},
-					"eth0": CaptureConfig{Disable: true},
+				AutoDetection: AutoDetectionConfig{
+					Enabled: true,
 				},
-			},
-			nil,
-		},
-		{"autodetect requires other interfaces to be disabled",
-			&Config{
-				DB: DBConfig{Path: defaults.DBPath},
 				Interfaces: Ifaces{
-					InterfaceAuto: CaptureConfig{
-						RingBuffer: &RingBufferConfig{BlockSize: 1024 * 1024, NumBlocks: 2},
-					},
 					"eth0": CaptureConfig{
 						RingBuffer: &RingBufferConfig{BlockSize: 1024 * 1024, NumBlocks: 2},
 					},
 				},
 			},
-			errorIfaceMustBeDisabledWithAuto,
+			errorInterfaceConfigPresentWithAutoDetectionEnabled,
 		},
-		{"autodetect missing ring buffer",
+		{"valid autodetection settings",
 			&Config{
 				DB: DBConfig{Path: defaults.DBPath},
-				Interfaces: Ifaces{
-					InterfaceAuto: CaptureConfig{},
+				AutoDetection: AutoDetectionConfig{
+					Enabled: true,
 				},
 			},
-			errorNoRingBufferConfig,
+			nil,
 		},
 		{"regex matcher interface valid",
 			&Config{
@@ -244,30 +227,16 @@ func TestValidate(t *testing.T) {
 		{"regex matcher requires disable when autodetect present",
 			&Config{
 				DB: DBConfig{Path: defaults.DBPath},
+				AutoDetection: AutoDetectionConfig{
+					Enabled: true,
+				},
 				Interfaces: Ifaces{
-					InterfaceAuto: CaptureConfig{
-						RingBuffer: &RingBufferConfig{BlockSize: 1024 * 1024, NumBlocks: 2},
-					},
 					"/eth[0-9]/": CaptureConfig{
 						RingBuffer: &RingBufferConfig{BlockSize: 1024 * 1024, NumBlocks: 2},
 					},
 				},
 			},
-			errorIfaceMustBeDisabledWithAuto,
-		},
-		{"regex matcher disabled with autodetect",
-			&Config{
-				DB: DBConfig{Path: defaults.DBPath},
-				Interfaces: Ifaces{
-					InterfaceAuto: CaptureConfig{
-						RingBuffer: &RingBufferConfig{BlockSize: 1024 * 1024, NumBlocks: 2},
-					},
-					"/eth[0-9]/": CaptureConfig{
-						Disable: true,
-					},
-				},
-			},
-			nil,
+			errorInterfaceConfigPresentWithAutoDetectionEnabled,
 		},
 	}
 
