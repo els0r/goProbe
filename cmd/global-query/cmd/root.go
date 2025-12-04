@@ -22,7 +22,7 @@ func Execute() error {
 		Short: helpBase,
 		Long:  helpBase,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			cmd.Help()
+			_ = cmd.Help()
 			return nil
 		},
 		SilenceErrors: true,
