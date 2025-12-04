@@ -21,6 +21,7 @@ COPY . .
 RUN nice -15 go build -tags jsoniter,slimcap_nomock -o goprobe -pgo=auto ./cmd/goProbe
 RUN nice -15 go build -tags jsoniter -o global-query -pgo=auto ./cmd/global-query
 RUN nice -15 go build -o goquery -pgo=auto ./cmd/goQuery
+RUN nice -15 go build -o gpctl -pgo=auto ./cmd/gpctl
 
 ###########################################################################
 
@@ -36,12 +37,13 @@ RUN set -ex \
 # Transfer binaries from build context
 COPY --from=build /app/goprobe /bin/goprobe
 COPY --from=build /app/goquery /bin/goquery
+COPY --from=build /app/gpctl /bin/gpctl
 
 # Set ownership
 RUN set -ex \
- && chmod 750 /bin/goprobe /bin/goquery \
- && chown goprobe /bin/goprobe /bin/goquery \
- && chgrp netdev /bin/goprobe /bin/goquery
+ && chmod 750 /bin/goprobe /bin/goquery /bin/gpctl \
+ && chown goprobe /bin/goprobe /bin/goquery /bin/gpctl \
+ && chgrp netdev /bin/goprobe /bin/goquery /bin/gpctl
 
 # Add inheritable NET_RAW capabilities to goprobe binary
 RUN setcap cap_net_raw=eip /bin/goprobe

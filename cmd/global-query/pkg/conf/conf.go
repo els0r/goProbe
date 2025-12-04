@@ -62,7 +62,9 @@ func RegisterFlags(cmd *cobra.Command) error {
 	pflags := cmd.PersistentFlags()
 
 	tracing.RegisterFlags(pflags)
-	pkgconf.RegisterFlags(cmd)
+	if err := pkgconf.RegisterFlags(cmd); err != nil {
+		return fmt.Errorf("failed to register flags: %w", err)
+	}
 
 	pflags.String(HostsResolverType, DefaultHostsResolverType, "resolver used for the hosts resolution query")
 	pflags.String(QuerierType, DefaultHostsQuerierType, "querier used to run queries")

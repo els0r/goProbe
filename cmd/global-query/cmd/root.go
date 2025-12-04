@@ -34,7 +34,7 @@ func Execute() error {
 	rootCmd.InitDefaultHelpFlag()
 
 	if err := conf.RegisterFlags(rootCmd); err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to register flags: %v\n", err)
+		fmt.Fprintf(os.Stderr, "failed to register flags: %v\n", err)
 		os.Exit(1)
 	}
 
