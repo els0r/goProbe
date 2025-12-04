@@ -42,4 +42,4 @@ volumes:
     driver_opts:
       type: 'none'
       o: 'bind'
-      device: '/tmp/goprobe_db'
+      device: '/tmp/goprobe_db' # NOTE: Directory must exist and have read/write permissions for UID:GID 1000:1000
