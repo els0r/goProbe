@@ -1,4 +1,6 @@
 ---
+db:
+  path: /tmp/goprobe_db
 interfaces:
   lo:
     promisc: false

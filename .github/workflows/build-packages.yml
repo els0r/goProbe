@@ -37,8 +37,6 @@ jobs:
           GOOS=linux GOARCH=amd64 go build -a -o gpctl -pgo=auto ./cmd/gpctl
           GOOS=linux GOARCH=amd64 go build -a -o goConvert ./cmd/goConvert
 
-
-
       - name: Deploy artifacts
         run: |
           mkdir -p .debpkg/usr/local/bin
@@ -206,7 +204,7 @@ jobs:
 
         - name: Build single OpenAPI 3.0 spec file for all documented APIs
           run: |
-            go run ./cmd/goProbe/goProbe.go -config .buildconfig/goprobe.yaml -openapi.spec-outfile ./goprobe_${{ env.RELEASE_VERSION }}_openapi.yaml
+            go run ./cmd/goProbe/main.go --config .buildconfig/goprobe.yaml --openapi.spec-outfile ./goprobe_${{ env.RELEASE_VERSION }}_openapi.yaml
             go run ./cmd/global-query/main.go --config .buildconfig/global-query.yaml server --openapi.spec-outfile ./global-query_${{ env.RELEASE_VERSION }}_openapi.yaml
 
         - name: Store artifacts
