@@ -172,7 +172,7 @@ interfaces:
 				})
 
 				configPath = filepath.Join(tempDir, tt.configFile)
-				err = os.WriteFile(configPath, []byte(tt.configContent), 0644)
+				err = os.WriteFile(configPath, []byte(tt.configContent), 0600)
 				require.NoError(t, err)
 
 				// Add config flag to args
@@ -183,7 +183,7 @@ interfaces:
 			var capturedCfg *gpconf.Config
 			runFuncCalled := false
 
-			testRunFunc := func(ctx context.Context, cfg *gpconf.Config) error {
+			testRunFunc := func(_ context.Context, cfg *gpconf.Config) error {
 				runFuncCalled = true
 				capturedCfg = cfg
 				return nil

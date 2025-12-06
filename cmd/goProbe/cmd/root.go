@@ -32,6 +32,7 @@ var (
 	defaultRequestDurationHistogramBins = []float64{0.01, 0.05, 0.1, 0.25, 1, 5, 10, 30, 60, 300}
 )
 
+// Execute is the main entry point for the goProbe command line application
 func Execute() error {
 	rootCmd, err := newRootCmd(run)
 	if err != nil {
@@ -53,7 +54,7 @@ func newRootCmd(run runFunc) (*cobra.Command, error) {
 	rootCmd := &cobra.Command{
 		Use:   "goProbe",
 		Short: "goProbe is a network traffic metadata capture tool",
-		PreRunE: func(cmd *cobra.Command, args []string) error {
+		PreRunE: func(*cobra.Command, []string) error {
 			err := initConfig(cfg)
 			if err != nil {
 				return fmt.Errorf("failed to initialize configuration: %w", err)
@@ -115,7 +116,9 @@ func registerFlags(cmd *cobra.Command, cfg *gpconf.Config) error {
 
 	pflags := cmd.PersistentFlags()
 
-	conf.RegisterFlags(cmd)
+	if err := conf.RegisterFlags(cmd); err != nil {
+		return fmt.Errorf("failed to register common flags: %w", err)
+	}
 
 	// NOTE: this is a breaking change compared to the previous flag parsing implementation
 	// needs a deprecation notice for 4.2
@@ -181,7 +184,7 @@ func initConfig(cfg *gpconf.Config) error {
 	// Unmarshal the entire config from viper (includes config file, flags, and env vars)
 	err := viper.Unmarshal(cfg)
 	if err != nil {
-		return fmt.Errorf("failed to parse configuration: %v", err)
+		return fmt.Errorf("failed to parse configuration: %w", err)
 	}
 
 	// Type conversions for types that viper can't unmarshal directly
@@ -267,7 +270,7 @@ func run(ctx context.Context, cfg *gpconf.Config) error {
 	// Create DB directory if it doesn't exist already.
 	// #nosec G301
 	if err := os.MkdirAll(filepath.Clean(config.DB.Path), 0755); err != nil {
-		return fmt.Errorf("failed to create database directory: %v", err)
+		return fmt.Errorf("failed to create database directory: %w", err)
 	}
 
 	var cmOpts []capture.ManagerOption
@@ -357,7 +360,7 @@ func run(ctx context.Context, cfg *gpconf.Config) error {
 		// but maybe there are ways to clean it up (not urgent, just a bit "unclean")
 		err := apiServer.Shutdown(fallbackCtx)
 		if err != nil {
-			return fmt.Errorf("forced shut down of goProbe API server: %v", err)
+			return fmt.Errorf("forced shut down of goProbe API server: %w", err)
 		}
 	}
 
