@@ -18,6 +18,7 @@ RUN go mod download
 COPY . .
 
 # Build all binaries
+RUN cd ./pkg/version && go generate && cd -
 RUN nice -15 go build -tags jsoniter,slimcap_nomock -o goprobe -pgo=auto ./cmd/goProbe
 RUN nice -15 go build -tags jsoniter -o global-query -pgo=auto ./cmd/global-query
 RUN nice -15 go build -o goquery -pgo=auto ./cmd/goQuery

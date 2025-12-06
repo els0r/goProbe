@@ -10,14 +10,7 @@ import (
 )
 
 func TestAutodetectIfaces(t *testing.T) {
-	cm := &Manager{
-		autoDetectionEnabled: true,
-		autoDetectionExclusionSet: map[string]struct{}{
-			"eth2": {},
-			"eth0": {},
-			"enp5": {},
-		},
-	}
+	cm := &Manager{}
 
 	defaultCfg := config.DefaultCaptureConfig()
 
@@ -28,17 +21,88 @@ func TestAutodetectIfaces(t *testing.T) {
 		&link.Link{Name: "enp5"},
 	}
 
-	originalHostLinks := hostLinks
-	hostLinks = func(...string) (link.Links, error) {
-		return stubLinks, nil
+	var tests = []struct {
+		name     string
+		cfg      config.AutoDetectionConfig
+		expected config.Ifaces
+	}{
+		{
+			name: "autodetection enabled with direct exclusions",
+			cfg: config.AutoDetectionConfig{
+				Enabled: true,
+				Exclude: []config.IfaceName{"eth2", "eth0", "enp5"},
+			},
+			expected: config.Ifaces{"eth1": defaultCfg},
+		},
+		{
+			name: "autodetection enabled with regex exclusions",
+			cfg: config.AutoDetectionConfig{
+				Enabled: true,
+				Exclude: []config.IfaceName{"/^eth[02]$/", "/^enp5$/"},
+			},
+			expected: config.Ifaces{"eth1": defaultCfg},
+		},
+		{
+			name: "autodetection enabled with mixed exclusions",
+			cfg: config.AutoDetectionConfig{
+				Enabled: true,
+				Exclude: []config.IfaceName{"eth0", "/^eth2$/", "enp5"},
+			},
+			expected: config.Ifaces{"eth1": defaultCfg},
+		},
+		{
+			name: "autodetection enabled with no exclusions",
+			cfg: config.AutoDetectionConfig{
+				Enabled: true,
+				Exclude: []config.IfaceName{},
+			},
+			expected: config.Ifaces{
+				"eth0": defaultCfg,
+				"eth1": defaultCfg,
+				"eth2": defaultCfg,
+				"enp5": defaultCfg,
+			},
+		},
+		{
+			name: "autodetection enabled with wildcard regex exclusion",
+			cfg: config.AutoDetectionConfig{
+				Enabled: true,
+				Exclude: []config.IfaceName{"/^eth[0-9]+$/"},
+			},
+			expected: config.Ifaces{"enp5": defaultCfg},
+		},
+		{
+			name: "autodetection disabled",
+			cfg: config.AutoDetectionConfig{
+				Enabled: false,
+				Exclude: []config.IfaceName{"eth0"},
+			},
+			expected: config.Ifaces{},
+		},
+		{
+			name: "autodetection enabled - config validation",
+			cfg: config.AutoDetectionConfig{
+				Enabled: true,
+				Exclude: []config.IfaceName{"eth0", "eth2"},
+			},
+			expected: config.Ifaces{
+				"eth1": {
+					RingBuffer: config.DefaultCaptureConfig().RingBuffer,
+				},
+				"enp5": {
+					RingBuffer: config.DefaultCaptureConfig().RingBuffer,
+				},
+			},
+		},
 	}
-	t.Cleanup(func() { hostLinks = originalHostLinks })
 
-	detected, err := cm.autodetectIfaces(stubLinks, defaultCfg)
-	require.NoError(t, err)
-
-	expected := config.Ifaces{"eth1": defaultCfg}
-	assert.Equal(t, expected, detected)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			detected, err := cm.autodetectIfaces(stubLinks, test.cfg)
+			require.NoError(t, err)
+			assert.Equal(t, test.expected, detected)
+		})
+	}
 }
 
 func TestFilterMatchingIfaces(t *testing.T) {

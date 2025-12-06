@@ -23,7 +23,7 @@ type Monitor struct {
 }
 
 // CallbackFn denotes a function to be called upon successful reload of the configuration
-type CallbackFn func(context.Context, Ifaces) (enabled, updated, disabled capturetypes.IfaceChanges, err error)
+type CallbackFn func(context.Context, *Config) (enabled, updated, disabled capturetypes.IfaceChanges, err error)
 
 // MonitorOption denotes a functional option for a config monitor
 type MonitorOption func(*Monitor)
@@ -126,7 +126,7 @@ func (m *Monitor) Apply(ctx context.Context, fn CallbackFn) (enabled, updated, d
 		return
 	}
 
-	if enabled, updated, disabled, err = fn(ctx, m.config.Interfaces); err != nil {
+	if enabled, updated, disabled, err = fn(ctx, m.config); err != nil {
 		err = fmt.Errorf("failed to execute config reload callback function: %w", err)
 		return
 	}

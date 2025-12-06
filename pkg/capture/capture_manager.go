@@ -34,9 +34,6 @@ type Manager struct {
 
 	lastAppliedConfig config.Ifaces
 
-	autoDetectionEnabled      bool
-	autoDetectionExclusionSet map[string]struct{}
-
 	lastRotation time.Time
 	startedAt    time.Time
 
@@ -66,11 +63,6 @@ func InitManager(ctx context.Context, config *config.Config, opts ...ManagerOpti
 
 	// Initialize the CaptureManager
 	captureManager := NewManager(writeoutHandler, opts...)
-	captureManager.autoDetectionEnabled = config.AutoDetection.Enabled
-	captureManager.autoDetectionExclusionSet = make(map[string]struct{})
-	for _, exclude := range config.AutoDetection.Exclude {
-		captureManager.autoDetectionExclusionSet[exclude] = struct{}{}
-	}
 
 	// Initialize local buffer
 	if err := captureManager.setLocalBuffers(); err != nil {
@@ -79,7 +71,7 @@ func InitManager(ctx context.Context, config *config.Config, opts ...ManagerOpti
 
 	// Update (i.e. start) all capture routines (implicitly by reloading all configurations) and schedule
 	// DB writeouts
-	_, _, _, err = captureManager.Update(ctx, config.Interfaces)
+	_, _, _, err = captureManager.Update(ctx, config)
 	if err != nil {
 		return nil, fmt.Errorf("initial manager update failed: %w", err)
 	}
@@ -308,29 +300,37 @@ func (cm *Manager) Status(ctx context.Context, ifaces ...string) (statusmap capt
 }
 
 // Update the configuration for all (or a set of) interfaces
-func (cm *Manager) Update(ctx context.Context, ifaces config.Ifaces) (enabled, updated, disabled capturetypes.IfaceChanges, err error) {
+func (cm *Manager) Update(ctx context.Context, cfg *config.Config) (enabled, updated, disabled capturetypes.IfaceChanges, err error) {
 	allLinks, err := hostLinks()
 	if err != nil {
 		err = fmt.Errorf("failed to get host links: %w", err)
 		return
 	}
 
+	ifaces := cfg.Interfaces
+
 	// Autodetect interfaces if required
-	if cm.autoDetectionEnabled {
-		if ifaces, err = cm.autodetectIfaces(allLinks, config.DefaultCaptureConfig()); err != nil {
+	if cfg.AutoDetection.Enabled {
+
+		// Validate the interface autodetectionconfiguration
+		if err = cfg.AutoDetection.Validate(); err != nil {
 			return
 		}
+
+		if ifaces, err = cm.autodetectIfaces(allLinks, cfg.AutoDetection); err != nil {
+			return
+		}
+
 		return cm.updateSelected(ctx, ifaces)
 	}
 
-	// Validate the config before doing anything else
-	err = ifaces.Validate()
-	if err != nil {
+	// Validate the interface configuration
+	if err = cfg.Interfaces.Validate(); err != nil {
 		return
 	}
 
 	// Extract any regexp matchers from the provided configuration
-	matcher, hasRe, err := ifaces.Matcher()
+	matcher, hasRe, err := cfg.Interfaces.Matcher()
 	if err != nil {
 		return
 	}
@@ -465,28 +465,36 @@ func (cm *Manager) update(ctx context.Context, ifaces config.Ifaces, enable, dis
 	rg.Wait()
 }
 
-func (cm *Manager) autodetectIfaces(allLinks link.Links, defaultConfig config.CaptureConfig) (config.Ifaces, error) {
+func (cm *Manager) autodetectIfaces(allLinks link.Links, cfg config.AutoDetectionConfig) (config.Ifaces, error) {
 	detectedIfaces := config.Ifaces{}
-	if !cm.autoDetectionEnabled {
+	if !cfg.Enabled {
 		return detectedIfaces, nil
 	}
 
+	// Extract any exclusion matchers from the provided configuration
+	matcher, _, err := cfg.ExcludeMatcher()
+	if err != nil {
+		return detectedIfaces, err
+	}
+
 	for _, l := range allLinks {
-		if _, excluded := cm.autoDetectionExclusionSet[l.Name]; excluded {
+		if _, excluded := matcher.FindMatch(l.Name); excluded {
 			continue
 		}
 
 		// Otherwise, add it to the list of interfaces to capture on
-		detectedIfaces[l.Name] = defaultConfig
+		detectedIfaces[l.Name] = config.DefaultCaptureConfig()
 	}
+
 	return detectedIfaces, nil
 }
 
 func (cm *Manager) filterMatchingIfaces(allLinks link.Links, matcher *config.IfaceMatcher) (config.Ifaces, error) {
 	matchingIfaces := config.Ifaces{}
 	for _, l := range allLinks {
+
 		// If the interface explicitly or via regexp exists in the provided configuration, add it to the list
-		if cfg, exists := matcher.FindCaptureConfig(l.Name); exists {
+		if cfg, exists := matcher.FindMatch(l.Name); exists {
 			matchingIfaces[l.Name] = cfg
 		}
 	}
