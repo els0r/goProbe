@@ -239,7 +239,7 @@ func run(ctx context.Context, cfg *gpconf.Config) error {
 	config := configMonitor.GetConfig()
 
 	logger := logging.FromContext(ctx)
-	logger.Info("loaded configuration")
+	logger.Infof("loaded configuration (interface autodetection: %v)", config.AutoDetection.Enabled)
 
 	// write spec and exit
 	openAPIfile := viper.GetString(flagOpenAPISpecOutfile)
@@ -282,7 +282,7 @@ func run(ctx context.Context, cfg *gpconf.Config) error {
 	// None of the initialization steps failed.
 	captureManager, err := capture.InitManager(ctx, config, cmOpts...)
 	if err != nil {
-		return fmt.Errorf("failed to initialize capture manager: %v", err)
+		return fmt.Errorf("failed to initialize capture manager: %w", err)
 	}
 
 	// Initialize constant monitoring / reloading of the config file

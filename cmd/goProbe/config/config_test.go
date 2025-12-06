@@ -238,6 +238,79 @@ func TestValidate(t *testing.T) {
 			},
 			errorInterfaceConfigPresentWithAutoDetectionEnabled,
 		},
+		{"autodetection with valid default config",
+			&Config{
+				DB: DBConfig{Path: defaults.DBPath},
+				AutoDetection: AutoDetectionConfig{
+					Enabled: true,
+				},
+			},
+			nil,
+		},
+		{"autodetection with invalid default config - no ring buffer",
+			&Config{
+				DB: DBConfig{Path: defaults.DBPath},
+				AutoDetection: AutoDetectionConfig{
+					Enabled: true,
+				},
+			},
+			nil,
+		},
+		{"autodetection with valid exclude list",
+			&Config{
+				DB: DBConfig{Path: defaults.DBPath},
+				AutoDetection: AutoDetectionConfig{
+					Enabled: true,
+					Exclude: []string{"lo", "docker0", "veth0"},
+				},
+			},
+			nil,
+		},
+		{"autodetection with valid regex exclude pattern",
+			&Config{
+				DB: DBConfig{Path: defaults.DBPath},
+				AutoDetection: AutoDetectionConfig{
+					Enabled: true,
+					Exclude: []string{"/^lo$/", "/^docker[0-9]+$/", "/^veth[a-f0-9]+$/"},
+				},
+			},
+			nil,
+		},
+		{"autodetection with mixed exclude patterns",
+			&Config{
+				DB: DBConfig{Path: defaults.DBPath},
+				AutoDetection: AutoDetectionConfig{
+					Enabled: true,
+					Exclude: []string{"lo", "/^docker[0-9]+$/", "veth0", "/^br-[a-f0-9]+$/"},
+				},
+			},
+			nil,
+		},
+		{"autodetection disabled with invalid config should pass",
+			&Config{
+				DB: DBConfig{Path: defaults.DBPath},
+				AutoDetection: AutoDetectionConfig{
+					Enabled: false,
+					Exclude: []string{"/(?P<invalid>/"}, // Invalid regex, but okay since disabled
+				},
+				Interfaces: Ifaces{
+					"eth0": CaptureConfig{
+						RingBuffer: &RingBufferConfig{BlockSize: 1024 * 1024, NumBlocks: 2},
+					},
+				},
+			},
+			nil,
+		},
+		{"autodetection with empty exclude list",
+			&Config{
+				DB: DBConfig{Path: defaults.DBPath},
+				AutoDetection: AutoDetectionConfig{
+					Enabled: true,
+					Exclude: []string{},
+				},
+			},
+			nil,
+		},
 	}
 
 	// run tests
@@ -248,6 +321,70 @@ func TestValidate(t *testing.T) {
 			err := test.input.Validate()
 			t.Log(test.input)
 			assert.ErrorIs(t, err, test.expectedErr)
+		})
+	}
+}
+
+func TestValidateAutoDetectionRegexErrors(t *testing.T) {
+	var tests = []struct {
+		name              string
+		input             *Config
+		expectedErrString string
+	}{
+		{"autodetection with invalid regex exclude pattern - unclosed bracket",
+			&Config{
+				DB: DBConfig{Path: defaults.DBPath},
+				AutoDetection: AutoDetectionConfig{
+					Enabled: true,
+					Exclude: []string{"/^eth[0-9$/"},
+				},
+			},
+			"invalid regexp exclusion pattern",
+		},
+		{"autodetection with invalid regex exclude pattern - bad syntax",
+			&Config{
+				DB: DBConfig{Path: defaults.DBPath},
+				AutoDetection: AutoDetectionConfig{
+					Enabled: true,
+					Exclude: []string{"/(?P<invalid>/"},
+				},
+			},
+			"invalid regexp exclusion pattern",
+		},
+		{"autodetection with invalid regex - missing closing paren",
+			&Config{
+				DB: DBConfig{Path: defaults.DBPath},
+				AutoDetection: AutoDetectionConfig{
+					Enabled: true,
+					Exclude: []string{"/^(eth[0-9]+$/"},
+				},
+			},
+			"invalid regexp exclusion pattern",
+		},
+		{"autodetection with invalid regex - empty pattern",
+			&Config{
+				DB: DBConfig{Path: defaults.DBPath},
+				AutoDetection: AutoDetectionConfig{
+					Enabled: true,
+					Exclude: []string{"//"},
+				},
+			},
+			"", // Empty regex is actually valid
+		},
+	}
+
+	// run tests
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			err := test.input.Validate()
+			t.Log(test.input)
+			if test.expectedErrString == "" {
+				assert.NoError(t, err)
+			} else {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), test.expectedErrString)
+			}
 		})
 	}
 }
@@ -405,7 +542,6 @@ func TestHasRegexpMatching(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			matcher, found, err := test.ifaces.Matcher()
 			if test.expectedErrContain != "" {
@@ -427,6 +563,269 @@ func TestHasRegexpMatching(t *testing.T) {
 			} else {
 				assert.NotNil(t, matcher)
 				assert.Equal(t, 0, len(matcher.regexpMatchers))
+			}
+		})
+	}
+}
+
+func TestIfaceMatcherFindMatch(t *testing.T) {
+	// Define test configs
+	validConfig := CaptureConfig{
+		RingBuffer: &RingBufferConfig{BlockSize: 1024 * 1024, NumBlocks: 2},
+		Promisc:    true,
+	}
+
+	anotherConfig := CaptureConfig{
+		RingBuffer:  &RingBufferConfig{BlockSize: 2048 * 1024, NumBlocks: 4},
+		IgnoreVLANs: true,
+	}
+
+	var tests = []struct {
+		name           string
+		ifaces         Ifaces
+		searchIface    string
+		expectedFound  bool
+		expectedConfig CaptureConfig
+	}{
+		// Positive cases - matching with valid configs
+		{
+			name: "direct match - single interface",
+			ifaces: Ifaces{
+				"eth0": validConfig,
+			},
+			searchIface:    "eth0",
+			expectedFound:  true,
+			expectedConfig: validConfig,
+		},
+		{
+			name: "direct match - multiple interfaces",
+			ifaces: Ifaces{
+				"eth0": validConfig,
+				"eth1": anotherConfig,
+			},
+			searchIface:    "eth1",
+			expectedFound:  true,
+			expectedConfig: anotherConfig,
+		},
+		{
+			name: "regex match - simple pattern",
+			ifaces: Ifaces{
+				"/^eth[0-9]+$/": validConfig,
+			},
+			searchIface:    "eth0",
+			expectedFound:  true,
+			expectedConfig: validConfig,
+		},
+		{
+			name: "regex match - complex pattern",
+			ifaces: Ifaces{
+				"/^(eth|ens)[0-9]+$/": validConfig,
+			},
+			searchIface:    "ens33",
+			expectedFound:  true,
+			expectedConfig: validConfig,
+		},
+		{
+			name: "regex match - multiple patterns, first matches",
+			ifaces: Ifaces{
+				"/^eth[0-9]+$/":  validConfig,
+				"/^wlan[0-9]+$/": anotherConfig,
+			},
+			searchIface:    "eth5",
+			expectedFound:  true,
+			expectedConfig: validConfig,
+		},
+		{
+			name: "regex match - multiple patterns, second matches",
+			ifaces: Ifaces{
+				"/^eth[0-9]+$/":  validConfig,
+				"/^wlan[0-9]+$/": anotherConfig,
+			},
+			searchIface:    "wlan0",
+			expectedFound:  true,
+			expectedConfig: anotherConfig,
+		},
+		{
+			name: "direct match takes precedence over regex",
+			ifaces: Ifaces{
+				"eth0":          anotherConfig,
+				"/^eth[0-9]+$/": validConfig,
+			},
+			searchIface:    "eth0",
+			expectedFound:  true,
+			expectedConfig: anotherConfig, // Direct match wins
+		},
+		{
+			name: "mixed direct and regex - regex matches",
+			ifaces: Ifaces{
+				"eth0":          validConfig,
+				"/^eth[0-9]+$/": anotherConfig,
+			},
+			searchIface:    "eth5",
+			expectedFound:  true,
+			expectedConfig: anotherConfig,
+		},
+		// Negative cases - no match
+		{
+			name: "no match - interface not found",
+			ifaces: Ifaces{
+				"eth0": validConfig,
+			},
+			searchIface:    "eth1",
+			expectedFound:  false,
+			expectedConfig: CaptureConfig{},
+		},
+		{
+			name: "no match - regex doesn't match",
+			ifaces: Ifaces{
+				"/^eth[0-9]+$/": validConfig,
+			},
+			searchIface:    "wlan0",
+			expectedFound:  false,
+			expectedConfig: CaptureConfig{},
+		},
+		{
+			name: "no match - multiple regexes, none match",
+			ifaces: Ifaces{
+				"/^eth[0-9]+$/":  validConfig,
+				"/^wlan[0-9]+$/": anotherConfig,
+			},
+			searchIface:    "docker0",
+			expectedFound:  false,
+			expectedConfig: CaptureConfig{},
+		},
+		{
+			name:           "no match - empty matcher",
+			ifaces:         Ifaces{},
+			searchIface:    "eth0",
+			expectedFound:  false,
+			expectedConfig: CaptureConfig{},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			matcher, _, err := test.ifaces.Matcher()
+			assert.NoError(t, err)
+			assert.NotNil(t, matcher)
+
+			cfg, found := matcher.FindMatch(test.searchIface)
+			assert.Equal(t, test.expectedFound, found)
+
+			if test.expectedFound {
+				// Verify the returned config matches expected
+				assert.Equal(t, test.expectedConfig.Promisc, cfg.Promisc)
+				assert.Equal(t, test.expectedConfig.IgnoreVLANs, cfg.IgnoreVLANs)
+				assert.Equal(t, test.expectedConfig.Disable, cfg.Disable)
+				if test.expectedConfig.RingBuffer != nil {
+					assert.NotNil(t, cfg.RingBuffer)
+					assert.Equal(t, test.expectedConfig.RingBuffer.BlockSize, cfg.RingBuffer.BlockSize)
+					assert.Equal(t, test.expectedConfig.RingBuffer.NumBlocks, cfg.RingBuffer.NumBlocks)
+				}
+			} else {
+				// Verify empty config is returned
+				assert.Equal(t, CaptureConfig{}, cfg)
+			}
+		})
+	}
+}
+
+func TestAutoDetectionExcludeMatcherFindMatch(t *testing.T) {
+	// Test FindMatch for exclusion matchers (negative case - match exists but config is empty)
+
+	var tests = []struct {
+		name          string
+		autoDetection AutoDetectionConfig
+		searchIface   string
+		expectedFound bool
+	}{
+		// Exclusion cases - interface matches but config should be empty
+		{
+			name: "exclude direct match",
+			autoDetection: AutoDetectionConfig{
+				Enabled: true,
+				Exclude: []IfaceName{"lo", "docker0"},
+			},
+			searchIface:   "lo",
+			expectedFound: true,
+		},
+		{
+			name: "exclude regex match",
+			autoDetection: AutoDetectionConfig{
+				Enabled: true,
+				Exclude: []IfaceName{"/^veth[a-f0-9]+$/", "/^br-[a-f0-9]+$/"},
+			},
+			searchIface:   "veth1a2b3c",
+			expectedFound: true,
+		},
+		{
+			name: "exclude mixed - direct match",
+			autoDetection: AutoDetectionConfig{
+				Enabled: true,
+				Exclude: []IfaceName{"lo", "/^docker[0-9]+$/", "virbr0"},
+			},
+			searchIface:   "virbr0",
+			expectedFound: true,
+		},
+		{
+			name: "exclude mixed - regex match",
+			autoDetection: AutoDetectionConfig{
+				Enabled: true,
+				Exclude: []IfaceName{"lo", "/^docker[0-9]+$/", "virbr0"},
+			},
+			searchIface:   "docker0",
+			expectedFound: true,
+		},
+		// Non-exclusion cases - interface doesn't match exclusion list
+		{
+			name: "not excluded - no match",
+			autoDetection: AutoDetectionConfig{
+				Enabled: true,
+				Exclude: []IfaceName{"lo", "docker0"},
+			},
+			searchIface:   "eth0",
+			expectedFound: false,
+		},
+		{
+			name: "not excluded - regex no match",
+			autoDetection: AutoDetectionConfig{
+				Enabled: true,
+				Exclude: []IfaceName{"/^veth[a-f0-9]+$/"},
+			},
+			searchIface:   "eth0",
+			expectedFound: false,
+		},
+		{
+			name: "empty exclude list",
+			autoDetection: AutoDetectionConfig{
+				Enabled: true,
+				Exclude: []IfaceName{},
+			},
+			searchIface:   "eth0",
+			expectedFound: false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			matcher, _, err := test.autoDetection.ExcludeMatcher()
+			assert.NoError(t, err)
+			assert.NotNil(t, matcher)
+
+			cfg, found := matcher.FindMatch(test.searchIface)
+			assert.Equal(t, test.expectedFound, found)
+
+			if test.expectedFound {
+				// For exclusion matchers, config should always be empty
+				assert.Equal(t, CaptureConfig{}, cfg)
+				assert.Nil(t, cfg.RingBuffer)
+				assert.False(t, cfg.Promisc)
+				assert.False(t, cfg.IgnoreVLANs)
+				assert.False(t, cfg.Disable)
+				assert.Empty(t, cfg.ExtraBPFFilters)
+			} else {
+				// No match means empty config
+				assert.Equal(t, CaptureConfig{}, cfg)
 			}
 		})
 	}

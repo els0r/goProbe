@@ -79,9 +79,9 @@ func runBenchmarkCaptureThroughput(t *testing.T, w io.Writer, runtime time.Durat
 		WithPermissions(goDB.DefaultPermissions)
 
 	captureManager := capture.NewManager(writeoutHandler, capture.WithSourceInitFn(fn))
-	_, _, _, err = captureManager.Update(ctx, config.Ifaces{
+	_, _, _, err = captureManager.Update(ctx, &config.Config{Interfaces: config.Ifaces{
 		"mock": defaultCaptureConfig,
-	})
+	}})
 	require.Nil(t, err)
 
 	go func() {

@@ -79,7 +79,7 @@ type CaptureConfig struct {
 	RingBuffer *RingBufferConfig `json:"ring_buffer" yaml:"ring_buffer" mapstructure:"ring_buffer" doc:"Kernel ring buffer configuration for interface"`
 	// ExtraBPFFilters: allows setting additional BPF filter instructions during capture
 	ExtraBPFFilters []bpf.RawInstruction `json:"extra_bpf_filters" yaml:"extra_bpf_filters" mapstructure:"extra_bpf_filters" doc:"Extra BPF filter instructions to be applied during capture"`
-	// Disable: explicitly disables capture on this interface (e.g. in conjunction with the `autodetect` option)
+	// Disable: explicitly disables capture on this interface
 	Disable bool `json:"disable" yaml:"disable" mapstructure:"disable" doc:"Explicitly disables capture on this interface" example:"true"`
 }
 
@@ -134,6 +134,54 @@ type AutoDetectionConfig struct {
 	Enabled bool `json:"enabled" yaml:"enabled" mapstructure:"enabled" doc:"Enables / disables auto-detection of interfaces" example:"true"`
 	// Exclude: a list of interface names to exclude from auto-detection
 	Exclude []IfaceName `json:"exclude" yaml:"exclude" mapstructure:"exclude" doc:"A list of interface names to exclude from auto-detection" example:"eth0,lo"`
+}
+
+// ExcludeMatcher creates an IfaceMatcher from the autodetection configuration (to be used for exclusions)
+func (a AutoDetectionConfig) ExcludeMatcher() (*IfaceMatcher, bool, error) {
+	matcher := IfaceMatcher{
+		ifaces:         make(map[IfaceName]CaptureConfig),
+		regexpMatchers: make(map[*regexp.Regexp]CaptureConfig),
+	}
+
+	for _, k := range a.Exclude {
+		if IsRegexpInterfaceMatcher(k) {
+			re, err := regexp.Compile(k[1 : len(k)-1])
+			if err != nil {
+				return nil, false, fmt.Errorf("invalid regexp interface matcher '%s': %w", k, err)
+			}
+
+			matcher.regexpMatchers[re] = CaptureConfig{}
+			continue
+		}
+
+		matcher.ifaces[k] = CaptureConfig{}
+	}
+
+	return &matcher, len(matcher.regexpMatchers) > 0, nil
+}
+
+// Validate validates the auto-detection configuration
+func (a AutoDetectionConfig) Validate() error {
+	return a.validate()
+}
+
+func (a AutoDetectionConfig) validate() error {
+	// If auto-detection is disabled, no validation needed
+	if !a.Enabled {
+		return nil
+	}
+
+	// Validate exclude patterns (especially regex patterns)
+	for _, exclude := range a.Exclude {
+		if IsRegexpInterfaceMatcher(exclude) {
+			_, err := regexp.Compile(exclude[1 : len(exclude)-1])
+			if err != nil {
+				return fmt.Errorf("invalid regexp exclusion pattern '%s': %w", exclude, err)
+			}
+		}
+	}
+
+	return nil
 }
 
 // LogConfig stores the logging configuration
@@ -301,7 +349,7 @@ func (i Ifaces) Validate() error {
 // Matcher creates an IfaceMatcher from the Ifaces configuration
 func (i Ifaces) Matcher() (*IfaceMatcher, bool, error) {
 	matcher := IfaceMatcher{
-		Ifaces:         i,
+		ifaces:         make(map[IfaceName]CaptureConfig),
 		regexpMatchers: make(map[*regexp.Regexp]CaptureConfig),
 	}
 
@@ -313,7 +361,10 @@ func (i Ifaces) Matcher() (*IfaceMatcher, bool, error) {
 			}
 
 			matcher.regexpMatchers[re] = i[k]
+			continue
 		}
+
+		matcher.ifaces[k] = i[k]
 	}
 
 	return &matcher, len(matcher.regexpMatchers) > 0, nil
@@ -321,16 +372,15 @@ func (i Ifaces) Matcher() (*IfaceMatcher, bool, error) {
 
 // IfaceMatcher stores the per-interface configuration (including regexp matchers)
 type IfaceMatcher struct {
-	Ifaces
-
+	ifaces         map[IfaceName]CaptureConfig
 	regexpMatchers map[*regexp.Regexp]CaptureConfig
 }
 
-// FindCaptureConfig attempts to find a matching interface configuration for the given interface name
-func (m *IfaceMatcher) FindCaptureConfig(iface string) (CaptureConfig, bool) {
+// FindMatch attempts to find a matching interface configuration for the given interface name
+func (m *IfaceMatcher) FindMatch(iface string) (CaptureConfig, bool) {
 
 	// first check for direct match
-	if cfg, exists := m.Ifaces[iface]; exists {
+	if cfg, exists := m.ifaces[iface]; exists {
 		return cfg, true
 	}
 
@@ -370,6 +420,7 @@ func (c *Config) Validate() error {
 		c.DB,
 		c.API,
 		c.LocalBuffers,
+		c.AutoDetection,
 	}
 
 	for _, section := range validators {

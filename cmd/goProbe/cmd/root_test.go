@@ -30,7 +30,7 @@ func TestNewRootCmd(t *testing.T) {
 				"--db.encoder_type=lz4",
 				"--db.permissions=0755",
 				"--autodetection.enabled=true",
-				"--autodetection.exclude=lo,docker0",
+				"--autodetection.exclude=lo,/docker.*/",
 				"--syslog_flows=true",
 				"--api.addr=127.0.0.1:8080",
 				"--api.metrics=true",
@@ -50,7 +50,7 @@ func TestNewRootCmd(t *testing.T) {
 				},
 				AutoDetection: gpconf.AutoDetectionConfig{
 					Enabled: true,
-					Exclude: []string{"lo", "docker0"},
+					Exclude: []string{"lo", "/docker.*/"},
 				},
 				SyslogFlows: true,
 				API: gpconf.APIConfig{
