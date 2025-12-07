@@ -144,17 +144,16 @@ func (a AutoDetectionConfig) ExcludeMatcher() (*IfaceMatcher, bool, error) {
 	}
 
 	for _, k := range a.Exclude {
-		if IsRegexpInterfaceMatcher(k) {
-			re, err := regexp.Compile(k[1 : len(k)-1])
-			if err != nil {
-				return nil, false, fmt.Errorf("invalid regexp interface matcher '%s': %w", k, err)
-			}
-
-			matcher.regexpMatchers[re] = CaptureConfig{}
+		if !IsRegexpInterfaceMatcher(k) {
+			matcher.ifaces[k] = CaptureConfig{}
 			continue
 		}
 
-		matcher.ifaces[k] = CaptureConfig{}
+		re, err := regexp.Compile(k[1 : len(k)-1])
+		if err != nil {
+			return nil, false, fmt.Errorf("invalid regexp interface matcher '%s': %w", k, err)
+		}
+		matcher.regexpMatchers[re] = CaptureConfig{}
 	}
 
 	return &matcher, len(matcher.regexpMatchers) > 0, nil
