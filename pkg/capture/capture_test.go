@@ -155,7 +155,7 @@ func testConcurrentMethodAccess(t *testing.T, nIfaces, nIterations int) {
 	go func() {
 		ctx := context.Background()
 		for i := 0; i < nIterations; i++ {
-			if _, _, _, err := captureManager.Update(ctx, ifaceConfigs); err != nil {
+			if _, _, _, err := captureManager.Update(ctx, &config.Config{Interfaces: ifaceConfigs}); err != nil {
 				atomic.AddUint64(&errCount, 1)
 			}
 		}
@@ -214,7 +214,7 @@ func setupInterfaces(t *testing.T, cfg config.CaptureConfig, nIfaces int) (*Mana
 		require.Nil(t, captureManager.setLocalBuffers())
 	}
 
-	_, _, _, err = captureManager.Update(context.Background(), ifaceConfigs)
+	_, _, _, err = captureManager.Update(context.Background(), &config.Config{Interfaces: ifaceConfigs})
 	require.Nil(t, err)
 
 	return captureManager, ifaceConfigs, testMockSrcs
