@@ -383,14 +383,20 @@ func (cm *Manager) updateSelected(ctx context.Context, ifaces config.Ifaces) (en
 
 	cm.update(ctx, ifaces, enable, disable)
 
-	logger.With(
-		"elapsed", time.Since(t0).Round(time.Millisecond).String(),
-		slog.Group("ifaces",
-			"added", enableIfaces,
-			"updated", updateIfaces,
-			"removed", disableIfaces,
-		),
-	).Info("updated interface configuration")
+	if len(enableIfaces) > 0 || len(updateIfaces) > 0 || len(disableIfaces) > 0 {
+		logger.With(
+			"elapsed", time.Since(t0).Round(time.Millisecond).String(),
+			slog.Group("ifaces",
+				"added", enableIfaces,
+				"updated", updateIfaces,
+				"removed", disableIfaces,
+			),
+		).Info("updated interface configuration")
+	} else {
+		logger.With(
+			"elapsed", time.Since(t0).Round(time.Millisecond).String(),
+		).Debug("no interface configuration changes detected")
+	}
 
 	return enableIfaces, updateIfaces, disableIfaces, nil
 }

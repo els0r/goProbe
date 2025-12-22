@@ -93,24 +93,15 @@ func (m *Monitor) Start(ctx context.Context, fn CallbackFn) {
 
 // Reload triggers a config reload from disk and triggers the execution of the provided callback (if any)
 func (m *Monitor) Reload(ctx context.Context, fn CallbackFn) (enabled, updated, disabled capturetypes.IfaceChanges, err error) {
-	if m.path == "" {
-		return
+
+	// If a config file was provided, reload it
+	if m.path != "" {
+		if err = m.reloadFromFile(ctx); err != nil {
+			return
+		}
 	}
 
-	cfg, perr := ParseFile(m.path)
-	if perr != nil {
-		err = fmt.Errorf("failed to reload config file: %w", perr)
-		return
-	}
-	if err = cfg.Validate(); err != nil {
-		err = fmt.Errorf("reloaded config file is invalid: %w", err)
-		return
-	}
-
-	m.PutConfig(cfg)
-
-	logging.FromContext(ctx).With("path", m.path).Debugf("config reloaded")
-
+	// Always apply configuration (in case the set of desired interfaces changed / doesn't match the current one)
 	if fn != nil {
 		return m.Apply(ctx, fn)
 	}
@@ -143,7 +134,6 @@ func (m *Monitor) Apply(ctx context.Context, fn CallbackFn) (enabled, updated, d
 ////////////////////////////////////////////////////////////////////////
 
 func (m *Monitor) reloadPeriodically(ctx context.Context, fn CallbackFn) {
-
 	logger := logging.FromContext(ctx)
 	ticker := time.NewTicker(m.reloadInterval)
 	logger.With("interval", m.reloadInterval.Round(1*time.Second)).Info("starting config monitor")
@@ -160,4 +150,19 @@ func (m *Monitor) reloadPeriodically(ctx context.Context, fn CallbackFn) {
 			}
 		}
 	}
+}
+
+func (m *Monitor) reloadFromFile(ctx context.Context) error {
+	cfg, err := ParseFile(m.path)
+	if err != nil {
+		return fmt.Errorf("failed to reload config file: %w", err)
+	}
+	if err := cfg.Validate(); err != nil {
+		return fmt.Errorf("reloaded config file is invalid: %w", err)
+	}
+
+	m.PutConfig(cfg)
+
+	logging.FromContext(ctx).With("path", m.path).Debug("config reloaded from file")
+	return nil
 }

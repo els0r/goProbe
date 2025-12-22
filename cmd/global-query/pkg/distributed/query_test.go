@@ -288,10 +288,12 @@ func TestRunStreaming_Keepalives_AreEmitted(t *testing.T) {
 	// Note: exact counts are timing-sensitive and can be flaky across environments,
 	// so we only verify presence rather than a specific minimum beyond 1.
 	keepaliveCount := 0
+	sender.mu.Lock()
 	for _, ev := range sender.events {
 		if ev.kind == "keepalive" {
 			keepaliveCount++
 		}
 	}
 	require.GreaterOrEqual(t, keepaliveCount, 1, sender.events)
+	sender.mu.Unlock()
 }
