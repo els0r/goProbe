@@ -1,0 +1,53 @@
+{
+	# We're behind an Ingress; don't manage TLS here
+	auto_https off
+	admin off
+}
+
+:5137 {
+	root * /opt/app/www
+	encode zstd gzip
+
+	# Security headers (tune CSP to your domains!)
+	header {
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy no-referrer-when-downgrade
+		Cross-Origin-Opener-Policy same-origin
+		Cross-Origin-Resource-Policy same-origin
+		Cross-Origin-Embedder-Policy require-corp
+		Permissions-Policy "geolocation=(), microphone=(), camera=()"
+		Content-Security-Policy "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-eval'; connect-src 'self' http: https:; frame-ancestors 'none';"
+	}
+
+	# Cache policies
+	@assets {
+		path *.js *.css *.woff *.woff2 *.ttf *.otf *.eot
+	}
+	header @assets Cache-Control "public, max-age=31536000, immutable"
+
+	@images {
+		path *.png *.jpg *.jpeg *.gif *.webp *.svg
+	}
+	header @images Cache-Control "public, max-age=604800"
+
+	# runtime env.js (no-store) served from a writable volume
+	@envjs path /env.js
+	header @envjs Cache-Control "no-store"
+	header @envjs Content-Type "application/javascript"
+	route @envjs {
+		file_server {
+			root /var/run/env
+		}
+	}
+
+	# Serve static files first
+	file_server
+
+	# SPA fallback: if request isn't an existing file AND not env.js, serve index.html
+	@notFile {
+		not file
+		not path /env.js
+	}
+	rewrite @notFile /index.html
+}

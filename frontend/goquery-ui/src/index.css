@@ -1,0 +1,40 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  @apply bg-surface text-gray-200 antialiased font-sans;
+}
+
+/* custom utility components */
+.btn {
+  @apply inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium bg-surface-100 hover:bg-surface-200 text-gray-200/90 hover:text-white ring-1 ring-white/10 shadow-sm transition-colors;
+}
+.btn-primary {
+  @apply bg-primary-500 hover:bg-primary-400 text-white;
+}
+.btn-danger {
+  @apply bg-red-500 hover:bg-red-400 text-white ring-1 ring-red-500/30;
+}
+.card {
+  @apply rounded-lg bg-surface-100 ring-1 ring-white/10 shadow-sm;
+}
+.input {
+  @apply bg-surface-200/50 rounded-md px-2 py-1.5 text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500/50 focus:ring-offset-0 border border-white/10;
+}
+.badge {
+  @apply inline-flex items-center rounded-md border border-white/10 bg-surface-200/40 px-1.5 py-0.5 text-[11px] font-medium text-gray-300;
+}
+.table-header {
+  @apply bg-surface-100/60 backdrop-blur sticky top-0 z-10;
+}
+.scroll-thin {
+  scrollbar-width: thin;
+}
+.scroll-thin::-webkit-scrollbar { width: 8px; height: 8px; }
+.scroll-thin::-webkit-scrollbar-track { background: transparent; }
+.scroll-thin::-webkit-scrollbar-thumb { background-color: #242a32; border-radius: 4px; }
