@@ -1,6 +1,12 @@
 ---
 # This file describes the necessary / optional configuration defaults to run
 # goprobe v4 and its associated CLI tools goquery and gpctl (auto-detection mode)
+#
+# auto-detection mode will automatically detect interfaces available on the host
+# and apply the ring buffer configuration specified under 'interfaces.autodetect' to all interfaces.
+autodetection:
+  # enabled turns on auto-detection of interfaces and their configuration
+  enabled: true
 
 # interfaces stores the configuration for the interfaces that goprobe will capture on
 interfaces:
@@ -28,11 +34,11 @@ interfaces:
   tun0:
     # in autodetect mode interfaces can only be disabled (excluding them)
     disable: true
-  '/veth.*/':
+  "/veth.*/":
     # exclusion via regex is also possible
     disable: true
 
-##### Standrd configuration options below #####
+##### Standard configuration options below #####
 db:
   # path of the goDB database written by goprobe and read by goquery
   path: /usr/local/goProbe/db
@@ -48,7 +54,7 @@ local_buffers:
 api:
   # addr defines what the API server binds to. This may also be a unix
   # socket.
-  addr: "unix:/var/run/goprobe"
+  addr: "localhost:8145"
   # profiling is enabled by default. It will only be run if one of the
   # /debug/pprof endpoints is accessed and otherwise will not have an impact
   # on performance.
@@ -63,6 +69,3 @@ logging:
   level: info
   # encoding logfmt is chosen over json for readability reasons
   encoding: logfmt
-  # destination describes the file goprobe logs to. If left empty, goprobe will log
-  # to stdout by default
-  destination: /var/logs/goprobe.log

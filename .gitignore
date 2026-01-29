@@ -2,16 +2,30 @@
 *.deb
 *.test
 absolute
+
+# binaries
 cmd/global-query/global-query
 cmd/goConvert/goConvert
 cmd/goProbe/goProbe
 cmd/goQuery/goQuery
 cmd/gpctl/gpctl
+goprobe
+goquery
+global-query
+gpctl
+
+# IDEs and editors
+.idea/
 .vscode/
 _build/
 go.work.sum
-.db/
+
+# OS generated files
+.DS_Stor
 tmp/
 bin/
+
+# Testing files
+.db/
 
 .codegpt
