@@ -278,9 +278,7 @@ var (
 
 func (c CaptureConfig) validate() error {
 	// Ensure no other settings are set when capture is disabled
-
 	if c.Disable {
-		fmt.Println(c.RingBuffer, len(c.ExtraBPFFilters), c.Promisc, c.IgnoreVLANs)
 		if c.RingBuffer != nil ||
 			len(c.ExtraBPFFilters) > 0 ||
 			c.Promisc || c.IgnoreVLANs {
