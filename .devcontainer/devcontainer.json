@@ -45,6 +45,7 @@
           "-race"
         ],
         "go.testTimeout": "10s",
+        "go.testOnSave": true,
         "go.coverOnSingleTest": true,
         "go.coverOnSingleTestFile": true,
         "go.coverOnTestPackage": true,
@@ -66,6 +67,7 @@
     }
   },
   "forwardPorts": [
-    8145
+    8145,
+    3000
   ]
 }
