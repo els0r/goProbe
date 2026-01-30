@@ -190,6 +190,20 @@ func TestValidate(t *testing.T) {
 			},
 			nil,
 		},
+		{"autodetection requires other interfaces to not be configured",
+			&Config{
+				DB: DBConfig{Path: defaults.DBPath},
+				AutoDetection: AutoDetectionConfig{
+					Enabled: true,
+				},
+				Interfaces: Ifaces{
+					"eth0": CaptureConfig{
+						RingBuffer: &RingBufferConfig{BlockSize: 1024 * 1024, NumBlocks: 2},
+					},
+				},
+			},
+			errorInterfaceConfigPresentWithAutoDetectionEnabled,
+		},
 		{"valid autodetection settings",
 			&Config{
 				DB: DBConfig{Path: defaults.DBPath},
@@ -222,7 +236,7 @@ func TestValidate(t *testing.T) {
 					},
 				},
 			},
-			errorSettingsWithCaptureDisabled,
+			errorInterfaceConfigPresentWithAutoDetectionEnabled,
 		},
 		{"autodetection with valid default config",
 			&Config{

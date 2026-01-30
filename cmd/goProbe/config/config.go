@@ -408,6 +408,10 @@ func (d DBConfig) validate() error {
 	return nil
 }
 
+var (
+	errorInterfaceConfigPresentWithAutoDetectionEnabled = errors.New("cannot have interface configurations present when auto-detection is enabled")
+)
+
 // Validate checks all config parameters
 func (c *Config) Validate() error {
 	// run all config subsection validators
@@ -425,7 +429,11 @@ func (c *Config) Validate() error {
 		}
 	}
 
+	// check for conflicting interface configuration
 	if c.AutoDetection.Enabled {
+		if len(c.Interfaces) > 0 {
+			return errorInterfaceConfigPresentWithAutoDetectionEnabled
+		}
 		return nil
 	}
 
