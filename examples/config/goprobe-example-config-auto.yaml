@@ -2,41 +2,14 @@
 # This file describes the necessary / optional configuration defaults to run
 # goprobe v4 and its associated CLI tools goquery and gpctl (auto-detection mode)
 #
-# auto-detection mode will automatically detect interfaces available on the host
-# and apply the ring buffer configuration specified under 'interfaces.autodetect' to all interfaces.
+# auto-detection mode will automatically detect interfaces available on the host (except for the excluded ones)
 autodetection:
   # enabled turns on auto-detection of interfaces and their configuration
   enabled: true
-
-# interfaces stores the configuration for the interfaces that goprobe will capture on
-interfaces:
-  # autodetect is a special interface name enabling auto-detection of all available interfaces
-  # upon startup and during interface / config / flow rotation
-  # NOTE: The configuration under autodetect will be applied to all interfaces
-  autodetect:
-    # promisc runs capturing in promiscuous mode in order to also capture
-    # VLAN traffic
-    promisc: true
-    # ring_buffer configures the ring buffer that the kernel has available
-    # to populate with packet metadata. The sizing of the ring_buffer has
-    # a direct effect on goprobe's base memory consumption
-    ring_buffer:
-      # num_blocks describes the amount of blocks that the ring buffer
-      # has available and which the kernel can fill. Make sure to have
-      # more than 2 blocks per ring buffer
-      #
-      #  - 1 may be held in user land during writeout
-      #  - 1 may be written to by the kernel
-      #  - >=1 should be available in case there are many packets captured
-      num_blocks: 4
-      # block_size of 1 MB should be enough for interfaces with much traffic
-      block_size: 1048576
-  tun0:
-    # in autodetect mode interfaces can only be disabled (excluding them)
-    disable: true
-  "/veth.*/":
-    # exclusion via regex is also possible
-    disable: true
+  # exclude interfaces (or regexes for interfaces) from auto-detection
+  exclude:
+    - tun0
+    - "/veth.*/"
 
 ##### Standard configuration options below #####
 db:

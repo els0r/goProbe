@@ -47,7 +47,6 @@
         "go.coverOnTestPackage": true,
         "go.lintTool": "golangci-lint",
         "go.lintOnSave": "package",
-        "go.testOnSave": true,
         "[go]": {
           "editor.codeActionsOnSave": {
             "source.organizeImports": "always"
