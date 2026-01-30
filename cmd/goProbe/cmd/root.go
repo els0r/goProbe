@@ -242,7 +242,7 @@ func run(ctx context.Context, cfg *gpconf.Config) error {
 	config := configMonitor.GetConfig()
 
 	logger := logging.FromContext(ctx)
-	logger.Infof("loaded configuration (interface autodetection: %v)", config.AutoDetection.Enabled)
+	logger.With("autodetection.enabled", config.AutoDetection.Enabled).Info("loaded configuration")
 
 	// write spec and exit
 	openAPIfile := viper.GetString(flagOpenAPISpecOutfile)

@@ -40,10 +40,6 @@
         "go.testEnvVars": {
           "CGO_ENABLED": "1"
         },
-        "go.testFlags": [
-          "-v",
-          "-race"
-        ],
         "go.testTimeout": "10s",
         "go.testOnSave": true,
         "go.coverOnSingleTest": true,
