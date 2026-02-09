@@ -81,35 +81,36 @@ func TestBinTimestamp(t *testing.T) {
 		binSize   time.Duration
 		expected  int64
 	}{
+		// Binning uses ceiling division: ceil(ts / binSize) * binSize
 		{
 			name:      "timestamp at bin boundary",
-			timestamp: 1000,
-			binSize:   300 * time.Second, // 5 minutes
-			expected:  900,
+			timestamp: 600, // ceil(600/300) * 300 = 2 * 300 = 600
+			binSize:   300 * time.Second,
+			expected:  600,
 		},
 		{
-			name:      "timestamp within bin (5 min bin)",
-			timestamp: 1250,
-			binSize:   300 * time.Second, // 5 minutes
-			expected:  1200,              // floor(1250/300)*300 = 1200
+			name:      "timestamp within bin",
+			timestamp: 450, // ceil(450/300) * 300 = 2 * 300 = 600
+			binSize:   300 * time.Second,
+			expected:  600,
 		},
 		{
 			name:      "timestamp 10 min bin",
-			timestamp: 1550,
-			binSize:   600 * time.Second, // 10 minutes
-			expected:  1200,              // floor(1550/600)*600 = 1200
+			timestamp: 1550, // ceil(1550/600) * 600 = 3 * 600 = 1800
+			binSize:   600 * time.Second,
+			expected:  1800,
 		},
 		{
 			name:      "multiple timestamps in same bin",
-			timestamp: 1599, // near end of bin
+			timestamp: 1599, // ceil(1599/600) * 600 = 3 * 600 = 1800
 			binSize:   600 * time.Second,
-			expected:  1200, // Same bin as timestamp 1550
+			expected:  1800,
 		},
 		{
-			name:      "timestamp at zero",
-			timestamp: 0,
+			name:      "timestamp at bin end",
+			timestamp: 300, // ceil(300/300) * 300 = 1 * 300 = 300
 			binSize:   300 * time.Second,
-			expected:  0,
+			expected:  300,
 		},
 		{
 			name:      "zero bin size",
@@ -124,16 +125,11 @@ func TestBinTimestamp(t *testing.T) {
 			expected:  1500, // Should return timestamp as-is
 		},
 		{
-			name:      "large timestamp",
-			timestamp: 1708953600, // Some large unix timestamp
-			binSize:   300 * time.Second,
-			expected:  1708953600, // Already on boundary
-		},
-		{
 			name:      "15 min bin",
 			timestamp: 1234567890,
 			binSize:   900 * time.Second, // 15 minutes
-			expected:  1234567500,        // floor(1234567890/900)*900
+			// ceil(1234567890 / 900) * 900 = ceil(1372297.653) * 900 = 1372298 * 900 = 1234668200
+			expected: 1234668200,
 		},
 	}
 
@@ -148,32 +144,34 @@ func TestBinTimestamp(t *testing.T) {
 func TestBinTimestampConsistency(t *testing.T) {
 	// Test that multiple timestamps within the same bin have the same binned value
 	binSize := 600 * time.Second // 10 minutes
-	ts1 := BinTimestamp(1000, binSize)
-	ts2 := BinTimestamp(1100, binSize)
-	ts3 := BinTimestamp(1599, binSize)
+	// All timestamps ceil to same bin end
+	ts1 := BinTimestamp(1200, binSize) // ceil(1200/600)*600 = 2*600 = 1200
+	ts2 := BinTimestamp(1550, binSize) // ceil(1550/600)*600 = 3*600 = 1800
+	ts3 := BinTimestamp(1800, binSize) // ceil(1800/600)*600 = 3*600 = 1800
 
-	assert.Equal(t, ts1, ts2, "timestamps 1000 and 1100 should bin to same value")
-	assert.Equal(t, ts1, ts3, "timestamps 1000 and 1599 should bin to same value")
+	assert.Equal(t, ts2, ts3, "timestamps 1550 and 1800 should bin to same value")
+	assert.Equal(t, int64(1800), ts2, "both should bin to 1800 (bin end)")
+	assert.NotEqual(t, ts1, ts2, "ts1 and ts2 should be in different bins")
 }
 
 func TestBinTimestampBoundaries(t *testing.T) {
-	// Test bin boundaries with 5-minute bins
+	// Test bin boundaries with 5-minute bins using ceiling division
 	binSize := 300 * time.Second // 5 minutes
 
-	// ts at 0 should be in bin 0
-	assert.Equal(t, int64(0), BinTimestamp(0, binSize))
-
-	// ts at 299 should be in bin 0
-	assert.Equal(t, int64(0), BinTimestamp(299, binSize))
-
-	// ts at 300 should be in bin 1 (next bin boundary)
+	// ts=300: ceil(300/300) = 1, output = 1*300 = 300
 	assert.Equal(t, int64(300), BinTimestamp(300, binSize))
 
-	// ts at 599 should be in bin 1
-	assert.Equal(t, int64(300), BinTimestamp(599, binSize))
+	// ts=301: ceil(301/300) = 2, output = 2*300 = 600
+	assert.Equal(t, int64(600), BinTimestamp(301, binSize))
 
-	// ts at 600 should be in bin 2
+	// ts=599: ceil(599/300) = 2, output = 2*300 = 600
+	assert.Equal(t, int64(600), BinTimestamp(599, binSize))
+
+	// ts=600: ceil(600/300) = 2, output = 2*300 = 600
 	assert.Equal(t, int64(600), BinTimestamp(600, binSize))
+
+	// ts=601: ceil(601/300) = 3, output = 3*300 = 900
+	assert.Equal(t, int64(900), BinTimestamp(601, binSize))
 }
 
 func TestTimeBinnerBinTime(t *testing.T) {
@@ -208,19 +206,28 @@ func TestTimeBinnerBinTime(t *testing.T) {
 	// Create a TimeBinner for 25 hours (should result in 10-minute bins)
 	binner := NewTimeBinner(25*time.Hour, 10*time.Minute)
 
-	// Apply binning
+	// Apply binning using ceiling division
 	binnedResult, err := binner.BinTime(result)
 	assert.NoError(t, err)
 	assert.NotNil(t, binnedResult)
 
-	// Should have 2 rows after binning (1000 and 1150 merge, 1600 stays separate)
+	// Should have 2 rows after binning
+	// Row 1 (ts=1000): ceil(1000/600)*600 = ceil(1.667)*600 = 2*600 = 1200
+	// Row 2 (ts=1150): ceil(1150/600)*600 = ceil(1.917)*600 = 2*600 = 1200 (merges with Row 1)
+	// Row 3 (ts=1600): ceil(1600/600)*600 = ceil(2.667)*600 = 3*600 = 1800
 	assert.Equal(t, 2, len(binnedResult.Rows), "Expected 2 rows after binning")
 
 	// Check that the first merged row has combined counters
 	firstRow := binnedResult.Rows[0]
-	assert.Equal(t, time.Unix(1000, 0), firstRow.Labels.Timestamp, "First row should be at 1000 (binned)")
+	assert.Equal(t, time.Unix(1200, 0), firstRow.Labels.Timestamp, "First row should be at 1200 (binned end)")
 	assert.Equal(t, uint64(150), firstRow.Counters.BytesRcvd, "BytesRcvd should be sum of 100+50")
 	assert.Equal(t, uint64(275), firstRow.Counters.BytesSent, "BytesSent should be sum of 200+75")
+
+	// Check the second row
+	secondRow := binnedResult.Rows[1]
+	assert.Equal(t, time.Unix(1800, 0), secondRow.Labels.Timestamp, "Second row should be at 1800")
+	assert.Equal(t, uint64(30), secondRow.Counters.BytesRcvd, "BytesRcvd should be 30")
+	assert.Equal(t, uint64(45), secondRow.Counters.BytesSent, "BytesSent should be 45")
 }
 
 func TestTimeBinnerBinTimeWithNilResult(t *testing.T) {

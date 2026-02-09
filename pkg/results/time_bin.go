@@ -86,9 +86,10 @@ func CalcTimeBinSize(duration time.Duration) time.Duration {
 	return binSize
 }
 
-// BinTimestamp bins a Unix timestamp to the nearest bin boundary.
-// This groups multiple timestamps into the same bin based on the provided bin size.
-// The timestamp is rounded down to the nearest bin boundary.
+// BinTimestamp bins a timestamp to the end of its bin period, accounting for the
+// interval that each timestamp represents. A timestamp t represents flows in the interval
+// [t - DefaultBucketSize, t]. The binning uses ceiling division to find the bin end
+// that the timestamp belongs to.
 func BinTimestamp(ts int64, binSize time.Duration) int64 {
 	if binSize <= 0 {
 		return ts
@@ -99,6 +100,7 @@ func BinTimestamp(ts int64, binSize time.Duration) int64 {
 		return ts
 	}
 
-	// Round down to nearest bin boundary
-	return (ts / binSizeSeconds) * binSizeSeconds
+	// Calculate the bin end using ceiling division
+	// This ensures ts falls into the correct bin
+	return ((ts + binSizeSeconds - 1) / binSizeSeconds) * binSizeSeconds
 }
