@@ -103,6 +103,8 @@ type Args struct {
 	First string `json:"first,omitempty" yaml:"first,omitempty" query:"first" required:"false" doc:"The first timestamp to query" example:"2020-08-12T09:47:00+02:00"`
 	// Last: the last timestamp to query
 	Last string `json:"last,omitempty" yaml:"last,omitempty" query:"last" required:"false" doc:"The last timestamp to query" example:"-24h"`
+	// TimeResolution: time resolution for binning results. Set to "auto" to automatically scale based on query duration, or specify a duration (e.g. "5m", "10m", "1h")
+	TimeResolution string `json:"time_resolution,omitempty" yaml:"time_resolution,omitempty" query:"time_resolution" required:"false" doc:"Time resolution for result aggregation. Set to 'auto' for automatic scaling, or specify a duration (min 5m, multiple of 5)" example:"5m"`
 
 	// formatting
 	// Format: the output format
@@ -152,16 +154,16 @@ type Args struct {
 //   Details: %s
 // `
 // 	errStr := err.err.Error()
-
 //	return fmt.Sprintf(str, err.Field, err.Message, errStr)
-//
-// '}
+// }
+
+// DetailError provides detailed error information via the huma.ErrorModel.
 type DetailError struct {
 	huma.ErrorModel
 }
 
 // NewDetailError creates a new generic DetailError of specific status and
-// providing detailed information based on a generic error
+// providing detailed information based on a generic error.
 func NewDetailError(code int, err error) *DetailError {
 	return &DetailError{
 		ErrorModel: huma.ErrorModel{
@@ -414,6 +416,45 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 		errModel.Errors = append(errModel.Errors, timeRangeDetails...)
 	}
 
+	// validate and calculate time resolution bin size
+	var binSize time.Duration
+	queryDuration := time.Unix(s.Last, 0).Sub(time.Unix(s.First, 0))
+	if a.TimeResolution != types.TimeResolution5m { // 5m is the default bin size, so if it's set, we can skip validation and calculation
+		if a.TimeResolution == types.TimeResolutionAuto {
+			// Auto mode: calculate from query duration
+			binSize = results.CalcTimeBinSize(queryDuration)
+		} else {
+			// Try to parse as duration
+			duration, err := time.ParseDuration(a.TimeResolution)
+			if err != nil {
+				errModel.Errors = append(errModel.Errors, &huma.ErrorDetail{
+					Message:  fmt.Sprintf("invalid time resolution: %s (must be '%s' or a valid duration like '%s', '10m', '1h')", types.TimeResolutionAuto, types.TimeResolution5m, a.TimeResolution),
+					Location: "body.time_resolution",
+					Value:    a.TimeResolution,
+				})
+			} else {
+				// Validate constraints: min 5m, multiple of 5m
+				if duration < types.DefaultBucketSize {
+					errModel.Errors = append(errModel.Errors, &huma.ErrorDetail{
+						Message:  "time resolution must be at least 5 minutes",
+						Location: "body.time_resolution",
+						Value:    a.TimeResolution,
+					})
+				} else if duration%types.DefaultBucketSize != 0 {
+					errModel.Errors = append(errModel.Errors, &huma.ErrorDetail{
+						Message:  "time resolution must be a multiple of 5 minutes (e.g. 5m, 10m, 15m, 1h, 1h30m)",
+						Location: "body.time_resolution",
+						Value:    a.TimeResolution,
+					})
+				} else {
+					binSize = duration
+				}
+			}
+		}
+	}
+	s.TimeResolution = a.TimeResolution
+	s.BinSize = binSize
+
 	switch {
 	case a.Sum:
 		s.Direction = types.DirectionSum
@@ -426,8 +467,8 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 	}
 
 	// check resolve timeout and DNS
+	// TODO: make this function available in the public domain or skip
 	if s.DNSResolution.Enabled {
-		// TODO: make this function available in the public domain or skip
 		err := dns.CheckDNS()
 		if err != nil {
 			// collect error

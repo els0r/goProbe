@@ -17,6 +17,17 @@ func (s *Statement) Print(ctx context.Context, result *results.Result, opts ...r
 	ctx, span := tracing.Start(ctx, "(*Statement).Print")
 	defer span.End()
 
+	// Apply time resolution scaling if configured
+	if s.BinSize > 0 && s.LabelSelector.Timestamp {
+		queryDuration := time.Unix(s.Last, 0).Sub(time.Unix(s.First, 0))
+		binner := results.NewTimeBinner(queryDuration, s.BinSize)
+		var binErr error
+		result, binErr = binner.BinTime(result)
+		if binErr != nil {
+			return fmt.Errorf("failed to apply time binning: %w", binErr)
+		}
+	}
+
 	var sip, dip types.Attribute
 
 	var hasDNSattributes bool
