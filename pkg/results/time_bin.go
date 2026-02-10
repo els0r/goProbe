@@ -3,9 +3,11 @@
 package results
 
 import (
+	"context"
 	"time"
 
 	"github.com/els0r/goProbe/v4/pkg/types"
+	"github.com/els0r/telemetry/tracing"
 )
 
 // AutoMode is the string value indicating automatic bin size calculation
@@ -16,7 +18,7 @@ const AutoMode = "auto"
 const NumBlocksPerDay = 288
 
 // PostProcessor is a function that post-processes a query result
-type PostProcessor func(*Result) (*Result, error)
+type PostProcessor func(context.Context, *Result) (*Result, error)
 
 // TimeBinner applies time binning to aggregate results to a coarser time resolution
 type TimeBinner struct {
@@ -34,7 +36,7 @@ func NewTimeBinner(queryRange, binSize time.Duration) *TimeBinner {
 
 // BinTime applies time binning to the result, re-aggregating rows with the same
 // binned timestamp and attributes
-func (t *TimeBinner) BinTime(res *Result) (*Result, error) {
+func (t *TimeBinner) BinTime(ctx context.Context, res *Result) (*Result, error) {
 	if res == nil {
 		return res, nil
 	}
@@ -43,6 +45,9 @@ func (t *TimeBinner) BinTime(res *Result) (*Result, error) {
 	if len(res.Rows) == 0 {
 		return res, nil
 	}
+
+	_, span := tracing.Start(ctx, "(*TimeBinner).BinTime")
+	defer span.End()
 
 	// Re-aggregate rows using RowsMap with binned timestamps
 	rowsMap := make(RowsMap)

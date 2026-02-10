@@ -3,6 +3,8 @@ package query
 import (
 	"context"
 	"fmt"
+	"reflect"
+	"runtime"
 	"time"
 
 	"github.com/els0r/goProbe/v4/pkg/query/dns"
@@ -12,21 +14,38 @@ import (
 	"github.com/els0r/telemetry/tracing"
 )
 
+func (s *Statement) PostProcess(ctx context.Context, result *results.Result) (*results.Result, error) {
+	ctx, span := tracing.Start(ctx, "(*Statement).PostProcess")
+	defer span.End()
+
+	// post-procesing on the results directly
+	var (
+		postProcessors []results.PostProcessor
+		err            error
+	)
+
+	// apply time resolution scaling if configured
+	if s.BinSize > 0 && s.LabelSelector.Timestamp {
+		queryDuration := time.Unix(s.Last, 0).Sub(time.Unix(s.First, 0))
+		binner := results.NewTimeBinner(queryDuration, s.BinSize)
+		postProcessors = append(postProcessors, binner.BinTime)
+	}
+
+	// run all post-processing on results
+	for _, processor := range postProcessors {
+		result, err = processor(ctx, result)
+		if err != nil {
+			fnName := runtime.FuncForPC(reflect.ValueOf(processor).Pointer()).Name()
+			return nil, fmt.Errorf("failed to run %s: %w", fnName, err)
+		}
+	}
+	return result, nil
+}
+
 // Print prints a statement to the result
 func (s *Statement) Print(ctx context.Context, result *results.Result, opts ...results.PrinterOption) error {
 	ctx, span := tracing.Start(ctx, "(*Statement).Print")
 	defer span.End()
-
-	// Apply time resolution scaling if configured
-	if s.BinSize > 0 && s.LabelSelector.Timestamp {
-		queryDuration := time.Unix(s.Last, 0).Sub(time.Unix(s.First, 0))
-		binner := results.NewTimeBinner(queryDuration, s.BinSize)
-		var binErr error
-		result, binErr = binner.BinTime(result)
-		if binErr != nil {
-			return fmt.Errorf("failed to apply time binning: %w", binErr)
-		}
-	}
 
 	var sip, dip types.Attribute
 

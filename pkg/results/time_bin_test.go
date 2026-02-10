@@ -207,7 +207,7 @@ func TestTimeBinnerBinTime(t *testing.T) {
 	binner := NewTimeBinner(25*time.Hour, 10*time.Minute)
 
 	// Apply binning using ceiling division
-	binnedResult, err := binner.BinTime(result)
+	binnedResult, err := binner.BinTime(t.Context(), result)
 	assert.NoError(t, err)
 	assert.NotNil(t, binnedResult)
 
@@ -232,7 +232,7 @@ func TestTimeBinnerBinTime(t *testing.T) {
 
 func TestTimeBinnerBinTimeWithNilResult(t *testing.T) {
 	binner := NewTimeBinner(24*time.Hour, CalcTimeBinSize(24*time.Hour))
-	result, err := binner.BinTime(nil)
+	result, err := binner.BinTime(t.Context(), nil)
 	assert.NoError(t, err)
 	assert.Nil(t, result)
 }
@@ -244,7 +244,7 @@ func TestTimeBinnerBinTimeWithEmptyRows(t *testing.T) {
 	}
 
 	binner := NewTimeBinner(24*time.Hour, CalcTimeBinSize(24*time.Hour))
-	binnedResult, err := binner.BinTime(result)
+	binnedResult, err := binner.BinTime(t.Context(), result)
 	assert.NoError(t, err)
 	assert.Equal(t, 0, len(binnedResult.Rows))
 }
