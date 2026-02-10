@@ -58,8 +58,8 @@ func (t *TimeBinner) BinTime(res *Result) (*Result, error) {
 		rowsMap.MergeRows(Rows{binnedRow})
 	}
 
-	// Convert back to sorted rows (keep original sort order, default to bytes/traffic)
-	res.Rows = rowsMap.ToRowsSorted(By(SortTraffic, types.DirectionSum, true))
+	// Convert back to sorted rows. Sort by time since binning is a time-based operation
+	res.Rows = rowsMap.ToRowsSorted(By(SortTime, types.DirectionSum, true))
 	res.Summary.Hits.Total = len(res.Rows)
 	res.Summary.Hits.Displayed = len(res.Rows)
 
