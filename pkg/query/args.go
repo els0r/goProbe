@@ -407,6 +407,11 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 		s.SortBy = results.SortTime
 		s.SortAscending = true
 		s.NumResults = MaxResults
+
+		// make sure the default behavior is resolving 5m blocks
+		if a.TimeResolution == "" {
+			a.TimeResolution = types.TimeResolution5m
+		}
 	}
 
 	// parse time bound
@@ -419,7 +424,7 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 	// validate and calculate time resolution bin size
 	var binSize time.Duration
 	queryDuration := time.Unix(s.Last, 0).Sub(time.Unix(s.First, 0))
-	if a.TimeResolution != types.TimeResolution5m { // 5m is the default bin size, so if it's set, we can skip validation and calculation
+	if a.TimeResolution != types.TimeResolution5m && selector.Timestamp { // 5m is the default bin size, so if it's set, we can skip validation and calculation
 		if a.TimeResolution == types.TimeResolutionAuto {
 			// Auto mode: calculate from query duration
 			binSize = results.CalcTimeBinSize(queryDuration)
@@ -452,6 +457,7 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 			}
 		}
 	}
+
 	s.TimeResolution = a.TimeResolution
 	s.BinSize = binSize
 
