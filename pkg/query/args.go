@@ -264,12 +264,9 @@ const (
 	invalidFormatMsg               = "unknown format"
 	invalidNumResults              = "invalid number of result rows"
 	invalidSortByMsg               = "unknown format"
-	invalidTimeRangeMsg            = "invalid time range"
 	invalidDNSResolutionTimeoutMsg = "invalid resolution timeout"
-	invalidDNSResolutionRowsMsg    = "invalid number of rows"
 	invalidConditionMsg            = "invalid condition"
 	invalidMaxMemPctMsg            = "invalid max memory percentage"
-	invalidRowLimitMsg             = "invalid row limit"
 	invalidKeepAliveDuration       = "invalid keepalive duration"
 	invalidLiveQueryMsg            = "query not possible"
 	unboundedQuery                 = "unbounded query"
@@ -306,32 +303,15 @@ func (a *Args) CheckUnboundedQueries() error {
 	return nil
 }
 
-// Prepare takes the query Arguments, validates them and creates an executable statement. Optionally, additional writers can be passed to route query results to different destinations.
-func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
-	var (
-		err      error
-		errModel = &DetailError{
-			ErrorModel: huma.ErrorModel{
-				Title:  http.StatusText(http.StatusUnprocessableEntity),
-				Status: http.StatusUnprocessableEntity,
-				Detail: "query preparation failed",
-			},
-		}
-	)
+type argPrepare func(a *Args, s *Statement, errModel *DetailError)
 
-	s := &Statement{
-		QueryType:     a.Query,
-		DNSResolution: a.DNSResolution,
-		Condition:     a.Condition,
-		LowMem:        a.LowMem,
-		Caller:        a.Caller,
-		Live:          a.Live,
-		Output:        os.Stdout, // by default, we write results to the console
-	}
-
+func prepQueryTypeArg(a *Args, s *Statement, errModel *DetailError) {
 	// the query type is parsed here already in order to validate if the query contains
 	// errors
-	var selector types.LabelSelector
+	var (
+		selector types.LabelSelector
+		err      error
+	)
 	s.attributes, selector, err = types.ParseQueryType(a.Query)
 	if err != nil {
 		errMsg := err.Error()
@@ -346,7 +326,10 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 			Value:    a.Query,
 		})
 	}
+	s.LabelSelector = selector
+}
 
+func prepFormatArg(a *Args, s *Statement, errModel *DetailError) {
 	// verify config format
 	_, verifies := permittedFormats[a.Format]
 	if !verifies {
@@ -358,13 +341,16 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 		})
 	}
 	s.Format = a.Format
+}
 
+func prepSortByArg(a *Args, s *Statement, errModel *DetailError) {
 	// if not already done beforehand, enforce defaults for args
 	if a.SortBy == "" {
 		a.SortBy = "packets"
 	}
 
 	// assign sort order and direction
+	var verifies bool
 	s.SortBy, verifies = permittedSortBy[a.SortBy]
 	if !verifies {
 		// collect error
@@ -374,19 +360,21 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 			Value:    a.Format,
 		})
 	}
+}
 
+func prepIfacesArg(a *Args, s *Statement, errModel *DetailError) {
 	// set and validate the interfaces
 	if a.Ifaces == "" {
-		// collect error
 		errModel.Errors = append(errModel.Errors, &huma.ErrorDetail{
 			Message:  emptyInterfaceMsg,
 			Location: "body.ifaces",
 			Value:    a.Ifaces,
 		})
 	}
+
+	var err error
 	s.Ifaces, err = types.ValidateIfaceArgument(a.Ifaces)
 	if err != nil {
-		// collect error
 		errModel.Errors = append(errModel.Errors, &huma.ErrorDetail{
 			Message:  fmt.Sprintf("%s: %s", invalidInterfaceMsg, err),
 			Location: "body.ifaces",
@@ -394,26 +382,15 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 		})
 	}
 
-	// insert iface attribute here in case multiple interfaces where specified and the
+	// insert iface attribute here in case multiple interfaces were specified and the
 	// interface column was not added as an attribute
 	if (len(s.Ifaces) > 1 || strings.Contains(a.Ifaces, types.AnySelector)) &&
 		!strings.Contains(a.Query, types.IfaceName) || types.IsIfaceArgumentRegExp(a.Ifaces) {
-		selector.Iface = true
+		s.LabelSelector.Iface = true
 	}
-	s.LabelSelector = selector
+}
 
-	// override sorting direction and number of entries for time based queries
-	if selector.Timestamp {
-		s.SortBy = results.SortTime
-		s.SortAscending = true
-		s.NumResults = MaxResults
-
-		// make sure the default behavior is resolving 5m blocks
-		if a.TimeResolution == "" {
-			a.TimeResolution = types.TimeResolution5m
-		}
-	}
-
+func prepTimeQueryArg(a *Args, s *Statement, errModel *DetailError) {
 	// parse time bound
 	var timeRangeDetails []*huma.ErrorDetail
 	s.First, s.Last, timeRangeDetails = ParseTimeRangeCollectErrors(a.First, a.Last)
@@ -421,46 +398,67 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 		errModel.Errors = append(errModel.Errors, timeRangeDetails...)
 	}
 
-	// validate and calculate time resolution bin size
-	var binSize time.Duration
-	queryDuration := time.Unix(s.Last, 0).Sub(time.Unix(s.First, 0))
-	if a.TimeResolution != types.TimeResolution5m && selector.Timestamp { // 5m is the default bin size, so if it's set, we can skip validation and calculation
-		if a.TimeResolution == types.TimeResolutionAuto {
-			// Auto mode: calculate from query duration
-			binSize = results.CalcTimeBinSize(queryDuration)
-		} else {
-			// Try to parse as duration
-			duration, err := time.ParseDuration(a.TimeResolution)
-			if err != nil {
-				errModel.Errors = append(errModel.Errors, &huma.ErrorDetail{
-					Message:  fmt.Sprintf("invalid time resolution: %s (must be '%s' or a valid duration like '%s', '10m', '1h')", types.TimeResolutionAuto, types.TimeResolution5m, a.TimeResolution),
-					Location: "body.time_resolution",
-					Value:    a.TimeResolution,
-				})
-			} else {
-				// Validate constraints: min 5m, multiple of 5m
-				if duration < types.DefaultBucketSize {
-					errModel.Errors = append(errModel.Errors, &huma.ErrorDetail{
-						Message:  "time resolution must be at least 5 minutes",
-						Location: "body.time_resolution",
-						Value:    a.TimeResolution,
-					})
-				} else if duration%types.DefaultBucketSize != 0 {
-					errModel.Errors = append(errModel.Errors, &huma.ErrorDetail{
-						Message:  "time resolution must be a multiple of 5 minutes (e.g. 5m, 10m, 15m, 1h, 1h30m)",
-						Location: "body.time_resolution",
-						Value:    a.TimeResolution,
-					})
-				} else {
-					binSize = duration
-				}
-			}
-		}
+	// override sorting direction and number of entries for time based queries
+	if !s.LabelSelector.Timestamp {
+		return
+	}
+	s.SortBy = results.SortTime
+	s.SortAscending = true
+	s.NumResults = MaxResults
+
+	// make sure the default behavior is resolving 5m blocks
+	if a.TimeResolution == "" {
+		a.TimeResolution = types.TimeResolution5m
 	}
 
 	s.TimeResolution = a.TimeResolution
-	s.BinSize = binSize
 
+	// validate and calculate time resolution bin size
+	queryDuration := time.Unix(s.Last, 0).Sub(time.Unix(s.First, 0))
+	if a.TimeResolution == types.TimeResolution5m { // 5m is the default bin size, so if it's set, we can skip validation and calculation
+		return
+	}
+	if a.TimeResolution == types.TimeResolutionAuto {
+		// Auto mode: calculate from query duration
+		s.BinSize = results.CalcTimeBinSize(queryDuration)
+
+		return
+	}
+
+	// Try to parse as duration
+	duration, err := time.ParseDuration(a.TimeResolution)
+	if err != nil {
+		errModel.Errors = append(errModel.Errors, &huma.ErrorDetail{
+			Message:  fmt.Sprintf("invalid time resolution: %s (must be '%s' or a valid duration like '%s', '10m', '1h')", types.TimeResolutionAuto, types.TimeResolution5m, a.TimeResolution),
+			Location: "body.time_resolution",
+			Value:    a.TimeResolution,
+		})
+
+		return
+	}
+	// Validate constraints: min 5m, multiple of 5m
+	if duration < types.DefaultBucketSize {
+		errModel.Errors = append(errModel.Errors, &huma.ErrorDetail{
+			Message:  "time resolution must be at least 5 minutes",
+			Location: "body.time_resolution",
+			Value:    a.TimeResolution,
+		})
+
+		return
+	}
+	if duration%types.DefaultBucketSize != 0 {
+		errModel.Errors = append(errModel.Errors, &huma.ErrorDetail{
+			Message:  "time resolution must be a multiple of 5 minutes (e.g. 5m, 10m, 15m, 1h, 1h30m)",
+			Location: "body.time_resolution",
+			Value:    a.TimeResolution,
+		})
+		return
+	}
+
+	s.BinSize = duration
+}
+
+func prepDirectionArg(a *Args, s *Statement, errModel *DetailError) {
 	switch {
 	case a.Sum:
 		s.Direction = types.DirectionSum
@@ -471,37 +469,38 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 	default:
 		s.Direction = types.DirectionBoth
 	}
+}
 
+func prepDNSResolutionArg(a *Args, s *Statement, errModel *DetailError) {
 	// check resolve timeout and DNS
-	// TODO: make this function available in the public domain or skip
-	if s.DNSResolution.Enabled {
-		err := dns.CheckDNS()
-		if err != nil {
-			// collect error
-			errModel.Errors = append(errModel.Errors, &huma.ErrorDetail{
-				Message:  fmt.Sprintf("DNS check failed: %s", err),
-				Location: "body.dns_resolution.enabled",
-				Value:    a.Ifaces,
-			})
-		}
-		if 0 >= s.DNSResolution.Timeout {
-			// collect error
-			errModel.Errors = append(errModel.Errors, &huma.ErrorDetail{
-				Message:  invalidDNSResolutionTimeoutMsg,
-				Location: "body.dns_resolution.timeout",
-				Value:    s.DNSResolution.Timeout,
-			})
-		}
-		if !(0 < s.DNSResolution.MaxRows) {
-			// collect error
-			errModel.Errors = append(errModel.Errors, &huma.ErrorDetail{
-				Message:  invalidDNSResolutionTimeoutMsg,
-				Location: "body.dns_resolution.max_rows",
-				Value:    s.DNSResolution.MaxRows,
-			})
-		}
+	if !s.DNSResolution.Enabled {
+		return
 	}
+	err := dns.CheckDNS()
+	if err != nil {
+		errModel.Errors = append(errModel.Errors, &huma.ErrorDetail{
+			Message:  fmt.Sprintf("DNS check failed: %s", err),
+			Location: "body.dns_resolution.enabled",
+			Value:    a.Ifaces,
+		})
+	}
+	if 0 >= s.DNSResolution.Timeout {
+		errModel.Errors = append(errModel.Errors, &huma.ErrorDetail{
+			Message:  invalidDNSResolutionTimeoutMsg,
+			Location: "body.dns_resolution.timeout",
+			Value:    s.DNSResolution.Timeout,
+		})
+	}
+	if s.DNSResolution.MaxRows <= 0 {
+		errModel.Errors = append(errModel.Errors, &huma.ErrorDetail{
+			Message:  invalidDNSResolutionTimeoutMsg,
+			Location: "body.dns_resolution.max_rows",
+			Value:    s.DNSResolution.MaxRows,
+		})
+	}
+}
 
+func prepConditionArg(a *Args, s *Statement, errModel *DetailError) {
 	// sanitize conditional if one was provided
 	s.Condition = conditions.SanitizeUserInput(a.Condition)
 
@@ -525,7 +524,9 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 	// form of the condition is stored
 	tokens, _ := conditions.Tokenize(s.Condition)
 	s.Condition = strings.Join(tokens, " ")
+}
 
+func prepMaxMemPctArg(a *Args, s *Statement, errModel *DetailError) {
 	// check memory flag
 	if !(0 < a.MaxMemPct && a.MaxMemPct <= 100) {
 		// collect error
@@ -536,7 +537,9 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 		})
 	}
 	s.MaxMemPct = a.MaxMemPct
+}
 
+func prepKeepAliveArg(a *Args, s *Statement, errModel *DetailError) {
 	// check keepalive duration flag
 	if a.KeepAlive != 0 {
 		if !(0 < a.KeepAlive) {
@@ -549,7 +552,9 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 		}
 	}
 	s.KeepAliveDuration = a.KeepAlive
+}
 
+func prepNumResultsArg(a *Args, s *Statement, errModel *DetailError) {
 	// check limits flag
 	if a.NumResults <= 0 {
 		// collect error
@@ -560,14 +565,56 @@ func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
 		})
 	}
 	s.NumResults = a.NumResults
+}
 
+func prepLiveArg(a *Args, s *Statement, errModel *DetailError) {
 	// check for consistent use of the live flag
 	if s.Live && s.Last != types.MaxTime.Unix() {
 		errModel.Errors = append(errModel.Errors, &huma.ErrorDetail{
 			Message:  fmt.Sprintf("%s: last timestamp unsupported", invalidLiveQueryMsg),
-			Location: "live",
 			Value:    s.Last,
+			Location: "live",
 		})
+	}
+}
+
+// Prepare takes the query Arguments, validates them and creates an executable statement. Optionally, additional writers can be passed to route query results to different destinations.
+func (a *Args) Prepare(writers ...io.Writer) (*Statement, error) {
+	var (
+		errModel = &DetailError{
+			ErrorModel: huma.ErrorModel{
+				Title:  http.StatusText(http.StatusUnprocessableEntity),
+				Status: http.StatusUnprocessableEntity,
+				Detail: "query preparation failed",
+			},
+		}
+	)
+
+	s := &Statement{
+		QueryType:     a.Query,
+		DNSResolution: a.DNSResolution,
+		Condition:     a.Condition,
+		LowMem:        a.LowMem,
+		Caller:        a.Caller,
+		Live:          a.Live,
+		Output:        os.Stdout, // by default, we write results to the console
+	}
+
+	for _, fn := range []argPrepare{
+		prepQueryTypeArg,
+		prepFormatArg,
+		prepSortByArg,
+		prepIfacesArg,
+		prepTimeQueryArg,
+		prepDirectionArg,
+		prepDNSResolutionArg,
+		prepConditionArg,
+		prepMaxMemPctArg,
+		prepKeepAliveArg,
+		prepNumResultsArg,
+		prepLiveArg,
+	} {
+		fn(a, s, errModel)
 	}
 
 	// fan-out query results in case multiple writers were supplied
