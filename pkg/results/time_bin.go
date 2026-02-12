@@ -105,7 +105,12 @@ func BinTimestamp(ts int64, binSize time.Duration) int64 {
 		return ts
 	}
 
-	// Calculate the bin end using ceiling division
-	// This ensures ts falls into the correct bin
-	return ((ts + binSizeSeconds - 1) / binSizeSeconds) * binSizeSeconds
+	remainder := ts % binSizeSeconds
+	if remainder == 0 {
+		return ts
+	}
+
+	// reduce to the nearest lower multiple of binSize, then add binSize to get the ceiling.
+	// e.g. 14:31 -> 14:30 at bin size = 15m ==> 14:30 + 15m = 14:45
+	return (ts - (ts % binSizeSeconds)) + binSizeSeconds
 }

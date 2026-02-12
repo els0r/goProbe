@@ -84,31 +84,31 @@ func TestBinTimestamp(t *testing.T) {
 		// Binning uses ceiling division: ceil(ts / binSize) * binSize
 		{
 			name:      "timestamp at bin boundary",
-			timestamp: 600, // ceil(600/300) * 300 = 2 * 300 = 600
+			timestamp: 600,
 			binSize:   300 * time.Second,
 			expected:  600,
 		},
 		{
 			name:      "timestamp within bin",
-			timestamp: 450, // ceil(450/300) * 300 = 2 * 300 = 600
+			timestamp: 450,
 			binSize:   300 * time.Second,
 			expected:  600,
 		},
 		{
 			name:      "timestamp 10 min bin",
-			timestamp: 1550, // ceil(1550/600) * 600 = 3 * 600 = 1800
+			timestamp: 1550,
 			binSize:   600 * time.Second,
 			expected:  1800,
 		},
 		{
 			name:      "multiple timestamps in same bin",
-			timestamp: 1599, // ceil(1599/600) * 600 = 3 * 600 = 1800
+			timestamp: 1599,
 			binSize:   600 * time.Second,
 			expected:  1800,
 		},
 		{
 			name:      "timestamp at bin end",
-			timestamp: 300, // ceil(300/300) * 300 = 1 * 300 = 300
+			timestamp: 300,
 			binSize:   300 * time.Second,
 			expected:  300,
 		},
@@ -128,8 +128,7 @@ func TestBinTimestamp(t *testing.T) {
 			name:      "15 min bin",
 			timestamp: 1234567890,
 			binSize:   900 * time.Second, // 15 minutes
-			// ceil(1234567890 / 900) * 900 = ceil(1372297.653) * 900 = 1372298 * 900 = 1234668200
-			expected: 1234668200,
+			expected:  1234568700,
 		},
 	}
 
