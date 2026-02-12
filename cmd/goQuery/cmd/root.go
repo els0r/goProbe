@@ -476,7 +476,7 @@ func entrypoint(cmd *cobra.Command, args []string) (err error) {
 	}
 
 	// post-processing functions to be applied to the result before printing
-	result, err = stmt.PostProcess(ctx, result)
+	err = stmt.PostProcess(ctx, result)
 	if err != nil {
 		return fmt.Errorf("failed to post-process query results: %w", err)
 	}

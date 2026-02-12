@@ -417,7 +417,9 @@ func prepTimeQueryArg(a *Args, s *Statement, errModel *DetailError) {
 	queryDuration := time.Unix(s.Last, 0).Sub(time.Unix(s.First, 0))
 	if a.TimeResolution == types.TimeResolutionAuto {
 		// Auto mode: calculate from query duration
-		s.TimeBinSize = results.CalcTimeBinSize(queryDuration)
+		// At the moment, everything runs on the 5 minute write-out assumption. The explicit
+		// parameter resolution preps for a potentially different interval in the future
+		s.TimeBinSize = results.CalcTimeBinSize(types.DefaultTimeResolution, queryDuration)
 		return
 	}
 

@@ -83,6 +83,14 @@ type TimeRange struct {
 	Last time.Time `json:"time_last" doc:"End of the queried interval" example:"2024-04-12T09:47:00+02:00"`
 }
 
+// ResultsRange returns the duration of the time range covered by the result. This MUST be strictly smaller, or equal to
+// the query range.
+//
+// Example: a single flow found in a 7d query range, will result in a 5m results range
+func (t TimeRange) ResultsRange() time.Duration {
+	return t.Last.Sub(t.First)
+}
+
 // Summary stores the total traffic volume and packets observed over the queried range and the interfaces that were queried
 type Summary struct {
 	// Interfaces: the interfaces that were queried
@@ -440,17 +448,26 @@ type RowsMap map[MergeableAttributes]types.Counters
 // MergeRows aggregates Rows by use of the RowsMap rm, which is modified
 // in the process
 func (rm RowsMap) MergeRows(r Rows) (merged int) {
-	for _, res := range r {
-		counters, exists := rm[MergeableAttributes{res.Labels, res.Attributes}]
-		if exists {
-			counters.Add(res.Counters)
-			rm[MergeableAttributes{res.Labels, res.Attributes}] = counters
+	for _, row := range r {
+		if rm.MergeRow(row) {
 			merged++
-		} else {
-			rm[MergeableAttributes{res.Labels, res.Attributes}] = res.Counters
 		}
 	}
 	return
+}
+
+// MergeRow aggregates a single Row into the RowsMap rm, which is modified in the process.
+// It returns whether the row was merged with an existing row (true) or added as a new entry (false)
+func (rm RowsMap) MergeRow(row Row) (merged bool) {
+	counters, exists := rm[MergeableAttributes{row.Labels, row.Attributes}]
+	if exists {
+		counters.Add(row.Counters)
+		rm[MergeableAttributes{row.Labels, row.Attributes}] = counters
+		return true
+	}
+
+	rm[MergeableAttributes{row.Labels, row.Attributes}] = row.Counters
+	return false
 }
 
 // MergeRowsMap aggregates all results of om and stores them in rm

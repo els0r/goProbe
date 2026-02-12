@@ -14,7 +14,7 @@ import (
 	"github.com/els0r/telemetry/tracing"
 )
 
-func (s *Statement) PostProcess(ctx context.Context, result *results.Result) (*results.Result, error) {
+func (s *Statement) PostProcess(ctx context.Context, result *results.Result) error {
 	ctx, span := tracing.Start(ctx, "(*Statement).PostProcess")
 	defer span.End()
 
@@ -26,20 +26,22 @@ func (s *Statement) PostProcess(ctx context.Context, result *results.Result) (*r
 
 	// apply time resolution scaling if configured
 	if s.LabelSelector.Timestamp && s.TimeBinSize != types.DefaultTimeResolution {
-		queryDuration := time.Unix(s.Last, 0).Sub(time.Unix(s.First, 0))
+		// it's important we look at the query range of the results, not the original query
+		queryDuration := result.Summary.TimeRange.ResultsRange()
+
 		binner := results.NewTimeBinner(queryDuration, s.TimeBinSize)
 		postProcessors = append(postProcessors, binner.BinTime)
 	}
 
 	// run all post-processing on results
 	for _, processor := range postProcessors {
-		result, err = processor(ctx, result)
+		err = processor(ctx, result)
 		if err != nil {
 			fnName := runtime.FuncForPC(reflect.ValueOf(processor).Pointer()).Name()
-			return nil, fmt.Errorf("failed to run %s: %w", fnName, err)
+			return fmt.Errorf("failed to run %s: %w", fnName, err)
 		}
 	}
-	return result, nil
+	return nil
 }
 
 // Print prints a statement to the result

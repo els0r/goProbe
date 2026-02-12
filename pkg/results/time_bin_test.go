@@ -68,7 +68,7 @@ func TestCalcTimeBinSize(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := CalcTimeBinSize(tt.duration)
+			result := CalcTimeBinSize(types.DefaultTimeResolution, tt.duration)
 			assert.Equal(t, tt.expected, result, "expected bin size %v, got %v", tt.expected, result)
 		})
 	}
@@ -206,34 +206,33 @@ func TestTimeBinnerBinTime(t *testing.T) {
 	binner := NewTimeBinner(25*time.Hour, 10*time.Minute)
 
 	// Apply binning using ceiling division
-	binnedResult, err := binner.BinTime(t.Context(), result)
+	err := binner.BinTime(t.Context(), result)
 	assert.NoError(t, err)
-	assert.NotNil(t, binnedResult)
+	assert.NotNil(t, result)
 
 	// Should have 2 rows after binning
 	// Row 1 (ts=1000): ceil(1000/600)*600 = ceil(1.667)*600 = 2*600 = 1200
 	// Row 2 (ts=1150): ceil(1150/600)*600 = ceil(1.917)*600 = 2*600 = 1200 (merges with Row 1)
 	// Row 3 (ts=1600): ceil(1600/600)*600 = ceil(2.667)*600 = 3*600 = 1800
-	assert.Equal(t, 2, len(binnedResult.Rows), "Expected 2 rows after binning")
+	assert.Equal(t, 2, len(result.Rows), "Expected 2 rows after binning")
 
 	// Check that the first merged row has combined counters
-	firstRow := binnedResult.Rows[0]
+	firstRow := result.Rows[0]
 	assert.Equal(t, time.Unix(1200, 0), firstRow.Labels.Timestamp, "First row should be at 1200 (binned end)")
 	assert.Equal(t, uint64(150), firstRow.Counters.BytesRcvd, "BytesRcvd should be sum of 100+50")
 	assert.Equal(t, uint64(275), firstRow.Counters.BytesSent, "BytesSent should be sum of 200+75")
 
 	// Check the second row
-	secondRow := binnedResult.Rows[1]
+	secondRow := result.Rows[1]
 	assert.Equal(t, time.Unix(1800, 0), secondRow.Labels.Timestamp, "Second row should be at 1800")
 	assert.Equal(t, uint64(30), secondRow.Counters.BytesRcvd, "BytesRcvd should be 30")
 	assert.Equal(t, uint64(45), secondRow.Counters.BytesSent, "BytesSent should be 45")
 }
 
 func TestTimeBinnerBinTimeWithNilResult(t *testing.T) {
-	binner := NewTimeBinner(24*time.Hour, CalcTimeBinSize(24*time.Hour))
-	result, err := binner.BinTime(t.Context(), nil)
+	binner := NewTimeBinner(24*time.Hour, CalcTimeBinSize(types.DefaultTimeResolution, 24*time.Hour))
+	err := binner.BinTime(t.Context(), nil)
 	assert.NoError(t, err)
-	assert.Nil(t, result)
 }
 
 func TestTimeBinnerBinTimeWithEmptyRows(t *testing.T) {
@@ -242,8 +241,8 @@ func TestTimeBinnerBinTimeWithEmptyRows(t *testing.T) {
 		Rows:   Rows{},
 	}
 
-	binner := NewTimeBinner(24*time.Hour, CalcTimeBinSize(24*time.Hour))
-	binnedResult, err := binner.BinTime(t.Context(), result)
+	binner := NewTimeBinner(24*time.Hour, CalcTimeBinSize(types.DefaultTimeResolution, 24*time.Hour))
+	err := binner.BinTime(t.Context(), result)
 	assert.NoError(t, err)
-	assert.Equal(t, 0, len(binnedResult.Rows))
+	assert.Equal(t, 0, len(result.Rows))
 }
