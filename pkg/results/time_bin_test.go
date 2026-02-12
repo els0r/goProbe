@@ -213,9 +213,6 @@ func TestTimeBinnerBinTime(t *testing.T) {
 	assert.NotNil(t, result)
 
 	// Should have 2 rows after binning
-	// Row 1 (ts=1000): ceil(1000/600)*600 = ceil(1.667)*600 = 2*600 = 1200
-	// Row 2 (ts=1150): ceil(1150/600)*600 = ceil(1.917)*600 = 2*600 = 1200 (merges with Row 1)
-	// Row 3 (ts=1600): ceil(1600/600)*600 = ceil(2.667)*600 = 3*600 = 1800
 	assert.Equal(t, 2, len(result.Rows), "Expected 2 rows after binning")
 
 	// Check that the first merged row has combined counters

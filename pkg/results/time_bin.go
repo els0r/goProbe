@@ -4,6 +4,7 @@ package results
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/els0r/goProbe/v4/pkg/types"
@@ -24,6 +25,23 @@ func NewTimeBinner(queryRange, binSize time.Duration) *TimeBinner {
 	}
 }
 
+var rowsMapPool = sync.Pool{
+	New: func() any {
+		return make(RowsMap)
+	},
+}
+
+// GetRowsMap retrieves a RowsMap from the pool for reuse
+func GetRowsMap() RowsMap {
+	return rowsMapPool.Get().(RowsMap)
+}
+
+// PutRowsMap clears the map and puts it back into the pool for reuse
+func PutRowsMap(m RowsMap) {
+	clear(m)
+	rowsMapPool.Put(m)
+}
+
 // BinTime applies time binning to the result, re-aggregating rows with the same
 // binned timestamp and attributes
 func (t *TimeBinner) BinTime(ctx context.Context, res *Result) error {
@@ -31,7 +49,6 @@ func (t *TimeBinner) BinTime(ctx context.Context, res *Result) error {
 		return nil
 	}
 
-	// If no rows, nothing to bin
 	if len(res.Rows) == 0 {
 		return nil
 	}
@@ -39,25 +56,25 @@ func (t *TimeBinner) BinTime(ctx context.Context, res *Result) error {
 	_, span := tracing.Start(ctx, "(*TimeBinner).BinTime")
 	defer span.End()
 
-	// Re-aggregate rows using RowsMap with binned timestamps
-	rowsMap := make(RowsMap)
+	// re-aggregate rows using RowsMap with binned timestamps
+	rowsMap := GetRowsMap()
 	for _, row := range res.Rows {
-		// Create a copy of the row with binned timestamp
 		binnedRow := row
 		if !row.Labels.Timestamp.IsZero() {
 			binnedTS := BinTimestamp(row.Labels.Timestamp.Unix(), t.binSize)
 			binnedRow.Labels.Timestamp = time.Unix(binnedTS, 0)
 		}
 
-		// Merge into the map (rows with identical labels+attributes will aggregate)
 		rowsMap.MergeRow(binnedRow)
 	}
 
-	// Convert back to sorted rows. Sort by time since binning is a time-based operation
-	res.Rows = rowsMap.ToRowsSorted(By(SortTime, types.DirectionSum, true))
+	// convert the map back to a sorted slice of rows, re-using the existing rows slice
+	res.Rows = rowsMap.ToRowsSortedTo(res.Rows, By(SortTime, types.DirectionSum, true))
+
 	res.Summary.Hits.Total = len(res.Rows)
 	res.Summary.Hits.Displayed = len(res.Rows)
 
+	PutRowsMap(rowsMap)
 	return nil
 }
 

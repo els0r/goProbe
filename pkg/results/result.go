@@ -493,22 +493,45 @@ func (rm RowsMap) ToRowsSorted(order by) Rows {
 	return r
 }
 
+// ToRowsSortedTo operates like ToRowsSorted but writes the sorted rows into the provided slice.
+//
+// If the provided slice is nil or has insufficient capacity, a new slice will be allocated.
+func (rm RowsMap) ToRowsSortedTo(rows Rows, order by) Rows {
+	rows = rm.ToRowsTo(rows)
+	order.Sort(rows)
+	return rows
+}
+
 // ToRows produces a flat list of Rows from rm. Due to randomized map access,
 // this list will _not_ be in any particular order. Use ToRowsSorted if you rely
 // on order instead
 func (rm RowsMap) ToRows() Rows {
 	var r = make(Rows, len(rm))
+	return rm.ToRowsTo(r)
+}
+
+// ToRowsTo writes a flat list of Rows from rm into the provided slice. Due to randomized map access,
+// the slice _will not_ be in any particular order. Use ToRowsSortedTo if you rely on order instead.
+//
+// If the provided slice is nil or has insufficient capacity, a new slice will be allocated.
+// The input slice will be cleared by this function, not retaining any of its previous content.
+func (rm RowsMap) ToRowsTo(rows Rows) Rows {
 	if len(rm) == 0 {
-		return r
+		return rows
+	}
+	if rows == nil || cap(rows) < len(rm) {
+		rows = make(Rows, 0, len(rm))
+	} else {
+		rows = rows[:0]
 	}
 	i := 0
 	for ma, c := range rm {
-		r[i] = Row{
+		rows = append(rows, Row{
 			Labels:     ma.Labels,
 			Attributes: ma.Attributes,
 			Counters:   c,
-		}
+		})
 		i++
 	}
-	return r
+	return rows
 }

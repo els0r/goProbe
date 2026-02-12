@@ -1,0 +1,12 @@
+goos: linux
+goarch: amd64
+pkg: github.com/els0r/goProbe/v4/pkg/results
+cpu: Intel(R) Xeon(R) Platinum 8370C CPU @ 2.80GHz
+BenchmarkTimeBinning/bin_10m0s_min-2         	      15	  75429990 ns/op	 2937698 B/op	      39 allocs/op
+BenchmarkTimeBinning/bin_15m0s_min-2         	      16	  67525556 ns/op	 2754062 B/op	      37 allocs/op
+BenchmarkTimeBinning/bin_30m0s_min-2         	      15	  72491006 ns/op	 2960742 B/op	      40 allocs/op
+BenchmarkTimeBinning/bin_1h0m0s_min-2        	      18	  70903098 ns/op	     286 B/op	       4 allocs/op
+BenchmarkTimeBinning/bin_12h0m0s_min-2       	      18	  70471529 ns/op	     286 B/op	       4 allocs/op
+BenchmarkTimeBinning/bin_24h0m0s_min-2       	      18	  69571940 ns/op	     286 B/op	       4 allocs/op
+PASS
+ok  	github.com/els0r/goProbe/v4/pkg/results	7.172s
