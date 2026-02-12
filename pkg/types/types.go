@@ -72,13 +72,12 @@ const (
 // DefaultTimeOutputFormat denotes the default time format to use when displaying time.Time information
 const DefaultTimeOutputFormat = "2006-01-02 15:04:05"
 
-// DefaultBucketSize describes the time interval after which flows are written out.
+// DefaultTimeResolution describes the time interval after which flows are written out.
 // Time resolution cannot fall below this granularity threshold
-const DefaultBucketSize = 300 * time.Second // 5 minutes in seconds
+const DefaultTimeResolution = 300 * time.Second // 5 minutes in seconds
 
 // Time resolution input args
 const (
-	TimeResolution5m   = "5m"
 	TimeResolutionAuto = "auto"
 )
 

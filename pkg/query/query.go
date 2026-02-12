@@ -25,9 +25,9 @@ func (s *Statement) PostProcess(ctx context.Context, result *results.Result) (*r
 	)
 
 	// apply time resolution scaling if configured
-	if s.BinSize > 0 && s.LabelSelector.Timestamp {
+	if s.LabelSelector.Timestamp && s.TimeBinSize != types.DefaultTimeResolution {
 		queryDuration := time.Unix(s.Last, 0).Sub(time.Unix(s.First, 0))
-		binner := results.NewTimeBinner(queryDuration, s.BinSize)
+		binner := results.NewTimeBinner(queryDuration, s.TimeBinSize)
 		postProcessors = append(postProcessors, binner.BinTime)
 	}
 

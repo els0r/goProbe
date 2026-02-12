@@ -406,22 +406,18 @@ func prepTimeQueryArg(a *Args, s *Statement, errModel *DetailError) {
 	s.SortAscending = true
 	s.NumResults = MaxResults
 
+	s.TimeBinSize = types.DefaultTimeResolution
+
 	// make sure the default behavior is resolving 5m blocks
 	if a.TimeResolution == "" {
-		a.TimeResolution = types.TimeResolution5m
+		return
 	}
-
-	s.TimeResolution = a.TimeResolution
 
 	// validate and calculate time resolution bin size
 	queryDuration := time.Unix(s.Last, 0).Sub(time.Unix(s.First, 0))
-	if a.TimeResolution == types.TimeResolution5m { // 5m is the default bin size, so if it's set, we can skip validation and calculation
-		return
-	}
 	if a.TimeResolution == types.TimeResolutionAuto {
 		// Auto mode: calculate from query duration
-		s.BinSize = results.CalcTimeBinSize(queryDuration)
-
+		s.TimeBinSize = results.CalcTimeBinSize(queryDuration)
 		return
 	}
 
@@ -429,33 +425,38 @@ func prepTimeQueryArg(a *Args, s *Statement, errModel *DetailError) {
 	duration, err := time.ParseDuration(a.TimeResolution)
 	if err != nil {
 		errModel.Errors = append(errModel.Errors, &huma.ErrorDetail{
-			Message:  fmt.Sprintf("invalid time resolution: %s (must be '%s' or a valid duration like '%s', '10m', '1h')", types.TimeResolutionAuto, types.TimeResolution5m, a.TimeResolution),
+			Message:  fmt.Sprintf("invalid time resolution: %s (must be '%s' or a valid duration like '5m', '10m', '1h')", types.TimeResolutionAuto, a.TimeResolution),
 			Location: "body.time_resolution",
 			Value:    a.TimeResolution,
 		})
-
 		return
 	}
+
+	if duration == types.DefaultTimeResolution {
+		s.TimeBinSize = duration
+		return
+	}
+
 	// Validate constraints: min 5m, multiple of 5m
-	if duration < types.DefaultBucketSize {
+	if duration < types.DefaultTimeResolution {
 		errModel.Errors = append(errModel.Errors, &huma.ErrorDetail{
-			Message:  "time resolution must be at least 5 minutes",
+			Message:  fmt.Sprintf("time resolution must be at least %s", types.DefaultTimeResolution),
 			Location: "body.time_resolution",
 			Value:    a.TimeResolution,
 		})
 
 		return
 	}
-	if duration%types.DefaultBucketSize != 0 {
+	if duration%types.DefaultTimeResolution != 0 {
 		errModel.Errors = append(errModel.Errors, &huma.ErrorDetail{
-			Message:  "time resolution must be a multiple of 5 minutes (e.g. 5m, 10m, 15m, 1h, 1h30m)",
+			Message:  fmt.Sprintf("time resolution must be a multiple of %s", types.DefaultTimeResolution),
 			Location: "body.time_resolution",
 			Value:    a.TimeResolution,
 		})
 		return
 	}
 
-	s.BinSize = duration
+	s.TimeBinSize = duration
 }
 
 func prepDirectionArg(a *Args, s *Statement, errModel *DetailError) {
