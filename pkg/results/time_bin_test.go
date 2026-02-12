@@ -1,6 +1,8 @@
 package results
 
 import (
+	"fmt"
+	"net/netip"
 	"testing"
 	"time"
 
@@ -245,4 +247,61 @@ func TestTimeBinnerBinTimeWithEmptyRows(t *testing.T) {
 	err := binner.BinTime(t.Context(), result)
 	assert.NoError(t, err)
 	assert.Equal(t, 0, len(result.Rows))
+}
+
+func BenchmarkTimeBinning(b *testing.B) {
+	res := &Result{
+		Status: Status{Code: "ok"},
+		Rows:   make(Rows, 100000), // 100k rows to bin
+	}
+
+	var maxTS int64
+	for i := 0; i < len(res.Rows); i++ {
+		sip, err := netip.ParseAddr(fmt.Sprintf("192.168.1.%d", i%256))
+		if err != nil {
+			b.Fatal(err)
+		}
+		dip, err := netip.ParseAddr(fmt.Sprintf("10.0.0.%d", i%256))
+		if err != nil {
+			b.Fatal(err)
+		}
+		maxTS = int64(i * int(types.DefaultTimeResolution))
+		res.Rows[i] = Row{
+			Labels: Labels{
+				Timestamp: time.Unix(maxTS, 0),
+				Iface:     "eth0",
+			},
+			Attributes: Attributes{
+				SrcIP:   sip,
+				DstIP:   dip,
+				DstPort: uint16(i % (1 << 16)),
+				IPProto: uint8(i % 256),
+			},
+			Counters: types.Counters{
+				PacketsRcvd: uint64(i), PacketsSent: uint64(i),
+				BytesRcvd: uint64(i), BytesSent: uint64(i * 2),
+			},
+		}
+	}
+	res.Summary.TimeRange.First = time.Unix(0, 0)
+	res.Summary.TimeRange.Last = time.Unix(maxTS, 0)
+
+	for _, bin := range []time.Duration{
+		10 * time.Minute, 15 * time.Minute, 30 * time.Minute,
+		1 * time.Hour, 12 * time.Hour, 24 * time.Hour,
+	} {
+		b.Run(fmt.Sprintf("bin_%s_min", bin), func(b *testing.B) {
+			binner := NewTimeBinner(res.Summary.TimeRange.ResultsRange(), bin)
+
+			b.ReportAllocs()
+			for b.Loop() {
+				res := *res // copy the original result to avoid mutating it across iterations
+
+				err := binner.BinTime(b.Context(), &res)
+				if err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
 }
