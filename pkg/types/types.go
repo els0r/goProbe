@@ -72,6 +72,15 @@ const (
 // DefaultTimeOutputFormat denotes the default time format to use when displaying time.Time information
 const DefaultTimeOutputFormat = "2006-01-02 15:04:05"
 
+// DefaultTimeResolution describes the time interval after which flows are written out.
+// Time resolution cannot fall below this granularity threshold
+const DefaultTimeResolution = 300 * time.Second // 5 minutes in seconds
+
+// Time resolution input args
+const (
+	TimeResolutionAuto = "auto"
+)
+
 // LabelSelector defines a selector based on several conditions / parameters
 type LabelSelector struct {
 	Timestamp bool `json:"timestamp,omitempty"`

@@ -169,6 +169,7 @@ and I/O load)
 	// the time parameter should be available to commands other than query
 	pflags.StringVarP(&cmdLineParams.First, conf.First, "f", "", helpMap["First"])
 	pflags.StringVarP(&cmdLineParams.Last, conf.Last, "l", "", "Show flows no later than --last. See help for --first for more info\n")
+	pflags.StringVar(&cmdLineParams.TimeResolution, conf.TimeResolution, "5m", "Time resolution for result aggregation. Set to 'auto' for automatic scaling based on query duration, or specify a duration (min 5m, multiple of 5 - e.g. 5m, 10m, 15m, 1h, 1h30m)\n")
 
 	pflags.String(conf.QueryServerAddr, "",
 		`Address of query server to run queries against (host:port). If this value is
@@ -474,6 +475,13 @@ func entrypoint(cmd *cobra.Command, args []string) (err error) {
 		}
 	}
 
+	// post-processing functions to be applied to the result before printing
+	err = stmt.PostProcess(ctx, result)
+	if err != nil {
+		return fmt.Errorf("failed to post-process query results: %w", err)
+	}
+
+	// finally: render the results
 	err = stmt.Print(ctx, result, results.WithQueryStats(viper.GetBool(conf.QueryStats)))
 	if err != nil {
 		return fmt.Errorf("failed to print query result: %w", err)

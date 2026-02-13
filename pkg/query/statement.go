@@ -26,8 +26,9 @@ type Statement struct {
 	Direction types.Direction `json:"direction"`
 
 	// time selection
-	First int64 `json:"from"`
-	Last  int64 `json:"to"`
+	First       int64         `json:"from"`
+	Last        int64         `json:"to"`
+	TimeBinSize time.Duration `json:"time_bin_size"`
 
 	// formatting
 	Format        string            `json:"format"`

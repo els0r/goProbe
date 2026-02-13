@@ -45,8 +45,9 @@ const (
 	MemoryLowMode = memoryKey + ".low-mode"
 
 	// Time
-	First = "first"
-	Last  = "last"
+	First          = "first"
+	Last           = "last"
+	TimeResolution = queryKey + ".time-resolution"
 
 	// Profiling
 	profilingKey       = "profiling"
