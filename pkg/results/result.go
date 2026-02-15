@@ -511,35 +511,34 @@ func (rm RowsMap) ToRows() Rows {
 	return rm.ToRowsTo(r)
 }
 
-// ToRowsTo writes a flat list of Rows from rm into the provided slice. Due to randomized map access,
-// the slice _will not_ be in any particular order. Use ToRowsSortedTo if you rely on order instead.
+// ToRowsTo writes a flat list of Rows from rm into the provided slice.
+// Due to randomized map access, the slice _will not_ be in any particular order.
+// Use ToRowsSortedTo if you rely on order instead.
 //
 // If the provided slice is nil or has insufficient capacity, a new slice will be allocated.
 // The input slice will be cleared by this function, not retaining any of its previous content.
 func (rm RowsMap) ToRowsTo(rows Rows) Rows {
-	capDiff := len(rm) - cap(rows)
-	switch {
-	case len(rm) == 0:
-		return rows
-	case rows == nil:
-		rows = make(Rows, 0, len(rm))
-	case capDiff > 0:
-		rows = slices.Grow(rows, capDiff)
-	default:
-	}
-
-	// make sure the slice is always reset. We are not interesting in its previous content, only
-	// its available memory
+	// 1. Always reset the length first.
+	// This ensures the "cleared" contract is met even if the map is empty.
+	// Note: rows[:0] is safe even if 'rows' is nil.
 	rows = rows[:0]
 
-	i := 0
+	// 2. Optimization: If map is empty, return the now-empty slice immediately.
+	if len(rm) == 0 {
+		return rows
+	}
+
+	// 3. Grow the slice to fit the map.
+	// If rows was nil, this allocates. If rows had cap, this checks it.
+	rows = slices.Grow(rows, len(rm))
+
 	for ma, c := range rm {
 		rows = append(rows, Row{
 			Labels:     ma.Labels,
 			Attributes: ma.Attributes,
 			Counters:   c,
 		})
-		i++
 	}
+
 	return rows
 }
