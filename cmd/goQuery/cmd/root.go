@@ -442,6 +442,12 @@ func entrypoint(cmd *cobra.Command, args []string) (err error) {
 %s`, err, types.PrettyIndent(stmt, 4))
 	}
 
+	// post-processing functions to be applied to the result before rendering
+	err = stmt.PostProcess(ctx, result)
+	if err != nil {
+		return fmt.Errorf("failed to post-process query results: %w", err)
+	}
+
 	// serialize raw results array if json is selected
 	if stmt.Format == types.FormatJSON {
 		err = jsoniter.NewEncoder(stmt.Output).Encode(result)
@@ -473,12 +479,6 @@ func entrypoint(cmd *cobra.Command, args []string) (err error) {
 		for _, host := range result.HostsStatuses.GetErrorStatuses() {
 			logger.Errorf("Host %s returned with error %q: %s", host.Hostname, host.Code, host.Message)
 		}
-	}
-
-	// post-processing functions to be applied to the result before printing
-	err = stmt.PostProcess(ctx, result)
-	if err != nil {
-		return fmt.Errorf("failed to post-process query results: %w", err)
 	}
 
 	// finally: render the results

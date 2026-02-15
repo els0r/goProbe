@@ -41,6 +41,13 @@ func (s *Statement) PostProcess(ctx context.Context, result *results.Result) err
 			return fmt.Errorf("failed to run %s: %w", fnName, err)
 		}
 	}
+
+	// prune results if the statement has NumResults set
+	if s.NumResults != 0 && s.NumResults < uint64(len(result.Rows)) {
+		result.Rows = result.Rows[:s.NumResults]
+	}
+	result.Summary.Hits.Displayed = len(result.Rows)
+
 	return nil
 }
 
