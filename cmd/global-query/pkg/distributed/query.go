@@ -219,12 +219,13 @@ func aggregateResults(ctx context.Context, stmt *query.Statement, queryResults <
 
 	// tracker maps for meta info
 	var (
-		rowMap   = make(results.RowsMap)
+		rowMap   = results.GetRowsMap()
 		ifaceMap = make(map[string]struct{})
 	)
 
 	defer func() {
 		finalizeResult(finalResult, stmt, rowMap, stmt.NumResults) // fully honors the limit
+		results.PutRowsMap(rowMap)
 	}()
 
 	for {
