@@ -388,18 +388,13 @@ func (qr *QueryRunner) RunStatement(ctx context.Context, stmt *query.Statement, 
 
 	// stop timing everything related to the query and store the hits
 	result.Summary.Hits.Total = count
+	result.Rows = rs
 
 	// due to filtering, might display less than min(stmt.NumResults, len(rs))
-	// result rows
-	nDisplay := stmt.NumResults
 	if uint64(count) < stmt.NumResults {
-		nDisplay = uint64(count)
+		stmt.NumResults = uint64(count)
 	}
-	if nDisplay < uint64(len(rs)) {
-		rs = rs[:nDisplay]
-	}
-	result.Summary.Hits.Displayed = len(rs)
-	result.Rows = rs
+
 	return result, nil
 }
 
