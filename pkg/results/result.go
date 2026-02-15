@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/netip"
+	"slices"
 	"sort"
 	"strings"
 	"text/tabwriter"
@@ -516,14 +517,21 @@ func (rm RowsMap) ToRows() Rows {
 // If the provided slice is nil or has insufficient capacity, a new slice will be allocated.
 // The input slice will be cleared by this function, not retaining any of its previous content.
 func (rm RowsMap) ToRowsTo(rows Rows) Rows {
-	if len(rm) == 0 {
+	capDiff := len(rm) - cap(rows)
+	switch {
+	case len(rm) == 0:
 		return rows
-	}
-	if rows == nil || cap(rows) < len(rm) {
+	case rows == nil:
 		rows = make(Rows, 0, len(rm))
-	} else {
-		rows = rows[:0]
+	case capDiff > 0:
+		rows = slices.Grow(rows, capDiff)
+	default:
 	}
+
+	// make sure the slice is always reset. We are not interesting in its previous content, only
+	// its available memory
+	rows = rows[:0]
+
 	i := 0
 	for ma, c := range rm {
 		rows = append(rows, Row{

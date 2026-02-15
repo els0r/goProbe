@@ -310,7 +310,7 @@ func finalizeResult(res *results.Result, stmt *query.Statement, rowMap results.R
 	}
 
 	// assign the rows to the result
-	res.Rows = rowMap.ToRowsSorted(results.By(stmt.SortBy, stmt.Direction, stmt.SortAscending))
+	res.Rows = rowMap.ToRowsSortedTo(res.Rows, results.By(stmt.SortBy, stmt.Direction, stmt.SortAscending))
 
 	limit := min(stmt.NumResults, limitUpperBound)
 
