@@ -219,12 +219,13 @@ func aggregateResults(ctx context.Context, stmt *query.Statement, queryResults <
 
 	// tracker maps for meta info
 	var (
-		rowMap   = make(results.RowsMap)
+		rowMap   = results.GetRowsMap()
 		ifaceMap = make(map[string]struct{})
 	)
 
 	defer func() {
-		finalizeResult(finalResult, stmt, rowMap, stmt.NumResults) // fully honors the limit
+		finalizeResult(ctx, finalResult, stmt, rowMap, stmt.NumResults) // fully honors the limit
+		results.PutRowsMap(rowMap)
 	}()
 
 	for {
@@ -293,7 +294,7 @@ func aggregateSingleResult(ctx context.Context, qr, finalResult *results.Result,
 	}
 
 	// for streaming, partial results must already include the current "final" state
-	finalizeResult(finalResult, stmt, rowMap, maxLimitStreaming) // caps the limit if it exceeds maxLimitStreaming
+	finalizeResult(ctx, finalResult, stmt, rowMap, maxLimitStreaming) // caps the limit if it exceeds maxLimitStreaming
 
 	// if SSE callback is provided, run it
 	err := api.OnResult(finalResult, send)
@@ -302,14 +303,19 @@ func aggregateSingleResult(ctx context.Context, qr, finalResult *results.Result,
 	}
 }
 
-func finalizeResult(res *results.Result, stmt *query.Statement, rowMap results.RowsMap, limitUpperBound uint64) {
+func finalizeResult(ctx context.Context, res *results.Result, stmt *query.Statement, rowMap results.RowsMap, limitUpperBound uint64) {
 	defer res.End()
 	if len(rowMap) == 0 {
 		return
 	}
 
 	// assign the rows to the result
-	res.Rows = rowMap.ToRowsSorted(results.By(stmt.SortBy, stmt.Direction, stmt.SortAscending))
+	res.Rows = rowMap.ToRowsSortedTo(res.Rows, results.By(stmt.SortBy, stmt.Direction, stmt.SortAscending))
+
+	err := stmt.PostProcess(ctx, res)
+	if err != nil {
+		logging.FromContext(ctx).With("error", err).Error("failed to post-process query results")
+	}
 
 	limit := min(stmt.NumResults, limitUpperBound)
 
