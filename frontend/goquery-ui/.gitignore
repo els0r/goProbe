@@ -1,0 +1,5 @@
+global-query_*_openapi.yaml
+
+# deps and distribution
+node_modules/
+dist/
