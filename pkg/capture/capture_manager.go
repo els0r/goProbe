@@ -681,7 +681,7 @@ func (cm *Manager) logErrors(ctx context.Context, iface string, errsChan <-chan 
 				}
 				return
 			}
-			logger.Error(err)
+			logger.Error("capture error", "error", err)
 		}
 	}
 }

@@ -212,7 +212,7 @@ func initLogging() error {
 		loggerOpts = append(loggerOpts, logging.WithFileOutput(dst))
 	}
 
-	err := logging.Init(
+	_, err := logging.Init(
 		logging.LevelFromString(viper.GetString(conf.LogLevel)),
 		logging.Encoding(viper.GetString(conf.LogEncoding)),
 		loggerOpts...,

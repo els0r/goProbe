@@ -251,7 +251,7 @@ func aggregateSingleResult(ctx context.Context, qr, finalResult *results.Result,
 
 		finalResult.HostsStatuses.SetErr(qr.Hostname, uerr)
 
-		logger.Error(qr.Err())
+		logger.Error("query failed", "error", qr.Err())
 		return
 	}
 

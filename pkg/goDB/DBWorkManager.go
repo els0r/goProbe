@@ -488,7 +488,7 @@ func (w *DBWorkManager) grabAndProcessWorkload(ctx context.Context, id int, wg *
 
 		enc, err := encoder.New(defaultEncoderType)
 		if err != nil {
-			logger.Error(err)
+			logger.Error("failed to create encoder", "error", err)
 			mapChan <- hashmap.NilAggFlowMapWithMetadata
 		}
 
@@ -525,7 +525,7 @@ func (w *DBWorkManager) grabAndProcessWorkload(ctx context.Context, id int, wg *
 					// if there is an error during one of the read jobs, throw a syslog message and terminate
 					stats, err = w.readBlocksAndEvaluate(workDir, enc, &resultMap)
 					if err != nil {
-						logger.Error(err)
+						logger.Error("failed to read blocks and evaluate", "error", err)
 						mapChan <- hashmap.NilAggFlowMapWithMetadata
 						return
 					}

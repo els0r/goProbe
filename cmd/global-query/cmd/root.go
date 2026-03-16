@@ -53,7 +53,7 @@ func Execute() error {
 func initLogger() {
 	// since this is a command line tool, only warnings and errors should be printed and they
 	// shouldn't go to a dedicated file
-	err := logging.Init(logging.LevelFromString(viper.GetString(conf.LogLevel)), logging.Encoding(viper.GetString(conf.LogEncoding)),
+	_, err := logging.Init(logging.LevelFromString(viper.GetString(conf.LogLevel)), logging.Encoding(viper.GetString(conf.LogEncoding)),
 		logging.WithVersion(version.Short()),
 		logging.WithOutput(os.Stdout),
 		logging.WithErrorOutput(os.Stderr),

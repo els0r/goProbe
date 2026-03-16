@@ -213,7 +213,7 @@ func (server *DefaultServer) registerMiddlewares() {
 		if len(server.requestDurationBuckets) > 0 {
 			buckets = server.requestDurationBuckets
 		}
-		metrics.NewPrometheus(server.serviceName, "api").
+		metrics.NewPrometheus(server.serviceName, "api", nil).
 			WithRequestDurationBuckets(buckets).
 			Register(server.router)
 	}

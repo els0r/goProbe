@@ -72,7 +72,7 @@ func listInterfaces(ctx context.Context, dbPath, queryLogFile string, ifaces ...
 		logger := logger.With("file", queryLogFile)
 		logger.Debugf("logging interface list query")
 
-		qlogger, err = logging.New(slog.LevelInfo, logging.EncodingJSON, logging.WithFileOutput(queryLogFile))
+		qlogger, _, err = logging.New(slog.LevelInfo, logging.EncodingJSON, logging.WithFileOutput(queryLogFile))
 		if err != nil {
 			logger.Errorf("failed to initialize query logger: %v", err)
 		} else {
