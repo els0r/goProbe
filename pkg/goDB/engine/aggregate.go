@@ -47,7 +47,7 @@ func logWorkloadStats(logger *logging.L, msg string, stats *workload.Stats) {
 	if stats == nil {
 		return
 	}
-	logger.With("stats", stats).Info(msg)
+	logger.Info(msg, "stats", stats)
 }
 
 // receive maps on mapChan until mapChan gets closed.
@@ -82,7 +82,7 @@ func (qr *QueryRunner) aggregate(ctx context.Context, mapChan <-chan hashmap.Agg
 				if send != nil {
 					err := api.OnKeepalive(send)
 					if err != nil {
-						logger.With("error", err).Error("failed to call keepalive callback")
+						logger.Error("failed to call keepalive callback", "error", err)
 					}
 				}
 			}, qr.keepAlive)

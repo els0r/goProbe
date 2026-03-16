@@ -64,7 +64,7 @@ func NewSSEFromConfig(cfg *gpclient.Config, keepaliveChan chan<- struct{}) *SSEC
 			errs := len(r.HostsStatuses.GetErrorStatuses())
 
 			logger := logging.FromContext(ctx)
-			logger.With("total", all, "done", all-errs, "errors", errs).Info("received update")
+			logger.Info("received update", "total", all, "done", all-errs, "errors", errs)
 
 			return nil
 		},
@@ -171,7 +171,7 @@ func (sse *SSEClient) readEventStream(ctx context.Context, r io.Reader) (res *re
 			}
 			eventsReceived++
 
-			logger.With("event_type", event.streamType, "events_received", eventsReceived).Info("received event")
+			logger.Info("received event", "event_type", event.streamType, "events_received", eventsReceived)
 
 			switch event.streamType {
 			case api.StreamEventQueryError:
@@ -184,15 +184,15 @@ func (sse *SSEClient) readEventStream(ctx context.Context, r io.Reader) (res *re
 				return nil, qe
 			case api.StreamEventKeepalive:
 				if err := jsoniter.Unmarshal(event.data, keepalive); err != nil {
-					logger.With("error", err).Error("failed to parse JSON")
+					logger.Error("failed to parse JSON", "error", err)
 					continue
 				}
 				if err := sse.onKeepalive(ctx); err != nil {
-					logger.With("error", err).Error("failed to call keepalive callback")
+					logger.Error("failed to call keepalive callback", "error", err)
 				}
 			case api.StreamEventPartialResult, api.StreamEventFinalResult:
 				if err := jsoniter.Unmarshal(event.data, res); err != nil {
-					logger.With("error", err).Error("failed to parse JSON")
+					logger.Error("failed to parse JSON", "error", err)
 					continue
 				}
 				// exit streaming if this is the final result
@@ -201,7 +201,7 @@ func (sse *SSEClient) readEventStream(ctx context.Context, r io.Reader) (res *re
 				}
 
 				if err := sse.onUpdate(ctx, res); err != nil {
-					logger.With("error", err).Error("failed to call update callback")
+					logger.Error("failed to call update callback", "error", err)
 				}
 			}
 		}

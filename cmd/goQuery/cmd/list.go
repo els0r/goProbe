@@ -76,7 +76,7 @@ func listInterfaces(ctx context.Context, dbPath, queryLogFile string, ifaces ...
 		if err != nil {
 			logger.Errorf("failed to initialize query logger: %v", err)
 		} else {
-			qlogger.With("args", queryArgs).Infof("preparing interface list query")
+			qlogger.Info("preparing interface list query", "args", queryArgs)
 			defer qlogger.Info("interface list query finished")
 		}
 	}

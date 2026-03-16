@@ -50,7 +50,7 @@ func getBodyQueryRunnerHandler(caller string, querier query.Runner) func(context
 
 		res, err := runQuery(ctx, caller, input.Body, querier)
 		if err != nil {
-			logging.FromContext(ctx).With("args", input.Body).With("error", err).Error("error running plain query")
+			logging.FromContext(ctx).Error("error running plain query", "args", input.Body, "error", err)
 			return nil, err
 		}
 		output.Body = res
@@ -63,7 +63,7 @@ func getSSEBodyQueryRunnerHandler(caller string, querier SSEQueryRunner) func(co
 	return func(ctx context.Context, input *ArgsInput, send sse.Sender) {
 		res, err := runQuerySSE(ctx, caller, input.Body, querier, send)
 		if err != nil {
-			logging.FromContext(ctx).With("args", input.Body).With("error", err).Error("error running SSE query")
+			logging.FromContext(ctx).Error("error running SSE query", "args", input.Body, "error", err)
 			_ = send.Data(query.NewDetailError(http.StatusInternalServerError, err))
 			return
 		}
@@ -95,12 +95,12 @@ func getBodyValidationHandler(extraValidation ...validationFunc) func(context.Co
 	return func(ctx context.Context, input *ArgsInput) (*struct{}, error) {
 		args := input.Body
 
-		logger := logging.FromContext(ctx).With("args", args)
-		logger.Debug("validating args from body")
+		logger := logging.FromContext(ctx)
+		logger.Debug("validating args from body", "args", args)
 
 		_, err := args.Prepare()
 		if err != nil {
-			logger.With("error", err).Error("invalid query args")
+			logger.Error("invalid query args", "args", args, "error", err)
 			// if it's a validation error 422 is returned automatically
 			return nil, err
 		}
@@ -112,7 +112,7 @@ func getBodyValidationHandler(extraValidation ...validationFunc) func(context.Co
 
 		for _, validate := range extraValidation {
 			if err := validate(args); err != nil {
-				logger.With("error", err).Error("extra validation: invalid query args")
+				logger.Error("extra validation: invalid query args", "args", args, "error", err)
 				return nil, err
 			}
 		}
@@ -127,12 +127,12 @@ func getParamsValidationHandler(extraValidation ...validationFunc) func(context.
 		args := input.Args
 		args.DNSResolution = input.DNSResolution
 
-		logger := logging.FromContext(ctx).With("args", args)
-		logger.Debug("validating args from query parameters")
+		logger := logging.FromContext(ctx)
+		logger.Debug("validating args from query parameters", "args", args)
 
 		_, err := args.Prepare()
 		if err != nil {
-			logger.With("error", err).Error("invalid query args")
+			logger.Error("invalid query args", "args", args, "error", err)
 			// if it's a validation error 422 is returned automatically
 			return nil, err
 		}
@@ -144,7 +144,7 @@ func getParamsValidationHandler(extraValidation ...validationFunc) func(context.
 
 		for _, validate := range extraValidation {
 			if err := validate(&args); err != nil {
-				logger.With("error", err).Error("extra validation: invalid query args")
+				logger.Error("extra validation: invalid query args", "args", args, "error", err)
 				return nil, err
 			}
 		}
@@ -166,7 +166,7 @@ func prepareArgs(ctx context.Context, caller string, args *query.Args) error {
 	logger := logging.FromContext(ctx)
 
 	// Check if the statement can be created
-	logger.With("args", args).Info("running query")
+	logger.Info("running query", "args", args)
 
 	_, err := args.Prepare()
 	return err

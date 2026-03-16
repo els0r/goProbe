@@ -11,6 +11,6 @@ func main() {
 	err := cmd.Execute()
 	if err != nil {
 		logger, _, _ := logging.New(slog.LevelInfo, "logfmt")
-		logger.With("error", err).Fatal("goProbe terminated with an error")
+		logger.Fatal("goProbe terminated with an error", "error", err)
 	}
 }

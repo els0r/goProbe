@@ -242,7 +242,7 @@ func run(ctx context.Context, cfg *gpconf.Config) error {
 	config := configMonitor.GetConfig()
 
 	logger := logging.FromContext(ctx)
-	logger.With("autodetection.enabled", config.AutoDetection.Enabled).Info("loaded configuration")
+	logger.Info("loaded configuration", "autodetection.enabled", config.AutoDetection.Enabled)
 
 	// write spec and exit
 	openAPIfile := viper.GetString(flagOpenAPISpecOutfile)
@@ -331,7 +331,7 @@ func run(ctx context.Context, cfg *gpconf.Config) error {
 
 		// serve API
 		go func() {
-			logger.With("addr", config.API.Addr).Info("starting API server")
+			logger.Info("starting API server", "addr", config.API.Addr)
 			err := apiServer.Serve()
 			if err != nil && !errors.Is(err, http.ErrServerClosed) {
 				logger.Fatalf("failed to spawn goProbe API server: %s", err)

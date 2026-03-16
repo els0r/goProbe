@@ -308,7 +308,7 @@ func entrypoint(cmd *cobra.Command, args []string) (err error) {
 	// initialize tracing
 	shutdown, err := tracing.InitFromFlags(queryCtx)
 	if err != nil {
-		logger.With("error", err).Error("failed to set up tracing")
+		logger.Error("failed to set up tracing", "error", err)
 	}
 	defer shutdown(context.Background())
 
@@ -409,7 +409,7 @@ func entrypoint(cmd *cobra.Command, args []string) (err error) {
 		if err != nil {
 			logger.Errorf("failed to initialize query logger: %v", err)
 		} else {
-			qlogger.With("args", queryArgs).Infof("preparing query")
+			qlogger.Info("preparing query", "args", queryArgs)
 			defer func() {
 				if result != nil {
 					qlogger = qlogger.With("summary", result.Summary)
@@ -428,7 +428,7 @@ func entrypoint(cmd *cobra.Command, args []string) (err error) {
 
 	if queryLogFile != "" {
 		if qlogger != nil {
-			qlogger.With("stmt", stmt).Info("running query")
+			qlogger.Info("running query", "stmt", stmt)
 		}
 	}
 
@@ -491,7 +491,7 @@ func setDefaultTimeRange(args *query.Args) query.Args {
 		// is included. This is only done if first wasn't explicitly set. If it is, it must be assumed that
 		// the caller knows the possible extend of a "time" query
 		if strings.Contains(args.Query, types.TimeName) || strings.Contains(args.Query, types.RawCompoundQuery) {
-			logger.With("query", args.Query).Debug("time attribute detected, limiting time range to one day")
+			logger.Debug("time attribute detected, limiting time range to one day", "query", args.Query)
 			args.First = time.Now().AddDate(0, 0, -1).Format(time.ANSIC)
 		} else {
 			// by default, go back one month in time
