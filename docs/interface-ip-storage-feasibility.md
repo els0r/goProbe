@@ -254,20 +254,73 @@ of that interface's database directory.
 Records are sorted by `t` in ascending order. The array is the complete file content;
 no outer envelope is required.
 
-### 5.3 Write Protocol
+### 5.3 Concurrency and File Access
+
+Understanding the existing locking model is essential before adding a new file.
+
+#### What the codebase already does
+
+| File | Write strategy | Read strategy | Locking |
+|---|---|---|---|
+| `.gpf` | Append-only; existing data never modified | Open + sequential read | None — append atomicity is sufficient |
+| `.blockmeta` | Write to temp file, then `rename(2)` | Open + full read | None — atomic rename guarantees complete file |
+| `summary.json` | Documented as using `O_EXCL\|O_CREAT` lock file | (same) | Documented but not currently implemented |
+
+The dominant pattern for files that must be rewritten is **write-to-temp → `rename(2)`**
+(`GPDir.writeMetadataAtomic()`). On Linux/POSIX `rename(2)` is atomic: any reader that
+opens the path sees either the old complete file or the new complete file — never a
+partial state. A reader that already has the old inode open continues reading the old
+data unaffected; both sides are safe.
+
+goquery holds **no locks** while reading. It opens files, reads them, and closes them.
+This is safe for `.blockmeta` precisely because of the atomic-rename guarantee.
+
+#### Why a naive append is not safe for `ipmeta.json`
+
+A JSON array cannot be extended with a single atomic `write(2)` call once it grows
+beyond a page. A reader catching a write mid-flight would see a truncated or
+syntactically invalid array. Unlike `.gpf` files — where the columnar binary format
+tolerates a partially written trailing block by checking block lengths — a JSON parser
+will simply error.
+
+#### Adopted strategy: atomic rename, consistent with `.blockmeta`
+
+On each IP-change event the writer:
+
+1. Serializes the complete updated array into a temp file in the same directory
+   (e.g. `.ipmeta-<pid>.tmp`)
+2. Calls `rename(2)` to replace `ipmeta.json` atomically
+3. Deletes the temp file only on failure
+
+Readers (goquery, global-query) open `ipmeta.json` and read it without acquiring any
+lock. Because the file is always a complete, valid JSON array (or absent), no
+synchronization primitive is needed on the read side — exactly the same guarantee
+`.blockmeta` relies on.
+
+**Cost**: the file is rewritten in full on each IP change. At O(10) changes/year and a
+file size of ~2 KB after a decade, this is entirely negligible.
+
+**No `ipmeta.lock` file is needed.** The `summary.lock` approach (documented but not
+implemented) exists for a mutable file rewritten on every writeout under potential
+concurrent access from multiple writers. `ipmeta.json` has a single writer (the
+capture daemon) and is rewritten only on IP changes, so `rename(2)` atomicity alone is
+sufficient.
+
+### 5.4 Write Protocol
 
 At each 5-minute writeout the capture manager:
 
 1. Reads the current address list from the OS (already available during capture setup)
-2. Compares it against the last-written entry in `ipmeta.json` (cached in memory; no
-   disk read needed after startup)
-3. If unchanged: no write
-4. If changed (or no file yet): append a new JSON record and update the in-memory cache
+2. Compares it against the last-written entry cached in memory (no disk read after
+   startup)
+3. If unchanged: no write, no disk activity
+4. If changed (or no file yet): serialize the full updated array to a temp file, then
+   `rename(2)` it to `ipmeta.json`; update the in-memory cache
 
 The initial record written at daemon startup always captures the address list at
 startup time, establishing the baseline even if no subsequent changes occur.
 
-### 5.4 Query Integration
+### 5.5 Query Integration
 
 #### goquery (local)
 
@@ -290,7 +343,7 @@ Each sensor's query API response already includes per-interface metadata. The
 filtered snapshots. The aggregating server merges these per sensor, keyed by
 `(sensor, interface)`.
 
-### 5.5 Edge Cases
+### 5.6 Edge Cases
 
 | Scenario | Handling |
 |---|---|
@@ -301,7 +354,7 @@ filtered snapshots. The aggregating server merges these per sensor, keyed by
 | Database copied to another host | File is preserved with original timestamps — historically correct |
 | Interface renamed | New interface directory means new (initially empty) `ipmeta.json`; old history is under the old name |
 
-### 5.6 Retention and Compaction
+### 5.7 Retention and Compaction
 
 Because the file grows at O(n_changes) and typical change rates are very low, no
 compaction is needed in practice. If a policy is desired (e.g., drop entries older
