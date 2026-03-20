@@ -17,11 +17,10 @@ RUN go mod download
 # Upload source code
 COPY . .
 
-# Build all binaries
-RUN export COMMIT_SHA="$(cat .build/commit_sha)" \
- && export SEM_VER="$(cat .build/sem_ver)" \
- && cd ./pkg/version \
- && go generate && cd -
+# Stamp version info into the build (passed via --build-arg)
+ARG COMMIT_SHA=""
+ARG SEM_VER=""
+RUN cd ./pkg/version && go generate
 RUN nice -15 go build -tags jsoniter,slimcap_nomock -o goprobe -pgo=auto ./cmd/goProbe
 RUN nice -15 go build -tags jsoniter -o global-query -pgo=auto ./cmd/global-query
 RUN nice -15 go build -o goquery -pgo=auto ./cmd/goQuery
