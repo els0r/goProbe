@@ -1,5 +1,5 @@
 # Base image on Alpine / Golang
-FROM golang:1.25-alpine3.22 AS build
+FROM golang:1.26-alpine3.23 AS build
 
 # Download system package dependencies
 RUN apk add cmake make gcc libtool git bash musl-dev zstd-dev lz4-dev
@@ -18,7 +18,11 @@ RUN go mod download
 COPY . .
 
 # Build all binaries
-RUN cd ./pkg/version && go generate && cd -
+RUN cd ./pkg/version \
+ && export COMMIT_SHA=$(git rev-parse HEAD) \
+ && export SEM_VER=$(git describe --tags --exact-match 2>/dev/null || echo devel) \
+ && export SEM_VER=${SEM_VER#v} \
+ && go generate && cd -
 RUN nice -15 go build -tags jsoniter,slimcap_nomock -o goprobe -pgo=auto ./cmd/goProbe
 RUN nice -15 go build -tags jsoniter -o global-query -pgo=auto ./cmd/global-query
 RUN nice -15 go build -o goquery -pgo=auto ./cmd/goQuery
@@ -26,7 +30,7 @@ RUN nice -15 go build -o gpctl -pgo=auto ./cmd/gpctl
 
 ###########################################################################
 
-FROM alpine:3.22 AS sensor
+FROM alpine:3.23 AS sensor
 
 # Download system package dependencies
 RUN apk add libcap zstd-libs lz4-libs
@@ -55,7 +59,7 @@ ENTRYPOINT /bin/goprobe
 
 ###########################################################################
 
-FROM alpine:3.22 AS query
+FROM alpine:3.23 AS query
 
 # Download system package dependencies
 RUN apk add libcap zstd-libs lz4-libs
