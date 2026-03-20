@@ -19,9 +19,8 @@ COPY . .
 
 # Build all binaries
 RUN cd ./pkg/version \
- && export COMMIT_SHA=$(git rev-parse HEAD) \
- && export SEM_VER=$(git describe --tags --exact-match 2>/dev/null || echo devel) \
- && export SEM_VER=${SEM_VER#v} \
+ && export COMMIT_SHA="$(cat .build/commit_sha)" \
+ && export SEM_VER="$(cat .build/sem_ver)" \
  && go generate && cd -
 RUN nice -15 go build -tags jsoniter,slimcap_nomock -o goprobe -pgo=auto ./cmd/goProbe
 RUN nice -15 go build -tags jsoniter -o global-query -pgo=auto ./cmd/global-query
