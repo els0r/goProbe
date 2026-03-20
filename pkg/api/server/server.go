@@ -42,6 +42,10 @@ type DefaultServer struct {
 
 	debug bool
 
+	// corsOrigins holds the list of allowed CORS origins. An empty slice means
+	// all origins are allowed (cors.Default() behaviour, suitable for dev/testing).
+	corsOrigins []string
+
 	// telemetry
 	profiling                 bool
 	metrics                   bool
@@ -110,6 +114,31 @@ func WithNoRecursionDetection() Option {
 	}
 }
 
+// WithCORSOrigins restricts CORS to the provided origins. When no origins are
+// supplied (the default), all origins are permitted — appropriate for
+// development and for deployments where the API is only reachable via the
+// Caddy reverse proxy (so the browser never makes a cross-origin request).
+// In production deployments that expose the API directly to browsers, provide
+// the explicit frontend origin(s), e.g. "https://query.example.com".
+func WithCORSOrigins(origins ...string) Option {
+	return func(server *DefaultServer) {
+		server.corsOrigins = origins
+	}
+}
+
+// buildCORSMiddleware returns a CORS middleware configured from s.corsOrigins.
+func (server *DefaultServer) buildCORSMiddleware() gin.HandlerFunc {
+	if len(server.corsOrigins) == 0 {
+		return cors.Default()
+	}
+	return cors.New(cors.Config{
+		AllowOrigins: server.corsOrigins,
+		AllowMethods: []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"},
+		AllowHeaders: []string{"Origin", "Content-Length", "Content-Type", "Authorization"},
+		MaxAge:       12 * time.Hour,
+	})
+}
+
 // NewDefault creates a new API server
 func NewDefault(serviceName, addr string, opts ...Option) *DefaultServer {
 	s := &DefaultServer{
@@ -117,6 +146,12 @@ func NewDefault(serviceName, addr string, opts ...Option) *DefaultServer {
 		// make sure that serviceName conforms to the prometheus naming convention. Exhaustive would be stripping
 		// the serviceName off any characters that are not permitted
 		serviceName: strings.ToLower(serviceName),
+	}
+
+	// Apply options before building the router so all settings (debug, corsOrigins,
+	// etc.) are available when middlewares are wired up.
+	for _, opt := range opts {
+		opt(s)
 	}
 
 	// Set Gin release / debug mode according to debug flag (must happen _before_ call to gin.New())
@@ -127,15 +162,12 @@ func NewDefault(serviceName, addr string, opts ...Option) *DefaultServer {
 	router.MaxMultipartMemory = maxMultipartMemory
 
 	router.Use(gin.Recovery())
-	router.Use(cors.Default())
+	router.Use(s.buildCORSMiddleware())
 
 	// make sure that unix sockets are handled if they are provided
 	s.unixSocketFile = api.ExtractUnixSocket(addr)
 
 	s.router = router
-	for _, opt := range opts {
-		opt(s)
-	}
 
 	// get a documented API
 	s.api = humagin.New(s.router, huma.DefaultConfig(serviceName, version.Short()))

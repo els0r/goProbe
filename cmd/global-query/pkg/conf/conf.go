@@ -39,6 +39,7 @@ const (
 	serverKey                 = "server"
 	ServerAddr                = serverKey + ".addr"
 	ServerShutdownGracePeriod = serverKey + ".shutdowngraceperiod"
+	ServerCORSOrigins         = serverKey + ".cors_origins"
 
 	openapiKey         = "openapi"
 	OpenAPISpecOutfile = openapiKey + ".spec-outfile"
