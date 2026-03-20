@@ -23,10 +23,13 @@ services:
 
   env-writer:
     profiles: ['prod']
-    image: debian:bookworm-slim
-    command: bash /scripts/write-env.sh
+    # alpine + gettext provides envsubst, which handles URLs with special chars safely.
+    image: alpine:3.19
+    command: sh -c "apk add --no-cache gettext && sh /scripts/write-env.sh"
     environment:
-      GQ_API_BASE_URL: ${GQ_API_BASE_URL:-http://localhost:8081}
+      # Leave GQ_API_BASE_URL empty by default: the browser uses relative paths
+      # that Caddy proxies to GQ_BACKEND_HOST. Set explicitly for direct-access deploys.
+      GQ_API_BASE_URL: ${GQ_API_BASE_URL:-}
       HOST_RESOLVER_TYPES: ${HOST_RESOLVER_TYPES:-string}
       SSE_ON_LOAD: ${SSE_ON_LOAD:-true}
     volumes:
@@ -53,3 +56,6 @@ services:
       - caddy_config:/config
     environment:
       NODE_ENV: production
+      # Backend host for Caddy's reverse proxy (see Caddyfile).
+      # Caddy forwards /_query* and /-/* to this address.
+      GQ_BACKEND_HOST: ${GQ_BACKEND_HOST:-http://localhost:8145}

@@ -8,16 +8,18 @@
 	root * /opt/app/www
 	encode zstd gzip
 
-	# Security headers (tune CSP to your domains!)
+	# Security headers
 	header {
 		X-Content-Type-Options nosniff
 		X-Frame-Options DENY
 		Referrer-Policy no-referrer-when-downgrade
 		Cross-Origin-Opener-Policy same-origin
 		Cross-Origin-Resource-Policy same-origin
-		Cross-Origin-Embedder-Policy require-corp
 		Permissions-Policy "geolocation=(), microphone=(), camera=()"
-		Content-Security-Policy "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-eval'; connect-src 'self' http: https:; frame-ancestors 'none';"
+		# connect-src is 'self' because API calls go through the reverse proxy below.
+		# unsafe-eval removed: production bundle uses source-map (separate file), not eval.
+		# COEP (require-corp) removed: only needed for SharedArrayBuffer; causes breakage otherwise.
+		Content-Security-Policy "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none';"
 	}
 
 	# Cache policies
@@ -40,6 +42,13 @@
 			root /var/run/env
 		}
 	}
+
+	# Proxy API calls to the backend. The browser sees same-origin requests,
+	# so no CORS headers are required on the backend for browser traffic.
+	# GQ_BACKEND_HOST must be set in the container environment, e.g.
+	#   GQ_BACKEND_HOST=http://global-query:8145
+	reverse_proxy /_query* {env.GQ_BACKEND_HOST}
+	reverse_proxy /-/* {env.GQ_BACKEND_HOST}
 
 	# Serve static files first
 	file_server
