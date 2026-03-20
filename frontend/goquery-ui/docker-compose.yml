@@ -6,9 +6,11 @@ volumes:
 services:
   dev:
     profiles: ["dev"]
-    image: node:20-bookworm-slim
-    working_dir: /app
-    command: sh -c "npm ci && npm run dev"
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    # node_modules are baked into the image; only npm run dev is needed at start.
+    command: npm run dev
     ports:
       - "5173:5173"
     env_file:
@@ -41,7 +43,7 @@ services:
       env-writer:
         condition: service_completed_successfully
     ports:
-      - '8080:8080'
+      - '5137:5137'
     read_only: true
     security_opt:
       - no-new-privileges:true
