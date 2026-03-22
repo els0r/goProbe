@@ -35,11 +35,20 @@ type promMetrics struct {
 type Metrics struct {
 	promMetrics
 
+	registry    *prometheus.Registry
 	trackIfaces bool
 }
 
 // MetricsOption denotes a functional option for Metrics
 type MetricsOption func(*Metrics)
+
+// WithRegistry sets a custom prometheus registry for metric registration.
+// If not set, metrics are registered on the default prometheus registry.
+func WithRegistry(reg *prometheus.Registry) MetricsOption {
+	return func(m *Metrics) {
+		m.registry = reg
+	}
+}
 
 // DisableIfaceTracking removes the "iface" label from all Prometheus
 // metrics (reducing cardinality, in particular if many interfaces from many sensors
@@ -139,7 +148,11 @@ func NewMetrics(opts ...MetricsOption) *Metrics {
 		}),
 	}
 
-	prometheus.MustRegister(
+	registerer := prometheus.Registerer(prometheus.DefaultRegisterer)
+	if metrics.registry != nil {
+		registerer = metrics.registry
+	}
+	registerer.MustRegister(
 		metrics.promPacketsProcessed,
 		metrics.promPacketsDropped,
 		metrics.promBytes,

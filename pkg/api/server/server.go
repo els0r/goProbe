@@ -48,6 +48,7 @@ type DefaultServer struct {
 	tracing                   bool
 	disableRecursionDetection bool
 	requestDurationBuckets    []float64
+	metricsRegistry           *prometheus.Registry
 
 	serviceName string // serviceName is the name of the program that serves the API, e.g. global-query
 	addr        string
@@ -83,6 +84,14 @@ func WithMetrics(enabled bool, requestDurationBuckets ...float64) Option {
 	return func(server *DefaultServer) {
 		server.metrics = enabled
 		server.requestDurationBuckets = requestDurationBuckets
+	}
+}
+
+// WithMetricsRegistry sets a custom prometheus registry for the metrics endpoint.
+// If not set, the telemetry/metrics middleware creates its own isolated registry.
+func WithMetricsRegistry(reg *prometheus.Registry) Option {
+	return func(server *DefaultServer) {
+		server.metricsRegistry = reg
 	}
 }
 
@@ -213,7 +222,7 @@ func (server *DefaultServer) registerMiddlewares() {
 		if len(server.requestDurationBuckets) > 0 {
 			buckets = server.requestDurationBuckets
 		}
-		metrics.NewPrometheus(server.serviceName, "api", nil).
+		metrics.NewPrometheus(server.serviceName, "api", server.metricsRegistry).
 			WithRequestDurationBuckets(buckets).
 			Register(server.router)
 	}
