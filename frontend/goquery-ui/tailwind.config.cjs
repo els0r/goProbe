@@ -4,6 +4,12 @@ module.exports = {
   ],
   theme: {
     extend: {
+      fontSize: {
+        // Named scale for data-dense UI — avoids scattered text-[Npx] arbitrary values
+        'data':    ['12px', { lineHeight: '1.4' }],
+        'data-sm': ['11px', { lineHeight: '1.35' }],
+        'data-xs': ['10px', { lineHeight: '1.3' }],
+      },
       colors: {
         surface: {
           DEFAULT: '#0f1115',
