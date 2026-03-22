@@ -23,6 +23,8 @@ github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSs
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc h1:U9qPSI2PIWSS1VwoXQT9A3Wy9MM3WgvqSxFWenqJduM=
 github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
+github.com/els0r/telemetry v1.2.0 h1:bqqq35QEtRZQb0KffHWTZP+IgvmTnfEdcta81OTAxeQ=
+github.com/els0r/telemetry v1.2.0/go.mod h1:RxZpyrbiD/NwOy+Pnp5zGieh6YIj0iuz8a3cYZdw/vA=
 github.com/els0r/telemetry/logging v0.0.0-20241007081432-5f966df95bbd h1:y0S8nMvVTq1SarcZOLyIKutGrtU2pFVekBTWdJkS1Ls=
 github.com/els0r/telemetry/logging v0.0.0-20241007081432-5f966df95bbd/go.mod h1:Nwfs00kMb5P8263qOrXMe+oYk5/GBZTN5LQhrxDFRyM=
 github.com/els0r/telemetry/logging v0.0.0-20260316115556-f92ddc69b6e7 h1:ZjLqV0R5K4Ho7bpvSf1/qGD7Mvdh1fCiDSbJ1T/qhT0=
