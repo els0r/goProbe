@@ -8,9 +8,9 @@ replace github.com/els0r/goProbe/plugins/contrib/v4 => ./plugins/contrib
 require (
 	github.com/danielgtaylor/huma/v2 v2.34.1
 	github.com/els0r/goProbe/plugins/contrib/v4 v4.0.0-20250311082229-45a8753b72a7
-	github.com/els0r/telemetry/logging v0.0.0-20241007081432-5f966df95bbd
-	github.com/els0r/telemetry/metrics v0.0.0-20241007081432-5f966df95bbd
-	github.com/els0r/telemetry/tracing v0.0.0-20241007081432-5f966df95bbd
+	github.com/els0r/telemetry/logging v0.0.0-20260316115556-f92ddc69b6e7
+	github.com/els0r/telemetry/metrics v0.0.0-20260316115556-f92ddc69b6e7
+	github.com/els0r/telemetry/tracing v0.0.0-20260316115556-f92ddc69b6e7
 	github.com/fako1024/gotools/bitpack v0.0.0-20250828105752-6dffddfeea78
 	github.com/fako1024/gotools/concurrency v0.0.0-20250828105752-6dffddfeea78
 	github.com/fako1024/gotools/link v0.0.0-20250828105752-6dffddfeea78
@@ -47,6 +47,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/cloudwego/base64x v0.1.6 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
+	github.com/els0r/telemetry v1.2.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.11 // indirect

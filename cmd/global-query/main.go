@@ -11,7 +11,7 @@ import (
 func main() {
 	err := cmd.Execute()
 	if err != nil {
-		logger, logErr := logging.New(logging.LevelError, logging.EncodingPlain,
+		logger, _, logErr := logging.New(logging.LevelError, logging.EncodingPlain,
 			logging.WithOutput(os.Stderr),
 		)
 		if logErr != nil {

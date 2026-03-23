@@ -94,7 +94,7 @@ func InitResolvers(ctx context.Context, cfg *HostResolverConfig) (*hosts.Resolve
 			continue
 		}
 
-		logger.With("resolver", resolverCfg).Info("initializing resolver")
+		logger.Info("initializing resolver", "resolver", resolverCfg)
 
 		name := resolverCfg.Type
 		initFn, exists := GetInitializer().getResolver(name)

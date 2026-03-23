@@ -18,6 +18,7 @@ import (
 	"github.com/els0r/goProbe/v4/pkg/conf"
 	"github.com/els0r/goProbe/v4/pkg/version"
 	"github.com/els0r/telemetry/logging"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"golang.org/x/time/rate"
@@ -212,7 +213,7 @@ func initLogging() error {
 		loggerOpts = append(loggerOpts, logging.WithFileOutput(dst))
 	}
 
-	err := logging.Init(
+	_, err := logging.Init(
 		logging.LevelFromString(viper.GetString(conf.LogLevel)),
 		logging.Encoding(viper.GetString(conf.LogEncoding)),
 		loggerOpts...,
@@ -242,7 +243,7 @@ func run(ctx context.Context, cfg *gpconf.Config) error {
 	config := configMonitor.GetConfig()
 
 	logger := logging.FromContext(ctx)
-	logger.With("autodetection.enabled", config.AutoDetection.Enabled).Info("loaded configuration")
+	logger.Info("loaded configuration", "autodetection.enabled", config.AutoDetection.Enabled)
 
 	// write spec and exit
 	openAPIfile := viper.GetString(flagOpenAPISpecOutfile)
@@ -273,9 +274,17 @@ func run(ctx context.Context, cfg *gpconf.Config) error {
 		return fmt.Errorf("failed to create database directory: %w", err)
 	}
 
+	// Create a shared prometheus registry so that capture metrics and the API
+	// /metrics endpoint use the same registry.
+	var metricsRegistry *prometheus.Registry
 	var cmOpts []capture.ManagerOption
 	if config.API.Metrics {
+		metricsRegistry = prometheus.NewRegistry()
+		metricsRegistry.MustRegister(prometheus.NewGoCollector())
+		metricsRegistry.MustRegister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
+
 		var metricsOpts []capture.MetricsOption
+		metricsOpts = append(metricsOpts, capture.WithRegistry(metricsRegistry))
 		if config.API.DisableIfaceMetrics {
 			metricsOpts = append(metricsOpts, capture.DisableIfaceTracking())
 		}
@@ -319,6 +328,7 @@ func run(ctx context.Context, cfg *gpconf.Config) error {
 			// this line will enable not only HTTP request metrics, but also the default prometheus golang client
 			// metrics for memory, cpu, gc performance, etc.
 			server.WithMetrics(config.API.Metrics, defaultRequestDurationHistogramBins...),
+			server.WithMetricsRegistry(metricsRegistry),
 
 			// enable global query rate limit if provided
 			server.WithQueryRateLimit(config.API.QueryRateLimit.MaxReqPerSecond, config.API.QueryRateLimit.MaxBurst, config.API.QueryRateLimit.MaxConcurrent),
@@ -331,7 +341,7 @@ func run(ctx context.Context, cfg *gpconf.Config) error {
 
 		// serve API
 		go func() {
-			logger.With("addr", config.API.Addr).Info("starting API server")
+			logger.Info("starting API server", "addr", config.API.Addr)
 			err := apiServer.Serve()
 			if err != nil && !errors.Is(err, http.ErrServerClosed) {
 				logger.Fatalf("failed to spawn goProbe API server: %s", err)

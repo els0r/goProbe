@@ -16,7 +16,7 @@ func initProfiling(_ *cobra.Command, _ []string) error {
 	// Setup profiling (if enabled)
 	profilingOutputDir := viper.GetString(conf.ProfilingOutputDir)
 	if profilingOutputDir != "" {
-		logging.Logger().With(conf.ProfilingOutputDir, profilingOutputDir).Debug("setting up profiling")
+		logging.Logger().Debug("setting up profiling", conf.ProfilingOutputDir, profilingOutputDir)
 		if err := startProfiling(profilingOutputDir); err != nil {
 			return fmt.Errorf("failed to initialize profiling: %w", err)
 		}

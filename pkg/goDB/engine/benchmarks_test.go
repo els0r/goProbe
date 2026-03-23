@@ -142,11 +142,11 @@ func flushCaches() {
 	cmd := exec.Command(syncCmd[0], syncCmd[1:]...)
 	err := cmd.Start()
 	if err != nil {
-		log.Error(err)
+		log.Error("failed to start sync command", "error", err)
 	}
 	err = cmd.Wait()
 	if err != nil {
-		log.Error(err)
+		log.Error("failed to wait for sync command", "error", err)
 	}
 }
 

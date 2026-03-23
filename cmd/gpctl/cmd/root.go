@@ -35,7 +35,7 @@ var rootCmd = &cobra.Command{
 func Execute() {
 	err := rootCmd.Execute()
 	if err != nil {
-		logger, logErr := logging.New(logging.LevelError, logging.EncodingPlain,
+		logger, _, logErr := logging.New(logging.LevelError, logging.EncodingPlain,
 			logging.WithOutput(os.Stderr),
 		)
 		if logErr != nil {
@@ -62,7 +62,7 @@ func init() {
 func initLogger() {
 	// since this is a command line tool, only warnings and errors should be printed and they
 	// shouldn't go to a dedicated file
-	err := logging.Init(logging.LevelWarn, logging.EncodingLogfmt,
+	_, err := logging.Init(logging.LevelWarn, logging.EncodingLogfmt,
 		logging.WithVersion(version.Short()),
 		logging.WithOutput(os.Stdout),
 		logging.WithErrorOutput(os.Stderr),

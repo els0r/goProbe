@@ -683,10 +683,11 @@ func runGoQuery(t *testing.T, res interface{}, args []string) {
 	<-copyDone
 
 	os.Stdout = old // restore the inital STDOUT
-	require.Nil(t, logging.Init(logging.LevelWarn, logging.EncodingLogfmt,
+	_, initErr := logging.Init(logging.LevelWarn, logging.EncodingLogfmt,
 		logging.WithOutput(os.Stdout),
 		logging.WithErrorOutput(os.Stderr),
-	))
+	)
+	require.Nil(t, initErr)
 
 	require.Nil(t, jsoniter.NewDecoder(buf).Decode(&res))
 }
@@ -1049,7 +1050,7 @@ func TestMain(m *testing.M) {
 	flag.BoolVar(&skipBenchmarks, "skip-benchmarks", false, "skip benchmark tests")
 	flag.Parse()
 
-	if err := logging.Init(logging.LevelWarn, logging.EncodingLogfmt,
+	if _, err := logging.Init(logging.LevelWarn, logging.EncodingLogfmt,
 		logging.WithOutput(os.Stdout),
 		logging.WithErrorOutput(os.Stderr),
 	); err != nil {

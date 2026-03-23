@@ -421,10 +421,11 @@ func (w *DBWorkManager) readMetadataAndEvaluate(workDir *gpfile.GPDir, blocks []
 			// TODO: If this fails due to a missing file, reset everything and retry opening the GPDir (but only once to avoid infinite loops)
 			if colBlocks[colIdx], err = workDir.ReadBlockAtIndex(colIdx, ind); err != nil {
 				blockBroken = true
-				logger.With(
+				logger.Warn("failed to read column",
 					"block", block.Timestamp,
 					"column", types.ColumnFileNames[colIdx],
-				).Warnf("Failed to read column: %s", err)
+					"error", err,
+				)
 				break
 			}
 		}
@@ -438,15 +439,17 @@ func (w *DBWorkManager) readMetadataAndEvaluate(workDir *gpfile.GPDir, blocks []
 			if colIdx.IsCounterCol() {
 				if len(colBlocks[colIdx]) == 0 {
 					blockBroken = true
-					logger.With("block", ind, "column", types.ColumnFileNames[colIdx]).Warn("Invalid (empty) Bitpack slice found")
+					logger.Warn("invalid (empty) Bitpack slice found", "block", ind, "column", types.ColumnFileNames[colIdx])
 					break
 				}
 				if bitpack.Len(colBlocks[colIdx]) != numEntries {
 					blockBroken = true
-					logger.With(
+					logger.Warn("incorrect number of entries in column file",
 						"block", ind,
 						"column", types.ColumnFileNames[colIdx],
-					).Warnf("Incorrect number of entries in column file. Expected %d, found %d", numEntries, bitpack.Len(colBlocks[colIdx]))
+						"expected", numEntries,
+						"found", bitpack.Len(colBlocks[colIdx]),
+					)
 					break
 				}
 			}
@@ -488,7 +491,7 @@ func (w *DBWorkManager) grabAndProcessWorkload(ctx context.Context, id int, wg *
 
 		enc, err := encoder.New(defaultEncoderType)
 		if err != nil {
-			logger.Error(err)
+			logger.Error("failed to create encoder", "error", err)
 			mapChan <- hashmap.NilAggFlowMapWithMetadata
 		}
 
@@ -525,7 +528,7 @@ func (w *DBWorkManager) grabAndProcessWorkload(ctx context.Context, id int, wg *
 					// if there is an error during one of the read jobs, throw a syslog message and terminate
 					stats, err = w.readBlocksAndEvaluate(workDir, enc, &resultMap)
 					if err != nil {
-						logger.Error(err)
+						logger.Error("failed to read blocks and evaluate", "error", err)
 						mapChan <- hashmap.NilAggFlowMapWithMetadata
 						return
 					}
@@ -617,7 +620,7 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workDir *gpfile.GPDir, enc encoder
 			blocks[colIdx], err = workDir.ReadBlockAtIndex(colIdx, b)
 			if err != nil {
 				blockBroken = true
-				logger.With("day", workDir.Path(), "block", block.Timestamp, "column", types.ColumnFileNames[colIdx]).Warnf("Failed to read column: %s", err)
+				logger.Warn("failed to read column", "day", workDir.Path(), "block", block.Timestamp, "column", types.ColumnFileNames[colIdx], "error", err)
 				break
 			}
 		}
@@ -640,30 +643,30 @@ func (w *DBWorkManager) readBlocksAndEvaluate(workDir *gpfile.GPDir, enc encoder
 			if colIdx.IsCounterCol() {
 				if len(blocks[colIdx]) == 0 {
 					blockBroken = true
-					logger.With("block", b, "column", types.ColumnFileNames[colIdx]).Warn("Invalid (empty) Bitpack slice found")
+					logger.Warn("invalid (empty) Bitpack slice found", "block", b, "column", types.ColumnFileNames[colIdx])
 					break
 				}
 				if bitpack.Len(blocks[colIdx]) != numEntries {
 					blockBroken = true
-					logger.With("block", b, "column", types.ColumnFileNames[colIdx]).Warnf("Incorrect number of entries in column file. Expected %d, found %d", numEntries, bitpack.Len(blocks[colIdx]))
+					logger.Warn("incorrect number of entries in column file", "block", b, "column", types.ColumnFileNames[colIdx], "expected", numEntries, "found", bitpack.Len(blocks[colIdx]))
 					break
 				}
 			} else {
 				if types.ColumnSizeofs[colIdx] == types.IPSizeOf {
 					if l != (numEntries-numV4Entries)*types.IPv6Width+numV4Entries*types.IPv4Width {
 						blockBroken = true
-						logger.With("block", b, "column", types.ColumnFileNames[colIdx]).Warnf("Incorrect number of entries in variable block size file. Expected file length %d, have %d", (numEntries-numV4Entries)*types.IPv6Width+numV4Entries*types.IPv4Width, l)
+						logger.Warn("incorrect number of entries in variable block size file", "block", b, "column", types.ColumnFileNames[colIdx], "expected", (numEntries-numV4Entries)*types.IPv6Width+numV4Entries*types.IPv4Width, "have", l)
 						break
 					}
 				} else {
 					if l/types.ColumnSizeofs[colIdx] != numEntries {
 						blockBroken = true
-						logger.With("block", b, "column", types.ColumnFileNames[colIdx]).Warnf("Incorrect number of entries in column file. Expected %d, found %d", numEntries, l/types.ColumnSizeofs[colIdx])
+						logger.Warn("incorrect number of entries in column file", "block", b, "column", types.ColumnFileNames[colIdx], "expected", numEntries, "found", l/types.ColumnSizeofs[colIdx])
 						break
 					}
 					if l%types.ColumnSizeofs[colIdx] != 0 {
 						blockBroken = true
-						logger.With("block", b, "column", types.ColumnFileNames[colIdx]).Warn("Entry size does not evenly divide block size in column file")
+						logger.Warn("entry size does not evenly divide block size in column file", "block", b, "column", types.ColumnFileNames[colIdx])
 						break
 					}
 				}
