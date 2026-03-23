@@ -207,7 +207,7 @@ func main() {
 	}
 
 	// get logger
-	err := logging.Init(logging.LevelDebug, logging.EncodingLogfmt,
+	_, err := logging.Init(logging.LevelDebug, logging.EncodingLogfmt,
 		logging.WithVersion(version.Short()),
 	)
 	if err != nil {

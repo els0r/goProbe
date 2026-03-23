@@ -122,11 +122,11 @@ func (m *Monitor) Apply(ctx context.Context, fn CallbackFn) (enabled, updated, d
 		return
 	}
 
-	logging.FromContext(ctx).With(
+	logging.FromContext(ctx).Debug("config applied",
 		"enabled", enabled,
 		"updated", updated,
 		"disabled", disabled,
-	).Debug("config applied")
+	)
 
 	return
 }
@@ -136,7 +136,7 @@ func (m *Monitor) Apply(ctx context.Context, fn CallbackFn) (enabled, updated, d
 func (m *Monitor) reloadPeriodically(ctx context.Context, fn CallbackFn) {
 	logger := logging.FromContext(ctx)
 	ticker := time.NewTicker(m.reloadInterval)
-	logger.With("interval", m.reloadInterval.Round(1*time.Second)).Info("starting config monitor")
+	logger.Info("starting config monitor", "interval", m.reloadInterval.Round(1*time.Second))
 
 	for {
 		select {
@@ -163,6 +163,6 @@ func (m *Monitor) reloadFromFile(ctx context.Context) error {
 
 	m.PutConfig(cfg)
 
-	logging.FromContext(ctx).With("path", m.path).Debug("config reloaded from file")
+	logging.FromContext(ctx).Debug("config reloaded from file", "path", m.path)
 	return nil
 }

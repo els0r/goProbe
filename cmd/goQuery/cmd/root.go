@@ -61,7 +61,7 @@ func validatePositionalArgs(cmd *cobra.Command, args []string) error {
 func Execute() {
 	err := rootCmd.Execute()
 	if err != nil {
-		logger, logErr := logging.New(logging.LevelError, logging.EncodingPlain,
+		logger, _, logErr := logging.New(logging.LevelError, logging.EncodingPlain,
 			logging.WithOutput(os.Stderr),
 		)
 		if logErr != nil {
@@ -212,7 +212,7 @@ func initLogger() {
 	}
 	opts = append(opts, logging.WithOutput(os.Stdout), logging.WithErrorOutput(os.Stderr))
 
-	err := logging.Init(logging.LevelFromString(viper.GetString(conf.LogLevel)), format, opts...)
+	_, err := logging.Init(logging.LevelFromString(viper.GetString(conf.LogLevel)), format, opts...)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to initialize logger: %v\n", err)
 		os.Exit(1)
@@ -309,7 +309,7 @@ func entrypoint(cmd *cobra.Command, args []string) (err error) {
 	// initialize tracing
 	shutdown, err := tracing.InitFromFlags(queryCtx)
 	if err != nil {
-		logger.With("error", err).Error("failed to set up tracing")
+		logger.Error("failed to set up tracing", "error", err)
 	}
 	defer shutdown(context.Background())
 
@@ -406,11 +406,11 @@ func entrypoint(cmd *cobra.Command, args []string) (err error) {
 		logger := logger.With("file", queryLogFile)
 		logger.Debugf("logging query")
 
-		qlogger, err = logging.New(slog.LevelInfo, logging.EncodingJSON, logging.WithFileOutput(queryLogFile))
+		qlogger, _, err = logging.New(slog.LevelInfo, logging.EncodingJSON, logging.WithFileOutput(queryLogFile))
 		if err != nil {
 			logger.Errorf("failed to initialize query logger: %v", err)
 		} else {
-			qlogger.With("args", queryArgs).Infof("preparing query")
+			qlogger.Info("preparing query", "args", queryArgs)
 			defer func() {
 				if result != nil {
 					qlogger = qlogger.With("summary", result.Summary)
@@ -429,7 +429,7 @@ func entrypoint(cmd *cobra.Command, args []string) (err error) {
 
 	if queryLogFile != "" {
 		if qlogger != nil {
-			qlogger.With("stmt", stmt).Info("running query")
+			qlogger.Info("running query", "stmt", stmt)
 		}
 	}
 
@@ -459,7 +459,7 @@ func entrypoint(cmd *cobra.Command, args []string) (err error) {
 
 	// when running against a local goDB, there should be exactly one result
 	if result.Status.Code != types.StatusOK {
-		logger, err := logging.New(logging.LevelInfo, logging.EncodingPlain,
+		logger, _, err := logging.New(logging.LevelInfo, logging.EncodingPlain,
 			logging.WithOutput(stmt.Output),
 		)
 		if err != nil {
@@ -470,7 +470,7 @@ func entrypoint(cmd *cobra.Command, args []string) (err error) {
 
 	// when running a distributed query, host status errors should be reported
 	if len(result.HostsStatuses) > 1 {
-		logger, err := logging.New(logging.LevelInfo, logging.EncodingPlain,
+		logger, _, err := logging.New(logging.LevelInfo, logging.EncodingPlain,
 			logging.WithOutput(stmt.Output),
 		)
 		if err != nil {
@@ -499,7 +499,7 @@ func setDefaultTimeRange(args *query.Args) query.Args {
 		// is included. This is only done if first wasn't explicitly set. If it is, it must be assumed that
 		// the caller knows the possible extend of a "time" query
 		if strings.Contains(args.Query, types.TimeName) || strings.Contains(args.Query, types.RawCompoundQuery) {
-			logger.With("query", args.Query).Debug("time attribute detected, limiting time range to one day")
+			logger.Debug("time attribute detected, limiting time range to one day", "query", args.Query)
 			args.First = time.Now().AddDate(0, 0, -1).Format(time.ANSIC)
 		} else {
 			// by default, go back one month in time

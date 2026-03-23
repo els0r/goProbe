@@ -25,7 +25,7 @@ var (
 
 func main() {
 
-	err := logging.Init(logging.LevelInfo, logging.EncodingLogfmt,
+	_, err := logging.Init(logging.LevelInfo, logging.EncodingLogfmt,
 		logging.WithVersion(version.Short()),
 	)
 	if err != nil {

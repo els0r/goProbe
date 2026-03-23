@@ -291,10 +291,10 @@ func (cm *Manager) Status(ctx context.Context, ifaces ...string) (statusmap capt
 		statusmap[mc.iface] = *status
 	}
 
-	logger.With(
+	logger.Debug("retrieved interface status",
 		"elapsed", time.Since(t0).Round(time.Millisecond).String(),
 		"ifaces", ifaces,
-	).Debug("retrieved interface status")
+	)
 
 	return
 }
@@ -384,18 +384,18 @@ func (cm *Manager) updateSelected(ctx context.Context, ifaces config.Ifaces) (en
 	cm.update(ctx, ifaces, enable, disable)
 
 	if len(enableIfaces) > 0 || len(updateIfaces) > 0 || len(disableIfaces) > 0 {
-		logger.With(
+		logger.Info("updated interface configuration",
 			"elapsed", time.Since(t0).Round(time.Millisecond).String(),
 			slog.Group("ifaces",
 				"added", enableIfaces,
 				"updated", updateIfaces,
 				"removed", disableIfaces,
 			),
-		).Info("updated interface configuration")
+		)
 	} else {
-		logger.With(
+		logger.Debug("no interface configuration changes detected",
 			"elapsed", time.Since(t0).Round(time.Millisecond).String(),
-		).Debug("no interface configuration changes detected")
+		)
 	}
 
 	return enableIfaces, updateIfaces, disableIfaces, nil
@@ -559,10 +559,10 @@ func (cm *Manager) GetFlowMaps(ctx context.Context, filterFn goDB.FilterFn, writ
 	}
 
 	// log fetch duration
-	logger.With(
+	logger.Debug("fetched flow maps",
 		"elapsed", time.Since(t0).Round(time.Microsecond).String(),
 		"ifaces", ifaces,
-	).Debug("fetched flow maps")
+	)
 }
 
 // Close stops / closes all (or a set of) interfaces
@@ -579,10 +579,10 @@ func (cm *Manager) Close(ctx context.Context, ifaces ...string) {
 	// interfaces to remove
 	cm.update(ctx, nil, nil, capturetypes.FromIfaceNames(ifaces))
 
-	logger.With(
+	logger.Info("closed interfaces",
 		"elapsed", time.Since(t0).Round(time.Millisecond).String(),
 		"ifaces", ifaces,
-	).Info("closed interfaces")
+	)
 }
 
 func withIfaceContext(ctx context.Context, iface string) context.Context {
@@ -633,7 +633,7 @@ func (cm *Manager) rotate(ctx context.Context, writeoutChan chan<- capturetypes.
 				}
 				cm.captures.Delete(mc.iface)
 			}
-			logger.With("elapsed", time.Since(lockStart).Round(time.Microsecond).String()).Debug("interface lock-cycle complete")
+			logger.Debug("interface lock-cycle complete", "elapsed", time.Since(lockStart).Round(time.Microsecond).String())
 
 			writeoutChan <- capturetypes.TaggedAggFlowMap{
 				Map:   rotateResult,
@@ -650,10 +650,10 @@ func (cm *Manager) rotate(ctx context.Context, writeoutChan chan<- capturetypes.
 		cm.metrics.ObserveNumIfacesCapturing().Set(float64(len(ifaces)))
 	}
 
-	logger.With(
+	logger.Info("rotated interfaces",
 		"elapsed", t1.Round(time.Microsecond).String(),
 		"ifaces", ifaces,
-	).Info("rotated interfaces")
+	)
 }
 
 func (cm *Manager) logErrors(ctx context.Context, iface string, errsChan <-chan error) {
@@ -681,7 +681,7 @@ func (cm *Manager) logErrors(ctx context.Context, iface string, errsChan <-chan 
 				}
 				return
 			}
-			logger.Error(err)
+			logger.Error("capture error", "error", err)
 		}
 	}
 }

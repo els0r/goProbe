@@ -110,10 +110,11 @@ func (t testMockSrcs) Wait() error {
 
 func TestConcurrentMethodAccess(t *testing.T) {
 
-	require.Nil(t, logging.Init(logging.LevelWarn, logging.EncodingLogfmt,
+	_, initErr := logging.Init(logging.LevelWarn, logging.EncodingLogfmt,
 		logging.WithOutput(os.Stdout),
 		logging.WithErrorOutput(os.Stderr),
-	))
+	)
+	require.Nil(t, initErr)
 
 	for _, i := range []int{1, 2, 3, 10} {
 		t.Run(fmt.Sprintf("%d ifaces", i), func(t *testing.T) {

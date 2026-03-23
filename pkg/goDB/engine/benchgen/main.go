@@ -153,11 +153,11 @@ func flushCaches() {
 	cmd := exec.Command(syncCmd[0], syncCmd[1:]...)
 	err := cmd.Start()
 	if err != nil {
-		log.Error(err)
+		log.Error("failed to start sync command", "error", err)
 	}
 	err = cmd.Wait()
 	if err != nil {
-		log.Error(err)
+		log.Error("failed to wait for sync command", "error", err)
 	}
 }
 `
@@ -299,11 +299,11 @@ func main() {
 	// write combinations to file
 	err = masterTmpl.Execute(allBenchmarksFile, tuples)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("failed to execute template", "error", err)
 	}
 
 	if err = allBenchmarksFile.Close(); err != nil {
-		log.Fatal(err)
+		log.Fatal("failed to close benchmarks file", "error", err)
 	}
 }
 

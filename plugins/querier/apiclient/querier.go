@@ -113,7 +113,7 @@ func (a *APIClientQuerier) prepareQueries(ctx context.Context, hostList hosts.Ho
 		for _, host := range hostList {
 			wl, err := a.createQueryWorkload(ctx, string(host), args, keepaliveChan)
 			if err != nil {
-				logger.With("hostname", host).Errorf("failed to create workload: %v", err)
+				logger.Error("failed to create workload", "hostname", host, "error", err)
 			}
 			workloads <- wl
 		}

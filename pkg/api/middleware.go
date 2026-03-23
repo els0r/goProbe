@@ -116,7 +116,8 @@ func RecursionDetectorMiddleware(headerKey, match string) gin.HandlerFunc {
 	ErrRecursionDetected := errors.New("API query recursion detected, cross-check host configuration")
 	return func(c *gin.Context) {
 		if c.Request.Header.Get(headerKey) == match {
-			logging.FromContext(c.Request.Context()).Error(c.AbortWithError(http.StatusBadRequest, ErrRecursionDetected))
+			_ = c.AbortWithError(http.StatusBadRequest, ErrRecursionDetected)
+			logging.FromContext(c.Request.Context()).Error("recursion detected", "error", ErrRecursionDetected)
 			return
 		}
 		c.Next()
