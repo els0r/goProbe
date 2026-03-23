@@ -38,7 +38,7 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({ percent, title, classN
       <div className="h-1 flex-1 rounded-full bg-surface-200 ring-1 ring-white/10 overflow-hidden">
         <div className="h-full bg-blue-500" style={{ width: pctWidth + '%' }} />
       </div>
-      <span className="text-[10px] leading-none text-primary-300 font-medium">
+      <span className="text-data-xs leading-none text-primary-300 font-medium">
         {pctLinear.toFixed(1)}%
       </span>
     </div>

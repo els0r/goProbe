@@ -8,7 +8,7 @@ export interface DisplaySummaryProps {
 
 export const DisplaySummary: React.FC<DisplaySummaryProps> = ({ displayed, total, className }) => {
   if (displayed === undefined && total === undefined) return null
-  const cls = `mb-2 text-[11px] text-gray-400 ${className || ''}`.trim()
+  const cls = `mb-2 text-data-sm text-gray-400 ${className || ''}`.trim()
   if (total !== undefined) {
     return (
       <div className={cls}>

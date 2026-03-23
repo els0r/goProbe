@@ -26,9 +26,9 @@ export function DetailsPanel({
       }
     >
       <div className="mb-2 flex items-baseline justify-between gap-3 px-3 pt-3">
-        <div className="text-[12px] font-semibold text-white">{title}</div>
+        <div className="text-data font-semibold text-white">{title}</div>
         {(totalBytes !== undefined || totalPackets !== undefined) && (
-          <div className="text-right text-[12px] font-medium text-primary-300 whitespace-nowrap">
+          <div className="text-right text-data font-medium text-primary-300 whitespace-nowrap">
             {humanBytes(totalBytes ?? 0)} / {humanPackets(totalPackets ?? 0)}
           </div>
         )}
@@ -39,7 +39,7 @@ export function DetailsPanel({
           <div className="mt-3 text-right">
             <button
               onClick={onClose}
-              className="rounded-md bg-surface-200 px-2 py-1 text-[12px] ring-1 ring-white/10 hover:bg-surface-300"
+              className="rounded-md bg-surface-200 px-2 py-1 text-data ring-1 ring-white/10 hover:bg-surface-300"
             >
               Close
             </button>

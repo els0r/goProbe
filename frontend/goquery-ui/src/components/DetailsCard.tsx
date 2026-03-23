@@ -34,19 +34,19 @@ export const DetailsCard: React.FC<DetailsCardProps> = ({
   return (
     <div className={container}>
       <div className="mb-2 flex items-baseline justify-between gap-3">
-        <div className="text-[12px] font-medium text-white">{heading}</div>
-        <div className="text-right text-[12px] font-medium text-primary-300 whitespace-nowrap">
+        <div className="text-data font-medium text-white">{heading}</div>
+        <div className="text-right text-data font-medium text-primary-300 whitespace-nowrap">
           {humanBytes(totalBytes)} / {humanPackets(totalPackets)}
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-2 text-[12px]">
+      <div className="grid grid-cols-2 gap-2 text-data">
         <div>
-          <div className="mb-0.5 text-[10px] uppercase tracking-wide text-gray-400">In</div>
+          <div className="mb-0.5 text-data-xs uppercase tracking-wide text-gray-400">In</div>
           <div className="text-gray-100">{bytesOrEmpty(inBytes)}</div>
           <div className="text-primary-300">{pktsOrEmpty(inPackets)}</div>
         </div>
         <div>
-          <div className="mb-0.5 text-[10px] uppercase tracking-wide text-gray-400">Out</div>
+          <div className="mb-0.5 text-data-xs uppercase tracking-wide text-gray-400">Out</div>
           <div className="text-gray-100">{bytesOrEmpty(outBytes)}</div>
           <div className="text-primary-300">{pktsOrEmpty(outPackets)}</div>
         </div>

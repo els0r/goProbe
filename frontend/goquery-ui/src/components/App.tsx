@@ -13,199 +13,14 @@ import { buildTextTable } from '../views/exportText'
 import { env } from '../env'
 import { formatDurationNs, humanBytes, humanPackets } from '../utils/format'
 import { DisplaySummary } from './DisplaySummary'
-
-interface ErrorBannerProps {
-  error: unknown
-}
-function ErrorBanner({ error }: ErrorBannerProps) {
-  if (!error) return null
-  const [open, setOpen] = React.useState(false)
-  let simple = ''
-  let problem: any | undefined
-  if (typeof error === 'string') simple = error
-  else if (error && typeof error === 'object') {
-    const e: any = error
-    simple = e.message || 'error'
-    if (e.problem) problem = e.problem
-  }
-  return (
-    <div className="mb-3 rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm">
-      <div className="flex items-center justify-between">
-        <div className="font-medium text-red-300">{simple}</div>
-        {problem && (
-          <button
-            type="button"
-            onClick={() => setOpen((o) => !o)}
-            className="text-[11px] rounded px-2 py-0.5 text-red-300 hover:text-white hover:bg-red-500/20 ring-1 ring-red-500/30"
-          >
-            {open ? 'Hide details' : 'Show details'}
-          </button>
-        )}
-      </div>
-      {problem && open && (
-        <div className="mt-2 space-y-1 text-red-200/90">
-          {problem.detail && <div className="text-[12px]">{problem.detail}</div>}
-          {Array.isArray(problem.errors) && problem.errors.length > 0 && (
-            <ul className="mt-1 max-h-60 overflow-auto rounded bg-red-500/5 p-2 text-[11px] leading-snug ring-1 ring-red-500/20">
-              {problem.errors.map((er: any, i: number) => (
-                <li key={i} className="mb-2 last:mb-0">
-                  <div>
-                    <span className="font-mono text-red-300">{er.location || '(unknown)'}:</span>{' '}
-                    {er.message || 'validation error'}
-                  </div>
-                  {er.value !== undefined &&
-                    (typeof er.value === 'object' && er.value !== null ? (
-                      <pre className="mt-1 max-h-40 overflow-auto whitespace-pre rounded bg-black/30 p-2 text-[11px] text-red-200/90 ring-1 ring-red-500/20">
-                        {JSON.stringify(er.value, null, 2)}
-                      </pre>
-                    ) : (
-                      <div className="opacity-70">value: {formatValue(er.value)}</div>
-                    ))}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function formatValue(v: unknown): string {
-  if (v === null) return 'null'
-  if (v === undefined) return 'undefined'
-  if (typeof v === 'string') return JSON.stringify(v)
-  if (typeof v === 'number' || typeof v === 'boolean') return String(v)
-  try {
-    return JSON.stringify(v)
-  } catch {
-    return '[unserializable]'
-  }
-}
-
-// normalize strings for error matching: lower-case and unify curly apostrophes
-function normalizeText(s: string | undefined | null): string {
-  if (!s) return ''
-  return String(s)
-    .toLowerCase()
-    .replace(/\u2019/g, "'")
-    .trim()
-}
-
-function formatTimestamp(ts: string | undefined): string {
-  if (!ts) return '—'
-  try {
-    const d = new Date(ts)
-    if (isNaN(d.getTime())) return ts
-    const pad = (n: number) => String(n).padStart(2, '0')
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
-  } catch {
-    return ts
-  }
-}
-
-function humanRangeDuration(startIso?: string | null, endIso?: string | null): string {
-  if (!startIso || !endIso) return ''
-  const start = new Date(startIso).getTime()
-  const end = new Date(endIso).getTime()
-  if (!isFinite(start) || !isFinite(end)) return ''
-  let ms = Math.max(0, end - start)
-  const dayMs = 24 * 60 * 60 * 1000
-  const hourMs = 60 * 60 * 1000
-  const minMs = 60 * 1000
-  const secMs = 1000
-  const d = Math.floor(ms / dayMs)
-  ms -= d * dayMs
-  const h = Math.floor(ms / hourMs)
-  ms -= h * hourMs
-  const m = Math.floor(ms / minMs)
-  ms -= m * minMs
-  const s = Math.floor(ms / secMs)
-  const parts: string[] = []
-  if (d > 0) parts.push(d + 'd')
-  if (h > 0 || d > 0) parts.push(h + 'h')
-  if (m > 0 || (d === 0 && h === 0)) parts.push(m + 'm')
-  // Only show seconds if duration < 1m
-  if (d === 0 && h === 0 && m === 0) parts.push(s + 's')
-  return parts.join('')
-}
-
-function isoToLocalInput(iso?: string | null): string {
-  if (!iso) return ''
-  try {
-    const d = new Date(iso)
-    if (isNaN(d.getTime())) return ''
-    const pad = (n: number) => String(n).padStart(2, '0')
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
-  } catch {
-    return ''
-  }
-}
-
-function localInputToIso(val: string): string | undefined {
-  if (!val) return undefined
-  const d = new Date(val)
-  if (isNaN(d.getTime())) return undefined
-  return d.toISOString()
-}
-
-// sanitize comma-separated host list: trim items and drop empties
-function sanitizeHostList(raw?: string | null): string | undefined {
-  if (!raw) return undefined
-  const items = String(raw)
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean)
-  return items.length ? items.join(',') : undefined
-}
-
-interface SummaryStatProps {
-  label: string
-  value: React.ReactNode
-  multiline?: boolean
-}
-function SummaryStat({ label, value, multiline }: SummaryStatProps) {
-  const isSimple = typeof value === 'string' || typeof value === 'number'
-  const valueClass = multiline
-    ? 'text-[13px] font-medium text-gray-100 leading-tight break-words'
-    : 'truncate text-[13px] font-medium text-gray-100'
-  return (
-    <div className="flex flex-col rounded-md bg-surface-200/40 px-2 py-2 ring-1 ring-white/5">
-      <div className="mb-0.5 text-[10px] uppercase tracking-wide text-gray-400">{label}</div>
-      <div className={valueClass} title={isSimple ? String(value) : undefined}>
-        {value}
-      </div>
-    </div>
-  )
-}
+import { ErrorBanner } from './ErrorBanner'
+import { SummaryStat } from './SummaryStat'
+import { SettingsModal } from './SettingsModal'
+import { formatTimestamp, humanRangeDuration, isoToLocalInput, localInputToIso } from '../utils/timeFormat'
+import { sanitizeHostList, sanitizeUIParams } from '../utils/inputSanitize'
+import { mapValidationError } from '../utils/errorMapping'
 
 const DEFAULT_FIRST_MINUTES = 10
-const DEFAULTS: QueryParamsUI = {
-  first: '',
-  last: '',
-  ifaces: '',
-  query: '',
-  condition: undefined as any,
-  limit: 200,
-  sort_by: 'bytes',
-  sort_ascending: false,
-}
-
-// Ensure any externally loaded params (e.g., from localStorage) are valid
-function sanitizeUIParams(p: any): QueryParamsUI {
-  const merged: QueryParamsUI = {
-    ...DEFAULTS,
-    ...(p || {}),
-  }
-  merged.sort_by = merged.sort_by === 'packets' ? 'packets' : 'bytes'
-  merged.sort_ascending = !!merged.sort_ascending
-  merged.limit = Math.max(1, Number(merged.limit) || DEFAULTS.limit)
-  merged.first = typeof merged.first === 'string' ? merged.first : DEFAULTS.first
-  merged.last = typeof merged.last === 'string' ? merged.last : DEFAULTS.last
-  merged.ifaces = typeof merged.ifaces === 'string' ? merged.ifaces : ''
-  merged.query = typeof merged.query === 'string' ? merged.query : ''
-  return merged
-}
 
 function buildInitialParams(): QueryParamsUI {
   const parsed = parseParams(window.location.search)
@@ -214,14 +29,13 @@ function buildInitialParams(): QueryParamsUI {
   // normalize attributes selection: if empty/All, store explicit list to satisfy backend min-length
   const attr = parseAttributeQuery(parsed.query)
   const normalizedQuery = buildAttributeQuery(attr.values, attr.all)
-  return {
-    ...DEFAULTS,
+  return sanitizeUIParams({
     ...parsed,
     query_hosts: sanitizeHostList(parsed.query_hosts),
     query: normalizedQuery,
     first: parsed.first || firstDate.toISOString(),
     last: parsed.last || lastDate.toISOString(),
-  }
+  })
 }
 
 const tabs = [
@@ -343,6 +157,13 @@ export default function App() {
     } catch {}
   }, [hostsResolver])
 
+  const onStreamingReset = useCallback(() => {
+    try {
+      localStorage.removeItem(LS_STREAMING_KEY)
+    } catch {}
+    setUseStreaming(!!env.SSE_ON_LOAD)
+  }, [])
+
   // guard against stale/invalid saved value not present in env options
   useEffect(() => {
     const opts = Array.isArray(env.HOST_RESOLVER_TYPES) ? env.HOST_RESOLVER_TYPES : []
@@ -387,11 +208,14 @@ export default function App() {
     const q = buildAttributeQuery(next.values, next.all)
     setParams((p) => ({ ...p, query: q }))
   }
+  const [selectedRow, setSelectedRow] = useState<FlowRecord | null>(null)
+
   function closeAllDetails() {
     setIpDetail(null)
     setIfaceDetail(null)
     setHostDetail(null)
     setTemporalDetail(null)
+    setSelectedRow(null)
   }
   function commitInterfaces() {
     setParams((p) => ({ ...p, ifaces: ifacesInput.trim() }))
@@ -415,102 +239,6 @@ export default function App() {
   const runAbortRef = useRef<AbortController | null>(null)
   // Small cooldown to avoid racing a new request onto a just-aborted connection
   const lastCancelAtRef = useRef<number>(0)
-
-  // Map API error to field errors and a banner error, mirroring run() behavior
-  const mapValidationError = useCallback(
-    (e: any): { fields: Record<string, string>; banner: any } => {
-      // Ignore user-initiated aborts: don't surface as banner errors
-      try {
-        const name = String((e as any)?.name || '')
-        const msg = String((e as any)?.message || '')
-        if (name === 'AbortError' || normalizeText(msg) === 'request aborted') {
-          return { fields: {}, banner: '' }
-        }
-      } catch {}
-      const fields: Record<string, string> = {}
-      let banner: any = e
-      if (
-        e &&
-        typeof e === 'object' &&
-        (e as any).problem &&
-        Array.isArray((e as any).problem.errors)
-      ) {
-        const isLoc = (loc: string, key: string) =>
-          loc === `body.${key}` ||
-          loc.startsWith(`body.${key}.`) ||
-          loc.startsWith(`body.${key}[`) ||
-          loc === key
-        for (const er of (e as any).problem.errors as any[]) {
-          const locRaw = String(er.location || '')
-          const loc = locRaw.toLowerCase()
-          const rawMsg = String(er.message || 'validation error').trim()
-          const isCondition = isLoc(loc, 'condition')
-          let msg = isCondition
-            ? rawMsg.replace(
-                /^(\s*)([a-z])/,
-                (_m: string, ws: string, ch: string) => ws + ch.toUpperCase()
-              )
-            : rawMsg.charAt(0).toUpperCase() + rawMsg.slice(1)
-          if (!isCondition && er.value !== undefined) msg += ` -- value: ${formatValue(er.value)}`
-          const normRaw = normalizeText(rawMsg)
-          if (
-            normRaw === 'list of target hosts is empty' ||
-            normRaw === "couldn't prepare query: list of target hosts is empty" ||
-            normRaw.includes('list of target hosts is empty')
-          ) {
-            fields.hosts = msg
-            continue
-          }
-          const isResolverField =
-            isLoc(loc, 'query_hosts_resolver_type') || isLoc(loc, 'hosts_resolver')
-          const isHostsField =
-            isLoc(loc, 'query_hosts') || isLoc(loc, 'hostname') || isLoc(loc, 'host_id')
-          if (isLoc(loc, 'ifaces')) fields.ifaces = msg
-          else if (!isResolverField && isHostsField) fields.hosts = msg
-          else if (isLoc(loc, 'query') || isLoc(loc, 'attributes')) fields.attributes = msg
-          else if (isCondition) fields.condition = msg
-          else if (isLoc(loc, 'first')) fields.first = msg
-          else if (isLoc(loc, 'last')) fields.last = msg
-          else if (isLoc(loc, 'num_results')) fields.limit = msg
-          else if (isLoc(loc, 'sort_by')) fields.sort_by = msg
-        }
-        const errs: any[] = (e as any).problem.errors as any[]
-        const first = errs[0] || {}
-        const msgText =
-          String(first?.message || '')
-            .toLowerCase()
-            .includes('unexpected property') && first?.location
-            ? `Unexpected property: ${first.location}`
-            : 'API request failed: validation failed'
-        banner = { message: msgText, problem: (e as any).problem, status: (e as any).status }
-      } else {
-        // Special-case mapping for non-problem errors
-        const status = (e as any)?.status
-        let combined = ''
-        const prob: any = (e as any)?.problem
-        if (prob) {
-          if (typeof prob.detail === 'string') combined += ' ' + prob.detail
-          if (Array.isArray(prob.errors)) {
-            combined += ' ' + prob.errors.map((er: any) => String(er?.message || '')).join(' ')
-          }
-        }
-        const body: any = (e as any)?.body
-        if (typeof body === 'string') combined += ' ' + body
-        else if (body && typeof body === 'object' && typeof body.message === 'string')
-          combined += ' ' + body.message
-        const lc = normalizeText(combined)
-        if (
-          lc.includes("couldn't prepare query: list of target hosts is empty") ||
-          (status === 500 && lc.includes('list of target hosts is empty'))
-        ) {
-          fields.hosts = 'List of target hosts is empty'
-          banner = { message: 'API request failed: validation failed', problem: prob, status }
-        }
-      }
-      return { fields, banner }
-    },
-    []
-  )
 
   // Build effective params merging uncommitted inputs and normalizing attribute query
   const computeFinalParams = useCallback(
@@ -692,73 +420,9 @@ export default function App() {
         }
       }
     } catch (e: any) {
-      // extract problem+json field errors to map inputs
-      if (
-        e &&
-        typeof e === 'object' &&
-        (e as any).problem &&
-        Array.isArray((e as any).problem.errors)
-      ) {
-        const fe: Record<string, string> = {}
-        const isLoc = (loc: string, key: string) =>
-          loc === `body.${key}` ||
-          loc.startsWith(`body.${key}.`) ||
-          loc.startsWith(`body.${key}[`) ||
-          loc === key
-        for (const er of (e as any).problem.errors as any[]) {
-          const locRaw = String(er.location || '')
-          const loc = locRaw.toLowerCase()
-          const rawMsg = String(er.message || 'validation error').trim()
-          // keep condition messages formatting (multi-line caret pointers), but capitalize first letter
-          const isCondition = isLoc(loc, 'condition')
-          let msg = isCondition
-            ? rawMsg.replace(
-                /^(\s*)([a-z])/,
-                (_m: string, ws: string, ch: string) => ws + ch.toUpperCase()
-              )
-            : rawMsg.charAt(0).toUpperCase() + rawMsg.slice(1)
-          // append value context only for non-condition fields to avoid duplicating formatted output
-          if (!isCondition && er.value !== undefined) msg += ` -- value: ${formatValue(er.value)}`
-          // HACK: if backend returns this specific text, attribute to Hosts Query
-          const normRaw = normalizeText(rawMsg)
-          if (
-            normRaw === 'list of target hosts is empty' ||
-            normRaw === "couldn't prepare query: list of target hosts is empty" ||
-            normRaw.includes('list of target hosts is empty')
-          ) {
-            fe.hosts = msg
-            continue
-          }
-          const isResolverField =
-            isLoc(loc, 'query_hosts_resolver_type') || isLoc(loc, 'hosts_resolver')
-          const isHostsField =
-            isLoc(loc, 'query_hosts') || isLoc(loc, 'hostname') || isLoc(loc, 'host_id')
-          if (isLoc(loc, 'ifaces')) fe.ifaces = msg
-          // do not attach resolver field errors to any single input; keep in banner details only
-          else if (!isResolverField && isHostsField) fe.hosts = msg
-          else if (isLoc(loc, 'query') || isLoc(loc, 'attributes')) fe.attributes = msg
-          else if (isCondition) fe.condition = msg
-          else if (isLoc(loc, 'first')) fe.first = msg
-          else if (isLoc(loc, 'last')) fe.last = msg
-          else if (isLoc(loc, 'num_results')) fe.limit = msg
-          else if (isLoc(loc, 'sort_by')) fe.sort_by = msg
-        }
-        setFieldErrors(fe)
-        // Special-case: unexpected property => friendly message with location
-        const errs: any[] = (e as any).problem.errors as any[]
-        const first = errs[0] || {}
-        const msgText =
-          String(first?.message || '')
-            .toLowerCase()
-            .includes('unexpected property') && first?.location
-            ? `Unexpected property: ${first.location}`
-            : 'API request failed: validation failed'
-        setError({
-          message: msgText,
-          problem: (e as any).problem,
-          status: (e as any).status,
-        })
-      }
+      const { fields, banner } = mapValidationError(e)
+      if (Object.keys(fields).length > 0) setFieldErrors(fields)
+      if (banner) setError(banner)
     } finally {
       // if in streaming mode, final handler turns off; otherwise already cleared
     }
@@ -832,6 +496,7 @@ export default function App() {
         ? ['sip', 'dip', 'dport', 'proto']
         : attrState.values.map((v) => (v === 'protocol' ? 'proto' : v === 'port' ? 'dport' : v))
       closeAllDetails()
+      setSelectedRow(r)
       setTemporalDetail({ meta, attrsShown, rows: [], loading: true })
       try {
         const detailParams: QueryParamsUI = {
@@ -1132,7 +797,7 @@ export default function App() {
           <button
             type="button"
             onClick={() => setSettingsOpen(true)}
-            className="absolute right-3 top-3 rounded-md bg-surface-200 px-2 py-1 text-[12px] font-medium ring-1 ring-white/10 hover:bg-surface-300 focus:outline-none focus:ring-primary-500"
+            className="absolute right-3 top-3 rounded-md bg-surface-200 px-2 py-1 text-data font-medium ring-1 ring-white/10 hover:bg-surface-300 focus:outline-none focus:ring-primary-500"
           >
             Settings
           </button>
@@ -1140,7 +805,7 @@ export default function App() {
             {/* Row 1 */}
             <div className="grid grid-cols-12 gap-4">
               {/* Hosts Query */}
-              <div className="col-span-12 md:col-span-4 flex flex-col text-[11px]">
+              <div className="col-span-12 md:col-span-4 flex flex-col text-data-sm">
                 <label className="mb-1 font-medium text-gray-400">Hosts Query</label>
                 <input
                   type="text"
@@ -1162,11 +827,11 @@ export default function App() {
                   }}
                 />
                 {fieldErrors.hosts && (
-                  <div className="mt-1 text-[11px] text-red-300">{fieldErrors.hosts}</div>
+                  <div className="mt-1 text-data-sm text-red-300">{fieldErrors.hosts}</div>
                 )}
               </div>
               {/* Interfaces */}
-              <div className="col-span-12 md:col-span-3 flex flex-col text-[11px]">
+              <div className="col-span-12 md:col-span-3 flex flex-col text-data-sm">
                 <label className="mb-1 font-medium text-gray-400">Interfaces</label>
                 <input
                   type="text"
@@ -1188,11 +853,11 @@ export default function App() {
                   }}
                 />
                 {fieldErrors.ifaces && (
-                  <div className="mt-1 text-[11px] text-red-300">{fieldErrors.ifaces}</div>
+                  <div className="mt-1 text-data-sm text-red-300">{fieldErrors.ifaces}</div>
                 )}
               </div>
               {/* Attributes */}
-              <div className="col-span-12 md:col-span-3 flex flex-col text-[11px]">
+              <div className="col-span-12 md:col-span-3 flex flex-col text-data-sm">
                 <label className="mb-1 font-medium text-gray-400">Attributes</label>
                 <AttributesSelect
                   options={[
@@ -1207,7 +872,7 @@ export default function App() {
                   hasError={!!fieldErrors.attributes}
                 />
                 {fieldErrors.attributes && (
-                  <div className="mt-1 text-[11px] text-red-300">{fieldErrors.attributes}</div>
+                  <div className="mt-1 text-data-sm text-red-300">{fieldErrors.attributes}</div>
                 )}
               </div>
               {/* spacer to keep grid alignment */}
@@ -1217,7 +882,7 @@ export default function App() {
             {/* Row 2 - aligned under each primary field */}
             <div className="grid grid-cols-12 gap-4">
               {/* Time Range under Hosts */}
-              <div className="col-span-12 md:col-span-4 flex flex-col text-[11px]">
+              <div className="col-span-12 md:col-span-4 flex flex-col text-data-sm">
                 <label className="mb-1 font-medium text-gray-400">Time Range</label>
                 <div className="grid grid-cols-6 gap-2">
                   {[5, 10, 30, 60, 360, 720, 1440, 2880, 10080, 43200, 129600, 259200].map((m) => {
@@ -1241,7 +906,7 @@ export default function App() {
                 {/* Manual From/To override presets */}
                 <div className="mt-2 flex gap-2">
                   <div className="flex flex-col flex-1">
-                    <label className="mb-0.5 text-[10px] tracking-wide text-gray-400">From</label>
+                    <label className="mb-0.5 text-data-xs tracking-wide text-gray-400">From</label>
                     <input
                       type="datetime-local"
                       className={
@@ -1257,11 +922,11 @@ export default function App() {
                       }}
                     />
                     {fieldErrors.first && (
-                      <div className="mt-1 text-[11px] text-red-300">{fieldErrors.first}</div>
+                      <div className="mt-1 text-data-sm text-red-300">{fieldErrors.first}</div>
                     )}
                   </div>
                   <div className="flex flex-col flex-1">
-                    <label className="mb-0.5 text-[10px] tracking-wide text-gray-400">To</label>
+                    <label className="mb-0.5 text-data-xs tracking-wide text-gray-400">To</label>
                     <input
                       type="datetime-local"
                       className={
@@ -1277,13 +942,13 @@ export default function App() {
                       }}
                     />
                     {fieldErrors.last && (
-                      <div className="mt-1 text-[11px] text-red-300">{fieldErrors.last}</div>
+                      <div className="mt-1 text-data-sm text-red-300">{fieldErrors.last}</div>
                     )}
                   </div>
                 </div>
               </div>
               {/* Sort By under Interfaces */}
-              <div className="col-span-12 md:col-span-3 flex flex-col text-[11px]">
+              <div className="col-span-12 md:col-span-3 flex flex-col text-data-sm">
                 <label className="mb-1 font-medium text-gray-400">Sort By</label>
                 <select
                   className={
@@ -1304,9 +969,9 @@ export default function App() {
                   <option value="packets">Packets</option>
                 </select>
                 {fieldErrors.sort_by && (
-                  <div className="mt-1 text-[11px] text-red-300">{fieldErrors.sort_by}</div>
+                  <div className="mt-1 text-data-sm text-red-300">{fieldErrors.sort_by}</div>
                 )}
-                <label className="mt-1 flex items-center gap-1 text-[11px] text-gray-400">
+                <label className="mt-1 flex items-center gap-1 text-data-sm text-gray-400">
                   <input
                     type="checkbox"
                     checked={params.sort_ascending}
@@ -1321,7 +986,7 @@ export default function App() {
                 </label>
               </div>
               {/* Limit under Attributes */}
-              <div className="col-span-12 md:col-span-3 flex flex-col text-[11px]">
+              <div className="col-span-12 md:col-span-3 flex flex-col text-data-sm">
                 <label className="mb-1 font-medium text-gray-400">Limit</label>
                 <input
                   type="number"
@@ -1342,7 +1007,7 @@ export default function App() {
                   }
                 />
                 {fieldErrors.limit && (
-                  <div className="mt-1 text-[11px] text-red-300">{fieldErrors.limit}</div>
+                  <div className="mt-1 text-data-sm text-red-300">{fieldErrors.limit}</div>
                 )}
                 <datalist id="limit-presets">
                   {[10, 25, 50, 100, 250, 500, 1000].map((n) => (
@@ -1355,7 +1020,7 @@ export default function App() {
             </div>
             {/* Row 3 - Condition full width */}
             <div className="grid grid-cols-12 gap-4">
-              <div className="col-span-12 flex flex-col text-[11px]">
+              <div className="col-span-12 flex flex-col text-data-sm">
                 <label className="mb-1 font-medium text-gray-400">Condition</label>
                 <textarea
                   placeholder='Free text condition,  (e.g. "proto = TCP and (dport = 80 or dport = 443)")'
@@ -1375,7 +1040,7 @@ export default function App() {
                   onBlur={() => commitCondition()}
                 />
                 {fieldErrors.condition && (
-                  <pre className="mt-1 whitespace-pre-wrap text-[11px] leading-snug text-red-300 font-mono">
+                  <pre className="mt-1 whitespace-pre-wrap text-data-sm leading-snug text-red-300 font-mono">
                     {fieldErrors.condition}
                   </pre>
                 )}
@@ -1452,10 +1117,10 @@ export default function App() {
           </div>
         </div>
         {summary && (
-          <div className="mb-4 rounded-lg border border-white/10 bg-surface-100/60 p-4 text-[12px] relative">
+          <div className="mb-4 rounded-lg border border-white/10 bg-surface-100/60 p-4 text-data relative">
             <div className="absolute right-2 top-2 flex items-center gap-2">
-              <span className="text-[11px] text-gray-300">Copy results</span>
-              {copiedToast && <span className="text-[11px] text-primary-300">Table copied</span>}
+              <span className="text-data-sm text-gray-300">Copy results</span>
+              {copiedToast && <span className="text-data-sm text-primary-300">Table copied</span>}
               <button
                 type="button"
                 className="rounded-md bg-surface-200 px-2 py-1 ring-1 ring-white/10 hover:bg-surface-300"
@@ -1516,7 +1181,7 @@ export default function App() {
                 </svg>
               </button>
             </div>
-            <div className="mb-2 text-[11px] font-semibold tracking-wide text-gray-300 uppercase">
+            <div className="mb-2 text-data-sm font-semibold tracking-wide text-gray-300 uppercase">
               Summary
             </div>
             <div
@@ -1694,10 +1359,10 @@ export default function App() {
           const durNs: number | undefined = (summary as any)?.timings?.query_duration_ns
           const hasLoaded = blocks !== undefined || decBytes !== undefined || durNs !== undefined
           return (
-            <div className="mb-2 flex items-center justify-between text-[12px] text-gray-300">
+            <div className="mb-2 flex items-center justify-between text-data text-gray-300">
               <DisplaySummary displayed={displayed} total={total} />
               {hasLoaded && (
-                <div className="text-right text-[12px] text-gray-300">
+                <div className="text-right text-data text-gray-300">
                   Loaded{' '}
                   <span className="font-semibold text-white">{humanPackets(blocks ?? 0)}</span>{' '}
                   blocks /{' '}
@@ -1716,92 +1381,19 @@ export default function App() {
               <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-white" />
             </div>
           )}
-          {/* Settings detail overlay */}
+          {/* Settings overlay */}
           {settingsOpen && (
-            <>
-              <div
-                className="absolute inset-0 z-20 rounded-lg bg-black/50"
-                onClick={() => setSettingsOpen(false)}
-              />
-              <div className="absolute left-1/2 top-16 z-30 w-[min(520px,90%)] -translate-x-1/2 rounded-lg border border-white/10 bg-surface-100 p-4 shadow-xl">
-                <div className="mb-2 flex items-center justify-between">
-                  <div className="text-[13px] font-semibold text-gray-200">Settings</div>
-                  <button
-                    type="button"
-                    onClick={() => setSettingsOpen(false)}
-                    className="rounded-md bg-surface-200 px-2 py-1 text-[12px] ring-1 ring-white/10 hover:bg-surface-300"
-                  >
-                    Close
-                  </button>
-                </div>
-                <div className="space-y-3 text-[12px]">
-                  <div className="flex items-center justify-between">
-                    <label className="flex items-center gap-2 text-gray-300">
-                      <input
-                        type="checkbox"
-                        checked={useStreaming}
-                        onChange={(e) => setUseStreaming(e.target.checked)}
-                      />
-                      Stream results
-                    </label>
-                    <button
-                      type="button"
-                      className="text-[11px] text-gray-400 hover:text-gray-200 underline decoration-dotted"
-                      onClick={() => {
-                        try {
-                          localStorage.removeItem(LS_STREAMING_KEY)
-                        } catch {}
-                        setUseStreaming(!!env.SSE_ON_LOAD)
-                      }}
-                      title={`Reset to default (${env.SSE_ON_LOAD ? 'on' : 'off'})`}
-                    >
-                      Reset to default ({env.SSE_ON_LOAD ? 'on' : 'off'})
-                    </button>
-                  </div>
-                  <div className="flex flex-col">
-                    <label className="mb-1 text-[11px] tracking-wide text-gray-400">Backend</label>
-                    <input
-                      type="text"
-                      placeholder={defaultBackend}
-                      className="w-full rounded-md bg-surface-200 px-2 py-1 text-[13px] ring-1 ring-white/10 focus:outline-none focus:ring-primary-500"
-                      value={backendUrl}
-                      onChange={(e) => setBackendUrl(e.target.value)}
-                    />
-                    <div className="mt-1 text-[11px] text-gray-500">Default: {defaultBackend}</div>
-                  </div>
-                  <div className="flex flex-col">
-                    <label className="mb-1 text-[11px] tracking-wide text-gray-400">
-                      Hosts Resolver
-                    </label>
-                    {env.HOST_RESOLVER_TYPES.length > 0 ? (
-                      <select
-                        className="w-full rounded-md bg-surface-200 px-2 py-1 text-[13px] ring-1 ring-white/10 focus:outline-none focus:ring-primary-500"
-                        value={hostsResolver}
-                        onChange={(e) => setHostsResolver(e.target.value)}
-                      >
-                        {env.HOST_RESOLVER_TYPES.map((opt: string) => (
-                          <option key={opt} value={opt}>
-                            {opt}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <input
-                        type="text"
-                        className="w-full rounded-md bg-surface-200 px-2 py-1 text-[13px] ring-1 ring-white/10"
-                        value="—"
-                        disabled
-                      />
-                    )}
-                    {env.HOST_RESOLVER_TYPES.length === 0 && (
-                      <div className="mt-1 text-[11px] text-gray-500">
-                        No resolver types configured
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </>
+            <SettingsModal
+              backendUrl={backendUrl}
+              onBackendUrlChange={setBackendUrl}
+              useStreaming={useStreaming}
+              onStreamingChange={setUseStreaming}
+              hostsResolver={hostsResolver}
+              onHostsResolverChange={setHostsResolver}
+              onStreamingReset={onStreamingReset}
+              defaultBackend={defaultBackend}
+              onClose={() => setSettingsOpen(false)}
+            />
           )}
           {/* Interfaces & Host Status modal */}
           {ifaceDetailOpen && (
@@ -1818,14 +1410,14 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => setIfaceDetailOpen(false)}
-                    className="rounded-md bg-surface-200 px-2 py-1 text-[12px] ring-1 ring-white/10 hover:bg-surface-300"
+                    className="rounded-md bg-surface-200 px-2 py-1 text-data ring-1 ring-white/10 hover:bg-surface-300"
                   >
                     Close
                   </button>
                 </div>
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-3 text-[12px]">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-3 text-data">
                   <div className="min-h-[180px]">
-                    <div className="mb-2 text-[11px] uppercase tracking-wide text-gray-400">
+                    <div className="mb-2 text-data-sm uppercase tracking-wide text-gray-400">
                       Interfaces
                     </div>
                     {(() => {
@@ -1854,7 +1446,7 @@ export default function App() {
                     })()}
                   </div>
                   <div className="min-h-[180px]">
-                    <div className="mb-2 text-[11px] uppercase tracking-wide text-gray-400">
+                    <div className="mb-2 text-data-sm uppercase tracking-wide text-gray-400">
                       Host OK
                     </div>
                     {(() => {
@@ -1878,7 +1470,7 @@ export default function App() {
                             <li key={hostId + i} className="mb-1 last:mb-0 text-gray-100">
                               {nameById[hostId] || hostId}
                               {nameById[hostId] && (
-                                <span className="ml-2 font-mono text-[11px] text-gray-400">
+                                <span className="ml-2 font-mono text-data-sm text-gray-400">
                                   {hostId}
                                 </span>
                               )}
@@ -1889,7 +1481,7 @@ export default function App() {
                     })()}
                   </div>
                   <div className="min-h-[180px]">
-                    <div className="mb-2 text-[11px] uppercase tracking-wide text-gray-400">
+                    <div className="mb-2 text-data-sm uppercase tracking-wide text-gray-400">
                       Host Errors
                     </div>
                     {(() => {
@@ -1914,13 +1506,13 @@ export default function App() {
                               <div className="font-medium text-gray-100">
                                 {nameById[hostId] || hostId}
                                 {nameById[hostId] && (
-                                  <span className="ml-2 font-mono text-[11px] text-gray-400">
+                                  <span className="ml-2 font-mono text-data-sm text-gray-400">
                                     {hostId}
                                   </span>
                                 )}
                               </div>
-                              <div className="mt-0.5 text-[11px] text-red-300">
-                                <span className="uppercase text-[10px] tracking-wide text-red-400/80">
+                              <div className="mt-0.5 text-data-sm text-red-300">
+                                <span className="uppercase text-data-xs tracking-wide text-red-400/80">
                                   {String(st?.code || 'error')}
                                 </span>
                                 {st?.message && (
@@ -1992,6 +1584,7 @@ export default function App() {
                     ps: typeof t.ps === 'number' ? t.ps : 0,
                   }
                 })()}
+                selectedRow={selectedRow}
                 onRowClick={(r) => {
                   void openTemporalForRow(r)
                 }}

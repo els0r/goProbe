@@ -1,6 +1,7 @@
 import { FlowRecord } from '../api/domain'
 import { humanBytes, humanPackets } from '../utils/format'
 import { renderProto } from '../utils/proto'
+import { formatTimestamp, humanRangeDuration } from '../utils/timeFormat'
 
 function pad(s: string, w: number, align: 'left' | 'right' = 'left'): string {
   const str = s === undefined || s === null ? '' : String(s)
@@ -43,19 +44,48 @@ export function buildTextTable(rows: FlowRecord[], opts: BuildTextOptions = {}):
   const anyHost = rows.some((r) => !!r.host)
   const anyIface = rows.some((r) => !!r.iface)
 
+  const totalBytes = Math.max(0, Number(opts.totalsBytes) || 0)
+  const totalPkts = Math.max(0, Number(opts.totalsPackets) || 0)
+
+  // Pre-compute display values for all rows so column widths can be measured
+  const rowVals: Record<string, string>[] = rows.map((r) => {
+    const bt = (r.bytes_in || 0) + (r.bytes_out || 0)
+    const pt = (r.packets_in || 0) + (r.packets_out || 0)
+    return {
+      host: r.host || '',
+      iface: r.iface || '',
+      sip: r.sip || '',
+      dip: r.dip || '',
+      dport: r.dport === null || r.dport === undefined ? '' : String(r.dport),
+      proto: renderProto(r.proto as any),
+      pin: humanPackets(r.packets_in || 0),
+      pout: humanPackets(r.packets_out || 0),
+      ppct: totalPkts > 0 ? ((pt * 100) / totalPkts).toFixed(2) : '',
+      bin: humanBytes(r.bytes_in || 0),
+      bout: humanBytes(r.bytes_out || 0),
+      bpct: totalBytes > 0 ? ((bt * 100) / totalBytes).toFixed(2) : '',
+    }
+  })
+
+  // Compute width as max of header label length and all data value lengths
+  const dynWidth = (key: string, headerLabel: string, minW: number): number => {
+    const dataMax = rowVals.reduce((m, r) => Math.max(m, (r[key] || '').length), 0)
+    return Math.max(minW, headerLabel.length, dataMax)
+  }
+
   const cols: Array<{ key: string; width: number; align: 'left' | 'right' }> = []
-  if (anyHost) cols.push({ key: 'host', width: 22, align: 'right' })
-  if (anyIface) cols.push({ key: 'iface', width: 8, align: 'right' })
-  if (show('sip')) cols.push({ key: 'sip', width: 15, align: 'right' })
-  if (show('dip')) cols.push({ key: 'dip', width: 15, align: 'right' })
-  if (show('dport')) cols.push({ key: 'dport', width: 6, align: 'right' })
-  if (show('proto')) cols.push({ key: 'proto', width: 6, align: 'right' })
-  cols.push({ key: 'pin', width: 8, align: 'right' })
-  cols.push({ key: 'pout', width: 8, align: 'right' })
-  cols.push({ key: 'ppct', width: 6, align: 'right' })
-  cols.push({ key: 'bin', width: 11, align: 'right' })
-  cols.push({ key: 'bout', width: 11, align: 'right' })
-  cols.push({ key: 'bpct', width: 6, align: 'right' })
+  if (anyHost) cols.push({ key: 'host', width: dynWidth('host', 'host', 6), align: 'right' })
+  if (anyIface) cols.push({ key: 'iface', width: dynWidth('iface', 'iface', 5), align: 'right' })
+  if (show('sip')) cols.push({ key: 'sip', width: dynWidth('sip', 'sip', 7), align: 'right' })
+  if (show('dip')) cols.push({ key: 'dip', width: dynWidth('dip', 'dip', 7), align: 'right' })
+  if (show('dport')) cols.push({ key: 'dport', width: dynWidth('dport', 'dport', 5), align: 'right' })
+  if (show('proto')) cols.push({ key: 'proto', width: dynWidth('proto', 'proto', 5), align: 'right' })
+  cols.push({ key: 'pin', width: dynWidth('pin', 'in', 6), align: 'right' })
+  cols.push({ key: 'pout', width: dynWidth('pout', 'out', 6), align: 'right' })
+  cols.push({ key: 'ppct', width: dynWidth('ppct', '%', 5), align: 'right' })
+  cols.push({ key: 'bin', width: dynWidth('bin', 'in', 6), align: 'right' })
+  cols.push({ key: 'bout', width: dynWidth('bout', 'out', 6), align: 'right' })
+  cols.push({ key: 'bpct', width: dynWidth('bpct', '%', 5), align: 'right' })
 
   const spacerBetween = '  '
   const firstMetricIdx = cols.findIndex((c) => c.key === 'pin')
@@ -92,31 +122,13 @@ export function buildTextTable(rows: FlowRecord[], opts: BuildTextOptions = {}):
     .map((c) => pad(header2Labels[c.key] || c.key, c.width, c.align))
     .join(spacerBetween)
 
-  const totalBytes = Math.max(0, Number(opts.totalsBytes) || 0)
-  const totalPkts = Math.max(0, Number(opts.totalsPackets) || 0)
   const lines: string[] = []
   lines.push('')
   lines.push('  ' + header1)
   lines.push('  ' + header2)
 
-  for (const r of rows) {
-    const bt = (r.bytes_in || 0) + (r.bytes_out || 0)
-    const pt = (r.packets_in || 0) + (r.packets_out || 0)
-    const rowVals: Record<string, string> = {
-      host: r.host || '',
-      iface: r.iface || '',
-      sip: r.sip || '',
-      dip: r.dip || '',
-      dport: r.dport === null || r.dport === undefined ? '' : String(r.dport),
-      proto: renderProto(r.proto as any),
-      pin: humanPackets(r.packets_in || 0),
-      pout: humanPackets(r.packets_out || 0),
-      ppct: totalPkts > 0 ? ((pt * 100) / totalPkts).toFixed(2) : '',
-      bin: humanBytes(r.bytes_in || 0),
-      bout: humanBytes(r.bytes_out || 0),
-      bpct: totalBytes > 0 ? ((bt * 100) / totalBytes).toFixed(2) : '',
-    }
-    const line = cols.map((c) => pad(rowVals[c.key] || '', c.width, c.align)).join(spacerBetween)
+  for (const rv of rowVals) {
+    const line = cols.map((c) => pad(rv[c.key] || '', c.width, c.align)).join(spacerBetween)
     lines.push('  ' + line)
   }
 
@@ -125,31 +137,13 @@ export function buildTextTable(rows: FlowRecord[], opts: BuildTextOptions = {}):
     : undefined
   if (totalHits !== undefined && rows.length < totalHits) {
     const ellVals: Record<string, string> = {
-      host: '',
-      iface: '',
-      sip: '',
-      dip: '',
-      dport: '',
-      proto: '',
-      pin: '...',
-      pout: '...',
-      ppct: '',
-      bin: '...',
-      bout: '...',
-      bpct: '',
+      host: '', iface: '', sip: '', dip: '', dport: '', proto: '',
+      pin: '...', pout: '...', ppct: '', bin: '...', bout: '...', bpct: '',
     }
-    const ellLine = cols
-      .map((c) => pad((ellVals as any)[c.key] || '', c.width, c.align))
-      .join(spacerBetween)
-    lines.push('  ' + ellLine)
+    lines.push('  ' + cols.map((c) => pad(ellVals[c.key] || '', c.width, c.align)).join(spacerBetween))
 
     const tVals: Record<string, string> = {
-      host: '',
-      iface: '',
-      sip: '',
-      dip: '',
-      dport: '',
-      proto: '',
+      host: '', iface: '', sip: '', dip: '', dport: '', proto: '',
       pin: humanPackets(Math.max(0, Number(opts?.meta?.pr) || 0)),
       pout: humanPackets(Math.max(0, Number(opts?.meta?.ps) || 0)),
       ppct: '',
@@ -157,82 +151,25 @@ export function buildTextTable(rows: FlowRecord[], opts: BuildTextOptions = {}):
       bout: humanBytes(Math.max(0, Number(opts?.meta?.bs) || 0)),
       bpct: '',
     }
-    const totLine = cols
-      .map((c) => pad((tVals as any)[c.key] || '', c.width, c.align))
-      .join(spacerBetween)
-    lines.push('  ' + totLine)
+    lines.push('  ' + cols.map((c) => pad(tVals[c.key] || '', c.width, c.align)).join(spacerBetween))
   }
 
-  const totPktsTxt = humanPackets(totalPkts)
   const totBytesTxt = humanBytes(totalBytes)
+  const totPktsTxt = humanPackets(totalPkts)
   lines.push('')
-  {
-    const bottomVals: Record<string, string> = {
-      pin: '',
-      pout: totPktsTxt,
-      ppct: '',
-      bin: '',
-      bout: totBytesTxt,
-      bpct: '',
-      host: '',
-      iface: '',
-      sip: '',
-      dip: '',
-      dport: '',
-      proto: '',
-    }
-    if (cols.length > 0) {
-      bottomVals[cols[0].key] = 'Totals:'
-    }
-    const bottomLine = cols
-      .map((c) => pad((bottomVals as any)[c.key] || '', c.width, c.align))
-      .join(spacerBetween)
-    lines.push('  ' + bottomLine)
+  const bottomVals: Record<string, string> = {
+    host: '', iface: '', sip: '', dip: '', dport: '', proto: '',
+    pin: '', pout: totPktsTxt, ppct: '', bin: '', bout: totBytesTxt, bpct: '',
   }
+  if (cols.length > 0) bottomVals[cols[0].key] = 'Totals:'
+  lines.push('  ' + cols.map((c) => pad(bottomVals[c.key] || '', c.width, c.align)).join(spacerBetween))
 
-  const first = (() => {
-    if (!opts?.meta?.first) return ''
-    const d = new Date(opts.meta.first)
-    if (isNaN(d.getTime())) return ''
-    const pad = (n: number) => String(n).padStart(2, '0')
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
-  })()
-  const last = (() => {
-    if (!opts?.meta?.last) return ''
-    const d = new Date(opts.meta.last)
-    if (isNaN(d.getTime())) return ''
-    const pad = (n: number) => String(n).padStart(2, '0')
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
-  })()
-  const span = first && last ? `[${first}, ${last}]` : ''
+  const first = formatTimestamp(opts?.meta?.first)
+  const last = formatTimestamp(opts?.meta?.last)
+  const span = opts?.meta?.first && opts?.meta?.last ? `[${first}, ${last}]` : ''
+  const rangeTxt = humanRangeDuration(opts?.meta?.first, opts?.meta?.last)
   const durTxt = fmtDurationNsAsMsOrS(opts?.meta?.durationNs)
-  const rangeTxt = (() => {
-    const f = opts?.meta?.first ? new Date(opts.meta.first).getTime() : NaN
-    const l = opts?.meta?.last ? new Date(opts.meta.last).getTime() : NaN
-    if (!isFinite(f) || !isFinite(l)) return ''
-    let ms = Math.max(0, l - f)
-    const dayMs = 24 * 60 * 60 * 1000
-    const hourMs = 60 * 60 * 1000
-    const minMs = 60 * 1000
-    const secMs = 1000
-    const d = Math.floor(ms / dayMs)
-    ms -= d * dayMs
-    const h = Math.floor(ms / hourMs)
-    ms -= h * hourMs
-    const m = Math.floor(ms / minMs)
-    ms -= m * minMs
-    const s = Math.floor(ms / secMs)
-    ms -= s * secMs
-    const parts: string[] = []
-    if (d > 0) parts.push(d + 'd')
-    if (h > 0 || d > 0) parts.push(h + 'h')
-    if (m > 0 || (d === 0 && h === 0)) parts.push(m + 'm')
-    if (d === 0 && h === 0 && m === 0) {
-      if (s > 0) parts.push(s + 's')
-      else parts.push(Math.round(ms) + 'ms')
-    }
-    return parts.join('')
-  })()
+
   lines.push('')
   if (span) lines.push('Timespan           : ' + span + (rangeTxt ? ' ' + rangeTxt : ''))
   const ifacesTxt = (opts?.meta?.interfacesCount || 0) + ' queried'
