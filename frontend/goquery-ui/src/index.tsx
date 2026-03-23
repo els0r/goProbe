@@ -2,6 +2,7 @@ import React from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './components/App'
 import './index.css'
+import { env } from './env'
 
 class RootErrorBoundary extends React.Component<{ children: React.ReactNode }, { error?: Error }> {
   constructor(props: { children: React.ReactNode }) {
@@ -28,7 +29,7 @@ class RootErrorBoundary extends React.Component<{ children: React.ReactNode }, {
 
 // helpful startup log to debug blank screen issues
 // eslint-disable-next-line no-console
-console.log('goquery-ui starting, GQ_API_BASE_URL=', process.env.GQ_API_BASE_URL)
+console.log('goquery-ui starting, GQ_API_BASE_URL=', env.GQ_API_BASE_URL)
 
 const container = document.getElementById('root')
 if (container) {
