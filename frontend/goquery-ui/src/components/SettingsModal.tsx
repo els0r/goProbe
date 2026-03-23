@@ -10,6 +10,8 @@ export interface SettingsModalProps {
   onHostsResolverChange: (v: string) => void
   onStreamingReset: () => void
   defaultBackend: string
+  showTotalsPercentage: boolean
+  onTotalsPercentageChange: (v: boolean) => void
   onClose: () => void
 }
 
@@ -22,6 +24,8 @@ export function SettingsModal({
   onHostsResolverChange,
   onStreamingReset,
   defaultBackend,
+  showTotalsPercentage,
+  onTotalsPercentageChange,
   onClose,
 }: SettingsModalProps) {
   return (
@@ -59,6 +63,16 @@ export function SettingsModal({
             >
               Reset to default ({env.SSE_ON_LOAD ? 'on' : 'off'})
             </button>
+          </div>
+          <div className="flex items-center">
+            <label className="flex items-center gap-2 text-gray-300">
+              <input
+                type="checkbox"
+                checked={showTotalsPercentage}
+                onChange={(e) => onTotalsPercentageChange(e.target.checked)}
+              />
+              Show totals percentage
+            </label>
           </div>
           <div className="flex flex-col">
             <label className="mb-1 text-data-sm tracking-wide text-gray-400">Backend</label>

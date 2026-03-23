@@ -12,6 +12,7 @@ export interface TableViewProps {
   selectedRow?: FlowRecord | null
   totalsBytes?: number
   totalsPackets?: number
+  showTotalsPercentage?: boolean
   copyMeta?: {
     first?: string
     last?: string
@@ -38,6 +39,7 @@ export function TableView({
   selectedRow,
   totalsBytes,
   totalsPackets,
+  showTotalsPercentage = false,
 }: TableViewProps) {
   const showAll = !attributes || attributes.length === 0
   const show = (attr: string) => showAll || attributes.includes(attr)
@@ -135,36 +137,36 @@ export function TableView({
               onKeyDown={
                 onRowClick
                   ? (e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault()
-                        onRowClick(r)
-                      }
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      onRowClick(r)
                     }
+                  }
                   : undefined
               }
             >
               {anyHost && (
-                <td key="host" className="px-2 py-2 font-mono text-data" title={r.host_id || ''}>
+                <td key="host" className="px-2 py-2 text-data" title={r.host_id || ''}>
                   {tupleChanged ? r.host || '' : ''}
                 </td>
               )}
               {anyIface && (
-                <td key="interface" className="px-2 py-2 font-mono text-data">
+                <td key="interface" className="px-2 py-2 text-data">
                   {tupleChanged ? r.iface || '' : ''}
                 </td>
               )}
               {show('sip') && (
-                <td key="sip" className="px-2 py-2 font-mono text-data">
+                <td key="sip" className="px-2 py-2 text-data">
                   {r.sip}
                 </td>
               )}
               {show('dip') && (
-                <td key="dip" className="px-2 py-2 font-mono text-data">
+                <td key="dip" className="px-2 py-2 text-data">
                   {r.dip}
                 </td>
               )}
               {show('dport') && (
-                <td key="dport" className="px-2 py-2 tabular-nums text-right font-mono text-data">
+                <td key="dport" className="px-2 py-2 tabular-nums text-right text-data">
                   {r.dport ?? ''}
                 </td>
               )}
@@ -198,7 +200,7 @@ export function TableView({
               >
                 <div className="flex w-full flex-col items-end">
                   <div>{humanBytes(r.bytes_in + r.bytes_out)}</div>
-                  {(() => {
+                  {showTotalsPercentage && (() => {
                     const total = Math.max(0, Number(totalsBytes) || 0)
                     const share = total > 0 ? (r.bytes_in + r.bytes_out) / total : 0
                     const pctLinear = Math.max(0, Math.min(100, share * 100))
@@ -232,7 +234,7 @@ export function TableView({
               >
                 <div className="flex w-full flex-col items-end">
                   <div>{humanPackets(r.packets_in + r.packets_out)}</div>
-                  {(() => {
+                  {showTotalsPercentage && (() => {
                     const total = Math.max(0, Number(totalsPackets) || 0)
                     const share = total > 0 ? (r.packets_in + r.packets_out) / total : 0
                     const pctLinear = Math.max(0, Math.min(100, share * 100))

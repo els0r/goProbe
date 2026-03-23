@@ -167,25 +167,25 @@ export function TemporalDetailsPanel({
             {attrsShown.includes('sip') && (
               <div>
                 <span className="mr-1 text-gray-400">SIP</span>
-                <span className="font-mono break-all">{meta.sip}</span>
+                <span className="break-all">{meta.sip}</span>
               </div>
             )}
             {attrsShown.includes('dip') && (
               <div>
                 <span className="mr-1 text-gray-400">DIP</span>
-                <span className="font-mono break-all">{meta.dip}</span>
+                <span className="break-all">{meta.dip}</span>
               </div>
             )}
             {attrsShown.includes('dport') && meta.dport !== undefined && meta.dport !== null && (
               <div>
                 <span className="mr-1 text-gray-400">DPORT</span>
-                <span className="font-mono">{meta.dport}</span>
+                <span>{meta.dport}</span>
               </div>
             )}
             {attrsShown.includes('proto') && meta.proto !== undefined && meta.proto !== null && (
               <div>
                 <span className="mr-1 text-gray-400">PROTO</span>
-                <span className="font-mono">{renderProto(meta.proto)}</span>
+                <span>{renderProto(meta.proto)}</span>
               </div>
             )}
           </div>

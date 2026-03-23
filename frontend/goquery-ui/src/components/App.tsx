@@ -107,6 +107,7 @@ export default function App() {
   const LS_BACKEND_KEY = 'goquery_ui_backend_url'
   const LS_STREAMING_KEY = 'goquery_ui_use_streaming'
   const LS_HOSTS_RESOLVER_KEY = 'goquery_ui_hosts_resolver'
+  const LS_TOTALS_PCT_KEY = 'goquery_ui_show_totals_pct'
   const [backendUrl, setBackendUrl] = useState<string>(() => {
     try {
       const saved = localStorage.getItem(LS_BACKEND_KEY)
@@ -120,7 +121,7 @@ export default function App() {
       const saved = localStorage.getItem(LS_STREAMING_KEY)
       if (saved === '1' || saved === 'true') return true
       if (saved === '0' || saved === 'false') return false
-    } catch {}
+    } catch { }
     // fallback to runtime env default
     return !!env.SSE_ON_LOAD
   })
@@ -130,16 +131,24 @@ export default function App() {
     try {
       const saved = localStorage.getItem(LS_HOSTS_RESOLVER_KEY)
       if (typeof saved === 'string' && saved.length > 0 && opts.includes(saved)) return saved
-    } catch {}
+    } catch { }
     return opts[0] || ''
   })
   const [settingsOpen, setSettingsOpen] = useState<boolean>(false)
+  const [showTotalsPercentage, setShowTotalsPercentage] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem(LS_TOTALS_PCT_KEY)
+      if (saved === '1' || saved === 'true') return true
+      if (saved === '0' || saved === 'false') return false
+    } catch { }
+    return false
+  })
 
   // persist backend selection and apply to client on change
   useEffect(() => {
     try {
       localStorage.setItem(LS_BACKEND_KEY, backendUrl)
-    } catch {}
+    } catch { }
     setGlobalQueryBaseUrl(backendUrl)
   }, [backendUrl])
 
@@ -147,20 +156,27 @@ export default function App() {
   useEffect(() => {
     try {
       localStorage.setItem(LS_STREAMING_KEY, useStreaming ? '1' : '0')
-    } catch {}
+    } catch { }
   }, [useStreaming])
+
+  // persist totals percentage preference
+  useEffect(() => {
+    try {
+      localStorage.setItem(LS_TOTALS_PCT_KEY, showTotalsPercentage ? '1' : '0')
+    } catch { }
+  }, [showTotalsPercentage])
 
   // persist hosts resolver selection
   useEffect(() => {
     try {
       localStorage.setItem(LS_HOSTS_RESOLVER_KEY, hostsResolver)
-    } catch {}
+    } catch { }
   }, [hostsResolver])
 
   const onStreamingReset = useCallback(() => {
     try {
       localStorage.removeItem(LS_STREAMING_KEY)
-    } catch {}
+    } catch { }
     setUseStreaming(!!env.SSE_ON_LOAD)
   }, [])
 
@@ -279,7 +295,7 @@ export default function App() {
       // abort any in-flight validation
       try {
         validateAbortRef.current?.abort()
-      } catch {}
+      } catch { }
       const ctrl = new AbortController()
       validateAbortRef.current = ctrl
       await getGlobalQueryClient().validateQueryUI(
@@ -315,14 +331,14 @@ export default function App() {
     if (streamCloserRef.current) {
       try {
         streamCloserRef.current.close()
-      } catch {}
+      } catch { }
       streamCloserRef.current = null
     }
     // cancel any previous non-streaming request
     if (runAbortRef.current) {
       try {
         runAbortRef.current.abort()
-      } catch {}
+      } catch { }
       runAbortRef.current = null
     }
     setLoading(true)
@@ -437,21 +453,21 @@ export default function App() {
         streamCloserRef.current.close()
         streamCloserRef.current = null
       }
-    } catch {}
+    } catch { }
     try {
       // abort fetch for non-streaming
       if (runAbortRef.current) {
         runAbortRef.current.abort()
         runAbortRef.current = null
       }
-    } catch {}
+    } catch { }
     try {
       // abort any in-flight validation to avoid surfacing an AbortError banner
       if (validateAbortRef.current) {
         validateAbortRef.current.abort()
         validateAbortRef.current = null
       }
-    } catch {}
+    } catch { }
     // clear transient UI state
     setError('')
     setFieldErrors({})
@@ -567,7 +583,7 @@ export default function App() {
     setSavedViews(next)
     try {
       localStorage.setItem('goquery_ui_views', JSON.stringify(next))
-    } catch {}
+    } catch { }
   }
   const [saveViewName, setSaveViewName] = useState<string>('')
   function onSaveView() {
@@ -1132,8 +1148,8 @@ export default function App() {
                       attributes: attrState.all
                         ? undefined
                         : attrState.values.map((v) =>
-                            v === 'protocol' ? 'proto' : v === 'port' ? 'dport' : v
-                          ),
+                          v === 'protocol' ? 'proto' : v === 'port' ? 'dport' : v
+                        ),
                       totalsBytes: (() => {
                         const br = t.br || 0,
                           bs = t.bs || 0
@@ -1167,7 +1183,7 @@ export default function App() {
                     }
                     setCopiedToast(true)
                     window.setTimeout(() => setCopiedToast(false), 1500)
-                  } catch {}
+                  } catch { }
                 }}
                 aria-label="Copy text table"
               >
@@ -1392,6 +1408,8 @@ export default function App() {
               onHostsResolverChange={setHostsResolver}
               onStreamingReset={onStreamingReset}
               defaultBackend={defaultBackend}
+              showTotalsPercentage={showTotalsPercentage}
+              onTotalsPercentageChange={setShowTotalsPercentage}
               onClose={() => setSettingsOpen(false)}
             />
           )}
@@ -1470,7 +1488,7 @@ export default function App() {
                             <li key={hostId + i} className="mb-1 last:mb-0 text-gray-100">
                               {nameById[hostId] || hostId}
                               {nameById[hostId] && (
-                                <span className="ml-2 font-mono text-data-sm text-gray-400">
+                                <span className="ml-2 text-data-sm text-gray-400">
                                   {hostId}
                                 </span>
                               )}
@@ -1506,7 +1524,7 @@ export default function App() {
                               <div className="font-medium text-gray-100">
                                 {nameById[hostId] || hostId}
                                 {nameById[hostId] && (
-                                  <span className="ml-2 font-mono text-data-sm text-gray-400">
+                                  <span className="ml-2 text-data-sm text-gray-400">
                                     {hostId}
                                   </span>
                                 )}
@@ -1545,8 +1563,8 @@ export default function App() {
                   attrState.all
                     ? undefined
                     : attrState.values.map((v) =>
-                        v === 'protocol' ? 'proto' : v === 'port' ? 'dport' : v
-                      )
+                      v === 'protocol' ? 'proto' : v === 'port' ? 'dport' : v
+                    )
                 }
                 totalsBytes={(() => {
                   const t: any = (summary as any)?.totals || {}
@@ -1588,6 +1606,7 @@ export default function App() {
                 onRowClick={(r) => {
                   void openTemporalForRow(r)
                 }}
+                showTotalsPercentage={showTotalsPercentage}
               />
             )}
             {activeTab === 'graph' && (
