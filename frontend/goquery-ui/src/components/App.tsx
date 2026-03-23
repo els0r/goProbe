@@ -492,6 +492,20 @@ export default function App() {
   // open temporal details for a specific row (shared by click and keyboard shortcut)
   const openTemporalForRow = useCallback(
     async (r: FlowRecord) => {
+      // Toggle: if clicking the already-selected row, close it
+      if (
+        selectedRow != null &&
+        selectedRow.sip === r.sip &&
+        selectedRow.dip === r.dip &&
+        selectedRow.dport === r.dport &&
+        selectedRow.proto === r.proto &&
+        selectedRow.host_id === r.host_id &&
+        selectedRow.iface === r.iface
+      ) {
+        setSelectedRow(null)
+        setTemporalDetail(null)
+        return
+      }
       const condParts: string[] = []
       if (r.sip) condParts.push(`sip=${r.sip}`)
       if (r.dip) condParts.push(`dip=${r.dip}`)
@@ -546,7 +560,7 @@ export default function App() {
         })
       }
     },
-    [params, attrState]
+    [params, attrState, selectedRow]
   )
 
   // Enter opens temporal details for the first row if in table view and no panel is open
@@ -1547,7 +1561,7 @@ export default function App() {
               </div>
             </>
           )}
-          {(ipDetail || ifaceDetail || hostDetail || temporalDetail) && (
+          {(ipDetail || ifaceDetail || hostDetail) && (
             <div
               className="absolute inset-0 z-10 rounded-lg bg-black/40 backdrop-blur-[1px]"
               onClick={closeAllDetails}
@@ -1607,6 +1621,7 @@ export default function App() {
                   void openTemporalForRow(r)
                 }}
                 showTotalsPercentage={showTotalsPercentage}
+                temporalDetail={temporalDetail}
               />
             )}
             {activeTab === 'graph' && (
@@ -1651,17 +1666,6 @@ export default function App() {
                   />
                 )}
               </div>
-            )}
-            {temporalDetail && (
-              <TemporalDetailsPanel
-                meta={temporalDetail.meta}
-                attrsShown={temporalDetail.attrsShown}
-                rows={temporalDetail.rows}
-                summary={temporalDetail.summary}
-                loading={temporalDetail.loading}
-                error={temporalDetail.error}
-                onClose={() => setTemporalDetail(null)}
-              />
             )}
             {/* progress moved above; nothing sticky at the bottom anymore */}
           </div>
