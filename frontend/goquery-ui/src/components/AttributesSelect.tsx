@@ -13,6 +13,8 @@ export interface AttributesSelectProps {
   allSelected: boolean // kept for external state compatibility
   onChange: (next: { values: string[]; all: boolean }) => void
   hasError?: boolean
+  /** Open the dropdown upward instead of downward */
+  dropUp?: boolean
 }
 
 // Multi-select dropdown without "All" entry; empty or full selection treated as all.
@@ -22,6 +24,7 @@ export function AttributesSelect({
   allSelected,
   onChange,
   hasError,
+  dropUp,
 }: AttributesSelectProps) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement | null>(null)
@@ -52,9 +55,9 @@ export function AttributesSelect({
     : value.length === 0
       ? 'All'
       : options
-          .filter((o) => value.includes(o.value))
-          .map((o) => o.label)
-          .join(', ')
+        .filter((o) => value.includes(o.value))
+        .map((o) => o.label)
+        .join(', ')
 
   return (
     <div className="relative text-sm w-full" ref={ref}>
@@ -72,7 +75,7 @@ export function AttributesSelect({
         <span className="text-xs opacity-70">{open ? '▲' : '▼'}</span>
       </button>
       {open && (
-        <div className="absolute z-20 mt-1 w-full rounded-md border border-white/10 bg-surface-100 p-1 shadow-lg">
+        <div className={`absolute z-20 w-full rounded-md border border-white/10 bg-surface-100 p-1 shadow-lg ${dropUp ? 'bottom-full mb-1' : 'mt-1'}`}>
           <ul className="max-h-60 overflow-auto scroll-thin text-xs">
             {options.map((o) => {
               const canonical = ATTR_ALIASES[o.value] || o.value

@@ -76,6 +76,7 @@ export default function App() {
   const [temporalDetail, setTemporalDetail] = useState<{
     meta: {
       host: string
+      host_id: string
       iface: string
       sip: string
       dip: string
@@ -511,11 +512,15 @@ export default function App() {
       if (r.dip) condParts.push(`dip=${r.dip}`)
       if (r.dport !== null && r.dport !== undefined) condParts.push(`dport=${r.dport}`)
       if (r.proto !== null && r.proto !== undefined) condParts.push(`proto=${r.proto}`)
+      // Include the original query condition (e.g. "proto eq icmp")
+      const origCond = (params.condition || '').trim()
+      if (origCond) condParts.push(origCond)
       const condition = condParts.join(' and ')
       const hostId = r.host_id || ''
       const iface = r.iface || ''
       const meta = {
         host: r.host || hostId,
+        host_id: hostId,
         iface,
         sip: r.sip || '',
         dip: r.dip || '',
@@ -1610,6 +1615,7 @@ export default function App() {
                     sortBy: params.sort_by,
                     hitsTotal: typeof hitsTotal === 'number' ? hitsTotal : undefined,
                     durationNs: typeof durNs === 'number' ? durNs : undefined,
+                    condition: params.condition,
                     br: typeof t.br === 'number' ? t.br : 0,
                     bs: typeof t.bs === 'number' ? t.bs : 0,
                     pr: typeof t.pr === 'number' ? t.pr : 0,

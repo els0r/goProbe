@@ -16,7 +16,8 @@ export interface TableViewProps {
   totalsPackets?: number
   showTotalsPercentage?: boolean
   temporalDetail?: {
-    meta: { host: string; iface: string; sip: string; dip: string; dport?: number | null; proto?: number | null }
+    meta: { host: string; host_id: string; iface: string; sip: string; dip: string; dport?: number | null; proto?: number | null }
+    attrsShown: string[]
     rows: FlowRecord[]
     loading: boolean
     error?: unknown
@@ -32,6 +33,7 @@ export interface TableViewProps {
     sortBy?: 'bytes' | 'packets'
     hitsTotal?: number
     durationNs?: number
+    condition?: string
     br?: number
     bs?: number
     pr?: number
@@ -277,6 +279,9 @@ export function TableView({
                   colSpan={colCount}
                   queryFirst={copyMeta?.first}
                   queryLast={copyMeta?.last}
+                  meta={temporalDetail.meta}
+                  attrsShown={temporalDetail.attrsShown}
+                  originalCondition={copyMeta?.condition}
                 />
               )}
             </React.Fragment>
