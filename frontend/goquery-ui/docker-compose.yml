@@ -1,15 +1,15 @@
-volumes:
-  env_run: {}
-  caddy_data: {}
-  caddy_config: {}
+# Local development only — hot reload with webpack dev server.
+# Production builds use the self-contained Dockerfile directly.
+#
+# Usage:
+#   docker compose up          (or: make docker-dev)
+#   docker compose down
 
 services:
   dev:
-    profiles: ["dev"]
     build:
       context: .
       dockerfile: Dockerfile.dev
-    # node_modules are baked into the image; only npm run dev is needed at start.
     command: npm run dev
     ports:
       - "5173:5173"
@@ -20,42 +20,3 @@ services:
     volumes:
       - ./:/app:delegated
       - /app/node_modules
-
-  env-writer:
-    profiles: ['prod']
-    # alpine + gettext provides envsubst, which handles URLs with special chars safely.
-    image: alpine:3.19
-    command: sh -c "apk add --no-cache gettext && sh /scripts/write-env.sh"
-    environment:
-      # Leave GQ_API_BASE_URL empty by default: the browser uses relative paths
-      # that Caddy proxies to GQ_BACKEND_HOST. Set explicitly for direct-access deploys.
-      GQ_API_BASE_URL: ${GQ_API_BASE_URL:-}
-      HOST_RESOLVER_TYPES: ${HOST_RESOLVER_TYPES:-string}
-      SSE_ON_LOAD: ${SSE_ON_LOAD:-true}
-    volumes:
-      - env_run:/var/run/env
-      - ./scripts:/scripts:ro
-
-  web:
-    profiles: ['prod']
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: goquery-ui:caddy-local
-    depends_on:
-      env-writer:
-        condition: service_completed_successfully
-    ports:
-      - '5137:5137'
-    read_only: true
-    security_opt:
-      - no-new-privileges:true
-    volumes:
-      - env_run:/var/run/env
-      - caddy_data:/data
-      - caddy_config:/config
-    environment:
-      NODE_ENV: production
-      # Backend host for Caddy's reverse proxy (see Caddyfile).
-      # Caddy forwards /_query* and /-/* to this address.
-      GQ_BACKEND_HOST: ${GQ_BACKEND_HOST:-http://localhost:8145}

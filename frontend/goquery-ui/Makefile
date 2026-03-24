@@ -29,11 +29,10 @@ help:
 	@echo "  make generate-index - create a minimal index.html if missing"
 	@echo "  make types          - fetch OpenAPI $(VERSION) and generate TS types ($(GENERATED_TYPES))"
 	@echo "  make regen          - install + types + build"
-	@echo "  make docker-dev     - docker compose dev profile (hot reload)"
-	@echo "  make docker-stop    - stop docker compose dev profile"
+	@echo "  make docker-dev     - docker compose dev server (hot reload)"
+	@echo "  make docker-stop    - stop docker compose dev server"
 	@echo "  make docker-logs    - view docker compose dev logs"
-	@echo "  make docker-prod    - docker compose prod-like profile (Caddy)"
-	@echo "  make docker-build   - build Caddy image locally"
+	@echo "  make docker-build   - build production image locally"
 
 # install: re-run if package.json or chosen lockfile changes
 node_modules: package.json $(LOCKFILE)
@@ -100,20 +99,16 @@ format: install
 docker-dev:
 	@echo "Starting Docker development server with hot reload..."
 	@echo "Access the application at http://localhost:5173"
-	docker compose --profile dev up --build
+	docker compose up --build
 
 .PHONY: docker-stop
 docker-stop:
-	docker compose --profile dev down
+	docker compose down
 
 .PHONY: docker-logs
 docker-logs:
-	docker compose --profile dev logs -f
-
-.PHONY: docker-prod
-docker-prod: types
-	docker compose --profile prod up --build
+	docker compose logs -f
 
 .PHONY: docker-build
 docker-build: types
-	docker build -t goquery-ui:caddy-local .
+	docker build -t goquery-ui:latest .

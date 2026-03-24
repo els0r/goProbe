@@ -42,52 +42,40 @@ services:
   # Bring up the SPA frontend alongside the backend stack:
   #   docker compose --profile frontend up
   #
-  # Required environment variables:
-  #   GQ_BACKEND_HOST  - address of the global-query API as seen from inside the
-  #                      container network, e.g. http://127.0.0.1:8145
-  #                      Defaults to the loopback address of the query service.
+  # The image is self-contained: env.js is generated at container startup
+  # from environment variables — no sidecar or init container needed.
   #
-  # Optional environment variables:
-  #   GQ_API_BASE_URL  - URL the *browser* uses to reach the API.
-  #                      Leave empty (default) to route via the Caddy proxy so
-  #                      the browser sees same-origin requests and no CORS is needed.
-  #                      Set to a full URL only for direct-access / split deployments.
-  #   HOST_RESOLVER_TYPES - comma-separated resolver types shown in the UI (default: string)
+  # Environment variables:
+  #   GQ_BACKEND_HOST      - backend API address for Caddy's reverse proxy
+  #                          (default: http://127.0.0.1:8145)
+  #   GQ_API_BASE_URL      - URL the *browser* uses to reach the API.
+  #                          Leave empty (default) to route via the Caddy proxy.
+  #   HOST_RESOLVER_TYPES  - comma-separated resolver types shown in the UI (default: string)
   #   SSE_ON_LOAD          - enable SSE streaming by default (default: true)
 
-  frontend-env-writer:
-    profiles: ['frontend']
-    image: alpine:3.19
-    command: sh -c "apk add --no-cache gettext && sh /scripts/write-env.sh"
-    environment:
-      GQ_API_BASE_URL: ${GQ_API_BASE_URL:-}
-      HOST_RESOLVER_TYPES: ${HOST_RESOLVER_TYPES:-string}
-      SSE_ON_LOAD: ${SSE_ON_LOAD:-true}
-    volumes:
-      - frontend_env_run:/var/run/env
-      - ./frontend/goquery-ui/scripts:/scripts:ro
-
-  frontend-web:
+  frontend:
     profiles: ['frontend']
     build:
       context: ./frontend/goquery-ui
       dockerfile: Dockerfile
     image: goquery-ui:latest
-    depends_on:
-      frontend-env-writer:
-        condition: service_completed_successfully
+    restart: unless-stopped
     ports:
       - '5137:5137'
     read_only: true
     security_opt:
       - no-new-privileges:true
+    tmpfs:
+      - /tmp:noexec,nosuid,size=1m
+      - /var/run/env:noexec,nosuid,size=1m
     volumes:
-      - frontend_env_run:/var/run/env
       - frontend_caddy_data:/data
       - frontend_caddy_config:/config
     environment:
-      NODE_ENV: production
       GQ_BACKEND_HOST: ${GQ_BACKEND_HOST:-http://127.0.0.1:8145}
+      GQ_API_BASE_URL: ${GQ_API_BASE_URL:-}
+      HOST_RESOLVER_TYPES: ${HOST_RESOLVER_TYPES:-string}
+      SSE_ON_LOAD: ${SSE_ON_LOAD:-true}
 
 volumes:
   db:
@@ -96,6 +84,5 @@ volumes:
       type: 'none'
       o: 'bind'
       device: '/tmp/goprobe_db' # NOTE: Directory must exist and have read/write permissions for UID:GID 1000:1000
-  frontend_env_run: {}
   frontend_caddy_data: {}
   frontend_caddy_config: {}
