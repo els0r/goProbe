@@ -47,8 +47,8 @@
 	# so no CORS headers are required on the backend for browser traffic.
 	# GQ_BACKEND_HOST must be set in the container environment, e.g.
 	#   GQ_BACKEND_HOST=http://global-query:8145
-	reverse_proxy /_query* {env.GQ_BACKEND_HOST}
-	reverse_proxy /-/* {env.GQ_BACKEND_HOST}
+	reverse_proxy /_query* {$GQ_BACKEND_HOST}
+	reverse_proxy /-/* {$GQ_BACKEND_HOST}
 
 	# Serve static files first
 	file_server
