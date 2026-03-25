@@ -22,13 +22,25 @@ import { mapValidationError } from '../utils/errorMapping'
 
 const DEFAULT_FIRST_MINUTES = 10
 
+const ATTR_PRESETS: { label: string; query: string; all: boolean }[] = [
+  { label: 'Top Talkers', query: 'sip,dip', all: false },
+  { label: 'Top Apps', query: 'dport,proto', all: false },
+  { label: 'Src IP', query: 'sip', all: false },
+  { label: 'Dst IP', query: 'dip', all: false },
+  { label: 'All', query: 'sip,dip,dport,proto', all: true },
+]
+
 function buildInitialParams(): QueryParamsUI {
   const parsed = parseParams(window.location.search)
   const lastDate = new Date()
   const firstDate = new Date(lastDate.getTime() - DEFAULT_FIRST_MINUTES * 60 * 1000)
-  // normalize attributes selection: if empty/All, store explicit list to satisfy backend min-length
-  const attr = parseAttributeQuery(parsed.query)
-  const normalizedQuery = buildAttributeQuery(attr.values, attr.all)
+  // default to "Top Talkers" (sip,dip) when no explicit query param provided
+  const normalizedQuery = parsed.query
+    ? buildAttributeQuery(
+      parseAttributeQuery(parsed.query).values,
+      parseAttributeQuery(parsed.query).all,
+    )
+    : 'sip,dip'
   return sanitizeUIParams({
     ...parsed,
     query_hosts: sanitizeHostList(parsed.query_hosts),
@@ -102,6 +114,7 @@ export default function App() {
   const [hostOkCount, setHostOkCount] = useState<number>(0)
   const [ifaceDetailOpen, setIfaceDetailOpen] = useState<boolean>(false)
   const [copiedToast, setCopiedToast] = useState<boolean>(false)
+  const [activePreset, setActivePreset] = useState<number | null>(null)
   const streamCloserRef = useRef<{ close: () => void } | null>(null)
   // settings state
   const defaultBackend = env.GQ_API_BASE_URL || 'http://localhost:8145'
@@ -810,6 +823,7 @@ export default function App() {
   function onTimePreset(minutes: number) {
     const lastDate = new Date()
     const firstDate = new Date(lastDate.getTime() - minutes * 60 * 1000)
+    setActivePreset(minutes)
     setParams((p) => ({
       ...p,
       first: firstDate.toISOString(),
@@ -824,23 +838,26 @@ export default function App() {
           <div className="text-lg font-semibold tracking-tight text-white">
             Goquery / Network Usage
           </div>
+          <button
+            type="button"
+            onClick={() => setSettingsOpen(true)}
+            className="rounded-md bg-surface-200 p-2 ring-1 ring-white/10 hover:bg-surface-300 focus:outline-none focus:ring-primary-500"
+            title="Settings"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.248a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.282c-.062-.373-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.248a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+            </svg>
+          </button>
         </div>
       </header>
       <main className="mx-auto max-w-7xl px-6 py-6">
         {/* Query Input Panel */}
-        <div className="mb-6 rounded-lg border border-white/10 bg-surface-100/60 p-4 relative">
-          <button
-            type="button"
-            onClick={() => setSettingsOpen(true)}
-            className="absolute right-3 top-3 rounded-md bg-surface-200 px-2 py-1 text-data font-medium ring-1 ring-white/10 hover:bg-surface-300 focus:outline-none focus:ring-primary-500"
-          >
-            Settings
-          </button>
-          <div className="space-y-4">
-            {/* Row 1 */}
-            <div className="grid grid-cols-12 gap-4">
-              {/* Hosts Query */}
-              <div className="col-span-12 md:col-span-4 flex flex-col text-data-sm">
+        <div className="mb-6 rounded-lg border border-white/10 bg-surface-100/60 p-4">
+          <div className="space-y-3 text-data-sm">
+            {/* Row 1: Hosts Query | Attributes */}
+            <div className="flex gap-4">
+              <div className="flex flex-col" style={{ flex: '0 0 40%' }}>
                 <label className="mb-1 font-medium text-gray-400">Hosts Query</label>
                 <input
                   type="text"
@@ -862,11 +879,32 @@ export default function App() {
                   }}
                 />
                 {fieldErrors.hosts && (
-                  <div className="mt-1 text-data-sm text-red-300">{fieldErrors.hosts}</div>
+                  <div className="mt-1 text-red-300">{fieldErrors.hosts}</div>
                 )}
               </div>
-              {/* Interfaces */}
-              <div className="col-span-12 md:col-span-3 flex flex-col text-data-sm">
+              <div className="flex flex-col flex-1 min-w-0">
+                <label className="mb-1 font-medium text-gray-400">Attributes</label>
+                <AttributesSelect
+                  options={[
+                    { label: 'Source IP', value: 'sip' },
+                    { label: 'Destination IP', value: 'dip' },
+                    { label: 'Port', value: 'dport' },
+                    { label: 'IP Protocol', value: 'proto' },
+                  ]}
+                  value={attrState.values}
+                  allSelected={attrState.all}
+                  onChange={onAttributesChange}
+                  hasError={!!fieldErrors.attributes}
+                />
+                {fieldErrors.attributes && (
+                  <div className="mt-1 text-red-300">{fieldErrors.attributes}</div>
+                )}
+              </div>
+            </div>
+
+            {/* Row 2: Interfaces | Attribute Presets */}
+            <div className="flex gap-4">
+              <div className="flex flex-col" style={{ flex: '0 0 40%' }}>
                 <label className="mb-1 font-medium text-gray-400">Interfaces</label>
                 <input
                   type="text"
@@ -888,36 +926,42 @@ export default function App() {
                   }}
                 />
                 {fieldErrors.ifaces && (
-                  <div className="mt-1 text-data-sm text-red-300">{fieldErrors.ifaces}</div>
+                  <div className="mt-1 text-red-300">{fieldErrors.ifaces}</div>
                 )}
               </div>
-              {/* Attributes */}
-              <div className="col-span-12 md:col-span-3 flex flex-col text-data-sm">
-                <label className="mb-1 font-medium text-gray-400">Attributes</label>
-                <AttributesSelect
-                  options={[
-                    { label: 'Source IP', value: 'sip' },
-                    { label: 'Destination IP', value: 'dip' },
-                    { label: 'Port', value: 'dport' },
-                    { label: 'IP Protocol', value: 'proto' },
-                  ]}
-                  value={attrState.values}
-                  allSelected={attrState.all}
-                  onChange={onAttributesChange}
-                  hasError={!!fieldErrors.attributes}
-                />
-                {fieldErrors.attributes && (
-                  <div className="mt-1 text-data-sm text-red-300">{fieldErrors.attributes}</div>
-                )}
+              <div className="flex flex-col flex-1 min-w-0">
+                <label className="mb-1 font-medium text-gray-400">Attribute Presets</label>
+                <div className="flex gap-2">
+                  {ATTR_PRESETS.map((preset) => {
+                    const active = attrState.all
+                      ? preset.all
+                      : preset.query === attrState.values.join(',')
+                    return (
+                      <button
+                        key={preset.label}
+                        onClick={() =>
+                          onAttributesChange(
+                            preset.all
+                              ? { values: [], all: true }
+                              : { values: preset.query.split(','), all: false },
+                          )
+                        }
+                        className={`flex-1 rounded-md px-2 py-1 text-center text-[13px] font-medium ring-1 focus:outline-none ${active
+                          ? 'bg-primary-600 text-white ring-primary-500'
+                          : 'bg-surface-200 ring-white/10 hover:bg-surface-300 focus:ring-primary-500'
+                          }`}
+                      >
+                        {preset.label}
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
-              {/* spacer to keep grid alignment */}
-              <div className="col-span-12 md:col-span-2" />
-              {/* (Run button moved below panel) */}
             </div>
-            {/* Row 2 - aligned under each primary field */}
-            <div className="grid grid-cols-12 gap-4">
-              {/* Time Range under Hosts */}
-              <div className="col-span-12 md:col-span-4 flex flex-col text-data-sm">
+
+            {/* Row 3: Time Range | Sort By + Ascending | Limit */}
+            <div className="flex gap-4">
+              <div className="flex flex-col" style={{ flex: '0 0 40%' }}>
                 <label className="mb-1 font-medium text-gray-400">Time Range</label>
                 <div className="grid grid-cols-6 gap-2">
                   {[5, 10, 30, 60, 360, 720, 1440, 2880, 10080, 43200, 129600, 259200].map((m) => {
@@ -931,135 +975,144 @@ export default function App() {
                       <button
                         key={m}
                         onClick={() => onTimePreset(m)}
-                        className="w-full rounded-md bg-surface-200 px-2 py-1 text-center text-[13px] font-medium ring-1 ring-white/10 hover:bg-surface-300 focus:outline-none focus:ring-primary-500"
+                        className={`w-full rounded-md px-2 py-1 text-center text-[13px] font-medium ring-1 focus:outline-none ${activePreset === m
+                          ? 'bg-primary-600 text-white ring-primary-500'
+                          : 'bg-surface-200 ring-white/10 hover:bg-surface-300 focus:ring-primary-500'
+                          }`}
                       >
                         {label}
                       </button>
                     )
                   })}
                 </div>
-                {/* Manual From/To override presets */}
-                <div className="mt-2 flex gap-2">
-                  <div className="flex flex-col flex-1">
-                    <label className="mb-0.5 text-data-xs tracking-wide text-gray-400">From</label>
-                    <input
-                      type="datetime-local"
-                      className={
-                        `rounded-md bg-surface-200 px-2 py-1 text-[13px] ring-1 focus:outline-none ` +
-                        (fieldErrors.first
-                          ? 'ring-red-500/40 bg-red-500/10 focus:ring-red-500/40'
-                          : 'ring-white/10 focus:ring-primary-500')
-                      }
-                      value={isoToLocalInput(params.first)}
-                      onChange={(e) => {
-                        const iso = localInputToIso(e.target.value)
-                        if (iso) setParams((p) => ({ ...p, first: iso }))
-                      }}
-                    />
-                    {fieldErrors.first && (
-                      <div className="mt-1 text-data-sm text-red-300">{fieldErrors.first}</div>
-                    )}
-                  </div>
-                  <div className="flex flex-col flex-1">
-                    <label className="mb-0.5 text-data-xs tracking-wide text-gray-400">To</label>
-                    <input
-                      type="datetime-local"
-                      className={
-                        `rounded-md bg-surface-200 px-2 py-1 text-[13px] ring-1 focus:outline-none ` +
-                        (fieldErrors.last
-                          ? 'ring-red-500/40 bg-red-500/10 focus:ring-red-500/40'
-                          : 'ring-white/10 focus:ring-primary-500')
-                      }
-                      value={isoToLocalInput(params.last)}
-                      onChange={(e) => {
-                        const iso = localInputToIso(e.target.value)
-                        if (iso) setParams((p) => ({ ...p, last: iso }))
-                      }}
-                    />
-                    {fieldErrors.last && (
-                      <div className="mt-1 text-data-sm text-red-300">{fieldErrors.last}</div>
-                    )}
-                  </div>
-                </div>
               </div>
-              {/* Sort By under Interfaces */}
-              <div className="col-span-12 md:col-span-3 flex flex-col text-data-sm">
-                <label className="mb-1 font-medium text-gray-400">Sort By</label>
-                <select
-                  className={
-                    `rounded-md bg-surface-200 px-2 py-1 text-[13px] ring-1 focus:outline-none ` +
-                    (fieldErrors.sort_by
-                      ? 'ring-red-500/40 bg-red-500/10 focus:ring-red-500/40'
-                      : 'ring-white/10 focus:ring-primary-500')
-                  }
-                  value={params.sort_by}
-                  onChange={(e) =>
-                    setParams((p) => ({
-                      ...p,
-                      sort_by: e.target.value as 'bytes' | 'packets',
-                    }))
-                  }
-                >
-                  <option value="bytes">Bytes</option>
-                  <option value="packets">Packets</option>
-                </select>
-                {fieldErrors.sort_by && (
-                  <div className="mt-1 text-data-sm text-red-300">{fieldErrors.sort_by}</div>
-                )}
-                <label className="mt-1 flex items-center gap-1 text-data-sm text-gray-400">
+              <div className="flex flex-1 min-w-0 gap-4 items-start">
+                <div className="flex flex-col flex-1">
+                  <label className="mb-1 font-medium text-gray-400">Sort By</label>
+                  <div className="flex items-center gap-2">
+                    <select
+                      className={
+                        `flex-1 rounded-md bg-surface-200 px-2 py-1 text-[13px] ring-1 focus:outline-none ` +
+                        (fieldErrors.sort_by
+                          ? 'ring-red-500/40 bg-red-500/10 focus:ring-red-500/40'
+                          : 'ring-white/10 focus:ring-primary-500')
+                      }
+                      value={params.sort_by}
+                      onChange={(e) =>
+                        setParams((p) => ({
+                          ...p,
+                          sort_by: e.target.value as 'bytes' | 'packets',
+                        }))
+                      }
+                    >
+                      <option value="bytes">Bytes</option>
+                      <option value="packets">Packets</option>
+                    </select>
+                    <label className="flex items-center gap-1 text-gray-400 whitespace-nowrap">
+                      <input
+                        type="checkbox"
+                        checked={params.sort_ascending}
+                        onChange={(e) =>
+                          setParams((p) => ({
+                            ...p,
+                            sort_ascending: e.target.checked,
+                          }))
+                        }
+                      />{' '}
+                      Ascending
+                    </label>
+                  </div>
+                  {fieldErrors.sort_by && (
+                    <div className="mt-1 text-red-300">{fieldErrors.sort_by}</div>
+                  )}
+                </div>
+                <div className="flex flex-col" style={{ flex: '0 0 100px' }}>
+                  <label className="mb-1 font-medium text-gray-400">Limit</label>
                   <input
-                    type="checkbox"
-                    checked={params.sort_ascending}
+                    type="number"
+                    min={1}
+                    list="limit-presets"
+                    className={
+                      `w-full rounded-md bg-surface-200 px-2 py-1 text-[13px] ring-1 focus:outline-none ` +
+                      (fieldErrors.limit
+                        ? 'ring-red-500/40 bg-red-500/10 focus:ring-red-500/40'
+                        : 'ring-white/10 focus:ring-primary-500')
+                    }
+                    value={params.limit}
                     onChange={(e) =>
                       setParams((p) => ({
                         ...p,
-                        sort_ascending: e.target.checked,
+                        limit: Math.max(1, Number(e.target.value) || 1),
                       }))
                     }
-                  />{' '}
-                  Ascending
-                </label>
+                  />
+                  {fieldErrors.limit && (
+                    <div className="mt-1 text-red-300">{fieldErrors.limit}</div>
+                  )}
+                  <datalist id="limit-presets">
+                    {[10, 25, 50, 100, 250, 500, 1000].map((n) => (
+                      <option key={n} value={n} />
+                    ))}
+                  </datalist>
+                </div>
               </div>
-              {/* Limit under Attributes */}
-              <div className="col-span-12 md:col-span-3 flex flex-col text-data-sm">
-                <label className="mb-1 font-medium text-gray-400">Limit</label>
-                <input
-                  type="number"
-                  min={1}
-                  list="limit-presets"
-                  className={
-                    `w-full rounded-md bg-surface-200 px-2 py-1 text-[13px] ring-1 focus:outline-none ` +
-                    (fieldErrors.limit
-                      ? 'ring-red-500/40 bg-red-500/10 focus:ring-red-500/40'
-                      : 'ring-white/10 focus:ring-primary-500')
-                  }
-                  value={params.limit}
-                  onChange={(e) =>
-                    setParams((p) => ({
-                      ...p,
-                      limit: Math.max(1, Number(e.target.value) || 1),
-                    }))
-                  }
-                />
-                {fieldErrors.limit && (
-                  <div className="mt-1 text-data-sm text-red-300">{fieldErrors.limit}</div>
-                )}
-                <datalist id="limit-presets">
-                  {[10, 25, 50, 100, 250, 500, 1000].map((n) => (
-                    <option key={n} value={n} />
-                  ))}
-                </datalist>
-              </div>
-              {/* Spacer to maintain grid alignment for Run column */}
-              <div className="col-span-12 md:col-span-2" />
             </div>
-            {/* Row 3 - Condition full width */}
-            <div className="grid grid-cols-12 gap-4">
-              <div className="col-span-12 flex flex-col text-data-sm">
+
+            {/* Row 4: From + To | Condition */}
+            <div className="flex gap-4">
+              <div className="flex gap-2" style={{ flex: '0 0 40%' }}>
+                <div className="flex flex-col flex-1">
+                  <label className="mb-1 font-medium text-gray-400">From</label>
+                  <input
+                    type="datetime-local"
+                    className={
+                      `rounded-md bg-surface-200 px-2 py-1 text-[13px] ring-1 focus:outline-none ` +
+                      (fieldErrors.first
+                        ? 'ring-red-500/40 bg-red-500/10 focus:ring-red-500/40'
+                        : 'ring-white/10 focus:ring-primary-500')
+                    }
+                    value={isoToLocalInput(params.first)}
+                    onChange={(e) => {
+                      const iso = localInputToIso(e.target.value)
+                      if (iso) {
+                        setActivePreset(null)
+                        setParams((p) => ({ ...p, first: iso }))
+                      }
+                    }}
+                  />
+                  {fieldErrors.first && (
+                    <div className="mt-1 text-red-300">{fieldErrors.first}</div>
+                  )}
+                </div>
+                <div className="flex flex-col flex-1">
+                  <label className="mb-1 font-medium text-gray-400">To</label>
+                  <input
+                    type="datetime-local"
+                    className={
+                      `rounded-md bg-surface-200 px-2 py-1 text-[13px] ring-1 focus:outline-none ` +
+                      (fieldErrors.last
+                        ? 'ring-red-500/40 bg-red-500/10 focus:ring-red-500/40'
+                        : 'ring-white/10 focus:ring-primary-500')
+                    }
+                    value={isoToLocalInput(params.last)}
+                    onChange={(e) => {
+                      const iso = localInputToIso(e.target.value)
+                      if (iso) {
+                        setActivePreset(null)
+                        setParams((p) => ({ ...p, last: iso }))
+                      }
+                    }}
+                  />
+                  {fieldErrors.last && (
+                    <div className="mt-1 text-red-300">{fieldErrors.last}</div>
+                  )}
+                </div>
+              </div>
+              <div className="flex flex-col flex-1 min-w-0">
                 <label className="mb-1 font-medium text-gray-400">Condition</label>
                 <textarea
-                  placeholder='Free text condition,  (e.g. "proto = TCP and (dport = 80 or dport = 443)")'
-                  rows={2}
+                  placeholder='Free text condition, e.g. "proto = TCP and (dport = 80 or dport = 443)"'
+                  rows={1}
                   className={
                     `w-full resize-y rounded-md bg-surface-200 px-2 py-1 text-[13px] ring-1 focus:outline-none ` +
                     (fieldErrors.condition
@@ -1075,7 +1128,7 @@ export default function App() {
                   onBlur={() => commitCondition()}
                 />
                 {fieldErrors.condition && (
-                  <pre className="mt-1 whitespace-pre-wrap text-data-sm leading-snug text-red-300 font-mono">
+                  <pre className="mt-1 whitespace-pre-wrap leading-snug text-red-300 font-mono">
                     {fieldErrors.condition}
                   </pre>
                 )}
