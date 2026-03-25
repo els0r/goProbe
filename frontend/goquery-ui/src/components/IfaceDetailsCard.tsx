@@ -7,6 +7,8 @@ export interface IfaceDetailsCardProps {
   inPackets: number
   outBytes: number
   outPackets: number
+  parentTotalBytes?: number
+  parentTotalPackets?: number
   backgroundClass?: string
   className?: string
 }
@@ -17,6 +19,8 @@ export const IfaceDetailsCard: React.FC<IfaceDetailsCardProps> = ({
   inPackets,
   outBytes,
   outPackets,
+  parentTotalBytes,
+  parentTotalPackets,
   backgroundClass,
   className,
 }) => {
@@ -31,6 +35,8 @@ export const IfaceDetailsCard: React.FC<IfaceDetailsCardProps> = ({
       inPackets={inPackets}
       outBytes={outBytes}
       outPackets={outPackets}
+      parentTotalBytes={parentTotalBytes}
+      parentTotalPackets={parentTotalPackets}
       backgroundClass={backgroundClass}
       className={className}
     />

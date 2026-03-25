@@ -9,6 +9,8 @@ export interface ServiceDetailsCardProps {
   inPackets: number
   outBytes: number
   outPackets: number
+  parentTotalBytes?: number
+  parentTotalPackets?: number
   backgroundClass?: string
   className?: string
 }
@@ -21,6 +23,8 @@ export const ServiceDetailsCard: React.FC<ServiceDetailsCardProps> = ({
   inPackets,
   outBytes,
   outPackets,
+  parentTotalBytes,
+  parentTotalPackets,
   backgroundClass,
   className,
 }) => {
@@ -36,6 +40,8 @@ export const ServiceDetailsCard: React.FC<ServiceDetailsCardProps> = ({
       inPackets={inPackets}
       outBytes={outBytes}
       outPackets={outPackets}
+      parentTotalBytes={parentTotalBytes}
+      parentTotalPackets={parentTotalPackets}
       backgroundClass={backgroundClass}
       className={className}
     />

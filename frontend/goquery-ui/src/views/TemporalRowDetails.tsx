@@ -68,6 +68,16 @@ export function TemporalRowDetails({
 }: TemporalRowDetailsProps) {
     const [selectedBucket, setSelectedBucket] = React.useState<number | null>(null)
 
+    // Parent totals across all temporal rows (used for share bars in child cards)
+    const rowTotals = React.useMemo(() => {
+        let b = 0, p = 0
+        for (const r of rows) {
+            b += (r.bytes_in || 0) + (r.bytes_out || 0)
+            p += (r.packets_in || 0) + (r.packets_out || 0)
+        }
+        return { bytes: b, packets: p }
+    }, [rows])
+
     // Drill-down state
     const complementAttrs = React.useMemo(() => {
         const shown = new Set(attrsShown || [])
@@ -334,6 +344,8 @@ export function TemporalRowDetails({
                                         inPackets={inP}
                                         outBytes={outB}
                                         outPackets={outP}
+                                        parentTotalBytes={rowTotals.bytes}
+                                        parentTotalPackets={rowTotals.packets}
                                         backgroundClass={backgroundClass}
                                         className="rounded-xl px-4 py-3"
                                     />
@@ -381,7 +393,7 @@ export function TemporalRowDetails({
                                         {drillFlows.length === 0 ? (
                                             <div className="text-data text-gray-400 text-center py-2">No results</div>
                                         ) : isServiceDrill ? (
-                                            <DrillServiceResults flows={drillFlows} />
+                                            <DrillServiceResults flows={drillFlows} parentTotalBytes={totalB} parentTotalPackets={totalP} />
                                         ) : (
                                             <DrillTableResults flows={drillFlows} attrs={effectiveAttrs} />
                                         )}
@@ -397,7 +409,7 @@ export function TemporalRowDetails({
 }
 
 // Render drill-down results as service cards (proto/port)
-function DrillServiceResults({ flows }: { flows: FlowRecord[] }) {
+function DrillServiceResults({ flows, parentTotalBytes, parentTotalPackets }: { flows: FlowRecord[]; parentTotalBytes: number; parentTotalPackets: number }) {
     const groups = groupByService(flows)
     return (
         <div>
@@ -415,6 +427,8 @@ function DrillServiceResults({ flows }: { flows: FlowRecord[] }) {
                             inPackets={g.inP}
                             outBytes={g.outB}
                             outPackets={g.outP}
+                            parentTotalBytes={parentTotalBytes}
+                            parentTotalPackets={parentTotalPackets}
                             backgroundClass={bg}
                             className="rounded-lg px-3 py-2"
                         />
