@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "description": "Network observability flow exploration UI (table + graph)",
   "scripts": {
-    "build": "webpack --config webpack.config.js",
+    "build": "webpack --mode production --config webpack.config.js",
     "dev": "webpack serve --config webpack.config.js",
     "typecheck": "tsc --noEmit",
     "generate:types": "openapi-typescript global-query_4.1.18_openapi.yaml --output src/api/generated.ts"

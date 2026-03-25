@@ -9,7 +9,7 @@ WEBPACK := node_modules/.bin/webpack
 # optional lock file (any one). If none exists we still allow install.
 LOCKFILE := $(firstword $(wildcard package-lock.json npm-shrinkwrap.json pnpm-lock.yaml yarn.lock))
 # OpenAPI spec version (can be overridden: `make VERSION=4.1.19 types`)
-VERSION ?= 4.1.18
+VERSION ?= 4.2.4
 OPENAPI_SPEC := global-query_$(VERSION)_openapi.yaml
 GENERATED_TYPES := src/api/generated.ts
 

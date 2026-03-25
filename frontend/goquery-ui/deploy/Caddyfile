@@ -53,10 +53,12 @@
 	# Serve static files first
 	file_server
 
-	# SPA fallback: if request isn't an existing file AND not env.js, serve index.html
+	# SPA fallback: if request isn't an existing file AND not env.js or API paths, serve index.html
 	@notFile {
 		not file
 		not path /env.js
+		not path /_query*
+		not path /-/*
 	}
 	rewrite @notFile /index.html
 }
