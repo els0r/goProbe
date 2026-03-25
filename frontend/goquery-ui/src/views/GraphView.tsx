@@ -74,7 +74,7 @@ const IP_R = 16
 const IFACE_R = 12
 
 // simple responsive container size hook
-function useRect(ref: React.RefObject<HTMLElement>) {
+function useRect(ref: React.RefObject<HTMLElement | null>) {
   const [rect, setRect] = useState<{ width: number; height: number }>({
     width: 800,
     height: 500,
@@ -441,14 +441,14 @@ export function GraphView({
     const hostOrder = hostNodes.length
       ? hostNodes
       : [
-          {
-            id: 'host:(unknown)',
-            label: '(unknown)',
-            type: 'host',
-            x: 0,
-            y: 0,
-          } as Node,
-        ]
+        {
+          id: 'host:(unknown)',
+          label: '(unknown)',
+          type: 'host',
+          x: 0,
+          y: 0,
+        } as Node,
+      ]
     // first pass: compute radius per host, factoring text width and iface count
     const MIN_HOST_GAP = 8
     hostOrder.forEach((h) => {
@@ -551,8 +551,8 @@ export function GraphView({
     ? edges.filter((e) => e.from === hoverIface || e.to === hoverIface)
     : hoverIP
       ? edges.filter(
-          (e) => (e.sips && e.sips.includes(hoverIP)) || (e.dips && e.dips.includes(hoverIP))
-        )
+        (e) => (e.sips && e.sips.includes(hoverIP)) || (e.dips && e.dips.includes(hoverIP))
+      )
       : []
   const connectedNodeIds = new Set<string>()
   for (const e of edgesToRender) {

@@ -275,7 +275,7 @@ export function TemporalInlineDetail({
                                 return (
                                     <div
                                         key={i}
-                                        ref={(el) => (rowRefs.current[i] = el)}
+                                        ref={(el) => { rowRefs.current[i] = el }}
                                         className={`mb-2 ${highlightIndex === i ? 'ring-2 ring-primary-500 rounded-xl' : ''}`}
                                         data-unidirectional={uni || undefined}
                                     >

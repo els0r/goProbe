@@ -5,7 +5,7 @@ WORKDIR /app
 COPY package.json package-lock.json* yarn.lock* pnpm-lock.yaml* ./
 RUN --mount=type=cache,target=/home/nonroot/.npm npm ci --no-audit --no-fund
 COPY . .
-RUN npm run build
+RUN npx -y update-browserslist-db@latest && npm run build
 
 # ---- runtime (Caddy) ----
 
