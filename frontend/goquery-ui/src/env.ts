@@ -35,7 +35,7 @@ const envGet = (key: string, dflt?: string): string => {
 
 export const env = {
   // API base URL for Global Query backend
-  GQ_API_BASE_URL: envGet('GQ_API_BASE_URL', 'http://localhost:8145'),
+  GQ_API_BASE_URL: envGet('GQ_API_BASE_URL', ''),
   HOST_RESOLVER_TYPES: toArray(envGet('HOST_RESOLVER_TYPES', 'string')),
   SSE_ON_LOAD: toBool(envGet('SSE_ON_LOAD', 'true')),
 }

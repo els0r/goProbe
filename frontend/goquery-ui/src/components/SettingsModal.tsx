@@ -75,15 +75,15 @@ export function SettingsModal({
             </label>
           </div>
           <div className="flex flex-col">
-            <label className="mb-1 text-data-sm tracking-wide text-gray-400">Backend</label>
+            <label className="mb-1 text-data-sm tracking-wide text-gray-400">Override backend</label>
             <input
               type="text"
-              placeholder={defaultBackend}
+              placeholder="Leave empty to use same-origin"
               className="w-full rounded-md bg-surface-200 px-2 py-1 text-[13px] ring-1 ring-white/10 focus:outline-none focus:ring-primary-500"
               value={backendUrl}
               onChange={(e) => onBackendUrlChange(e.target.value)}
             />
-            <div className="mt-1 text-data-sm text-gray-500">Default: {defaultBackend}</div>
+            <div className="mt-1 text-data-sm text-gray-500">Empty = relative paths via reverse proxy</div>
           </div>
           <div className="flex flex-col">
             <label className="mb-1 text-data-sm tracking-wide text-gray-400">Hosts Resolver</label>

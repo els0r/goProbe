@@ -117,7 +117,7 @@ export default function App() {
   const [activePreset, setActivePreset] = useState<number | null>(null)
   const streamCloserRef = useRef<{ close: () => void } | null>(null)
   // settings state
-  const defaultBackend = env.GQ_API_BASE_URL || 'http://localhost:8145'
+  const defaultBackend = env.GQ_API_BASE_URL
   const LS_BACKEND_KEY = 'goquery_ui_backend_url'
   const LS_STREAMING_KEY = 'goquery_ui_use_streaming'
   const LS_HOSTS_RESOLVER_KEY = 'goquery_ui_hosts_resolver'
