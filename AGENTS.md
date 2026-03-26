@@ -130,7 +130,7 @@ If `golangci-lint` is unavailable, at minimum run `go test` and `go vet` for tou
 
 ### Logging, context, and concurrency
 - Use `github.com/els0r/telemetry/logging` for service/runtime logging
-- Prefer structured fields (`With("key", value)`)
+- Prefer structured fields (`Info("log message", "key1", value1, "key2", value2, ...)`)
 - Accept `context.Context` as first argument for cancellable/blocking work
 - Propagate cancellation and clean up derived contexts (`defer cancel()`)
 - Protect shared mutable state with mutexes or confinement
