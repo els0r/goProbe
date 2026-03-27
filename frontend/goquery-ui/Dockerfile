@@ -1,9 +1,11 @@
 # ---- build ----
 
 FROM node:22-alpine AS build
+RUN apk add make curl
 WORKDIR /app
-COPY package.json package-lock.json* yarn.lock* pnpm-lock.yaml* ./
-RUN --mount=type=cache,target=/home/nonroot/.npm npm ci --no-audit --no-fund
+COPY package.json Makefile ./
+RUN make types
+RUN --mount=type=cache,target=/home/nonroot/.npm npm install --no-audit --no-fund
 COPY . .
 RUN npx -y update-browserslist-db@latest && npm run build
 

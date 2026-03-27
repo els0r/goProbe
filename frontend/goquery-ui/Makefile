@@ -110,5 +110,5 @@ docker-logs:
 	docker compose logs -f
 
 .PHONY: docker-build
-docker-build: types
+docker-build:
 	docker build -t goquery-ui:latest .
