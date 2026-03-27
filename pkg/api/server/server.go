@@ -43,7 +43,9 @@ type DefaultServer struct {
 	debug bool
 
 	// corsOrigins holds the list of allowed CORS origins. An empty slice means
-	// all origins are allowed (cors.Default() behaviour, suitable for dev/testing).
+	// no origins are allowed (no Access-Control-Allow-Origin header is sent,
+	// so browsers block cross-origin requests). Set explicit origins for
+	// deployments that expose the API directly to browsers.
 	corsOrigins []string
 
 	// telemetry
@@ -123,12 +125,10 @@ func WithNoRecursionDetection() Option {
 	}
 }
 
-// WithCORSOrigins restricts CORS to the provided origins. When no origins are
-// supplied (the default), all origins are permitted — appropriate for
-// development and for deployments where the API is only reachable via the
-// Caddy reverse proxy (so the browser never makes a cross-origin request).
-// In production deployments that expose the API directly to browsers, provide
-// the explicit frontend origin(s), e.g. "https://query.example.com".
+// WithCORSOrigins sets the allowed CORS origins. When no origins are supplied
+// (the default), no CORS headers are sent and browsers will block cross-origin
+// requests. Provide explicit frontend origin(s) for deployments that expose
+// the API directly to browsers, e.g. "https://query.example.com".
 func WithCORSOrigins(origins ...string) Option {
 	return func(server *DefaultServer) {
 		server.corsOrigins = origins
@@ -136,9 +136,14 @@ func WithCORSOrigins(origins ...string) Option {
 }
 
 // buildCORSMiddleware returns a CORS middleware configured from s.corsOrigins.
+// When no origins are configured, it returns a no-op handler so that no
+// Access-Control-Allow-Origin header is sent and browsers block cross-origin
+// requests by default.
 func (server *DefaultServer) buildCORSMiddleware() gin.HandlerFunc {
 	if len(server.corsOrigins) == 0 {
-		return cors.Default()
+		// No-op: without CORS headers the browser's same-origin policy blocks
+		// cross-origin requests.
+		return func(c *gin.Context) { c.Next() }
 	}
 	return cors.New(cors.Config{
 		AllowOrigins: server.corsOrigins,
