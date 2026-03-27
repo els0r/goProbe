@@ -4,8 +4,6 @@ set -eu
 # Generate runtime env.js from environment variables, then start Caddy.
 # This makes the image fully self-contained — no sidecar / initContainer needed.
 
-mkdir -p /var/run/env
-
 cat > /tmp/env.js.tmpl << 'TMPL'
 // Generated at container startup
 window.__ENV__ = {

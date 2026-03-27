@@ -37,10 +37,7 @@ services:
     volumes:
       - ./examples/docker/querier.example.yaml:/app/goprobe-global-querier.yaml:ro
 
-  # ---- Frontend (opt-in, profile: frontend) ----
-  #
-  # Bring up the SPA frontend alongside the backend stack:
-  #   docker compose --profile frontend up
+  # ---- Frontend ----
   #
   # The image is self-contained: env.js is generated at container startup
   # from environment variables — no sidecar or init container needed.
@@ -54,23 +51,21 @@ services:
   #   SSE_ON_LOAD          - enable SSE streaming by default (default: true)
 
   frontend:
-    profiles: ['frontend']
     build:
       context: ./frontend/goquery-ui
       dockerfile: Dockerfile
-    image: goquery-ui:latest
+    image: goprobe/frontend:${VERSION:-latest}
     restart: unless-stopped
-    ports:
-      - '5137:5137'
-    read_only: true
+    container_name: frontend
+    network_mode: host
     security_opt:
       - no-new-privileges:true
     tmpfs:
-      - /tmp:noexec,nosuid,size=1m
-      - /var/run/env:noexec,nosuid,size=1m
+      - /tmp:noexec,nosuid,size=1m,uid=1000,gid=1000
+      - /var/run/env:noexec,nosuid,size=1m,uid=1000,gid=1000
     volumes:
-      - frontend_caddy_data:/data
-      - frontend_caddy_config:/config
+      - frontend_data:/data
+      - frontend_config:/config
     environment:
       GQ_BACKEND_HOST: ${GQ_BACKEND_HOST:-http://127.0.0.1:8145}
       GQ_API_BASE_URL: ${GQ_API_BASE_URL:-}
@@ -84,5 +79,15 @@ volumes:
       type: 'none'
       o: 'bind'
       device: '/tmp/goprobe_db' # NOTE: Directory must exist and have read/write permissions for UID:GID 1000:1000
-  frontend_caddy_data: {}
-  frontend_caddy_config: {}
+  frontend_data:
+    driver: local
+    driver_opts:
+      type: 'none'
+      o: 'bind'
+      device: '/tmp/goprobe_frontend_data' # NOTE: Directory must exist and have read/write permissions for UID:GID 1000:1000
+  frontend_config:
+    driver: local
+    driver_opts:
+      type: 'none'
+      o: 'bind'
+      device: '/tmp/goprobe_frontend_config' # NOTE: Directory must exist and have read/write permissions for UID:GID 1000:1000

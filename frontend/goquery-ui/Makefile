@@ -111,4 +111,4 @@ docker-logs:
 
 .PHONY: docker-build
 docker-build:
-	docker build -t goquery-ui:latest .
+	docker build -t goprobe/frontend:latest .
