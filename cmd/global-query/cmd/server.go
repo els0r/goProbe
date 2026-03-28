@@ -33,6 +33,7 @@ func serverCommand() (*cobra.Command, error) {
 
 	pflags.String(conf.ServerAddr, conf.DefaultServerAddr, "address to which the server binds")
 	pflags.Duration(conf.ServerShutdownGracePeriod, conf.DefaultServerShutdownGracePeriod, "duration the server will wait during shutdown before forcing shutdown")
+	pflags.StringSlice(conf.ServerCORSOrigins, nil, "allowed CORS origins for browser clients (empty = allow none; recommended in production: set to the frontend origin)")
 
 	pflags.String(conf.OpenAPISpecOutfile, "", "write OpenAPI 3.0.3 spec to output file and exit")
 
@@ -89,6 +90,7 @@ func serverEntrypoint(_ *cobra.Command, _ []string) error {
 		),
 		server.WithProfiling(viper.GetBool(conf.ProfilingEnabled)),
 		server.WithTracing(viper.GetBool(tracing.TracingEnabledArg)),
+		server.WithCORSOrigins(viper.GetStringSlice(conf.ServerCORSOrigins)...),
 	)
 
 	// initializing the server in a goroutine so that it won't block the graceful

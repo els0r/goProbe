@@ -42,6 +42,12 @@ type DefaultServer struct {
 
 	debug bool
 
+	// corsOrigins holds the list of allowed CORS origins. An empty slice means
+	// no origins are allowed (no Access-Control-Allow-Origin header is sent,
+	// so browsers block cross-origin requests). Set explicit origins for
+	// deployments that expose the API directly to browsers.
+	corsOrigins []string
+
 	// telemetry
 	profiling                 bool
 	metrics                   bool
@@ -119,6 +125,34 @@ func WithNoRecursionDetection() Option {
 	}
 }
 
+// WithCORSOrigins sets the allowed CORS origins. When no origins are supplied
+// (the default), no CORS headers are sent and browsers will block cross-origin
+// requests. Provide explicit frontend origin(s) for deployments that expose
+// the API directly to browsers, e.g. "https://query.example.com".
+func WithCORSOrigins(origins ...string) Option {
+	return func(server *DefaultServer) {
+		server.corsOrigins = origins
+	}
+}
+
+// buildCORSMiddleware returns a CORS middleware configured from s.corsOrigins.
+// When no origins are configured, it returns a no-op handler so that no
+// Access-Control-Allow-Origin header is sent and browsers block cross-origin
+// requests by default.
+func (server *DefaultServer) buildCORSMiddleware() gin.HandlerFunc {
+	if len(server.corsOrigins) == 0 {
+		// No-op: without CORS headers the browser's same-origin policy blocks
+		// cross-origin requests.
+		return func(c *gin.Context) { c.Next() }
+	}
+	return cors.New(cors.Config{
+		AllowOrigins: server.corsOrigins,
+		AllowMethods: []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"},
+		AllowHeaders: []string{"Origin", "Content-Length", "Content-Type", "Authorization"},
+		MaxAge:       12 * time.Hour,
+	})
+}
+
 // NewDefault creates a new API server
 func NewDefault(serviceName, addr string, opts ...Option) *DefaultServer {
 	s := &DefaultServer{
@@ -126,6 +160,12 @@ func NewDefault(serviceName, addr string, opts ...Option) *DefaultServer {
 		// make sure that serviceName conforms to the prometheus naming convention. Exhaustive would be stripping
 		// the serviceName off any characters that are not permitted
 		serviceName: strings.ToLower(serviceName),
+	}
+
+	// Apply options before building the router so all settings (debug, corsOrigins,
+	// etc.) are available when middlewares are wired up.
+	for _, opt := range opts {
+		opt(s)
 	}
 
 	// Set Gin release / debug mode according to debug flag (must happen _before_ call to gin.New())
@@ -136,15 +176,12 @@ func NewDefault(serviceName, addr string, opts ...Option) *DefaultServer {
 	router.MaxMultipartMemory = maxMultipartMemory
 
 	router.Use(gin.Recovery())
-	router.Use(cors.Default())
+	router.Use(s.buildCORSMiddleware())
 
 	// make sure that unix sockets are handled if they are provided
 	s.unixSocketFile = api.ExtractUnixSocket(addr)
 
 	s.router = router
-	for _, opt := range opts {
-		opt(s)
-	}
 
 	// get a documented API
 	s.api = humagin.New(s.router, huma.DefaultConfig(serviceName, version.Short()))

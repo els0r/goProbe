@@ -1,0 +1,6 @@
+global-query_*_openapi.yaml
+package-lock.json
+
+# deps and distribution
+node_modules/
+dist/

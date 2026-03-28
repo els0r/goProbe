@@ -1,0 +1,22 @@
+# Local development only — hot reload with webpack dev server.
+# Production builds use the self-contained Dockerfile directly.
+#
+# Usage:
+#   docker compose up          (or: make docker-dev)
+#   docker compose down
+
+services:
+  dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    command: npm run dev
+    ports:
+      - "5173:5173"
+    env_file:
+      - .env.development
+    environment:
+      NODE_ENV: development
+    volumes:
+      - ./:/app:delegated
+      - /app/node_modules

@@ -53,3 +53,10 @@ jobs:
           build-args: |
             COMMIT_SHA=${{ env.COMMIT_SHA }}
             SEM_VER=${{ env.SEM_VER }}
+
+      - name: Build and push frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend/goquery-ui
+          push: true
+          tags: goprobe/frontend:${{ env.COMMIT_SHA }},goprobe/frontend:${{ env.RELEASE_VERSION }},goprobe/frontend:latest
