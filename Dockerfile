@@ -1,8 +1,13 @@
 # Base image on Alpine / Golang
-FROM golang:1.26-alpine3.23 AS build
+# Always build on the host platform to enable native cross-compilation
+FROM --platform=$BUILDPLATFORM golang:1.26-alpine3.23 AS build
 
-# Download system package dependencies
-RUN apk add cmake make gcc libtool git bash musl-dev zstd-dev lz4-dev
+# Download system package dependencies (no CGO libs needed: pure-Go lz4/zstd used)
+RUN apk add cmake make gcc libtool git bash musl-dev
+
+# Target platform args injected by Docker Buildx
+ARG TARGETOS=linux
+ARG TARGETARCH=amd64
 
 # Upload source code
 WORKDIR /app
@@ -21,10 +26,10 @@ COPY . .
 ARG COMMIT_SHA=""
 ARG SEM_VER=""
 RUN cd ./pkg/version && go generate
-RUN nice -15 go build -tags jsoniter,slimcap_nomock -o goprobe -pgo=auto ./cmd/goProbe
-RUN nice -15 go build -tags jsoniter -o global-query -pgo=auto ./cmd/global-query
-RUN nice -15 go build -o goquery -pgo=auto ./cmd/goQuery
-RUN nice -15 go build -o gpctl -pgo=auto ./cmd/gpctl
+RUN nice -15 CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -tags jsoniter,slimcap_nomock -o goprobe -pgo=auto ./cmd/goProbe
+RUN nice -15 CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -tags jsoniter -o global-query -pgo=auto ./cmd/global-query
+RUN nice -15 CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -o goquery -pgo=auto ./cmd/goQuery
+RUN nice -15 CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -o gpctl -pgo=auto ./cmd/gpctl
 
 ###########################################################################
 

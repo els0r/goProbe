@@ -37,6 +37,7 @@ jobs:
         with:
           context: .
           push: true
+          platforms: linux/amd64,linux/arm64
           target: sensor
           tags: goprobe/sensor:${{ env.COMMIT_SHA }},goprobe/sensor:${{ env.RELEASE_VERSION }},goprobe/sensor:latest
           build-args: |
@@ -48,6 +49,7 @@ jobs:
         with:
           context: .
           push: true
+          platforms: linux/amd64,linux/arm64
           target: query
           tags: goprobe/query:${{ env.COMMIT_SHA }},goprobe/query:${{ env.RELEASE_VERSION }},goprobe/query:latest
           build-args: |
@@ -59,4 +61,5 @@ jobs:
         with:
           context: ./frontend/goquery-ui
           push: true
+          platforms: linux/amd64,linux/arm64
           tags: goprobe/frontend:${{ env.COMMIT_SHA }},goprobe/frontend:${{ env.RELEASE_VERSION }},goprobe/frontend:latest

@@ -8,6 +8,19 @@ on:
 jobs:
   build-deb:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goarch: amd64
+            deb_arch: amd64
+            tarball_suffix: debian_amd64
+            cgo_enabled: "1"
+            depends: 'liblz4-1, libzstd1'
+          - goarch: arm64
+            deb_arch: arm64
+            tarball_suffix: debian_arm64
+            cgo_enabled: "0"
+            depends: ''
     steps:
 
       - name: Set up Go
@@ -29,13 +42,17 @@ jobs:
         run: |
           cd ./pkg/version && go generate
 
-      - name: Build for AMD64
+      - name: Build for ${{ matrix.goarch }}
+        env:
+          CGO_ENABLED: ${{ matrix.cgo_enabled }}
+          GOOS: linux
+          GOARCH: ${{ matrix.goarch }}
         run: |
-          GOOS=linux GOARCH=amd64 go build -a -tags jsoniter,slimcap_nomock -o goProbe -pgo=auto ./cmd/goProbe
-          GOOS=linux GOARCH=amd64 go build -a -tags jsoniter -o global-query -pgo=auto ./cmd/global-query
-          GOOS=linux GOARCH=amd64 go build -a -o goQuery -pgo=auto ./cmd/goQuery
-          GOOS=linux GOARCH=amd64 go build -a -o gpctl -pgo=auto ./cmd/gpctl
-          GOOS=linux GOARCH=amd64 go build -a -o goConvert ./cmd/goConvert
+          go build -a -tags jsoniter,slimcap_nomock -o goProbe -pgo=auto ./cmd/goProbe
+          go build -a -tags jsoniter -o global-query -pgo=auto ./cmd/global-query
+          go build -a -o goQuery -pgo=auto ./cmd/goQuery
+          go build -a -o gpctl -pgo=auto ./cmd/gpctl
+          go build -a -o goConvert ./cmd/goConvert
 
       - name: Deploy artifacts
         run: |
@@ -48,7 +65,7 @@ jobs:
           cp goQuery .debpkg/usr/local/bin/goQuery
           cp gpctl .debpkg/usr/local/bin/gpctl
           cp goConvert .debpkg/usr/local/bin/goConvert
-          tar czf ./goprobe_${{ env.RELEASE_VERSION }}_debian_amd64.tar.gz goProbe global-query goQuery gpctl goConvert
+          tar czf ./goprobe_${{ env.RELEASE_VERSION }}_${{ matrix.tarball_suffix }}.tar.gz goProbe global-query goQuery gpctl goConvert
 
           # Config
           cp examples/config/goprobe-example-config.yaml .debpkg/etc/goprobe.conf.example
@@ -68,21 +85,32 @@ jobs:
           package_root: .debpkg
           maintainer: fako1024
           version: ${{ github.ref }}
-          arch: 'amd64'
-          depends: 'liblz4-1, libzstd1'
+          arch: ${{ matrix.deb_arch }}
+          depends: ${{ matrix.depends }}
           desc: 'goProbe Network Traffic Monitoring'
 
       - name: Store artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Debian
+          name: Debian-${{ matrix.deb_arch }}
           path: |
-            ./goprobe_${{ env.RELEASE_VERSION }}_amd64.deb
-            ./goprobe_${{ env.RELEASE_VERSION }}_debian_amd64.tar.gz
+            ./goprobe_${{ env.RELEASE_VERSION }}_${{ matrix.deb_arch }}.deb
+            ./goprobe_${{ env.RELEASE_VERSION }}_${{ matrix.tarball_suffix }}.tar.gz
 
   build-rpm:
     runs-on: ubuntu-latest
     container: fedora:37
+    strategy:
+      matrix:
+        include:
+          - goarch: amd64
+            rpm_arch: x86_64
+            tarball_suffix: fedora_x86_64
+            cgo_enabled: "1"
+          - goarch: arm64
+            rpm_arch: aarch64
+            tarball_suffix: fedora_aarch64
+            cgo_enabled: "0"
     steps:
 
       - name: Set up Go
@@ -107,13 +135,17 @@ jobs:
         run: |
           cd ./pkg/version && go generate
 
-      - name: Build for AMD64
+      - name: Build for ${{ matrix.goarch }}
+        env:
+          CGO_ENABLED: ${{ matrix.cgo_enabled }}
+          GOOS: linux
+          GOARCH: ${{ matrix.goarch }}
         run: |
-          GOOS=linux GOARCH=amd64 go build -a -tags jsoniter,slimcap_nomock -o goProbe -pgo=auto ./cmd/goProbe
-          GOOS=linux GOARCH=amd64 go build -a -tags jsoniter -o global-query -pgo=auto ./cmd/global-query
-          GOOS=linux GOARCH=amd64 go build -a -o goQuery -pgo=auto ./cmd/goQuery
-          GOOS=linux GOARCH=amd64 go build -a -o gpctl -pgo=auto ./cmd/gpctl
-          GOOS=linux GOARCH=amd64 go build -a -o goConvert ./cmd/goConvert
+          go build -a -tags jsoniter,slimcap_nomock -o goProbe -pgo=auto ./cmd/goProbe
+          go build -a -tags jsoniter -o global-query -pgo=auto ./cmd/global-query
+          go build -a -o goQuery -pgo=auto ./cmd/goQuery
+          go build -a -o gpctl -pgo=auto ./cmd/gpctl
+          go build -a -o goConvert ./cmd/goConvert
 
       - name: Deploy artifacts
         run: |
@@ -126,7 +158,7 @@ jobs:
           cp goQuery .rpmpkg/usr/local/bin/goQuery
           cp gpctl .rpmpkg/usr/local/bin/gpctl
           cp goConvert .rpmpkg/usr/local/bin/goConvert
-          tar czf ./goprobe_${{ env.RELEASE_VERSION }}_fedora_x86_64.tar.gz goProbe global-query goQuery gpctl goConvert
+          tar czf ./goprobe_${{ env.RELEASE_VERSION }}_${{ matrix.tarball_suffix }}.tar.gz goProbe global-query goQuery gpctl goConvert
 
           # Config
           cp examples/config/goprobe-example-config.yaml .rpmpkg/etc/goprobe.conf.example
@@ -137,20 +169,29 @@ jobs:
           package_root: .rpmpkg
           maintainer: fako1024
           version: ${{ github.ref }}
-          arch: 'x86_64'
+          arch: ${{ matrix.rpm_arch }}
           desc: 'goProbe Network Traffic Monitoring'
 
       - name: Store artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Fedora
+          name: Fedora-${{ matrix.rpm_arch }}
           path: |
-            ./goprobe-${{ env.RELEASE_VERSION }}*x86_64.rpm
-            ./goprobe_${{ env.RELEASE_VERSION }}_fedora_x86_64.tar.gz
+            ./goprobe-${{ env.RELEASE_VERSION }}*${{ matrix.rpm_arch }}.rpm
+            ./goprobe_${{ env.RELEASE_VERSION }}_${{ matrix.tarball_suffix }}.tar.gz
 
   build-apk:
     runs-on: ubuntu-latest
     container: golang:1-alpine
+    strategy:
+      matrix:
+        include:
+          - goarch: amd64
+            tarball_suffix: alpine_x86_64
+            cgo_enabled: "1"
+          - goarch: arm64
+            tarball_suffix: alpine_aarch64
+            cgo_enabled: "0"
     steps:
 
       - name: Set environment
@@ -169,25 +210,28 @@ jobs:
         run: |
           cd ./pkg/version && go generate
 
-      - name: Build for AMD64
+      - name: Build for ${{ matrix.goarch }}
+        env:
+          CGO_ENABLED: ${{ matrix.cgo_enabled }}
+          GOOS: linux
+          GOARCH: ${{ matrix.goarch }}
         run: |
-          GOOS=linux GOARCH=amd64 go build -buildvcs=false -a -tags jsoniter,slimcap_nomock -o goProbe -pgo=auto ./cmd/goProbe
-          GOOS=linux GOARCH=amd64 go build -buildvcs=false -a -tags jsoniter -o global-query -pgo=auto ./cmd/global-query
-          GOOS=linux GOARCH=amd64 go build -buildvcs=false -a -o goQuery -pgo=auto ./cmd/goQuery
-          GOOS=linux GOARCH=amd64 go build -buildvcs=false -a -o gpctl -pgo=auto ./cmd/gpctl
-          GOOS=linux GOARCH=amd64 go build -buildvcs=false -a -o goConvert ./cmd/goConvert
-
+          go build -buildvcs=false -a -tags jsoniter,slimcap_nomock -o goProbe -pgo=auto ./cmd/goProbe
+          go build -buildvcs=false -a -tags jsoniter -o global-query -pgo=auto ./cmd/global-query
+          go build -buildvcs=false -a -o goQuery -pgo=auto ./cmd/goQuery
+          go build -buildvcs=false -a -o gpctl -pgo=auto ./cmd/gpctl
+          go build -buildvcs=false -a -o goConvert ./cmd/goConvert
 
       - name: Deploy artifacts
         run: |
-          tar czf ./goprobe_${{ env.RELEASE_VERSION }}_alpine_x86_64.tar.gz goProbe global-query goQuery gpctl goConvert
+          tar czf ./goprobe_${{ env.RELEASE_VERSION }}_${{ matrix.tarball_suffix }}.tar.gz goProbe global-query goQuery gpctl goConvert
 
       - name: Store artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Alpine
+          name: Alpine-${{ matrix.goarch }}
           path: |
-            ./goprobe_${{ env.RELEASE_VERSION }}_alpine_x86_64.tar.gz
+            ./goprobe_${{ env.RELEASE_VERSION }}_${{ matrix.tarball_suffix }}.tar.gz
 
   build-openapi-specs:
     runs-on: ubuntu-latest
@@ -230,10 +274,10 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            downloaded-artifacts/Debian/goprobe*.deb
-            downloaded-artifacts/Debian/goprobe*.tar.gz
-            downloaded-artifacts/Fedora/goprobe*.rpm
-            downloaded-artifacts/Fedora/goprobe*.tar.gz
-            downloaded-artifacts/Alpine/goprobe*.tar.gz
+            downloaded-artifacts/Debian-*/goprobe*.deb
+            downloaded-artifacts/Debian-*/goprobe*.tar.gz
+            downloaded-artifacts/Fedora-*/goprobe*.rpm
+            downloaded-artifacts/Fedora-*/goprobe*.tar.gz
+            downloaded-artifacts/Alpine-*/goprobe*.tar.gz
             downloaded-artifacts/OpenAPI/*_openapi.yaml
           generate_release_notes: true
