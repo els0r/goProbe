@@ -14,13 +14,13 @@ jobs:
           - goarch: amd64
             deb_arch: amd64
             tarball_suffix: debian_amd64
-            cgo_enabled: "1"
+            cc: gcc
             depends: 'liblz4-1, libzstd1'
           - goarch: arm64
             deb_arch: arm64
             tarball_suffix: debian_arm64
-            cgo_enabled: "0"
-            depends: ''
+            cc: aarch64-linux-gnu-gcc
+            depends: 'liblz4-1, libzstd1'
     steps:
 
       - name: Set up Go
@@ -38,13 +38,21 @@ jobs:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v4
 
+      - name: Install ARM64 cross-compilation toolchain
+        if: matrix.goarch == 'arm64'
+        run: |
+          sudo dpkg --add-architecture arm64
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu liblz4-dev:arm64 libzstd-dev:arm64
+
       - name: Generate version file in pkg/version using COMMIT_SHA and SEM_VER
         run: |
           cd ./pkg/version && go generate
 
       - name: Build for ${{ matrix.goarch }}
         env:
-          CGO_ENABLED: ${{ matrix.cgo_enabled }}
+          CGO_ENABLED: "1"
+          CC: ${{ matrix.cc }}
           GOOS: linux
           GOARCH: ${{ matrix.goarch }}
         run: |
