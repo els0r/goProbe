@@ -41,9 +41,11 @@ jobs:
       - name: Install ARM64 cross-compilation toolchain
         if: matrix.goarch == 'arm64'
         run: |
-          sudo dpkg --add-architecture arm64
-          sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu liblz4-dev:arm64 libzstd-dev:arm64
+          sudo sh -c '
+            dpkg --add-architecture arm64
+            apt-get update
+            apt-get install -y gcc-aarch64-linux-gnu liblz4-dev:arm64 libzstd-dev:arm64
+          '
 
       - name: Generate version file in pkg/version using COMMIT_SHA and SEM_VER
         run: |
@@ -107,25 +109,18 @@ jobs:
 
   build-rpm:
     runs-on: ubuntu-latest
-    container: fedora:37
     strategy:
       matrix:
         include:
           - goarch: amd64
+            docker_platform: linux/amd64
             rpm_arch: x86_64
             tarball_suffix: fedora_x86_64
-            cgo_enabled: "1"
           - goarch: arm64
+            docker_platform: linux/arm64
             rpm_arch: aarch64
             tarball_suffix: fedora_aarch64
-            cgo_enabled: "0"
     steps:
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: 'stable'
-        id: go
 
       - name: Set environment
         run: |
@@ -133,27 +128,38 @@ jobs:
           echo "SEM_VER=${GITHUB_REF#refs/*/v}" >> $GITHUB_ENV
           echo "COMMIT_SHA=${GITHUB_SHA}" >> $GITHUB_ENV
 
-      - name: Install OS dependencies
-        run: dnf -y install gcc libzstd-devel lz4-devel
-
       - name: Check out code into the Go module directory
         uses: actions/checkout@v4
 
-      - name: Generate version file in pkg/version using COMMIT_SHA and SEM_VER
-        run: |
-          cd ./pkg/version && go generate
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
 
-      - name: Build for ${{ matrix.goarch }}
-        env:
-          CGO_ENABLED: ${{ matrix.cgo_enabled }}
-          GOOS: linux
-          GOARCH: ${{ matrix.goarch }}
+      - name: Build for ${{ matrix.goarch }} in fedora:37
         run: |
-          go build -a -tags jsoniter,slimcap_nomock -o goProbe -pgo=auto ./cmd/goProbe
-          go build -a -tags jsoniter -o global-query -pgo=auto ./cmd/global-query
-          go build -a -o goQuery -pgo=auto ./cmd/goQuery
-          go build -a -o gpctl -pgo=auto ./cmd/gpctl
-          go build -a -o goConvert ./cmd/goConvert
+          docker run --rm --platform=${{ matrix.docker_platform }} \
+            -v "${GITHUB_WORKSPACE}:/workspace" \
+            -w /workspace \
+            -e RELEASE_VERSION="${RELEASE_VERSION}" \
+            -e SEM_VER="${SEM_VER}" \
+            -e COMMIT_SHA="${COMMIT_SHA}" \
+            fedora:37 \
+            bash -euxo pipefail -c '
+              dnf -y install gcc libzstd-devel lz4-devel tar gzip
+              GO_VERSION=$(grep "^go " go.mod | cut -d" " -f2)
+              GO_ARCH=$(uname -m | sed -e "s/x86_64/amd64/" -e "s/aarch64/arm64/")
+              curl -sSL "https://go.dev/dl/go${GO_VERSION}.linux-${GO_ARCH}.tar.gz" | tar -xz -C /usr/local
+              export PATH=/usr/local/go/bin:$PATH
+              (cd pkg/version && go generate)
+              export CGO_ENABLED=1
+              go build -a -tags jsoniter,slimcap_nomock -o goProbe -pgo=auto ./cmd/goProbe
+              go build -a -tags jsoniter -o global-query -pgo=auto ./cmd/global-query
+              go build -a -o goQuery -pgo=auto ./cmd/goQuery
+              go build -a -o gpctl -pgo=auto ./cmd/gpctl
+              go build -a -o goConvert ./cmd/goConvert
+            '
+          sudo chown -R "$(id -u):$(id -g)" .
 
       - name: Deploy artifacts
         run: |
@@ -190,16 +196,15 @@ jobs:
 
   build-apk:
     runs-on: ubuntu-latest
-    container: golang:1-alpine
     strategy:
       matrix:
         include:
           - goarch: amd64
+            docker_platform: linux/amd64
             tarball_suffix: alpine_x86_64
-            cgo_enabled: "1"
           - goarch: arm64
+            docker_platform: linux/arm64
             tarball_suffix: alpine_aarch64
-            cgo_enabled: "0"
     steps:
 
       - name: Set environment
@@ -208,27 +213,34 @@ jobs:
           echo "SEM_VER=${GITHUB_REF#refs/*/v}" >> $GITHUB_ENV
           echo "COMMIT_SHA=${GITHUB_SHA}" >> $GITHUB_ENV
 
-      - name: Install OS dependencies
-        run: apk add cmake make gcc libtool git bash musl-dev zstd-dev lz4-dev
-
       - name: Check out code into the Go module directory
         uses: actions/checkout@v4
 
-      - name: Generate version file in pkg/version using COMMIT_SHA and SEM_VER
-        run: |
-          cd ./pkg/version && go generate
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
 
-      - name: Build for ${{ matrix.goarch }}
-        env:
-          CGO_ENABLED: ${{ matrix.cgo_enabled }}
-          GOOS: linux
-          GOARCH: ${{ matrix.goarch }}
+      - name: Build for ${{ matrix.goarch }} in golang:1-alpine
         run: |
-          go build -buildvcs=false -a -tags jsoniter,slimcap_nomock -o goProbe -pgo=auto ./cmd/goProbe
-          go build -buildvcs=false -a -tags jsoniter -o global-query -pgo=auto ./cmd/global-query
-          go build -buildvcs=false -a -o goQuery -pgo=auto ./cmd/goQuery
-          go build -buildvcs=false -a -o gpctl -pgo=auto ./cmd/gpctl
-          go build -buildvcs=false -a -o goConvert ./cmd/goConvert
+          docker run --rm --platform=${{ matrix.docker_platform }} \
+            -v "${GITHUB_WORKSPACE}:/workspace" \
+            -w /workspace \
+            -e RELEASE_VERSION="${RELEASE_VERSION}" \
+            -e SEM_VER="${SEM_VER}" \
+            -e COMMIT_SHA="${COMMIT_SHA}" \
+            golang:1-alpine \
+            sh -euxc '
+              apk add --no-cache cmake make gcc libtool git bash musl-dev zstd-dev lz4-dev
+              (cd pkg/version && go generate)
+              export CGO_ENABLED=1
+              go build -buildvcs=false -a -tags jsoniter,slimcap_nomock -o goProbe -pgo=auto ./cmd/goProbe
+              go build -buildvcs=false -a -tags jsoniter -o global-query -pgo=auto ./cmd/global-query
+              go build -buildvcs=false -a -o goQuery -pgo=auto ./cmd/goQuery
+              go build -buildvcs=false -a -o gpctl -pgo=auto ./cmd/gpctl
+              go build -buildvcs=false -a -o goConvert ./cmd/goConvert
+            '
+          sudo chown -R "$(id -u):$(id -g)" .
 
       - name: Deploy artifacts
         run: |
