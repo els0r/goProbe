@@ -9,6 +9,7 @@ cmd/goConvert/goConvert
 cmd/goProbe/goProbe
 cmd/goQuery/goQuery
 cmd/gpctl/gpctl
+cmd/gpdb/gpdb
 goprobe
 goquery
 global-query
