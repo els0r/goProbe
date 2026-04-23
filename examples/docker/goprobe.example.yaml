@@ -1,5 +1,5 @@
 db:
-  path: /usr/local/goProbe/db
+  path: /var/lib/goprobe/db
 local_buffers:
   size_limit: 33554432
   num_buffers: 1

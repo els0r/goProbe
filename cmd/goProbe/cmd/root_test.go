@@ -97,6 +97,13 @@ func TestNewRootCmd(t *testing.T) {
 			expectError:     false,
 		},
 		{
+			name: "missing mandatory db path",
+			args: []string{
+				"--autodetection.enabled=true",
+			},
+			expectError: true,
+		},
+		{
 			name:       "config file flag",
 			args:       []string{},
 			configFile: "test-config.yaml",

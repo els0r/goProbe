@@ -39,7 +39,9 @@ The list of available options is rich, so it's best to familiarize oneself with 
 
 The standard way to query flow data is via a flow database (goDB) stored on the same host as where `goQuery` is invoked. The parameter `--database|-d` will instruct `goQuery` to load and aggregate flow data from a local directory.
 
-This is the default case.
+`db.path` is mandatory for local DB operations (queries against local goDB data and the `list` command).
+
+If `--query.server.addr` is not provided, goQuery runs in local DB mode and fails at startup when `db.path` is missing.
 
 ### Global Query Server
 

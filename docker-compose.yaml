@@ -8,7 +8,7 @@ services:
     container_name: sensor
     network_mode: host
     environment:
-      - DB_PATH=/usr/local/goProbe/db
+      - DB_PATH=/var/lib/goprobe/db
       - LOCAL__BUFFERS_SIZE__LIMIT=33554432
       - LOCAL__BUFFERS_NUM__BUFFERS=1
       - AUTODETECTION_ENABLED=1
@@ -18,7 +18,7 @@ services:
       - API_PROFILING=0
       - API_KEYS=48fd01fa8f8b12a31fdc614c27c6c273459fe7755a141e9e8deed9f65123f97d
     volumes:
-      - db:/usr/local/goProbe/db
+      - db:/var/lib/goprobe/db
 
   query:
     image: goprobe/query:${VERSION:-latest}

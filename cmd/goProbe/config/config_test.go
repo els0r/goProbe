@@ -15,7 +15,7 @@ func TestValidate(t *testing.T) {
 		input       *Config
 		expectedErr error
 	}{
-		{"new", newDefault(), errorNoInterfacesSpecified},
+		{"new", newDefault(), errorEmptyDBPath},
 		{"valid config",
 			&Config{
 				DB: DBConfig{
@@ -433,9 +433,7 @@ interfaces:
 		},
 		{"invalid",
 			`db:`,
-			// when parse is used, the default DB path is set. Hence, the next error
-			// that can occur is the empty interface error
-			errorNoInterfacesSpecified,
+			errorEmptyDBPath,
 		},
 	}
 
