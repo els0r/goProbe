@@ -5,7 +5,6 @@ absolute
 
 # binaries
 cmd/global-query/global-query
-cmd/goConvert/goConvert
 cmd/goProbe/goProbe
 cmd/goQuery/goQuery
 cmd/gpctl/gpctl

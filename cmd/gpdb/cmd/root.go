@@ -21,6 +21,7 @@ func Execute() {
 	rootCmd := newRootCmd()
 	rootCmd.AddCommand(newVersionCmd())
 	rootCmd.AddCommand(newMergeCmd())
+	rootCmd.AddCommand(newImportCmd())
 
 	err := rootCmd.Execute()
 	if err != nil {
@@ -76,7 +77,7 @@ func initLogger() {
 
 func verifyArgs(cmd *cobra.Command, _ []string) error {
 	// Don't verify server if command does not rely on API access.
-	if cmd.Name() == "help" || cmd.Name() == "version" || cmd.Name() == "gpdb" || cmd.Name() == "merge" {
+	if cmd.Name() == "help" || cmd.Name() == "version" || cmd.Name() == "gpdb" || cmd.Name() == "merge" || cmd.Name() == "import" {
 		return nil
 	}
 
