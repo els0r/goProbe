@@ -27,5 +27,6 @@ bin/
 
 # Testing files
 .db/
+pkg/goDB/engine/testdb/host.id
 
 .codegpt

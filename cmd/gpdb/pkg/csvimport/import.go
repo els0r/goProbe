@@ -201,6 +201,7 @@ func initCSVReader(opts Options) (schemaDefinition, *csv.Reader, *os.File, error
 
 	reader := csv.NewReader(bufio.NewReader(file))
 	reader.FieldsPerRecord = -1
+	reader.ReuseRecord = true
 
 	if strings.TrimSpace(opts.Schema) != "" {
 		schema, err = parseSchema(opts.Schema)
@@ -348,6 +349,9 @@ func parseRow(
 	}
 	if iface == "" {
 		return "", nil, types.Counters{}, errors.New("empty interface")
+	}
+	if strings.ContainsAny(iface, `/\`) || iface == "." || iface == ".." {
+		return "", nil, types.Counters{}, errors.New("invalid interface name")
 	}
 
 	key, err := parseKey(row, schema.keyParsers, baseV4, baseV6)

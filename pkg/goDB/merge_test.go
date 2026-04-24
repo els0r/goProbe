@@ -549,13 +549,13 @@ func TestMergeSnapshots(t *testing.T) {
 	src := map[int64]blockSnapshot{1: {Timestamp: 1, Counts: types.Counters{BytesRcvd: 10}}, 2: {Timestamp: 2, Counts: types.Counters{BytesRcvd: 20}}}
 	dst := map[int64]blockSnapshot{2: {Timestamp: 2, Counts: types.Counters{BytesRcvd: 200}}, 3: {Timestamp: 3, Counts: types.Counters{BytesRcvd: 300}}}
 
-	merged, conflictsDst, conflictsSrc := mergeSnapshots(src, dst, true, true, false)
+	merged, conflictsDst, conflictsSrc := mergeSnapshots(src, dst, false)
 	require.Len(t, merged, 3)
 	require.Equal(t, 1, conflictsDst)
 	require.Equal(t, 0, conflictsSrc)
 	require.EqualValues(t, 200, merged[1].Counts.BytesRcvd)
 
-	merged, conflictsDst, conflictsSrc = mergeSnapshots(src, dst, true, true, true)
+	merged, conflictsDst, conflictsSrc = mergeSnapshots(src, dst, true)
 	require.Len(t, merged, 3)
 	require.Equal(t, 0, conflictsDst)
 	require.Equal(t, 1, conflictsSrc)

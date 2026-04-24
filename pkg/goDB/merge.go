@@ -462,7 +462,7 @@ func rebuildDayToStage(ctx context.Context, stageRoot, iface, sourceIfacePath, d
 		}
 	}
 
-	mergedSnapshots, conflictsByDest, conflictsBySource := mergeSnapshots(sourceSnapshots, destinationSnapshots, plan.UseSource, plan.UseDest, overwrite)
+	mergedSnapshots, conflictsByDest, conflictsBySource := mergeSnapshots(sourceSnapshots, destinationSnapshots, overwrite)
 
 	writer := gpfile.NewDirWriter(stageIfacePath, dayTimestamp, gpfile.WithPermissions(DefaultPermissions))
 	if err := writer.Open(); err != nil {
@@ -503,7 +503,7 @@ func rebuildDayToStage(ctx context.Context, stageRoot, iface, sourceIfacePath, d
 	return stagedDayPath, conflictsByDest, conflictsBySource, nil
 }
 
-func mergeSnapshots(sourceSnapshots, destinationSnapshots map[int64]blockSnapshot, useSource, useDest, overwrite bool) (merged []blockSnapshot, conflictsByDest int, conflictsBySource int) {
+func mergeSnapshots(sourceSnapshots, destinationSnapshots map[int64]blockSnapshot, overwrite bool) (merged []blockSnapshot, conflictsByDest int, conflictsBySource int) {
 	timestampsSet := make(map[int64]struct{}, len(sourceSnapshots)+len(destinationSnapshots))
 	for ts := range sourceSnapshots {
 		timestampsSet[ts] = struct{}{}
@@ -534,9 +534,9 @@ func mergeSnapshots(sourceSnapshots, destinationSnapshots map[int64]blockSnapsho
 				merged = append(merged, dstSnapshot)
 				conflictsByDest++
 			}
-		case hasSource && useSource:
+		case hasSource:
 			merged = append(merged, srcSnapshot)
-		case hasDestination && useDest:
+		case hasDestination:
 			merged = append(merged, dstSnapshot)
 		}
 	}
