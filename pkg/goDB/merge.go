@@ -368,11 +368,19 @@ func isDayComplete(ifacePath string, d dayDescriptor, tolerance time.Duration) (
 		_ = reader.Close()
 	}()
 
-	if reader.NBlocks() == 0 {
+	n := reader.NBlocks()
+	if n == 0 {
 		return false, nil
 	}
 
 	first, last := reader.TimeRange()
+
+	var blockDuration int64 = 300
+	if n > 1 {
+		blocks := reader.BlockMetadata[0].Blocks()
+		blockDuration = blocks[n-1].Timestamp - blocks[n-2].Timestamp
+	}
+
 	dayStart := gpfile.DirTimestamp(d.Timestamp)
 	dayEnd := dayStart + gpfile.EpochDay - 1
 	toleranceSeconds := int64(tolerance / time.Second)
@@ -381,7 +389,7 @@ func isDayComplete(ifacePath string, d dayDescriptor, tolerance time.Duration) (
 	}
 
 	completeAtStart := first <= dayStart+toleranceSeconds
-	completeAtEnd := last >= dayEnd-toleranceSeconds
+	completeAtEnd := last+blockDuration >= dayEnd-toleranceSeconds
 
 	return completeAtStart && completeAtEnd, nil
 }
@@ -536,6 +544,9 @@ func mergeSnapshots(sourceSnapshots, destinationSnapshots map[int64]blockSnapsho
 	return merged, conflictsByDest, conflictsBySource
 }
 
+// readDaySnapshots loads all blocks for a given day into memory.
+// TODO: If block payloads become large and memory limits are constrained, consider
+// refactoring this to stream block-by-block concurrently instead of buffering the whole day.
 func readDaySnapshots(ifacePath string, day dayDescriptor) (map[int64]blockSnapshot, error) {
 	reader := gpfile.NewDirReader(ifacePath, day.Timestamp, day.Suffix)
 	if err := reader.Open(); err != nil {
@@ -666,19 +677,19 @@ func monthPathForTimestamp(ifacePath string, dayTimestamp int64) string {
 func copyDir(srcDir, dstDir string) error {
 	srcInfo, err := os.Stat(srcDir)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to stat source directory `%s`: %w", srcDir, err)
 	}
 	if !srcInfo.IsDir() {
 		return fmt.Errorf("source `%s` is not a directory", srcDir)
 	}
 
 	if err := os.MkdirAll(dstDir, srcInfo.Mode().Perm()); err != nil {
-		return err
+		return fmt.Errorf("failed to create destination directory `%s`: %w", dstDir, err)
 	}
 
 	entries, err := os.ReadDir(srcDir)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to read source directory `%s`: %w", srcDir, err)
 	}
 
 	for _, entry := range entries {
@@ -703,7 +714,7 @@ func copyDir(srcDir, dstDir string) error {
 func copyFile(srcFile, dstFile string) error {
 	src, err := os.Open(srcFile)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to open source file `%s`: %w", srcFile, err)
 	}
 	defer func() {
 		_ = src.Close()
@@ -711,19 +722,19 @@ func copyFile(srcFile, dstFile string) error {
 
 	srcInfo, err := src.Stat()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to stat source file `%s`: %w", srcFile, err)
 	}
 
 	dst, err := os.OpenFile(dstFile, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, srcInfo.Mode().Perm())
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create destination file `%s`: %w", dstFile, err)
 	}
 	defer func() {
 		_ = dst.Close()
 	}()
 
 	if _, err := io.Copy(dst, src); err != nil {
-		return err
+		return fmt.Errorf("failed to copy data from `%s` to `%s`: %w", srcFile, dstFile, err)
 	}
 
 	return nil

@@ -17,44 +17,49 @@ const (
 	flagCompleteTolerance = "complete-tolerance"
 )
 
-var (
-	mergeInterfaces        []string
-	mergeOverwrite         bool
-	mergeDryRun            bool
-	mergeCompleteTolerance time.Duration
-)
+type mergeCommandOptions struct {
+	interfaces        []string
+	overwrite         bool
+	dryRun            bool
+	completeTolerance time.Duration
+}
 
-var mergeCmd = &cobra.Command{
-	Use:   "merge SOURCE_DB DESTINATION_DB",
-	Short: "Merge source goDB into destination goDB",
-	Long: `Merge source goDB into destination goDB.
+func newMergeCmd() *cobra.Command {
+	opts := mergeCommandOptions{}
+
+	mergeCmd := &cobra.Command{
+		Use:   "merge SOURCE_DB DESTINATION_DB",
+		Short: "Merge source goDB into destination goDB",
+		Long: `Merge source goDB into destination goDB.
 
 Days that are complete can be copied directly when safe, while partial-day
 data is rebuilt block-by-block to ensure metadata is re-encoded in the
 destination database layout.`,
-	Args:          cobra.ExactArgs(2),
-	RunE:          wrapCancellationContext(mergeEntrypoint),
-	SilenceErrors: true,
-	SilenceUsage:  true,
+		Args: cobra.ExactArgs(2),
+		RunE: wrapCancellationContext(func(ctx context.Context, cmd *cobra.Command, args []string) error {
+			return mergeEntrypoint(ctx, cmd, args, opts)
+		}),
+		SilenceErrors: true,
+		SilenceUsage:  true,
+	}
+
+	mergeFlags := mergeCmd.Flags()
+	mergeFlags.StringSliceVar(&opts.interfaces, flagInterface, nil, "interface(s) to merge (default: all interfaces found in source)")
+	mergeFlags.BoolVar(&opts.overwrite, flagOverwrite, false, "prefer source on conflicts (for complete-day collisions, replace destination day)")
+	mergeFlags.BoolVar(&opts.dryRun, flagDryRun, false, "show planned actions without mutating destination")
+	mergeFlags.DurationVar(&opts.completeTolerance, flagCompleteTolerance, 150*time.Second, "tolerance for classifying full-day coverage")
+
+	return mergeCmd
 }
 
-func init() {
-	rootCmd.AddCommand(mergeCmd)
-
-	mergeCmd.Flags().StringSliceVar(&mergeInterfaces, flagInterface, nil, "interface(s) to merge (default: all interfaces found in source)")
-	mergeCmd.Flags().BoolVar(&mergeOverwrite, flagOverwrite, false, "prefer source on conflicts (for complete-day collisions, replace destination day)")
-	mergeCmd.Flags().BoolVar(&mergeDryRun, flagDryRun, false, "show planned actions without mutating destination")
-	mergeCmd.Flags().DurationVar(&mergeCompleteTolerance, flagCompleteTolerance, 150*time.Second, "tolerance for classifying full-day coverage")
-}
-
-func mergeEntrypoint(ctx context.Context, cmd *cobra.Command, args []string) error {
+func mergeEntrypoint(ctx context.Context, cmd *cobra.Command, args []string, opts mergeCommandOptions) error {
 	summary, err := goDB.MergeDatabases(ctx, goDB.MergeOptions{
 		SourcePath:        args[0],
 		DestinationPath:   args[1],
-		Interfaces:        mergeInterfaces,
-		Overwrite:         mergeOverwrite,
-		DryRun:            mergeDryRun,
-		CompleteTolerance: mergeCompleteTolerance,
+		Interfaces:        opts.interfaces,
+		Overwrite:         opts.overwrite,
+		DryRun:            opts.dryRun,
+		CompleteTolerance: opts.completeTolerance,
 	})
 	if err != nil {
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {

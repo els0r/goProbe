@@ -16,18 +16,12 @@ import (
 	"github.com/spf13/viper"
 )
 
-// rootCmd represents the base command when called without any subcommands
-var rootCmd = &cobra.Command{
-	Use:               "gpdb",
-	Short:             "goProbe DB maintenance tool",
-	Long:              `gpdb goProbe DB maintenance CLI tool`,
-	PersistentPreRunE: verifyArgs,
-	RunE:              rootEntrypoint,
-	SilenceErrors:     true,
-}
-
 // Execute is the main entrypoint and runs the CLI tool
 func Execute() {
+	rootCmd := newRootCmd()
+	rootCmd.AddCommand(newVersionCmd())
+	rootCmd.AddCommand(newMergeCmd())
+
 	err := rootCmd.Execute()
 	if err != nil {
 		logger, _, logErr := logging.New(logging.LevelError, logging.EncodingPlain,
@@ -42,11 +36,25 @@ func Execute() {
 	}
 }
 
-func init() {
-	cobra.OnInitialize(initConfig)
-	cobra.OnInitialize(initLogger)
+func newRootCmd() *cobra.Command {
+	rootCmd := &cobra.Command{
+		Use:               "gpdb",
+		Short:             "goProbe DB maintenance tool",
+		Long:              `gpdb goProbe DB maintenance CLI tool`,
+		PersistentPreRunE: rootPersistentPreRun,
+		RunE:              rootEntrypoint,
+		SilenceErrors:     true,
+	}
 
 	_ = viper.BindPFlags(rootCmd.PersistentFlags())
+
+	return rootCmd
+}
+
+func rootPersistentPreRun(cmd *cobra.Command, args []string) error {
+	initConfig()
+	initLogger()
+	return verifyArgs(cmd, args)
 }
 
 // initConfig is currently a no-op to keep parity with cobra initialization hooks.
@@ -68,7 +76,7 @@ func initLogger() {
 
 func verifyArgs(cmd *cobra.Command, _ []string) error {
 	// Don't verify server if command does not rely on API access.
-	if cmd.Use == "help" || cmd.Use == versionCmd.Use || cmd.Name() == "gpdb" || cmd.Name() == "merge" {
+	if cmd.Name() == "help" || cmd.Name() == "version" || cmd.Name() == "gpdb" || cmd.Name() == "merge" {
 		return nil
 	}
 
