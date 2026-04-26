@@ -8,14 +8,14 @@ replace github.com/els0r/goProbe/plugins/contrib/v4 => ./plugins/contrib
 require (
 	github.com/danielgtaylor/huma/v2 v2.34.1
 	github.com/els0r/goProbe/plugins/contrib/v4 v4.0.0-20250311082229-45a8753b72a7
-	github.com/els0r/telemetry/logging v0.0.0-20260316115556-f92ddc69b6e7
+	github.com/els0r/telemetry/logging v0.0.0-20260406010724-0c813ed6284d
 	github.com/els0r/telemetry/metrics v0.0.0-20260316115556-f92ddc69b6e7
 	github.com/els0r/telemetry/tracing v0.0.0-20260316115556-f92ddc69b6e7
 	github.com/fako1024/gotools/bitpack v0.0.0-20250828105752-6dffddfeea78
 	github.com/fako1024/gotools/concurrency v0.0.0-20250828105752-6dffddfeea78
-	github.com/fako1024/gotools/link v0.0.0-20250828105752-6dffddfeea78
+	github.com/fako1024/gotools/link v0.0.0-20260108133916-d42cb4e89f05
 	github.com/fako1024/httpc v1.1.3
-	github.com/fako1024/slimcap v1.0.10
+	github.com/fako1024/slimcap v1.0.11
 	github.com/gin-contrib/cors v1.7.6
 	github.com/gin-contrib/pprof v1.5.3
 	github.com/gin-gonic/gin v1.11.0
@@ -32,8 +32,8 @@ require (
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.63.0
 	go.opentelemetry.io/otel v1.43.0
 	go.opentelemetry.io/otel/trace v1.43.0
-	golang.org/x/net v0.48.0
-	golang.org/x/sys v0.42.0
+	golang.org/x/net v0.53.0
+	golang.org/x/sys v0.43.0
 	golang.org/x/time v0.14.0
 	gopkg.in/yaml.v3 v3.0.1
 )
@@ -104,8 +104,8 @@ require (
 	go.yaml.in/yaml/v2 v2.4.3 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/arch v0.23.0 // indirect
-	golang.org/x/crypto v0.46.0 // indirect
-	golang.org/x/text v0.32.0 // indirect
+	golang.org/x/crypto v0.50.0 // indirect
+	golang.org/x/text v0.36.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20251202230838-ff82c1b0f217 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20251202230838-ff82c1b0f217 // indirect
 	google.golang.org/grpc v1.79.3 // indirect
