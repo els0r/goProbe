@@ -5,10 +5,10 @@ absolute
 
 # binaries
 cmd/global-query/global-query
-cmd/goConvert/goConvert
 cmd/goProbe/goProbe
 cmd/goQuery/goQuery
 cmd/gpctl/gpctl
+cmd/gpdb/gpdb
 goprobe
 goquery
 global-query
@@ -27,5 +27,6 @@ bin/
 
 # Testing files
 .db/
+pkg/goDB/engine/testdb/host.id
 
 .codegpt
