@@ -32,6 +32,10 @@ import (
 
 const resNil = "<nil>"
 
+const maxNegationNormalFormDepth = 512
+
+var errConditionTreeTooDeep = errors.New("condition tree exceeds maximum nesting depth")
+
 // ParseAndInstrument parses and instruments the given conditional string for evaluation.
 // This is the main external function related to conditionals.
 func ParseAndInstrument(conditional string, dnsTimeout time.Duration) (Node, *ValFilterNode, error) {
@@ -58,7 +62,9 @@ func ParseAndInstrument(conditional string, dnsTimeout time.Duration) (Node, *Va
 			return nil, nil, err
 		}
 
-		conditionalNode = negationNormalForm(conditionalNode)
+		if conditionalNode, err = negationNormalForm(conditionalNode); err != nil {
+			return nil, nil, err
+		}
 
 		if conditionalNode, err = instrument(conditionalNode); err != nil {
 			return nil, nil, err
@@ -274,58 +280,96 @@ func QueryConditionalString(conditionalNode Node, filterNode Node) string {
 // the tree and the result is logically equivalent to the input.
 // For example, "!((sip = 127.0.0.1 & dip = 127.0.0.1) | dport = 80)" is
 // converted into "(sip != 127.0.0.1 | dip != 127.0.0.1) & dport != 80".
-func negationNormalForm(node Node) Node {
-	var helper func(Node, bool) Node
-	helper = func(node Node, negate bool) Node {
+func negationNormalForm(node Node) (Node, error) {
+	var helper func(Node, bool, int) (Node, error)
+	helper = func(node Node, negate bool, depth int) (Node, error) {
+		if depth > maxNegationNormalFormDepth {
+			return nil, fmt.Errorf("%w: %d", errConditionTreeTooDeep, maxNegationNormalFormDepth)
+		}
+
 		switch node := node.(type) {
 		default:
 			panic(fmt.Sprintf("Node unexpectly has type %T", node))
 		case conditionNode:
-			if negate {
-				switch node.comparator {
-				default:
-					panic(fmt.Sprintf("Unknown comparison operator %s", node.comparator))
-				case "=":
-					node.comparator = "!="
-				case "!=":
-					node.comparator = "="
-				case "<":
-					node.comparator = ">="
-				case ">":
-					node.comparator = "<="
-				case "<=":
-					node.comparator = ">"
-				case ">=":
-					node.comparator = "<"
-				}
-				return node
+			if !negate {
+				return node, nil
 			}
-			return node
+
+			transformedComparator, err := transformComparator(node.comparator)
+			if err != nil {
+				return nil, err
+			}
+
+			transformedNode := node
+			transformedNode.comparator = transformedComparator
+			return transformedNode, nil
 		case andNode:
+			left, err := helper(node.left, negate, depth+1)
+			if err != nil {
+				return nil, err
+			}
+
+			right, err := helper(node.right, negate, depth+1)
+			if err != nil {
+				return nil, err
+			}
+
 			if negate {
 				return orNode{
-					left:  helper(node.left, true),
-					right: helper(node.right, true),
-				}
+					left:  left,
+					right: right,
+				}, nil
 			}
+
 			return andNode{
-				left:  helper(node.left, false),
-				right: helper(node.right, false),
-			}
+				left:  left,
+				right: right,
+			}, nil
 		case orNode:
+			left, err := helper(node.left, negate, depth+1)
+			if err != nil {
+				return nil, err
+			}
+
+			right, err := helper(node.right, negate, depth+1)
+			if err != nil {
+				return nil, err
+			}
+
 			if negate {
 				return andNode{
-					left:  helper(node.left, true),
-					right: helper(node.right, true),
-				}
+					left:  left,
+					right: right,
+				}, nil
 			}
+
 			return orNode{
-				left:  helper(node.left, false),
-				right: helper(node.right, false),
-			}
+				left:  left,
+				right: right,
+			}, nil
 		case notNode:
-			return helper(node.node, !negate)
+			return helper(node.node, !negate, depth+1)
 		}
 	}
-	return helper(node, false)
+
+	return helper(node, false, 0)
+}
+
+func transformComparator(comparator string) (string, error) {
+	switch comparator {
+	default:
+		return "", fmt.Errorf("unknown comparison operator %q", comparator)
+	case "=":
+		return "!=", nil
+	case "!=":
+		return "=", nil
+	case "<":
+		return ">=", nil
+	case ">":
+		return "<=", nil
+	case "<=":
+		return ">", nil
+	case ">=":
+		return "<", nil
+	}
 }
