@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path/filepath"
 
 	"github.com/els0r/goProbe/v4/pkg/distributed/hosts"
 	"github.com/els0r/goProbe/v4/plugins"
@@ -30,7 +31,7 @@ func load(cfgPath string) (*Resolver, error) {
 		// Keep behavior graceful if no config is supplied: empty list.
 		return &Resolver{ids: nil}, nil
 	}
-	b, err := os.ReadFile(cfgPath)
+	b, err := os.ReadFile(filepath.Clean(cfgPath))
 	if err != nil {
 		return nil, err
 	}
