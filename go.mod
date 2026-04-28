@@ -15,7 +15,7 @@ require (
 	github.com/fako1024/gotools/concurrency v0.0.0-20250828105752-6dffddfeea78
 	github.com/fako1024/gotools/link v0.0.0-20260108133916-d42cb4e89f05
 	github.com/fako1024/httpc v1.1.3
-	github.com/fako1024/slimcap v1.0.11
+	github.com/fako1024/slimcap v1.0.12
 	github.com/gin-contrib/cors v1.7.6
 	github.com/gin-contrib/pprof v1.5.3
 	github.com/gin-gonic/gin v1.11.0
