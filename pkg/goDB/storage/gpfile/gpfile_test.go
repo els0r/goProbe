@@ -229,6 +229,46 @@ func TestInvalidMetadata(t *testing.T) {
 	require.ErrorIs(t, testDir.Open(), ErrInputSizeTooSmall)
 }
 
+func TestInvalidMetadataNBlocks(t *testing.T) {
+
+	newTestDirReader := func(t *testing.T, metadata []byte) *GPDir {
+		t.Helper()
+
+		basePath := t.TempDir()
+		targetDir := filepath.Join(basePath, "1970/01/0")
+		require.Nil(t, os.MkdirAll(targetDir, 0750), "error creating test dir for reading")
+		require.Nil(t, os.WriteFile(filepath.Join(targetDir, metadataFileName), metadata, 0600), "error creating test metadata for reading")
+
+		return NewDirReader(basePath, 1000, "")
+	}
+
+	t.Run("oversized nBlocks", func(t *testing.T) {
+		metadata := make([]byte, minMetadataFileSize)
+		binary.BigEndian.PutUint64(metadata[8:16], ^uint64(0))
+
+		testDir := newTestDirReader(t, metadata)
+
+		var err error
+		require.NotPanics(t, func() {
+			err = testDir.Open()
+		})
+		require.ErrorIs(t, err, ErrInputSizeTooSmall)
+	})
+
+	t.Run("truncated payload", func(t *testing.T) {
+		metadata := make([]byte, minMetadataFileSize)
+		binary.BigEndian.PutUint64(metadata[8:16], 1)
+
+		testDir := newTestDirReader(t, metadata)
+
+		var err error
+		require.NotPanics(t, func() {
+			err = testDir.Open()
+		})
+		require.ErrorIs(t, err, ErrInputSizeTooSmall)
+	})
+}
+
 func TestEmptyMetadata(t *testing.T) {
 
 	require.Nil(t, os.RemoveAll(testDirPath))
