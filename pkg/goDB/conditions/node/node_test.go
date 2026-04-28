@@ -52,10 +52,35 @@ func TestNegationNormalForm(t *testing.T) {
 		if err != nil && !errors.Is(err, errEmptyConditional) {
 			t.Fatalf("Parsing %v unexpectly failed. Error:\n%v", test.inTokens, err)
 		}
-		nnfNode := negationNormalForm(node)
+		nnfNode, err := negationNormalForm(node)
+		if err != nil {
+			t.Fatalf("Failed to convert %v into negation normal form: %v", test.inTokens, err)
+		}
 		if nnfNode.String() != test.output {
 			t.Fatalf("Expected output: %v Actual output: %v", test.output, nnfNode)
 		}
+	}
+}
+
+func TestNegationNormalFormDepthLimit(t *testing.T) {
+	buildNestedNegationTree := func(depth int) Node {
+		var result Node = newConditionNode("sip", "=", "127.0.0.1")
+		for i := 0; i < depth; i++ {
+			result = notNode{node: result}
+		}
+		return result
+	}
+
+	nodeWithinLimit := buildNestedNegationTree(maxNegationNormalFormDepth)
+	_, err := negationNormalForm(nodeWithinLimit)
+	if err != nil {
+		t.Fatalf("Unexpected depth-limit error for %d nested not nodes: %v", maxNegationNormalFormDepth, err)
+	}
+
+	nodeExceedingLimit := buildNestedNegationTree(maxNegationNormalFormDepth + 1)
+	_, err = negationNormalForm(nodeExceedingLimit)
+	if !errors.Is(err, errConditionTreeTooDeep) {
+		t.Fatalf("Expected error %v, got %v", errConditionTreeTooDeep, err)
 	}
 }
 
