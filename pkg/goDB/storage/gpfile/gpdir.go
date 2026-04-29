@@ -254,8 +254,19 @@ func (d *GPDir) TimeRange() (first int64, last int64) {
 }
 
 const (
-	minMetadataFileSize    = 73
+	metadataHeaderSize         = 72
+	metadataBlockOffsetsPos    = metadataHeaderSize
+	metadataCurrentOffsetSize  = 8
+	metadataBlockDescriptorLen = 9
+	metadataInitialTSSize      = 8
+	metadataTrafficEntryLen    = 16
+
+	minMetadataFileSize = metadataHeaderSize +
+		uint64(types.ColIdxCount)*metadataCurrentOffsetSize +
+		metadataInitialTSSize
 	minMetadataFileSizePos = minMetadataFileSize - 1
+
+	metadataPerBlockSize = uint64(types.ColIdxCount)*metadataBlockDescriptorLen + metadataTrafficEntryLen
 )
 
 // Unmarshal reads and unmarshals a serialized metadata set into the GPDir instance
@@ -268,15 +279,19 @@ func (d *GPDir) Unmarshal(r concurrency.ReadWriteSeekCloser) error {
 	}
 
 	data := memFile.Data()
-	if len(data) < minMetadataFileSize {
+	if len(data) < int(minMetadataFileSize) {
 		return fmt.Errorf("%w (len: %d)", ErrInputSizeTooSmall, len(data))
 	}
 	_ = data[minMetadataFileSizePos] // Compiler hint
 
 	d.Metadata = newMetadata()
 
-	d.Metadata.Version = binary.BigEndian.Uint64(data[0:8])                // Get header version
-	nBlocks := binary.BigEndian.Uint64(data[8:16])                         // Get flat nummber of blocks
+	d.Metadata.Version = binary.BigEndian.Uint64(data[0:8]) // Get header version
+	nBlocks := binary.BigEndian.Uint64(data[8:16])          // Get flat nummber of blocks
+	maxBlocksBySize := (uint64(len(data)) - minMetadataFileSize) / metadataPerBlockSize
+	if nBlocks > maxBlocksBySize {
+		return fmt.Errorf("%w (len: %d, blocks: %d, max blocks by size: %d)", ErrInputSizeTooSmall, len(data), nBlocks, maxBlocksBySize)
+	}
 	d.Metadata.Traffic.NumV4Entries = binary.BigEndian.Uint64(data[16:24]) // Get global number of IPv4 flows
 	d.Metadata.Traffic.NumV6Entries = binary.BigEndian.Uint64(data[24:32]) // Get global number of IPv6 flows
 	d.Metadata.Traffic.NumDrops = binary.BigEndian.Uint64(data[32:40])     // Get global number of dropped packets
@@ -284,7 +299,7 @@ func (d *GPDir) Unmarshal(r concurrency.ReadWriteSeekCloser) error {
 	d.Metadata.Counts.BytesSent = binary.BigEndian.Uint64(data[48:56])     // Get global Counters (BytesSent)
 	d.Metadata.Counts.PacketsRcvd = binary.BigEndian.Uint64(data[56:64])   // Get global Counters (PacketsRcvd)
 	d.Metadata.Counts.PacketsSent = binary.BigEndian.Uint64(data[64:72])   // Get global Counters (PacketsSent)
-	pos := minMetadataFileSizePos
+	pos := metadataBlockOffsetsPos
 
 	// Get block information
 	for i := range int(types.ColIdxCount) {
@@ -305,14 +320,14 @@ func (d *GPDir) Unmarshal(r concurrency.ReadWriteSeekCloser) error {
 
 	// Get Metadata.NumIPV4Entries
 	d.BlockTraffic = make([]TrafficMetadata, nBlocks)
-	lastTimestamp := int64(binary.BigEndian.Uint64(data[pos : pos+8]))
+	lastTimestamp := int64(binary.BigEndian.Uint64(data[pos : pos+8])) //nolint:gosec // G115: metadata stores timestamp as uint64-encoded int64 value.
 	pos += 8
-	for i := uint64(0); i < nBlocks; i++ {
+	for i := range nBlocks {
 		d.BlockTraffic[i].NumV4Entries = uint64(binary.BigEndian.Uint32(data[pos : pos+4]))
 		d.BlockTraffic[i].NumV6Entries = uint64(binary.BigEndian.Uint32(data[pos+4 : pos+8]))
 		d.BlockTraffic[i].NumDrops = uint64(binary.BigEndian.Uint32(data[pos+8 : pos+12]))
 		thisTimestamp := lastTimestamp + int64(binary.BigEndian.Uint32(data[pos+12:pos+16]))
-		for j := 0; j < int(types.ColIdxCount); j++ {
+		for j := range int(types.ColIdxCount) {
 			d.BlockMetadata[j].BlockList[i].Timestamp = thisTimestamp
 		}
 		lastTimestamp = thisTimestamp
@@ -325,7 +340,7 @@ func (d *GPDir) Unmarshal(r concurrency.ReadWriteSeekCloser) error {
 // Marshal marshals and writes the metadata of the GPDir instance into serialized metadata set
 func (d *GPDir) Marshal(w concurrency.ReadWriteSeekCloser) error {
 
-	nBlocks := len(d.BlockTraffic)
+	nBlocks := uint64(len(d.BlockTraffic))
 	size := 8 + // Overall number of blocks
 		8 + // Metadata.Version
 		8 + // Metadata.NumV4Entries
@@ -337,10 +352,10 @@ func (d *GPDir) Marshal(w concurrency.ReadWriteSeekCloser) error {
 		nBlocks*4 + // Metadata.GlobalBlockMetadata.NumV6Entries
 		nBlocks*4 + // Metadata.GlobalBlockMetadata.NumDrops
 		nBlocks*4 + // Metadata.BlockMetadata.BlockList.Timestamp (Delta)
-		int(types.ColIdxCount)*8 + // Metadata.BlockMetadata.CurrentOffset
-		nBlocks*int(types.ColIdxCount)*4 + // Metadata.BlockMetadata.BlockList.Len
-		nBlocks*int(types.ColIdxCount)*4 + // Metadata.BlockMetadata.BlockList.RawLen
-		nBlocks*int(types.ColIdxCount) // Metadata.BlockMetadata.BlockList.Block.EncoderType
+		uint64(types.ColIdxCount)*8 + // Metadata.BlockMetadata.CurrentOffset
+		nBlocks*uint64(types.ColIdxCount)*4 + // Metadata.BlockMetadata.BlockList.Len
+		nBlocks*uint64(types.ColIdxCount)*4 + // Metadata.BlockMetadata.BlockList.RawLen
+		nBlocks*uint64(types.ColIdxCount) // Metadata.BlockMetadata.BlockList.Block.EncoderType
 
 	// Note: Lengths and timestamp deltas are encoded as uint32s, allowing for a maximum block (!) size of
 	// 4 GiB (uncompressed / compressed).
@@ -348,11 +363,11 @@ func (d *GPDir) Marshal(w concurrency.ReadWriteSeekCloser) error {
 	// something is _very_ wrong
 
 	// Fetch a buffer from the pool
-	data := metaDataMemPool.Get(size)
+	data := metaDataMemPool.Get(int(size)) //nolint:gosec // G115: size is pre-calculated and should always be within reasonable bounds
 	defer metaDataMemPool.Put(data)
 
 	binary.BigEndian.PutUint64(data[0:8], d.Metadata.Version)                // Store header version
-	binary.BigEndian.PutUint64(data[8:16], uint64(nBlocks))                  // Store flat nummber of blocks
+	binary.BigEndian.PutUint64(data[8:16], nBlocks)                          // Store flat nummber of blocks
 	binary.BigEndian.PutUint64(data[16:24], d.Metadata.Traffic.NumV4Entries) // Store global number of IPv4 flows
 	binary.BigEndian.PutUint64(data[24:32], d.Metadata.Traffic.NumV6Entries) // Store global number of IPv6 flows
 	binary.BigEndian.PutUint64(data[32:40], d.Metadata.Traffic.NumDrops)     // Store global number of dropped packets
@@ -360,12 +375,12 @@ func (d *GPDir) Marshal(w concurrency.ReadWriteSeekCloser) error {
 	binary.BigEndian.PutUint64(data[48:56], d.Metadata.Counts.BytesSent)     // Store global Counters (BytesSent)
 	binary.BigEndian.PutUint64(data[56:64], d.Metadata.Counts.PacketsRcvd)   // Store global Counters (PacketsRcvd)
 	binary.BigEndian.PutUint64(data[64:72], d.Metadata.Counts.PacketsSent)   // Store global Counters (PacketsSent)
-	pos := minMetadataFileSizePos
+	pos := metadataBlockOffsetsPos
 
 	if nBlocks > 0 {
 
 		// Store block information
-		for i := 0; i < int(types.ColIdxCount); i++ {
+		for i := range d.BlockMetadata {
 			binary.BigEndian.PutUint64(data[pos:pos+8], d.BlockMetadata[i].CurrentOffset)
 			pos += 8
 			for _, block := range d.BlockMetadata[i].BlockList {
@@ -384,7 +399,7 @@ func (d *GPDir) Marshal(w concurrency.ReadWriteSeekCloser) error {
 
 		// Store Metadata.NumIPV4Entries
 		lastTimestamp := d.BlockMetadata[0].BlockList[0].Timestamp
-		binary.BigEndian.PutUint64(data[pos:pos+8], uint64(lastTimestamp))
+		binary.BigEndian.PutUint64(data[pos:pos+8], uint64(lastTimestamp)) //nolint:gosec // G115: metadata stores timestamp as uint64-encoded int64 value.
 		pos += 8
 		for i := 0; i < len(d.BlockTraffic); i++ {
 
@@ -396,10 +411,10 @@ func (d *GPDir) Marshal(w concurrency.ReadWriteSeekCloser) error {
 				return ErrExceedsEncodingSize
 			}
 
-			binary.BigEndian.PutUint32(data[pos:pos+4], uint32(d.BlockTraffic[i].NumV4Entries))
-			binary.BigEndian.PutUint32(data[pos+4:pos+8], uint32(d.BlockTraffic[i].NumV6Entries))
-			binary.BigEndian.PutUint32(data[pos+8:pos+12], uint32(d.BlockTraffic[i].NumDrops))
-			binary.BigEndian.PutUint32(data[pos+12:pos+16], uint32(d.BlockMetadata[0].BlockList[i].Timestamp-lastTimestamp))
+			binary.BigEndian.PutUint32(data[pos:pos+4], uint32(d.BlockTraffic[i].NumV4Entries))                              //nolint:gosec // G115: value range-checked against maxUint32 above.
+			binary.BigEndian.PutUint32(data[pos+4:pos+8], uint32(d.BlockTraffic[i].NumV6Entries))                            //nolint:gosec // G115: value range-checked against maxUint32 above.
+			binary.BigEndian.PutUint32(data[pos+8:pos+12], uint32(d.BlockTraffic[i].NumDrops))                               //nolint:gosec // G115: value range-checked against maxUint32 above.
+			binary.BigEndian.PutUint32(data[pos+12:pos+16], uint32(d.BlockMetadata[0].BlockList[i].Timestamp-lastTimestamp)) //nolint:gosec // G115: delta range-checked against maxUint32 above.
 			lastTimestamp = d.BlockMetadata[0].BlockList[i].Timestamp
 			pos += 16
 		}
@@ -409,7 +424,7 @@ func (d *GPDir) Marshal(w concurrency.ReadWriteSeekCloser) error {
 	if err != nil {
 		return err
 	}
-	if n != len(data) || n != size {
+	if n != len(data) || n != int(size) { //nolint:gosec // G115: length of data is pre-calculated and should always match the size of the buffer
 		return fmt.Errorf("invalid number of bytes written, want %d, have %d", len(data), n)
 	}
 	data = nil
