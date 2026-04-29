@@ -18,7 +18,7 @@ When task-specific direction is missing, use this lookup order:
    - `README.md`
    - `cmd/goProbe/README.md`
    - `cmd/goQuery/README.md`
-   - `cmd/goConvert/README.md`
+   - `cmd/gpdb/README.md`
    - `pkg/query/README.md`
    - `examples/README.md`
 3. CI workflows and release pipelines as source of truth for verification and packaging behavior:
@@ -36,7 +36,7 @@ When task-specific direction is missing, use this lookup order:
   - `./cmd/goQuery`
   - `./cmd/global-query`
   - `./cmd/gpctl`
-  - `./cmd/goConvert`
+  - `./cmd/gpdb`
 - Primary code folders:
   - `pkg/` (API, capture, query, goDB, results, shared types)
   - `plugins/` (resolver/querier plugin registration)
@@ -54,14 +54,14 @@ Run commands from repository root.
 - `go build -tags jsoniter -o goQuery ./cmd/goQuery`
 - `go build -tags jsoniter -o global-query ./cmd/global-query`
 - `go build -tags jsoniter -o gpctl ./cmd/gpctl`
-- `go build -tags jsoniter -o goConvert ./cmd/goConvert`
+- `go build -tags jsoniter -o gpdb ./cmd/gpdb`
 
 ### Release-like builds (workflow parity)
 - `GOOS=linux GOARCH=amd64 go build -a -tags jsoniter,slimcap_nomock -pgo=auto -o goProbe ./cmd/goProbe`
 - `GOOS=linux GOARCH=amd64 go build -a -tags jsoniter -pgo=auto -o global-query ./cmd/global-query`
 - `GOOS=linux GOARCH=amd64 go build -a -pgo=auto -o goQuery ./cmd/goQuery`
 - `GOOS=linux GOARCH=amd64 go build -a -pgo=auto -o gpctl ./cmd/gpctl`
-- `GOOS=linux GOARCH=amd64 go build -a -o goConvert ./cmd/goConvert`
+- `GOOS=linux GOARCH=amd64 go build -a -o gpdb ./cmd/gpdb`
 
 ## Test Commands
 
