@@ -4,20 +4,18 @@ import (
 	"sort"
 	"time"
 
-	"github.com/els0r/goProbe/v4/pkg/defaults"
 	"github.com/els0r/goProbe/v4/pkg/results"
 	"github.com/els0r/goProbe/v4/pkg/types"
 )
 
 // Defaults for query arguments
 var (
-	DefaultDBPath         = defaults.DBPath
 	DefaultFormat         = types.FormatTXT
 	DefaultMaxMemPct      = 60
 	DefaultNumResults     = uint64(1000)
 	DefaultResolveRows    = 25
 	DefaultResolveTimeout = 1 * time.Second
-	DefaultQueryTimeout   = defaults.QueryTimeout
+	DefaultQueryTimeout   = 0 * time.Second
 	DefaultSortBy         = "bytes"
 )
 

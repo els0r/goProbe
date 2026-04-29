@@ -15,7 +15,6 @@ import (
 
 	"github.com/els0r/goProbe/v4/cmd/goQuery/pkg/conf"
 	gqclient "github.com/els0r/goProbe/v4/pkg/api/globalquery/client"
-	"github.com/els0r/goProbe/v4/pkg/defaults"
 	"github.com/els0r/goProbe/v4/pkg/goDB/engine"
 	"github.com/els0r/goProbe/v4/pkg/query"
 	"github.com/els0r/goProbe/v4/pkg/results"
@@ -29,6 +28,18 @@ import (
 )
 
 var cfgFile string
+
+var errorEmptyDBPath = errors.New("db.path is required for local DB operations")
+
+func requireDBPathIfLocalOperation(dbPath, queryServerAddr string, isListOperation bool) error {
+	if isListOperation || strings.TrimSpace(queryServerAddr) == "" {
+		if strings.TrimSpace(dbPath) == "" {
+			return errorEmptyDBPath
+		}
+	}
+
+	return nil
+}
 
 // TODO: This part is currently unused - cross check if that is intentional (in which case it can be removed)
 // var supportedCmds = "{QUERY TYPE|COLUMNS|examples|list|version}"
@@ -176,14 +187,11 @@ and I/O load)
 set, goQuery will attempt to run queries using the specified query server as opposed to its local goDB
 `,
 	)
-	pflags.StringP(conf.QueryDBPath, "d", defaults.DBPath,
+	pflags.StringP(conf.QueryDBPath, "d", "",
 		`Path to goDB database directory. By default,
-the database path from the configuration file is used.
-If it does not exist, an error will be thrown.
-
-This also implies that you have to explicitly specify
-the path if you analyze data on a different host without
-goProbe.
+	set this explicitly for local DB operations such as
+	queries against local goDB data and the "list" command.
+	Ignored when --query.server.addr is set.
 `,
 	)
 	pflags.String(conf.StoredQuery, "", "Load JSON serialized query arguments from disk and run them\n")
@@ -245,9 +253,8 @@ func entrypoint(cmd *cobra.Command, args []string) (err error) {
 	// assign query args
 	var queryArgs = *cmdLineParams
 
-	// the DB path that can be set in the configuration file has precedence over the one
-	// in the arguments
-	dbPathCfg := viper.GetString(conf.QueryDBPath)
+	dbPathCfg := strings.TrimSpace(viper.GetString(conf.QueryDBPath))
+	queryServerAddr := strings.TrimSpace(viper.GetString(conf.QueryServerAddr))
 
 	queryCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	defer stop()
@@ -255,6 +262,9 @@ func entrypoint(cmd *cobra.Command, args []string) (err error) {
 	// run commands that don't require any argument
 	// handle list flag
 	if cmdLineParams.List {
+		if err := requireDBPathIfLocalOperation(dbPathCfg, queryServerAddr, true); err != nil {
+			return err
+		}
 		err := listInterfaces(queryCtx, dbPathCfg, viper.GetString(conf.QueryLog))
 		if err != nil {
 			return fmt.Errorf("failed to retrieve list of available databases: %w", err)
@@ -332,7 +342,7 @@ func entrypoint(cmd *cobra.Command, args []string) (err error) {
 
 	// run query against query server if it is specified, otherwise, take the local DB
 	var querier query.Runner
-	if viper.GetString(conf.QueryServerAddr) != "" {
+	if queryServerAddr != "" {
 		if queryArgs.QueryHosts == "" {
 			err := fmt.Errorf("list of target hosts is empty")
 			fmt.Fprintf(os.Stderr, "Distributed query preparation failed: %v\n", err)
@@ -356,7 +366,7 @@ func entrypoint(cmd *cobra.Command, args []string) (err error) {
 		if viper.GetBool(conf.QueryStreaming) {
 			logger.Info("calling streaming API")
 
-			querier = gqclient.NewSSE(viper.GetString(conf.QueryServerAddr),
+			querier = gqclient.NewSSE(queryServerAddr,
 
 				// TODO: this will become more informational in the future as in: printing partial results, etc.
 				func(ctx context.Context, r *results.Result) error {
@@ -378,11 +388,14 @@ func entrypoint(cmd *cobra.Command, args []string) (err error) {
 				},
 			)
 		} else {
-			querier = gqclient.New(viper.GetString(conf.QueryServerAddr))
+			querier = gqclient.New(queryServerAddr)
 		}
 	} else {
 		if queryArgs.Live {
 			return errors.New("cannot run live query in local DB mode")
+		}
+		if err := requireDBPathIfLocalOperation(dbPathCfg, queryServerAddr, false); err != nil {
+			return err
 		}
 		// query using local goDB
 		querier = engine.NewQueryRunner(dbPathCfg)

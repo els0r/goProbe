@@ -32,6 +32,8 @@ The tool is meant to run as a service/daemon by means of init scripts or systems
 
 Refer to [goprobe-example-config.yaml](../../examples/config/goprobe-example-config.yaml) for configuration options.
 
+The `db.path` parameter is mandatory and must point to the local goDB directory (for example `/var/lib/goprobe/db`).
+
 The configuration can be provided as YAML or as JSON.
 
 ### Live Config

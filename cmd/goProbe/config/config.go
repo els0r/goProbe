@@ -27,7 +27,6 @@ import (
 	"golang.org/x/time/rate"
 	"gopkg.in/yaml.v3"
 
-	"github.com/els0r/goProbe/v4/pkg/defaults"
 	"github.com/els0r/goProbe/v4/pkg/goDB/encoder/encoders"
 )
 
@@ -212,7 +211,6 @@ type APIConfig struct {
 func newDefault() *Config {
 	return &Config{
 		DB: DBConfig{
-			Path:        defaults.DBPath,
 			EncoderType: "lz4",
 		},
 		Interfaces: make(Ifaces),

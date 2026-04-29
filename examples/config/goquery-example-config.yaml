@@ -1,7 +1,7 @@
 # db configures where goquery can find the flow database. It enables querying the local DB
 db:
   # path of the goDB database written by goprobe and read by goquery
-  path: /usr/local/goprobe/db
+  path: /var/lib/goprobe/db
 query:
   # server enables querying the global-query API
   server:

@@ -66,10 +66,26 @@ var (
 
 func getAvailablePort() (port uint16) {
 	portMutex.Lock()
-	port = firstGoProbePort
-	firstGoProbePort++
-	portMutex.Unlock()
-	return
+	defer portMutex.Unlock()
+
+	startPort := firstGoProbePort
+	for checked := 0; checked <= int(^uint16(0)); checked++ {
+		if firstGoProbePort == 0 {
+			firstGoProbePort++
+		}
+
+		port = firstGoProbePort
+		firstGoProbePort++
+
+		listener, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
+		if err != nil {
+			continue
+		}
+		_ = listener.Close()
+		return
+	}
+
+	panic(fmt.Sprintf("unable to find an available test port, started from %d", startPort))
 }
 
 //go:embed testdata/*

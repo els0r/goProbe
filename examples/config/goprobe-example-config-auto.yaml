@@ -14,7 +14,7 @@ autodetection:
 ##### Standard configuration options below #####
 db:
   # path of the goDB database written by goprobe and read by goquery
-  path: /usr/local/goProbe/db
+  path: /var/lib/goprobe/db
 # local_buffers sets the local buffer configuration used during rotation of a capture
 local_buffers:
   # size_limit is the buffer held for packet capture during flow rotation
