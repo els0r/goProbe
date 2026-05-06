@@ -16,6 +16,7 @@ const defaultReloadInterval = 5 * time.Minute
 type Monitor struct {
 	path   string
 	config *Config
+	loader func() (*Config, error)
 
 	reloadInterval time.Duration
 
@@ -61,6 +62,13 @@ func NewMonitor(path string, opts ...MonitorOption) (*Monitor, error) {
 	}
 
 	return obj, nil
+}
+
+// SetLoader configures a custom configuration loader used for reloads.
+func (m *Monitor) SetLoader(loader func() (*Config, error)) {
+	m.Lock()
+	m.loader = loader
+	m.Unlock()
 }
 
 // GetConfig safely returns the current configuration
@@ -153,7 +161,19 @@ func (m *Monitor) reloadPeriodically(ctx context.Context, fn CallbackFn) {
 }
 
 func (m *Monitor) reloadFromFile(ctx context.Context) error {
-	cfg, err := ParseFile(m.path)
+	m.RLock()
+	loader := m.loader
+	m.RUnlock()
+
+	var (
+		cfg *Config
+		err error
+	)
+	if loader != nil {
+		cfg, err = loader()
+	} else {
+		cfg, err = ParseFile(m.path)
+	}
 	if err != nil {
 		return fmt.Errorf("failed to reload config file: %w", err)
 	}

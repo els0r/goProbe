@@ -446,6 +446,32 @@ interfaces:
 	}
 }
 
+func TestParsePreservesDottedInterfaceNames(t *testing.T) {
+	const input = `db:
+  path: /tmp/db
+interfaces:
+  eth40.1:
+    ring_buffer:
+      block_size: 1048576
+      num_blocks: 4
+  eth40.6:
+    ring_buffer:
+      block_size: 1048576
+      num_blocks: 4
+`
+
+	cfg, err := Parse(strings.NewReader(input))
+	assert.NoError(t, err)
+	if !assert.NotNil(t, cfg) {
+		return
+	}
+
+	assert.Contains(t, cfg.Interfaces, "eth40.1")
+	assert.Contains(t, cfg.Interfaces, "eth40.6")
+	assert.NotContains(t, cfg.Interfaces, "eth40")
+	assert.Equal(t, &RingBufferConfig{BlockSize: 1048576, NumBlocks: 4}, cfg.Interfaces["eth40.1"].RingBuffer)
+}
+
 func TestIsRegexpInterfaceMatcher(t *testing.T) {
 	var tests = []struct {
 		name     string

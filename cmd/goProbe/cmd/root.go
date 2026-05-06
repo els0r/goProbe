@@ -18,6 +18,7 @@ import (
 	"github.com/els0r/goProbe/v4/pkg/conf"
 	"github.com/els0r/goProbe/v4/pkg/version"
 	"github.com/els0r/telemetry/logging"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -161,7 +162,30 @@ func initConfig(cfg *gpconf.Config) error {
 		return fmt.Errorf("configuration must not be nil")
 	}
 
-	// Initialize the Interfaces map if it's nil (required for viper.Unmarshal to work correctly)
+	loadedCfg, err := loadConfig()
+	if err != nil {
+		return err
+	}
+
+	cfg.DB = loadedCfg.DB
+	cfg.AutoDetection = loadedCfg.AutoDetection
+	cfg.Interfaces = loadedCfg.Interfaces
+	cfg.SyslogFlows = loadedCfg.SyslogFlows
+	cfg.API = loadedCfg.API
+	cfg.LocalBuffers = loadedCfg.LocalBuffers
+
+	if cfg.Interfaces == nil {
+		cfg.Interfaces = make(gpconf.Ifaces)
+	}
+
+	return nil
+}
+
+func loadConfig() (*gpconf.Config, error) {
+	cfg := &gpconf.Config{
+		Interfaces: make(gpconf.Ifaces),
+	}
+
 	if cfg.Interfaces == nil {
 		cfg.Interfaces = make(gpconf.Ifaces)
 	}
@@ -172,7 +196,7 @@ func initConfig(cfg *gpconf.Config) error {
 
 		err := viper.ReadInConfig()
 		if err != nil {
-			return fmt.Errorf("failed to read configuration file: %w", err)
+			return nil, fmt.Errorf("failed to read configuration file: %w", err)
 		}
 	}
 
@@ -182,10 +206,20 @@ func initConfig(cfg *gpconf.Config) error {
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_", "-", "__"))
 	viper.AutomaticEnv()
 
-	// Unmarshal the entire config from viper (includes config file, flags, and env vars)
 	err := viper.Unmarshal(cfg)
 	if err != nil {
-		return fmt.Errorf("failed to parse configuration: %w", err)
+		return nil, fmt.Errorf("failed to parse configuration: %w", err)
+	}
+
+	if rawInterfaces := viper.Get("interfaces"); rawInterfaces != nil {
+		ifaces, err := decodeInterfaces(rawInterfaces)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse interface configuration: %w", err)
+		}
+		cfg.Interfaces = ifaces
+	}
+	if cfg.DB.EncoderType == "" {
+		cfg.DB.EncoderType = "lz4"
 	}
 
 	// Type conversions for types that viper can't unmarshal directly
@@ -198,7 +232,21 @@ func initConfig(cfg *gpconf.Config) error {
 		cfg.API.QueryRateLimit.MaxReqPerSecond = rate.Limit(viper.GetFloat64(flagAPIQueryRateLimitMaxReq))
 	}
 
-	return nil
+	return cfg, nil
+}
+
+func decodeInterfaces(raw any) (gpconf.Ifaces, error) {
+	b, err := jsoniter.Marshal(raw)
+	if err != nil {
+		return nil, err
+	}
+
+	ifaces := make(gpconf.Ifaces)
+	if err := jsoniter.Unmarshal(b, &ifaces); err != nil {
+		return nil, err
+	}
+
+	return ifaces, nil
 }
 
 func initLogging() error {
@@ -236,6 +284,7 @@ func run(ctx context.Context, cfg *gpconf.Config) error {
 	if err != nil {
 		return fmt.Errorf("failed to initialize config file monitor: %w", err)
 	}
+	configMonitor.SetLoader(loadConfig)
 	_, _, _, err = configMonitor.Reload(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("failed to initialize config monitor: %w", err)
