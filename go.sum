@@ -27,14 +27,10 @@ github.com/els0r/telemetry/metrics v0.0.0-20260406010724-0c813ed6284d h1:pc45XR2
 github.com/els0r/telemetry/metrics v0.0.0-20260406010724-0c813ed6284d/go.mod h1:V63AJPy62usGXhgifNIrPYrdBhor57wQd3/G+JTrg4E=
 github.com/els0r/telemetry/tracing v0.0.0-20260406010724-0c813ed6284d h1:zeMz/zS9zbSUcsXE6z5W6/IRzpaVjvnfn4U+YGD/lxI=
 github.com/els0r/telemetry/tracing v0.0.0-20260406010724-0c813ed6284d/go.mod h1:or6i2P/IjrEujjNenM9rcT5yMkBd7a1DUdWDw9v0Cds=
-github.com/fako1024/gotools v1.0.11 h1:Bor2L2gAQwhZeh1dllFWV/9Kq2pp0seaju3lUJJVuwU=
-github.com/fako1024/gotools v1.0.11/go.mod h1:foBo9vYEXD2f0S+NVi0/CL3z0geLsJ5tqv+cVmrE6ZU=
 github.com/fako1024/gotools/bitpack v0.0.0-20260108133916-d42cb4e89f05 h1:3VHEnPPCiqXfLn6IWoJ7emXjYoxmbMhXxZRA6b+cAoA=
 github.com/fako1024/gotools/bitpack v0.0.0-20260108133916-d42cb4e89f05/go.mod h1:OEC+qO4RGU1TTAN2uR1jcc7GXZTv3WA/G8nEU71Ezzs=
 github.com/fako1024/gotools/concurrency v0.0.0-20260108133916-d42cb4e89f05 h1:DZEPw0HElVshjsd7+OwNjmZIMLuTwAuywMZz0bdjLkE=
 github.com/fako1024/gotools/concurrency v0.0.0-20260108133916-d42cb4e89f05/go.mod h1:3ALRLl+moaiZInwD1FPHO3orrGm0U/E3tolgV9XaCEE=
-github.com/fako1024/gotools/link v0.0.0-20260108133916-d42cb4e89f05 h1:1vwXd29aFsCvPDBZUHokxvWkEsqwU/hwSmMx4S0hHiE=
-github.com/fako1024/gotools/link v0.0.0-20260108133916-d42cb4e89f05/go.mod h1:wQzxOmWgVXZFU6V0/ND3SwUyzywsPBlz2bFiq1H9p98=
 github.com/fako1024/gotools/link v0.0.0-20260508092022-ce4a48edb845 h1:RdG3qH/kC2fK7HWpThZm0qa77hFOyW+i2aT/qohWzxk=
 github.com/fako1024/gotools/link v0.0.0-20260508092022-ce4a48edb845/go.mod h1:wQzxOmWgVXZFU6V0/ND3SwUyzywsPBlz2bFiq1H9p98=
 github.com/fako1024/httpc v1.1.3 h1:2UbGhOgEMnkGnWCzT/pQH5eDAdO9FwfvBgZVK9fnoOA=
