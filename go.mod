@@ -13,7 +13,7 @@ require (
 	github.com/els0r/telemetry/tracing v0.0.0-20260406010724-0c813ed6284d
 	github.com/fako1024/gotools/bitpack v0.0.0-20260108133916-d42cb4e89f05
 	github.com/fako1024/gotools/concurrency v0.0.0-20260108133916-d42cb4e89f05
-	github.com/fako1024/gotools/link v0.0.0-20260508092022-ce4a48edb845
+	github.com/fako1024/gotools/link v0.0.0-20260511092824-089d64760c34
 	github.com/fako1024/httpc v1.1.3
 	github.com/fako1024/slimcap v1.0.12
 	github.com/gin-contrib/cors v1.7.7
@@ -33,7 +33,7 @@ require (
 	go.opentelemetry.io/otel v1.43.0
 	go.opentelemetry.io/otel/trace v1.43.0
 	golang.org/x/net v0.53.0
-	golang.org/x/sys v0.43.0
+	golang.org/x/sys v0.44.0
 	golang.org/x/time v0.15.0
 	gopkg.in/yaml.v3 v3.0.1
 )
