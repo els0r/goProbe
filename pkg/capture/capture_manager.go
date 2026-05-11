@@ -301,12 +301,6 @@ func (cm *Manager) Status(ctx context.Context, ifaces ...string) (statusmap capt
 
 // Update the configuration for all (or a set of) interfaces
 func (cm *Manager) Update(ctx context.Context, cfg *config.Config) (enabled, updated, disabled capturetypes.IfaceChanges, err error) {
-	allLinks, err := hostLinks()
-	if err != nil {
-		err = fmt.Errorf("failed to get host links: %w", err)
-		return
-	}
-
 	ifaces := cfg.Interfaces
 
 	// Autodetect interfaces if required
@@ -314,6 +308,12 @@ func (cm *Manager) Update(ctx context.Context, cfg *config.Config) (enabled, upd
 
 		// Validate the interface autodetectionconfiguration
 		if err = cfg.AutoDetection.Validate(); err != nil {
+			return
+		}
+
+		allLinks, lErr := hostLinks()
+		if lErr != nil {
+			err = fmt.Errorf("failed to get host links: %w", lErr)
 			return
 		}
 
@@ -337,6 +337,12 @@ func (cm *Manager) Update(ctx context.Context, cfg *config.Config) (enabled, upd
 
 	// If there are regexp matchers, find all matching interfaces and add them to the list
 	if hasRe {
+		allLinks, lErr := hostLinks()
+		if lErr != nil {
+			err = fmt.Errorf("failed to get host links: %w", lErr)
+			return
+		}
+
 		if ifaces, err = cm.filterMatchingIfaces(allLinks, matcher); err != nil {
 			return
 		}
