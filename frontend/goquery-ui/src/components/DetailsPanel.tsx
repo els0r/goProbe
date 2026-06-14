@@ -36,30 +36,32 @@ export function DetailsPanel({
       <div
         className={
           (className ? className + ' ' : '') +
-          'rounded-xl border border-white/10 bg-surface-100/80 shadow-xl backdrop-blur-md'
+          'flex max-h-[66vh] flex-col rounded-xl border border-line bg-surface-100 shadow-xl'
         }
       >
-        <div className="mb-2 flex items-baseline justify-between gap-3 px-3 pt-3">
-          <div className="text-data font-semibold text-white">{title}</div>
+        <div className="flex shrink-0 items-baseline justify-between gap-3 px-3 pb-2 pt-3">
+          <div className="text-data font-semibold text-gray-100">{title}</div>
           {ctx && (
-            <div className="text-right text-data font-medium text-primary-300 whitespace-nowrap">
+            <div className="text-right text-data font-medium text-accent whitespace-nowrap">
               {humanBytes(ctx.totalBytes)} / {humanPackets(ctx.totalPackets)}
             </div>
           )}
         </div>
-        <div className="px-3 pb-3">
+        {/* scrolling body; header above and Close below stay pinned so the
+            action is always reachable regardless of list length */}
+        <div className="min-h-0 flex-1 overflow-y-auto scroll-thin px-3 pb-3">
           {children}
-          {onClose && (
-            <div className="mt-3 text-right">
-              <button
-                onClick={onClose}
-                className="rounded-md bg-surface-200 px-2 py-1 text-data ring-1 ring-white/10 hover:bg-surface-300"
-              >
-                Close
-              </button>
-            </div>
-          )}
         </div>
+        {onClose && (
+          <div className="shrink-0 border-t border-line px-3 py-2 text-right">
+            <button
+              onClick={onClose}
+              className="rounded-md bg-surface-200 px-2 py-1 text-data ring-1 ring-line hover:bg-surface-300"
+            >
+              Close
+            </button>
+          </div>
+        )}
       </div>
     </PanelTotalsCtx.Provider>
   )

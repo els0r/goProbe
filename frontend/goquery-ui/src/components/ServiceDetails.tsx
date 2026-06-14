@@ -1,7 +1,7 @@
 import React from 'react'
 import { ServiceDetailsCard } from './ServiceDetailsCard'
 import { DetailList } from './DetailList'
-import { ServiceGroup } from '../utils/aggregation'
+import { ServiceGroup } from '../flows'
 
 export type { ServiceGroup }
 
@@ -19,7 +19,7 @@ export const ServiceDetails: React.FC<ServiceDetailsProps> = ({ groups, loading 
       const uni = (g.inB === 0 && g.inP === 0) || (g.outB === 0 && g.outP === 0)
       const backgroundClass = uni
         ? 'bg-red-400/15 ring-1 ring-red-400/20 hover:bg-red-400/25'
-        : 'bg-surface-200/60 border-white/10'
+        : 'bg-surface-200/60 border-line'
       return (
         <ServiceDetailsCard
           proto={g.proto}

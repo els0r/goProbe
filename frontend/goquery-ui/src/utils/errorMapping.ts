@@ -1,4 +1,4 @@
-import { formatValue, normalizeText } from './inputSanitize'
+import { formatValue, normalizeText } from './errorText'
 
 function isLoc(loc: string, key: string): boolean {
   return (

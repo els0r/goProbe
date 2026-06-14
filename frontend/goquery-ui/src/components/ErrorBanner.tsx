@@ -1,5 +1,5 @@
 import React from 'react'
-import { formatValue } from '../utils/inputSanitize'
+import { formatValue } from '../utils/errorText'
 
 export interface ErrorBannerProps {
   error: unknown
@@ -17,14 +17,14 @@ export function ErrorBanner({ error }: ErrorBannerProps) {
     if (e.problem) problem = e.problem
   }
   return (
-    <div className="mb-3 rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm">
+    <div className="mb-6 rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm">
       <div className="flex items-center justify-between">
         <div className="font-medium text-red-300">{simple}</div>
         {problem && (
           <button
             type="button"
             onClick={() => setOpen((o) => !o)}
-            className="text-data-sm rounded px-2 py-0.5 text-red-300 hover:text-white hover:bg-red-500/20 ring-1 ring-red-500/30"
+            className="text-data-sm rounded px-2 py-0.5 text-red-300 hover:text-gray-100 hover:bg-red-500/20 ring-1 ring-red-500/30"
           >
             {open ? 'Hide details' : 'Show details'}
           </button>
@@ -43,7 +43,7 @@ export function ErrorBanner({ error }: ErrorBannerProps) {
                   </div>
                   {er.value !== undefined &&
                     (typeof er.value === 'object' && er.value !== null ? (
-                      <pre className="mt-1 max-h-40 overflow-auto whitespace-pre rounded bg-black/30 p-2 text-data-sm text-red-200/90 ring-1 ring-red-500/20">
+                      <pre className="mt-1 max-h-40 overflow-auto whitespace-pre rounded bg-scrim p-2 text-data-sm text-red-200/90 ring-1 ring-red-500/20">
                         {JSON.stringify(er.value, null, 2)}
                       </pre>
                     ) : (

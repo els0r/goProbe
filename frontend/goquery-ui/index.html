@@ -6,6 +6,19 @@
 	<title>Goquery UI</title>
 	<!-- runtime-config: provided by env-writer/initContainer when present -->
 	<script src="/env.js"></script>
+	<!-- pre-paint theme guard: resolve stored preference before first paint to avoid FOUC.
+	     Self-contained because it runs before the bundle; key must match LS_THEME_KEY in src/theme.ts. -->
+	<script>
+		(function () {
+			try {
+				var p = localStorage.getItem('goquery_ui_theme') || 'system';
+				var dark = p === 'dark' || (p !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+				var t = dark ? 'dark' : 'light';
+				document.documentElement.setAttribute('data-theme', t);
+				document.documentElement.style.colorScheme = t;
+			} catch (e) {}
+		})();
+	</script>
 	<noscript>This app requires JavaScript to run.</noscript>
 	<style>html,body,#root{height:100%;margin:0}</style>
 	</head>

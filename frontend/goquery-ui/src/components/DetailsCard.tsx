@@ -14,7 +14,7 @@ export interface DetailsCardProps {
   // explicit parent totals (used when DetailsCard is outside a DetailsPanel)
   parentTotalBytes?: number
   parentTotalPackets?: number
-  // background styling classes (e.g., bg-surface-200/60 border-white/10 or red variant)
+  // background styling classes (e.g., bg-surface-200/60 border-line or red variant)
   backgroundClass?: string
   // optional container className overrides (e.g., rounded, padding, highlight rings)
   className?: string
@@ -37,7 +37,7 @@ export const DetailsCard: React.FC<DetailsCardProps> = ({
   const panelTotals = usePanelTotals()
   const ptBytes = panelTotals?.totalBytes ?? parentTotalBytes
   const ptPackets = panelTotals?.totalPackets ?? parentTotalPackets
-  const bg = backgroundClass || 'bg-surface-200/60 border-white/10'
+  const bg = backgroundClass || 'bg-surface-200/60 border-line'
   const container = `rounded-lg border p-3 ${bg} ${className || ''}`.trim()
 
   const bytesPct = ptBytes && ptBytes > 0 ? (totalBytes / ptBytes) * 100 : undefined
@@ -46,11 +46,11 @@ export const DetailsCard: React.FC<DetailsCardProps> = ({
   return (
     <div className={container}>
       <div className="mb-2 flex items-center gap-2">
-        <div className="min-w-0 shrink text-data font-medium text-white truncate">{heading}</div>
+        <div className="min-w-0 shrink text-data font-medium text-gray-100 truncate">{heading}</div>
         <div className="ml-auto flex shrink-0 items-end gap-2">
           {bytesPct !== undefined && (
             <div className="flex w-[90px] flex-col items-end">
-              <span className="text-data font-medium text-primary-300 whitespace-nowrap">
+              <span className="text-data font-medium text-accent whitespace-nowrap">
                 {humanBytes(totalBytes)}
               </span>
               <ProgressBar percent={bytesPct} />
@@ -58,7 +58,7 @@ export const DetailsCard: React.FC<DetailsCardProps> = ({
           )}
           {pktsPct !== undefined && (
             <div className="flex w-[90px] flex-col items-end">
-              <span className="text-data font-medium text-primary-300 whitespace-nowrap">
+              <span className="text-data font-medium text-accent whitespace-nowrap">
                 {humanPackets(totalPackets)}
               </span>
               <ProgressBar percent={pktsPct} />
@@ -66,7 +66,7 @@ export const DetailsCard: React.FC<DetailsCardProps> = ({
           )}
         </div>
         {bytesPct === undefined && (
-          <div className="text-right text-data font-medium text-primary-300 whitespace-nowrap">
+          <div className="text-right text-data font-medium text-accent whitespace-nowrap">
             {humanBytes(totalBytes)} / {humanPackets(totalPackets)}
           </div>
         )}
@@ -75,12 +75,12 @@ export const DetailsCard: React.FC<DetailsCardProps> = ({
         <div>
           <div className="mb-0.5 text-data-xs uppercase tracking-wide text-gray-400">In</div>
           <div className="text-gray-100">{bytesOrEmpty(inBytes)}</div>
-          <div className="text-primary-300">{pktsOrEmpty(inPackets)}</div>
+          <div className="text-accent">{pktsOrEmpty(inPackets)}</div>
         </div>
         <div>
           <div className="mb-0.5 text-data-xs uppercase tracking-wide text-gray-400">Out</div>
           <div className="text-gray-100">{bytesOrEmpty(outBytes)}</div>
-          <div className="text-primary-300">{pktsOrEmpty(outPackets)}</div>
+          <div className="text-accent">{pktsOrEmpty(outPackets)}</div>
         </div>
       </div>
     </div>

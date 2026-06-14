@@ -1,11 +1,17 @@
+import { FlowRecord, extractFlows } from '../flows'
+import { SummarySchema } from './domain'
+import type { QueryParamsUI } from '../query/params'
 import {
   ApiError,
-  FlowRecord,
-  extractFlows,
-  QueryParamsUI,
-  ErrorModelSchema,
-  SummarySchema,
-} from './domain'
+  apiError,
+  abortError,
+  unknownError,
+  isApiError,
+  safeJson,
+  extractProblem,
+} from './errors'
+import { SSEParser } from './sse'
+import { interpretSSEEvent, SSEOutcome } from './sseEvents'
 import { getApiBaseUrl } from '../env'
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore generated after `make types`
@@ -82,15 +88,7 @@ export class GlobalQueryClient {
         if (res.status === 204) return
         if (!res.ok) {
           const body = await safeJson(res)
-          let problem: ErrorModelSchema | undefined
-          if (
-            body &&
-            typeof body === 'object' &&
-            ('detail' in (body as any) || 'errors' in (body as any))
-          ) {
-            problem = body as ErrorModelSchema
-          }
-          throw apiError(res.status, body, problem)
+          throw apiError(res.status, body, extractProblem(body))
         }
         // treat as success
         return
@@ -134,15 +132,7 @@ export class GlobalQueryClient {
         } as RequestInit)
         if (!res.ok) {
           const body = await safeJson(res)
-          let problem: ErrorModelSchema | undefined
-          if (
-            body &&
-            typeof body === 'object' &&
-            ('detail' in (body as any) || 'errors' in (body as any))
-          ) {
-            problem = body as ErrorModelSchema
-          }
-          throw apiError(res.status, body, problem)
+          throw apiError(res.status, body, extractProblem(body))
         }
         const json = (await res.json()) as ResultSchema
         const hostsStatuses = (json as any)?.hosts_statuses as
@@ -195,289 +185,89 @@ export class GlobalQueryClient {
     let closed = false
     let readerRef: ReadableStreamDefaultReader<Uint8Array> | undefined
 
-    const unwrapPayload = (data: any): any => {
-      if (!data) return data
-      if (Array.isArray(data)) return { rows: data }
-      if (typeof data !== 'object') return data
-      // recursively unwrap common wrapper fields until stable
-      let cur: any = data
-      const unwrapOnce = (x: any): any => {
-        if (!x || typeof x !== 'object') return x
-        if (Array.isArray(x)) return { rows: x }
-        if (x.result) return x.result
-        if (x.partialResult) return x.partialResult
-        if (x.finalResult) return x.finalResult
-        return x
-      }
-      // limit iterations to avoid infinite loops
-      for (let i = 0; i < 5; i++) {
-        const next = unwrapOnce(cur)
-        if (next === cur) break
-        cur = next
-      }
-      // normalize common shapes to { rows }
-      if (!cur.rows) {
-        if (Array.isArray(cur.data)) cur = { ...cur, rows: cur.data }
-        else if (Array.isArray(cur.flows)) cur = { ...cur, rows: cur.flows }
-        else if (cur.rows && Array.isArray(cur.rows.data)) cur = { ...cur, rows: cur.rows.data }
-      }
-      return cur
-    }
-
-    const processEvent = (evt: { event?: string; data?: string }) => {
-      const name = (evt.event || 'message').trim()
-      const lname = name.toLowerCase()
-      const raw = evt.data || ''
-      const data = (() => {
-        try {
-          return raw ? JSON.parse(raw) : undefined
-        } catch {
-          return undefined
-        }
-      })()
-      if (lname === 'partialresult' || lname === 'partial' || lname === 'message') {
-        if (!data) return
-        try {
-          const payload: any = unwrapPayload(data)
-          const flows = extractFlows(payload as ResultSchema)
-          const summary = (data as any)?.summary ?? (payload as any)?.summary
-          const statuses = (data as any)?.hosts_statuses ?? (payload as any)?.hosts_statuses
-          if (statuses && typeof statuses === 'object') {
-            let err = 0,
-              ok = 0
-            for (const k of Object.keys(statuses)) {
-              const c = String((statuses as any)[k]?.code || '').toLowerCase()
-              if (c === 'ok') ok++
-              else err++
-            }
-            handlers.onMeta?.({
-              hostsStatuses: statuses as any,
-              hostErrorCount: err,
-              hostOkCount: ok,
-            })
-          }
-          handlers.onPartial?.(flows, summary as any)
-        } catch (e) {
-          handlers.onError?.(unknownError(e))
-        }
-        return
-      }
-      if (lname === 'finalresult' || lname === 'final') {
-        try {
-          const payload: any = unwrapPayload(data)
-          const flows = extractFlows(payload as ResultSchema)
-          const summary = (data as any)?.summary ?? (payload as any)?.summary
-          const statuses = (data as any)?.hosts_statuses ?? (payload as any)?.hosts_statuses
-          if (statuses && typeof statuses === 'object') {
-            let err = 0,
-              ok = 0
-            for (const k of Object.keys(statuses)) {
-              const c = String((statuses as any)[k]?.code || '').toLowerCase()
-              if (c === 'ok') ok++
-              else err++
-            }
-            handlers.onMeta?.({
-              hostsStatuses: statuses as any,
-              hostErrorCount: err,
-              hostOkCount: ok,
-            })
-          }
-          handlers.onFinal?.(flows, summary as any)
-        } finally {
-          // caller's close will abort; we also clear timeout here
+    // Apply one interpreted outcome to the handlers. Returns true when the
+    // stream is complete (final event), which also performs the single
+    // close/abort that ends the read loop.
+    const dispatch = (o: SSEOutcome): boolean => {
+      switch (o.kind) {
+        case 'partial':
+          if (o.meta) handlers.onMeta?.(o.meta)
+          handlers.onPartial?.(o.flows, o.summary)
+          return false
+        case 'final':
+          if (o.meta) handlers.onMeta?.(o.meta)
+          handlers.onFinal?.(o.flows, o.summary)
           clearTimeout(timeout)
           closed = true
           controller.abort()
+          return true
+        case 'error':
+          handlers.onError?.(o.error)
+          return false
+        case 'progress':
+          handlers.onProgress?.(o.progress)
+          return false
+        case 'ignore':
+          return false
+      }
+    }
+
+    const connect = async () =>
+      await fetch(this.bustUrl('/_query/sse'), {
+        method: 'POST',
+        headers: {
+          accept: 'text/event-stream',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify(args),
+        signal: controller.signal,
+        cache: 'no-store',
+      } as RequestInit)
+
+    // Read an SSE response to completion, feeding bytes through the parser and
+    // dispatching each interpreted event. Returns when the stream ends or a
+    // final/close stops it.
+    const drainStream = async (reader: ReadableStreamDefaultReader<Uint8Array>) => {
+      readerRef = reader
+      const parser = new SSEParser()
+      while (true) {
+        const { value, done } = await reader.read()
+        if (done) break
+        for (const evt of parser.push(value)) {
+          if (dispatch(interpretSSEEvent(evt))) return
+          if (closed) return
         }
-        return
       }
-      if (lname === 'progress') {
-        if (data && typeof data === 'object') handlers.onProgress?.(data as any)
-        return
+      // process any trailing, unterminated event block
+      for (const evt of parser.flush()) {
+        if (dispatch(interpretSSEEvent(evt))) return
+        if (closed) return
       }
-      if (lname === 'error') {
-        if (data && typeof data === 'object') handlers.onError?.(data as any)
-        else handlers.onError?.(unknownError(new Error('sse error event')))
-        return
-      }
-      // heuristic fallback: if payload includes rows, treat as partial; if it signals completion, treat as final
-      if (data && typeof data === 'object') {
-        try {
-          const payload: any = unwrapPayload(data)
-          const rows = (payload as any)?.rows
-          const isRowsArray = Array.isArray(rows)
-          const isFinal = !!((payload as any)?.final || (data as any)?.final)
-          if (isRowsArray) {
-            const flows = extractFlows(payload as ResultSchema)
-            if (isFinal) handlers.onFinal?.(flows, (payload as any)?.summary as any)
-            else handlers.onPartial?.(flows, (payload as any)?.summary as any)
-            if (isFinal) {
-              clearTimeout(timeout)
-              closed = true
-              controller.abort()
-            }
-            return
-          }
-        } catch (e) {
-          // fall through to ignore
-        }
-      }
-      // ignore other events
     }
 
     // kick off POST fetch that returns text/event-stream
+    const openAndDrain = async () => {
+      const res = await connect()
+      if (!res.ok) {
+        const body = await safeJson(res)
+        throw apiError(res.status, body, extractProblem(body))
+      }
+      const reader = res.body?.getReader()
+      if (!reader) throw unknownError(new Error('no response body'))
+      await drainStream(reader)
+    }
+
     ;(async () => {
       let triedReconnect = false
       try {
-        const connect = async () =>
-          await fetch(this.bustUrl('/_query/sse'), {
-            method: 'POST',
-            headers: {
-              accept: 'text/event-stream',
-              'content-type': 'application/json',
-            },
-            body: JSON.stringify(args),
-            signal: controller.signal,
-            cache: 'no-store',
-          } as RequestInit)
-        let res = await connect()
-        // if server closed connection aggressively, attempt one quick reconnect
-        if (!res.ok) {
-          const body = await safeJson(res)
-          let problem: ErrorModelSchema | undefined
-          if (
-            body &&
-            typeof body === 'object' &&
-            ('detail' in (body as any) || 'errors' in (body as any))
-          ) {
-            problem = body as ErrorModelSchema
-          }
-          throw apiError(res.status, body, problem)
-        }
-        if (!res.ok) {
-          const body = await safeJson(res)
-          let problem: ErrorModelSchema | undefined
-          if (
-            body &&
-            typeof body === 'object' &&
-            ('detail' in (body as any) || 'errors' in (body as any))
-          ) {
-            problem = body as ErrorModelSchema
-          }
-          throw apiError(res.status, body, problem)
-        }
-        const reader = res.body?.getReader()
-        if (!reader) throw unknownError(new Error('no response body'))
-        readerRef = reader
-        const decoder = new TextDecoder('utf-8')
-        let buf = ''
-        while (true) {
-          const { value, done } = await reader.read()
-          if (done) break
-          buf += decoder.decode(value, { stream: true })
-          // normalize newlines and parse complete events (\n\n delimiter)
-          buf = buf.replace(/\r\n/g, '\n')
-          let idx
-          while ((idx = buf.indexOf('\n\n')) >= 0) {
-            const rawEvt = buf.slice(0, idx)
-            buf = buf.slice(idx + 2)
-            // parse one event block
-            const evt: { event?: string; data?: string } = {}
-            const lines = rawEvt.split('\n')
-            for (const ln of lines) {
-              if (!ln) continue
-              if (ln.startsWith(':')) continue // comment
-              const m = ln.match(/^(\w+):\s?(.*)$/)
-              if (!m) continue
-              const k = m[1]
-              const v = m[2]
-              if (k === 'event') evt.event = v
-              else if (k === 'data') evt.data = (evt.data ? evt.data + '\n' : '') + v
-            }
-            processEvent(evt)
-            if (closed) return
-          }
-        }
-        // stream ended: process any trailing, unterminated event block
-        if (buf && buf.trim().length > 0) {
-          const rawEvt = buf.replace(/\r\n/g, '\n')
-          const evt: { event?: string; data?: string } = {}
-          const lines = rawEvt.split('\n')
-          for (const ln of lines) {
-            if (!ln) continue
-            if (ln.startsWith(':')) continue
-            const m = ln.match(/^(\w+):\s?(.*)$/)
-            if (!m) continue
-            const k = m[1]
-            const v = m[2]
-            if (k === 'event') evt.event = v
-            else if (k === 'data') evt.data = (evt.data ? evt.data + '\n' : '') + v
-          }
-          if (evt.event || evt.data) {
-            processEvent(evt)
-            if (closed) return
-          }
-        }
+        await openAndDrain()
       } catch (e: any) {
+        // if the server closed the connection aggressively, attempt one quick reconnect
         if (!closed && !triedReconnect && this.isLikelyConnReset(e)) {
           triedReconnect = true
           try {
             await this.delay(150)
-            const res = await fetch(this.bustUrl('/_query/sse'), {
-              method: 'POST',
-              headers: {
-                accept: 'text/event-stream',
-                'content-type': 'application/json',
-              },
-              body: JSON.stringify(args),
-              signal: controller.signal,
-              cache: 'no-store',
-            } as RequestInit)
-            if (!res.ok) {
-              const body = await safeJson(res)
-              let problem: ErrorModelSchema | undefined
-              if (
-                body &&
-                typeof body === 'object' &&
-                ('detail' in (body as any) || 'errors' in (body as any))
-              ) {
-                problem = body as ErrorModelSchema
-              }
-              throw apiError(res.status, body, problem)
-            }
-            const reader = res.body?.getReader()
-            if (!reader) throw unknownError(new Error('no response body'))
-            readerRef = reader
-            // fall-through to normal loop by rethrowing a sentinel is complex; instead, we simply return and let caller re-run stream
-            // However, to keep current API, if reconnect succeeds we proceed with the same reading loop
-            const decoder = new TextDecoder('utf-8')
-            let buf = ''
-            while (true) {
-              const { value, done } = await reader.read()
-              if (done) break
-              buf += decoder.decode(value, { stream: true })
-              buf = buf.replace(/\r\n/g, '\n')
-              let idx
-              while ((idx = buf.indexOf('\n\n')) >= 0) {
-                const rawEvt = buf.slice(0, idx)
-                buf = buf.slice(idx + 2)
-                const evt: { event?: string; data?: string } = {}
-                const lines = rawEvt.split('\n')
-                for (const ln of lines) {
-                  if (!ln) continue
-                  if (ln.startsWith(':')) continue
-                  const m = ln.match(/^(\w+):\s?(.*)$/)
-                  if (!m) continue
-                  const k = m[1]
-                  const v = m[2]
-                  if (k === 'event') evt.event = v
-                  else if (k === 'data') evt.data = (evt.data ? evt.data + '\n' : '') + v
-                }
-                processEvent(evt)
-                if (closed) return
-              }
-            }
-            return
+            await openAndDrain()
           } catch (re) {
             if (!closed) handlers.onError?.(isApiError(re) ? (re as any) : unknownError(re))
           }
@@ -546,42 +336,3 @@ function buildArgs(p: QueryParamsUI): Args {
   }
 }
 
-function apiError(status: number, body: unknown, problem?: ErrorModelSchema): ApiError {
-  return {
-    name: 'ApiError',
-    message: `api request failed: status=${status}`,
-    status,
-    category: status >= 500 ? 'network' : 'client',
-    body,
-    problem,
-  }
-}
-
-function abortError(): ApiError {
-  return {
-    name: 'AbortError',
-    message: 'request aborted',
-    category: 'network',
-  }
-}
-
-function unknownError(err: unknown): ApiError {
-  return {
-    name: 'UnknownError',
-    message: 'unknown error',
-    category: 'unknown',
-    body: err,
-  }
-}
-
-function isApiError(e: any): e is ApiError {
-  return e && typeof e === 'object' && 'category' in e
-}
-
-async function safeJson(res: Response): Promise<unknown> {
-  try {
-    return await res.json()
-  } catch {
-    return undefined
-  }
-}

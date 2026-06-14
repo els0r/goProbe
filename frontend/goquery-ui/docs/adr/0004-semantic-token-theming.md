@@ -1,0 +1,24 @@
+# Light mode rides a semantic-token layer, switched by a JS-resolved `data-theme`
+
+The UI supports light and dark themes through one mechanism: every color in `src/components` and `src/views` resolves through a token in `tokens.css`, and the theme is selected by a concrete `data-theme="light|dark"` attribute on `<html>`. No component carries a raw `white`/`black`/`text-white` literal or a hardcoded hex; a grep for `white/`, `black/`, or `text-white` across those trees returns nothing, and `GraphView.tsx` (the only file that set colors as JS hex) reads its palette from `--graph-*` tokens via `getComputedStyle`.
+
+The dark ramp stays the `:root` default. Light is a sibling block, `:root[data-theme="light"]`, that re-points the existing functional tokens (`--surface-*`, `--gray-*`, `--blue-stroke`) and a small set of new semantic tokens. The new tokens name roles the old markup expressed with literals: `--line-soft`/`--line`/`--line-strong` (the `white/{5,10,20}` hairlines, alpha baked in), `--on-accent` (text on a colored fill — white in both themes), `--scrim` (modal backdrop — black in both), `--accent` (accent foreground, currently `text-primary-300`), and `--graph-*`. Surfaces and the gray text ramp simply flip; the gray ramp reverses around `#979ca8`/`#6b7282`, which are the same in both themes. Hover direction needs no markup change: in light, `--surface-200/300` are *darker* than the white card, so the existing `hover:bg-surface-200` darkens instead of lightening.
+
+The preference is tri-state (`system | light | dark`), persisted in `localStorage` (`LS_THEME_KEY`) alongside the other settings, and chosen via a segmented control in `SettingsModal`. `system` is the default and tracks the OS live via a `matchMedia` listener. An inline script in `index.html`, before the bundle, resolves the stored preference to a concrete `data-theme` (and matching `color-scheme`) before first paint.
+
+## Considered Options
+
+- **Pure CSS `@media (prefers-color-scheme)`, no JS** — rejected: it cannot honor a manual override. The user asked for an explicit System/Light/Dark choice, which requires reading a persisted preference and forcing a theme against the OS. A pure-media approach also duplicates the light token block (once in `@media`, once for the forced case) or needs a `:not([data-theme])` dance. Resolving the preference to a concrete `data-theme` in JS keeps the CSS to two flat blocks.
+- **Tailwind `dark:` variant with light as the base** — rejected: it inverts the current default and pairs a `dark:` variant onto *every* color site (200+), not just the ~100 literals, doubling the markup and the churn. The token-flip approach changes values in one file and migrates only the literals that have no token.
+- **Two stylesheets swapped by `<link>`** — rejected: duplicates the entire utility surface, fights Tailwind's JIT, and reintroduces FOUC on switch.
+- **A JS palette object for the graph (`graphPalette(theme)`)** — rejected: more unit-testable in isolation, but it puts graph colors in a second source of truth outside `tokens.css`. Reading `--graph-*` via `getComputedStyle` keeps `tokens.css` the single source; the graph already re-renders on theme change, so the read cost is paid once per render.
+- **Keep the brand ramp constant across themes** — rejected for accent *text* only: `text-primary-300` (`#5c92ff`, used 25×) drops to ~3:1 on white and fails WCAG AA. `--accent` flips to `#0049db` (~6.7:1) in light. Brand *fills* and focus *rings* (`bg-primary-500`, `ring-primary-500`) are vivid enough on both and stay constant.
+
+## Consequences
+
+- `tokens.css` is the single source of truth for color in both themes. Adding a third theme, or retuning either, is a localized edit to two `:root` blocks plus the graph tokens — no component changes.
+- The literal sweep is a one-time cost: `ring/border/divide-white/X` → `*-line*`; on-surface `text-white` → `text-gray-100`; on-fill `text-white` → `text-on-accent`; `text-primary-300/200` → `text-accent`; `bg-black/X` → `bg-scrim`. Stray non-gq colors found during the sweep (`bg-blue-500` in `ProgressBar`, `#e5e7eb`/`#60a5fa` in `GraphView`) are folded onto tokens in the same pass.
+- The "zero raw literals" rule is enforceable in review by grep; new components inherit theming for free as long as they use tokens.
+- `GraphView` gains a dependency on `getComputedStyle` at render and must re-read on theme change. Server-side or pre-DOM rendering of the graph would need the colors passed in explicitly.
+- An inline pre-paint script is now part of `index.html`; it is the only place theme resolution is duplicated outside the React tree, and exists solely to prevent FOUC.
+- `CONTEXT.md` is deliberately left untouched. Theming is UI chrome, not flow-data domain language (Query, Run, Flow); the glossary stays decoupled from presentation.

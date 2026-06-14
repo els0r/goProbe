@@ -1,9 +1,10 @@
-import { FlowRecord, SummarySchema } from '../api/domain'
+import { FlowRecord } from '../flows'
+import { SummarySchema } from '../api/domain'
 import { ServiceDetails } from '../components/ServiceDetails'
 import { DetailsPanel } from '../components/DetailsPanel'
 import { DisplaySummary } from '../components/DisplaySummary'
 import { InOutSummary } from '../components/InOutSummary'
-import { sumTotals, groupByService } from '../utils/aggregation'
+import { sumTotals, groupByService } from '../flows'
 import { renderError } from '../utils/renderError'
 import { usePanelEscape } from '../hooks/usePanelEscape'
 
