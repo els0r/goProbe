@@ -1,4 +1,6 @@
-import { FlowRecord } from '../api/domain'
+// Grouping and scaling over sets of Flows: the aggregates the details panels
+// and table bars derive from a Run's (or Detail Run's) result rows.
+import { FlowRecord } from './record'
 
 export interface ServiceGroup {
   proto: number | null
@@ -70,4 +72,26 @@ export function groupByIface(rows: FlowRecord[]): IfaceGroup[] {
     m.set(key, g)
   }
   return Array.from(m.values()).sort((a, b) => b.inB + b.outB - (a.inB + a.outB))
+}
+
+/**
+ * Shared global max over every in *and* out magnitude across `rows` — the
+ * single scale reference each diverging bar in one table normalizes against,
+ * so bars stay comparable both within a row (in vs out) and down the column.
+ *
+ * Recomputed live as streaming rows arrive; returns `0` for an empty set.
+ */
+export function inOutScaleMax(
+  rows: ReadonlyArray<FlowRecord>,
+  inKey: 'bytes_in' | 'packets_in',
+  outKey: 'bytes_out' | 'packets_out',
+): number {
+  let max = 0
+  for (const r of rows) {
+    const i = r[inKey] || 0
+    const o = r[outKey] || 0
+    if (i > max) max = i
+    if (o > max) max = o
+  }
+  return max
 }

@@ -1,27 +1,26 @@
-import { QueryParamsUI } from '../api/domain'
+// params.ts — the shape of a Query (CONTEXT.md): the parameter set one Run
+// executes. Owned by the query/ concept module per ADR-0003; moved here from
+// the transport-named api/domain.ts.
 
-export function formatValue(v: unknown): string {
-  if (v === null) return 'null'
-  if (v === undefined) return 'undefined'
-  if (typeof v === 'string') return JSON.stringify(v)
-  if (typeof v === 'number' || typeof v === 'boolean') return String(v)
-  try {
-    return JSON.stringify(v)
-  } catch {
-    return '[unserializable]'
-  }
+export interface QueryParamsUI {
+  first: string
+  last: string
+  ifaces: string
+  query: string
+  // free text hosts query (separate from generic attribute list in `query`)
+  query_hosts?: string
+  // selected hosts resolver type from Settings; forwarded to backend as query_hosts_resolver_type
+  hosts_resolver?: string
+  condition?: string
+  limit: number
+  sort_by: 'bytes' | 'packets'
+  sort_ascending: boolean
+  in_only?: boolean
+  out_only?: boolean
+  sum?: boolean
 }
 
-// normalize strings for error matching: lower-case and unify curly apostrophes
-export function normalizeText(s: string | undefined | null): string {
-  if (!s) return ''
-  return String(s)
-    .toLowerCase()
-    .replace(/\u2019/g, "'")
-    .trim()
-}
-
-// sanitize comma-separated host list: trim items and drop empties
+// sanitize a comma-separated host list: trim items and drop empties
 export function sanitizeHostList(raw?: string | null): string | undefined {
   if (!raw) return undefined
   const items = String(raw)
@@ -31,6 +30,7 @@ export function sanitizeHostList(raw?: string | null): string | undefined {
   return items.length ? items.join(',') : undefined
 }
 
+// the canonical default Query — the parameter set a fresh session starts from
 const DEFAULTS: QueryParamsUI = {
   first: '',
   last: '',
@@ -42,7 +42,7 @@ const DEFAULTS: QueryParamsUI = {
   sort_ascending: false,
 }
 
-// Ensure any externally loaded params (e.g., from localStorage) are valid
+// ensure any externally loaded params (e.g., from localStorage) are valid
 export function sanitizeUIParams(p: any): QueryParamsUI {
   const merged: QueryParamsUI = {
     ...DEFAULTS,

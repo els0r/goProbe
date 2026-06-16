@@ -1,7 +1,7 @@
 import React from 'react'
 import { IfaceDetailsCard } from './IfaceDetailsCard'
 import { DetailList } from './DetailList'
-import { IfaceGroup } from '../utils/aggregation'
+import { IfaceGroup } from '../flows'
 
 export type { IfaceGroup }
 

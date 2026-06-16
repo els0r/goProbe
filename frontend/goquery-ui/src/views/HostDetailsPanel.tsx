@@ -1,8 +1,9 @@
 import { DetailsPanel } from '../components/DetailsPanel'
-import { FlowRecord, SummarySchema } from '../api/domain'
+import { FlowRecord } from '../flows'
+import { SummarySchema } from '../api/domain'
 import { DisplaySummary } from '../components/DisplaySummary'
 import { IfaceDetails } from '../components/IfaceDetails'
-import { sumTotals, groupByIface } from '../utils/aggregation'
+import { sumTotals, groupByIface } from '../flows'
 import { renderError } from '../utils/renderError'
 import { usePanelEscape } from '../hooks/usePanelEscape'
 

@@ -1,7 +1,9 @@
 import React, { useMemo, useRef, useEffect, useState } from 'react'
-import { FlowRecord } from '../api/domain'
+import { FlowRecord } from '../flows'
 import { formatBytesIEC, humanBytes, humanPackets } from '../utils/format'
 import { isPrivateIP } from '../utils/ipClassify'
+import { buildGraph, layoutGraph, IP_R, IFACE_R } from './graph'
+import type { Edge, PositionedNode } from './graph'
 
 export interface GraphViewProps {
   rows: FlowRecord[]
@@ -13,65 +15,51 @@ export interface GraphViewProps {
   onHostClick?: (hostId: string) => void
 }
 
-type NodeType = 'ip' | 'iface' | 'host'
-
-interface Node {
-  id: string
-  label: string
-  type: NodeType
-  // grouping keys
-  host?: string
-  iface?: string
-  hostId?: string
-  // position (computed)
-  x: number
-  y: number
-  // for host bubble sizing
-  radius?: number
-}
-
-interface Edge {
-  id: string
-  from: string
-  to: string
-  color: string
-  width: number
-  title: string
-  sip: string
-  dip: string
-  bytesTotal: number
-  packetsTotal: number
-  // Membership of source/destination IPs touched by this (possibly aggregated) edge
-  sips: string[]
-  dips: string[]
-  // Directionality category: 'bi' for bidirectional flows, 'uni' for unidirectional flows
-  dircat: 'bi' | 'uni'
-}
-
-// map a 0..1 value to stroke width 1..8px in 12.5% buckets
-function edgeWidth01(v01: number): number {
-  if (!isFinite(v01) || v01 <= 0) return 1
-  const bin = Math.min(7, Math.floor(v01 * 8)) // 0..7
-  return 1 + bin
-}
-
-const BLUE = '#60a5fa' // tailwind blue-400 (also used for edge/label accents)
-const RED = '#f87171' // tailwind red-400 (matches table row accent)
-const BLUE_STROKE = '#93c5fd' // blue-300 (legacy default)
 // Label metrics (used for rect height and spacing guarantees)
 const LABEL_FS = 11
 const LABEL_PADY = 4
-// Stronger visual separation for IP node fills/strokes
-const PUBLIC_FILL = '#3b82f6' // blue-500
-const PUBLIC_STROKE = '#60a5fa' // blue-400
-const PRIVATE_FILL = '#dbeafe' // blue-100
-const PRIVATE_STROKE = '#bfdbfe' // blue-200
-const HOST_FILL = 'rgba(59,130,246,0.12)' // translucent blue
-const HOST_STROKE = 'rgba(255,255,255,0.08)'
 
-// node radii (kept top-level so layout + render agree)
-const IP_R = 16
-const IFACE_R = 12
+// Theme-aware graph palette. Colours live in --graph-* CSS custom properties
+// (defined per theme in tokens.css) and are read here as whole colour strings,
+// so a data-theme flip recolours the diagram without a reload.
+interface GraphPalette {
+  bg: string
+  edge: string
+  edgeHighlight: string
+  publicFill: string
+  publicStroke: string
+  privateFill: string
+  privateStroke: string
+  ifaceFill: string
+  ifaceStroke: string
+  hostFill: string
+  hostStroke: string
+  label: string
+  labelMuted: string
+  labelAccent: string
+}
+
+function readGraphPalette(): GraphPalette {
+  const s = getComputedStyle(document.documentElement)
+  const v = (name: string) => s.getPropertyValue(name).trim()
+  return {
+    bg: v('--graph-bg'),
+    edge: v('--graph-edge'),
+    edgeHighlight: v('--graph-edge-highlight'),
+    publicFill: v('--graph-node-public-fill'),
+    publicStroke: v('--graph-node-public-stroke'),
+    privateFill: v('--graph-node-private-fill'),
+    privateStroke: v('--graph-node-private-stroke'),
+    ifaceFill: v('--graph-node-iface-fill'),
+    ifaceStroke: v('--graph-node-iface-stroke'),
+    hostFill: v('--graph-host-fill'),
+    hostStroke: v('--graph-host-stroke'),
+    label: v('--graph-label'),
+    labelMuted: v('--graph-label-muted'),
+    labelAccent: v('--graph-label-accent'),
+  }
+}
+
 
 // simple responsive container size hook
 function useRect(ref: React.RefObject<HTMLElement | null>) {
@@ -105,10 +93,12 @@ export function GraphView({
   const containerRef = useRef<HTMLDivElement>(null)
   const { width, height } = useRect(containerRef)
   const [hoverIP, setHoverIP] = useState<string | null>(null)
-  const [panelBg, setPanelBg] = useState<string>('#0f172a')
+  // Lazy initializer so first paint already has the correct (theme-resolved) palette.
+  const [palette, setPalette] = useState<GraphPalette>(() => readGraphPalette())
+  const [panelBg, setPanelBg] = useState<string>(() => readGraphPalette().bg)
 
   // detect nearest non-transparent background color to use as text outline fill
-  useEffect(() => {
+  const detectPanelBg = () => {
     let el: HTMLElement | null = containerRef.current
     let found: string | null = null
     try {
@@ -123,409 +113,55 @@ export function GraphView({
     } catch {
       // ignore
     }
-    if (found) setPanelBg(found)
+    setPanelBg(found || readGraphPalette().bg)
+  }
+
+  // Re-read the palette (and the rendered panel background) whenever the theme
+  // flips. applyTheme always rewrites data-theme on <html>, so a MutationObserver
+  // on that attribute fires for both manual settings toggles and OS-driven changes.
+  useEffect(() => {
+    detectPanelBg()
+    const obs = new MutationObserver(() => {
+      setPalette(readGraphPalette())
+      detectPanelBg()
+    })
+    obs.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme'],
+    })
+    return () => obs.disconnect()
   }, [])
   const [hoverIface, setHoverIface] = useState<string | null>(null)
 
-  // build graph data with node budget and weighting
-  const { nodes, edges, infoMsg, ipTotals, hostTotals } = useMemo(() => {
-    if (!rows || rows.length === 0)
-      return {
-        nodes: [] as Node[],
-        edges: [] as Edge[],
-        infoMsg: 'No graph data',
-      }
+  // The node-count-budget model: which Flows fit under maxNodes, plus their edges
+  // and per-IP/per-host totals. Viewport-independent, so it recomputes only when
+  // rows/maxNodes change — a resize or theme flip no longer re-runs aggregation.
+  const model = useMemo(() => buildGraph(rows, { maxNodes }), [rows, maxNodes])
+  const { ipTotals, hostTotals } = model
 
-    // sort flows by total bytes, descending, so heavier edges are preferred
-    const flows = [...rows].sort((a, b) => b.bytes_in + b.bytes_out - (a.bytes_in + a.bytes_out))
+  // The spatial-budget layout: position the model's nodes for the current
+  // viewport and prune any that can't fit. Recomputes only on model/size change.
+  const layout = useMemo(() => layoutGraph(model, { width, height }), [model, width, height])
+  const { nodes, edges } = layout
 
-    const nodeMap = new Map<string, Node>()
-    const ipTotalsMap = new Map<string, { bytes: number; packets: number }>()
-    const hostTotalsMap = new Map<string, { bytes: number; packets: number }>()
-    const edgesOut: Edge[] = []
-    let edgeIndex = 0
-
-    // helper to add/find nodes while keeping within budget
-    const ensureNode = (
-      id: string,
-      label: string,
-      type: NodeType,
-      host?: string,
-      iface?: string,
-      hostId?: string
-    ): Node | null => {
-      const exist = nodeMap.get(id)
-      if (exist) return exist
-      if (nodeMap.size + 1 > maxNodes) return null
-      const n: Node = { id, label, type, host, iface, hostId, x: 0, y: 0 }
-      nodeMap.set(id, n)
-      return n
-    }
-
-    // First pass: decide which flows we can include based on node budget and accumulate totals
-    const included: FlowRecord[] = []
-    for (const r of flows) {
-      const sipId = `ip:${r.sip}`
-      const dipId = `ip:${r.dip}`
-      const ifaceKey = r.iface ? `${r.host || 'host'}:${r.iface}` : 'unknown'
-      const ifaceId = `iface:${ifaceKey}`
-      const hostId = r.host ? `host:${r.host}` : undefined
-
-      const needed = [
-        nodeMap.has(sipId) ? 0 : 1,
-        nodeMap.has(dipId) ? 0 : 1,
-        nodeMap.has(ifaceId) ? 0 : 1,
-        hostId ? (nodeMap.has(hostId) ? 0 : 1) : 0,
-      ].reduce((a, b) => a + b, 0)
-
-      if (nodeMap.size + needed > maxNodes && included.length > 0) break
-
-      // add nodes within budget
-      ensureNode(sipId, r.sip, 'ip')
-      ensureNode(dipId, r.dip, 'ip')
-      ensureNode(ifaceId, r.iface || '(iface)', 'iface', r.host, r.iface || undefined, r.host_id)
-      if (hostId) ensureNode(hostId, r.host!, 'host', r.host, undefined, r.host_id)
-
-      // accumulate totals
-      const bytes = r.bytes_in + r.bytes_out
-      const packets = r.packets_in + r.packets_out
-      const sipTot = ipTotalsMap.get(r.sip) || { bytes: 0, packets: 0 }
-      sipTot.bytes += bytes
-      sipTot.packets += packets
-      ipTotalsMap.set(r.sip, sipTot)
-      const dipTot = ipTotalsMap.get(r.dip) || { bytes: 0, packets: 0 }
-      dipTot.bytes += bytes
-      dipTot.packets += packets
-      ipTotalsMap.set(r.dip, dipTot)
-      if (r.host) {
-        const hTot = hostTotalsMap.get(r.host) || { bytes: 0, packets: 0 }
-        hTot.bytes += bytes
-        hTot.packets += packets
-        hostTotalsMap.set(r.host, hTot)
-      }
-
-      included.push(r)
-    }
-
-    // build edges: sip -> iface, iface -> dip (initial, per-flow)
-    const maxBytes = Math.max(1, ...included.map((rr) => rr.bytes_in + rr.bytes_out))
-    for (const r of included) {
-      const totalB = r.bytes_in + r.bytes_out
-      const w = edgeWidth01(totalB / maxBytes)
-      const color = r.bidirectional ? BLUE : RED
-      const dircat: 'bi' | 'uni' = r.bidirectional ? 'bi' : 'uni'
-      const sipId2 = `ip:${r.sip}`
-      const dipId2 = `ip:${r.dip}`
-      const ifaceKey2 = r.iface ? `${r.host || 'host'}:${r.iface}` : 'unknown'
-      const ifaceId2 = `iface:${ifaceKey2}`
-      const packetsTotal = r.packets_in + r.packets_out
-      const title = `${r.sip} → ${r.dip} (${r.iface || 'iface'} on ${r.host || 'host'})\nbytes in/out: ${r.bytes_in} / ${r.bytes_out}\npackets in/out: ${r.packets_in} / ${r.packets_out}`
-      edgesOut.push({
-        id: `e:${edgeIndex++}:${sipId2}->${ifaceId2}`,
-        from: sipId2,
-        to: ifaceId2,
-        color,
-        width: w,
-        title,
-        sip: r.sip,
-        dip: r.dip,
-        bytesTotal: totalB,
-        packetsTotal,
-        sips: [r.sip],
-        dips: [r.dip],
-        dircat,
-      })
-      edgesOut.push({
-        id: `e:${edgeIndex++}:${ifaceId2}->${dipId2}`,
-        from: ifaceId2,
-        to: dipId2,
-        color,
-        width: w,
-        title,
-        sip: r.sip,
-        dip: r.dip,
-        bytesTotal: totalB,
-        packetsTotal,
-        sips: [r.sip],
-        dips: [r.dip],
-        dircat,
-      })
-    }
-
-    // aggregate duplicate edges between same nodes (e.g., multiple flows sharing sip→iface)
-    if (edgesOut.length) {
-      const byPair = new Map<string, Edge & { count: number }>()
-      for (const e of edgesOut) {
-        const key = `${e.from}|${e.to}|${e.dircat}`
-        const acc = byPair.get(key)
-        if (acc) {
-          acc.bytesTotal += e.bytesTotal
-          acc.packetsTotal += e.packetsTotal
-          acc.count += 1
-          // keep color of this category (no mixing bi/uni in same bucket)
-          // merge membership (unique)
-          const addUniq = (arr: string[], v: string) => {
-            if (!arr.includes(v)) arr.push(v)
-          }
-          for (const s of e.sips) addUniq(acc.sips, s)
-          for (const d of e.dips) addUniq(acc.dips, d)
-        } else {
-          byPair.set(key, { ...e, count: 1 })
-        }
-      }
-      // recompute widths based on aggregated totals
-      const maxEdgeBytes = Math.max(1, ...Array.from(byPair.values()).map((x) => x.bytesTotal))
-      const aggregated: Edge[] = []
-      let idx = 0
-      for (const [key, v] of Array.from(byPair.entries())) {
-        const w = edgeWidth01(v.bytesTotal / maxEdgeBytes)
-        aggregated.push({ ...v, id: `ea:${idx++}:${key}`, width: w })
-      }
-      // replace edgesOut with aggregated list
-      edgesOut.length = 0
-      edgesOut.push(...aggregated)
-    }
-
-    // Lay out nodes: three columns (left IPs, middle interfaces (grouped by host), right IPs)
-    // Determine sets
-    const ipNodes: Node[] = []
-    const ifaceNodesByHost = new Map<string, Node[]>()
-    const hostNodes: Node[] = []
-    for (const n of Array.from(nodeMap.values())) {
-      if (n.type === 'ip') ipNodes.push(n)
-      else if (n.type === 'iface') {
-        const key = n.host || '(unknown)'
-        const arr = ifaceNodesByHost.get(key) || []
-        arr.push(n)
-        ifaceNodesByHost.set(key, arr)
-      } else if (n.type === 'host') hostNodes.push(n)
-    }
-
-    // helper volume for IP
-    const vol = (n: Node) => ipTotalsMap.get(n.label)?.bytes || 0
-    // sort ips by volume desc within their final groups later
-    hostNodes.sort((a, b) => a.label.localeCompare(b.label))
-    for (const arr of ifaceNodesByHost.values())
-      arr.sort((a, b) => (a.iface || '').localeCompare(b.iface || ''))
-
-    const padding = 40
-    const colX = {
-      left: padding + 60,
-      mid: width / 2,
-      right: width - padding - 60,
-    }
-
-    // scatter IPs half on left (sources) and half on right (dests) based on roles in included flows
-    const sourceSet = new Set(included.map((r) => r.sip))
-    const destSet = new Set(included.map((r) => r.dip))
-    const leftIPsAll = ipNodes.filter((n) => sourceSet.has(n.label) && !destSet.has(n.label))
-    const rightIPsAll = ipNodes.filter((n) => destSet.has(n.label) && !sourceSet.has(n.label))
-    const bothIPs = ipNodes.filter((n) => sourceSet.has(n.label) && destSet.has(n.label))
-    // split "both" across sides to balance
-    const half = Math.ceil(bothIPs.length / 2)
-    const leftIPs = [...leftIPsAll, ...bothIPs.slice(0, half)]
-    const rightIPs = [...rightIPsAll, ...bothIPs.slice(half)]
-
-    // group into private/public and sort by volume (desc) within each group
-    const sortDesc = (arr: Node[]) =>
-      arr.sort((a, b) => vol(b) - vol(a) || a.label.localeCompare(b.label))
-    const leftPriv = sortDesc(leftIPs.filter((n) => isPrivateIP(n.label)))
-    const leftPub = sortDesc(leftIPs.filter((n) => !isPrivateIP(n.label)))
-    const rightPriv = sortDesc(rightIPs.filter((n) => isPrivateIP(n.label)))
-    const rightPub = sortDesc(rightIPs.filter((n) => !isPrivateIP(n.label)))
-
-    // ensure at least MIN_IP_GAP between nodes; ensure GROUP_GAP between
-    // private/public groups; prune from the tail if needed (lowest volume)
-    const MIN_IP_GAP = 2 * IP_R + 8 // center-to-center spacing within a group (>= 8px edge gap)
-    const GROUP_EDGE_GAP = 16 // minimum edge-to-edge gap between private and public groups
-    const GROUP_CENTER_GAP = 2 * IP_R + GROUP_EDGE_GAP // convert to center-to-center spacing
-    const distributeGrouped = (
-      priv: Node[],
-      pub: Node[],
-      x: number,
-      top: number,
-      bottom: number
-    ) => {
-      const span = Math.max(0, bottom - top)
-      const havePriv = priv.length > 0
-      const havePub = pub.length > 0
-      if (!havePriv && !havePub) return
-      if (havePriv && !havePub) {
-        const maxFit = Math.max(1, Math.floor(span / MIN_IP_GAP) + 1)
-        if (priv.length > maxFit) priv.length = maxFit
-        if (priv.length === 1) {
-          priv[0].x = x
-          priv[0].y = (top + bottom) / 2
-          return
-        }
-        const step = Math.max(MIN_IP_GAP, span / (priv.length - 1))
-        const needed = step * (priv.length - 1)
-        const start = top + Math.max(0, (span - needed) / 2)
-        priv.forEach((n, i) => {
-          n.x = x
-          n.y = start + i * step
-        })
-        return
-      }
-      if (!havePriv && havePub) {
-        const maxFit = Math.max(1, Math.floor(span / MIN_IP_GAP) + 1)
-        if (pub.length > maxFit) pub.length = maxFit
-        if (pub.length === 1) {
-          pub[0].x = x
-          pub[0].y = (top + bottom) / 2
-          return
-        }
-        const step = Math.max(MIN_IP_GAP, span / (pub.length - 1))
-        const needed = step * (pub.length - 1)
-        const start = top + Math.max(0, (span - needed) / 2)
-        pub.forEach((n, i) => {
-          n.x = x
-          n.y = start + i * step
-        })
-        return
-      }
-      // both groups present
-      const canFit = () => {
-        const gaps = priv.length - 1 + (pub.length - 1)
-        const minH = (gaps > 0 ? gaps * MIN_IP_GAP : 0) + GROUP_CENTER_GAP
-        return minH <= span
-      }
-      while (!canFit()) {
-        if (priv.length === 0 && pub.length === 0) break
-        if (pub.length > priv.length) pub.pop()
-        else if (priv.length > pub.length) priv.pop()
-        else pub.pop() // prefer pruning public on ties
-      }
-      const gaps = priv.length - 1 + (pub.length - 1)
-      if (gaps <= 0) {
-        const start = top + Math.max(0, (span - GROUP_CENTER_GAP) / 2)
-        priv[0].x = x
-        priv[0].y = start
-        pub[0].x = x
-        pub[0].y = start + GROUP_CENTER_GAP
-        return
-      }
-      const step = Math.max(MIN_IP_GAP, (span - GROUP_CENTER_GAP) / gaps)
-      const used = gaps * step + GROUP_CENTER_GAP
-      const start = top + Math.max(0, (span - used) / 2)
-      priv.forEach((n, i) => {
-        n.x = x
-        n.y = start + i * step
-      })
-      const lastPrivY = start + (priv.length - 1) * step
-      pub.forEach((n, i) => {
-        n.x = x
-        n.y = lastPrivY + GROUP_CENTER_GAP + i * step
-      })
-    }
-
-    const top = padding
-    const bottom = height - padding
-    distributeGrouped(leftPriv, leftPub, colX.left, top, bottom)
-    distributeGrouped(rightPriv, rightPub, colX.right, top, bottom)
-
-    // Remove IP nodes that couldn't be placed due to spacing constraints
-    const keepIpIds = new Set<string>(
-      [...leftPriv, ...leftPub, ...rightPriv, ...rightPub].map((n) => n.id)
-    )
-    for (const n of ipNodes) {
-      if (!keepIpIds.has(n.id)) nodeMap.delete(n.id)
-    }
-    // prune edges connected to removed nodes
-    for (let i = edgesOut.length - 1; i >= 0; i--) {
-      const e = edgesOut[i]
-      if (!nodeMap.has(e.from) || !nodeMap.has(e.to)) edgesOut.splice(i, 1)
-    }
-
-    // Hosts vertically stacked in the middle; each host gets a bubble; interfaces distributed on bubble edge
-    const hostOrder = hostNodes.length
-      ? hostNodes
-      : [
-        {
-          id: 'host:(unknown)',
-          label: '(unknown)',
-          type: 'host',
-          x: 0,
-          y: 0,
-        } as Node,
-      ]
-    // first pass: compute radius per host, factoring text width and iface count
-    const MIN_HOST_GAP = 8
-    hostOrder.forEach((h) => {
-      const ifaces = ifaceNodesByHost.get(h.label) || []
-      const N = Math.max(1, ifaces.length)
-      // slightly smaller base radius due to smaller fonts
-      let radius = Math.min(200, Math.max(80, 36 + N * 18))
-      // ensure enough space for host label + totals centered
-      const totals = hostTotalsMap.get(h.label) || { bytes: 0, packets: 0 }
-      const bytesStr = humanBytes(totals.bytes)
-      const pktStr = humanPackets(totals.packets)
-      const label = h.label || 'host'
-      const approx = (s: string, fs: number) => s.length * fs * 0.6
-      // reduced font sizes: name 14, totals 12
-      const maxTextWidth = Math.max(approx(label, 14), approx(`${bytesStr} / ${pktStr}`, 12))
-      const pad = 20
-      const neededR = (maxTextWidth + pad) / 2
-      radius = Math.max(radius, neededR)
-      h.radius = radius
-      h.x = colX.mid
-    })
-    // second pass: vertically pack hosts with at least MIN_HOST_GAP between circles, centered block
-    if (hostOrder.length > 0) {
-      const available = bottom - top
-      const n = hostOrder.length
-      const totalCircles = hostOrder.reduce((s, h) => s + 2 * (h.radius || 100), 0)
-      const blockHeight = totalCircles + (n - 1) * MIN_HOST_GAP
-      const spacing = n > 1 ? MIN_HOST_GAP : 0
-      // center the packed block vertically; don't stretch spacing
-      const startTop = top + Math.max(0, (available - blockHeight) / 2)
-      let y = startTop + (hostOrder[0].radius || 100)
-      hostOrder[0].y = y
-      for (let i = 1; i < n; i++) {
-        const prev = hostOrder[i - 1]
-        const cur = hostOrder[i]
-        y += (prev.radius || 100) + spacing + (cur.radius || 100)
-        cur.y = y
-      }
-      // place interfaces on the edge of each host circle
-      hostOrder.forEach((h) => {
-        const ifaces = ifaceNodesByHost.get(h.label) || []
-        const N = Math.max(1, ifaces.length)
-        const r = h.radius || 100
-        ifaces.forEach((n, i) => {
-          const angle = (i / N) * Math.PI * 2
-          n.x = h.x + Math.cos(angle) * r
-          n.y = h.y + Math.sin(angle) * r
-        })
-      })
-    }
-
-    const infoMsg =
-      rows.length > included.length
-        ? `Graph limited to ${nodeMap.size} nodes across ${included.length} flows (of ${rows.length})`
-        : undefined
-
-    return {
-      nodes: Array.from(nodeMap.values()),
-      edges: edgesOut,
-      infoMsg,
-      ipTotals: ipTotalsMap,
-      hostTotals: hostTotalsMap,
-    }
-  }, [rows, maxNodes, width, height])
+  // Behaviour-preserving message: still driven by the node-count budget only.
+  // (layout.droppedForSpace is available too but deliberately not surfaced yet —
+  // see docs/adr/0006-view-support-logic-framework-free-in-views.md.)
+  const includedFlows = rows.length - model.droppedForCap
+  const infoMsg =
+    model.droppedForCap > 0
+      ? `Graph limited to ${nodes.length} nodes across ${includedFlows} flows (of ${rows.length})`
+      : undefined
 
   if (loading && rows.length === 0)
     return <div className="p-4 text-sm text-gray-400">Loading graph…</div>
   if (!rows.length) return <div className="p-4 text-sm text-gray-400">No graph data</div>
 
-  // helper to trim lines to circle edges
-  // radii already declared above; keep local aliases for clarity
-  // (values kept in sync)
-  // const IP_R = 16
-  // const IFACE_R = 12
-  const getRadius = (n: Node | undefined) =>
+  // helper to trim lines to circle edges (IP_R/IFACE_R imported from ./graph so
+  // render and layout agree on radii)
+  const getRadius = (n: PositionedNode | undefined) =>
     !n ? 0 : n.type === 'ip' ? IP_R : n.type === 'iface' ? IFACE_R : 0
-  const shorten = (a: Node | undefined, b: Node | undefined) => {
+  const shorten = (a: PositionedNode | undefined, b: PositionedNode | undefined) => {
     if (!a || !b) return { x1: a?.x || 0, y1: a?.y || 0, x2: b?.x || 0, y2: b?.y || 0 }
     const dx = b.x - a.x
     const dy = b.y - a.y
@@ -578,7 +214,7 @@ export function GraphView({
     const nTo1 = nodes.find((n) => n.id === e1.to)
     const nFrom2 = nodes.find((n) => n.id === e2.from)
     const nTo2 = nodes.find((n) => n.id === e2.to)
-    const pri = (from?: Node, to?: Node) => {
+    const pri = (from?: PositionedNode, to?: PositionedNode) => {
       if (from?.type === 'ip' && to?.type === 'iface') return 1 // away from IP (top)
       if (from?.type === 'iface' && to?.type === 'ip') return 0 // towards IP (bottom)
       return 0
@@ -624,7 +260,7 @@ export function GraphView({
   return (
     <div ref={containerRef} className="relative h-[70vh]">
       {infoMsg && (
-        <div className="absolute left-2 top-2 z-10 rounded bg-surface-100/70 px-2 py-1 text-data-sm text-gray-300 ring-1 ring-white/10">
+        <div className="absolute left-2 top-2 z-10 rounded bg-surface-100/70 px-2 py-1 text-data-sm text-gray-300 ring-1 ring-line">
           {infoMsg}
         </div>
       )}
@@ -648,7 +284,7 @@ export function GraphView({
             }
             return n.toFixed(n >= 100 ? 0 : n >= 10 ? 1 : 2) + ' ' + units[i]
           }
-          const measureNode = (n: Node) => {
+          const measureNode = (n: PositionedNode) => {
             if (n.type === 'host') {
               const r = n.radius || 100
               return {
@@ -742,13 +378,19 @@ export function GraphView({
                       onClick={() => onHostClick?.(h.hostId || h.label)}
                       style={{ cursor: 'pointer' }}
                     >
-                      <circle cx={h.x} cy={h.y} r={r} fill={HOST_FILL} stroke={HOST_STROKE} />
+                      <circle
+                        cx={h.x}
+                        cy={h.y}
+                        r={r}
+                        fill={palette.hostFill}
+                        stroke={palette.hostStroke}
+                      />
                       <text
                         x={h.x}
                         y={h.y - 3}
                         textAnchor="middle"
                         fontSize={14}
-                        fill="#ffffff"
+                        fill={palette.label}
                         opacity={0.95}
                       >
                         {h.label || 'host'}
@@ -758,7 +400,7 @@ export function GraphView({
                         y={h.y + 13}
                         textAnchor="middle"
                         fontSize={12}
-                        fill="#93c5fd"
+                        fill={palette.ifaceStroke}
                         opacity={0.95}
                       >
                         {bytesStr} / {pktStr}
@@ -773,6 +415,9 @@ export function GraphView({
                   {(() => {
                     const a = nodes.find((n) => n.id === e.from)
                     const b = nodes.find((n) => n.id === e.to)
+                    // colour derived from the semantic directionality the model carries;
+                    // the model itself stays palette-free (ADR-0006)
+                    const color = e.dircat === 'bi' ? palette.edge : palette.edgeHighlight
                     const p = shorten(a, b)
                     // base vectors
                     const dx = p.x2 - p.x1
@@ -902,7 +547,7 @@ export function GraphView({
                           <path
                             d={`M ${p.x1},${p.y1} Q ${cx},${cy} ${p.x2},${p.y2}`}
                             fill="none"
-                            stroke={e.color}
+                            stroke={color}
                             strokeWidth={e.width}
                             strokeLinecap="butt"
                             opacity={0.9}
@@ -913,7 +558,7 @@ export function GraphView({
                             y1={p.y1}
                             x2={p.x2}
                             y2={p.y2}
-                            stroke={e.color}
+                            stroke={color}
                             strokeWidth={e.width}
                             strokeLinecap="butt"
                             opacity={0.9}
@@ -936,7 +581,7 @@ export function GraphView({
                             textAnchor="middle"
                             dominantBaseline="middle"
                             fontSize={fs}
-                            fill={e.color}
+                            fill={color}
                             opacity={1}
                           >
                             {label}
@@ -944,9 +589,9 @@ export function GraphView({
                         </g>
                         <polygon
                           points={pts}
-                          fill={e.color}
+                          fill={color}
                           opacity={0.98}
-                          stroke={e.color}
+                          stroke={color}
                           strokeWidth={0.6}
                           strokeLinejoin="round"
                         />
@@ -972,8 +617,8 @@ export function GraphView({
                       cx={n.x}
                       cy={n.y}
                       r={IFACE_R}
-                      fill="#1f2937"
-                      stroke="#93c5fd"
+                      fill={palette.ifaceFill}
+                      stroke={palette.ifaceStroke}
                       strokeWidth={2}
                       opacity={connectedNodeIds.size ? (connectedNodeIds.has(n.id) ? 1 : 0.2) : 1}
                     />
@@ -982,7 +627,7 @@ export function GraphView({
                       y={n.y - (IFACE_R + 4)}
                       textAnchor="middle"
                       fontSize={11}
-                      fill="#93c5fd"
+                      fill={palette.ifaceStroke}
                       opacity={connectedNodeIds.size ? (connectedNodeIds.has(n.id) ? 1 : 0.2) : 1}
                     >
                       {n.iface || n.label}
@@ -1026,8 +671,8 @@ export function GraphView({
                   const labelX = isLeft ? n.x - IP_R - 8 : n.x + IP_R + 8
                   const anchor: 'start' | 'end' = isLeft ? 'end' : 'start'
                   const isPriv = isPrivateIP(n.label)
-                  const fillColor = isPriv ? PRIVATE_FILL : PUBLIC_FILL
-                  const strokeColor = isPriv ? PRIVATE_STROKE : PUBLIC_STROKE
+                  const fillColor = isPriv ? palette.privateFill : palette.publicFill
+                  const strokeColor = isPriv ? palette.privateStroke : palette.publicStroke
                   return (
                     <g
                       key={n.id}
@@ -1050,7 +695,7 @@ export function GraphView({
                         y={n.y - 3}
                         textAnchor={anchor as any}
                         fontSize={12}
-                        fill="#e5e7eb"
+                        fill={palette.labelMuted}
                         opacity={dim}
                       >
                         {n.label}
@@ -1060,7 +705,7 @@ export function GraphView({
                         y={n.y + 12}
                         textAnchor={anchor as any}
                         fontSize={12}
-                        fill="#60a5fa"
+                        fill={palette.labelAccent}
                         opacity={dim}
                       >
                         {totalStr} / {pktStr}

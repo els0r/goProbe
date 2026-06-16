@@ -1,5 +1,7 @@
-// URL query state serialization / parsing utilities
-import { QueryParamsUI } from '../api/domain'
+// serialize.ts — a Query's URL form: serialize QueryParamsUI to a query string
+// and parse it back. Owned by the query/ concept module per ADR-0003 (moved
+// here from the layer-named state/queryState.ts).
+import { QueryParamsUI } from './params'
 
 export function serializeParams(p: QueryParamsUI): string {
   const qp = new URLSearchParams()

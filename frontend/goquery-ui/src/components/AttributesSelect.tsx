@@ -1,8 +1,15 @@
 import { useState, useRef, useEffect } from 'react'
+import { Chevron } from './Chevron'
 
 export interface AttributeOption {
   label: string
   value: string
+}
+
+export interface AttributePreset {
+  label: string
+  values: string[]
+  all: boolean
 }
 
 const ALL_VALUE = '*'
@@ -15,6 +22,8 @@ export interface AttributesSelectProps {
   hasError?: boolean
   /** Open the dropdown upward instead of downward */
   dropUp?: boolean
+  /** Quick-select presets rendered below the attribute checkboxes */
+  presets?: AttributePreset[]
 }
 
 // Multi-select dropdown without "All" entry; empty or full selection treated as all.
@@ -25,6 +34,7 @@ export function AttributesSelect({
   onChange,
   hasError,
   dropUp,
+  presets,
 }: AttributesSelectProps) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement | null>(null)
@@ -60,7 +70,7 @@ export function AttributesSelect({
         .join(', ')
 
   return (
-    <div className="relative text-sm w-full" ref={ref}>
+    <div className="relative w-full" ref={ref}>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
@@ -68,14 +78,14 @@ export function AttributesSelect({
           `w-full rounded-md bg-surface-200 px-2 py-1 text-[13px] text-left ring-1 flex items-center justify-between ` +
           (hasError
             ? 'ring-red-500/40 bg-red-500/10 focus:outline-none focus:ring-red-500/40'
-            : 'ring-white/10 focus:outline-none focus:ring-primary-500')
+            : 'ring-line focus:outline-none focus:ring-primary-500')
         }
       >
         <span className="truncate">{label}</span>
-        <span className="text-xs opacity-70">{open ? '▲' : '▼'}</span>
+        <Chevron open={open} className="ml-1" />
       </button>
       {open && (
-        <div className={`absolute z-20 w-full rounded-md border border-white/10 bg-surface-100 p-1 shadow-lg ${dropUp ? 'bottom-full mb-1' : 'mt-1'}`}>
+        <div className={`absolute z-20 w-full rounded-md border border-line bg-surface-100 p-1 shadow-lg ${dropUp ? 'bottom-full mb-1' : 'mt-1'}`}>
           <ul className="max-h-60 overflow-auto scroll-thin text-xs">
             {options.map((o) => {
               const canonical = ATTR_ALIASES[o.value] || o.value
@@ -92,6 +102,39 @@ export function AttributesSelect({
               )
             })}
           </ul>
+          {presets && presets.length > 0 && (
+            <>
+              <div className="my-1 border-t border-line" />
+              <ul className="text-xs">
+                {presets.map((p) => {
+                  const active = allSelected
+                    ? p.all
+                    : !p.all && p.values.join(',') === value.join(',')
+                  return (
+                    <li key={p.label}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onChange(
+                            p.all
+                              ? { values: [], all: true }
+                              : { values: p.values, all: false },
+                          )
+                          setOpen(false)
+                        }}
+                        className={`w-full rounded px-2 py-1 text-left ${active
+                          ? 'bg-primary-600 text-on-accent'
+                          : 'hover:bg-surface-200'
+                          }`}
+                      >
+                        {p.label}
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
+            </>
+          )}
         </div>
       )}
     </div>
@@ -99,7 +142,7 @@ export function AttributesSelect({
 }
 
 // allowed attribute keys (defensive whitelist)
-const ALLOWED_ATTR_ORDER: string[] = ['sip', 'dip', 'dport', 'proto']
+export const ALLOWED_ATTR_ORDER: string[] = ['sip', 'dip', 'dport', 'proto']
 const ALLOWED_ATTR = new Set(ALLOWED_ATTR_ORDER)
 // alias map to normalize different UI labels/inputs -> canonical keys
 const ATTR_ALIASES: Record<string, string> = {
@@ -144,4 +187,13 @@ export function buildAttributeQuery(values: string[], all: boolean): string {
   // maintain canonical order in output
   const ordered = ALLOWED_ATTR_ORDER.filter((a) => filtered.includes(a))
   return ordered.join(',')
+}
+
+// The attribute columns to display for a given selection state. `all` -> every
+// allowed attribute in canonical order; otherwise the selected subset in caller
+// order. parseAttributeQuery already canonicalizes/filters `values`, so no alias
+// mapping is needed here. Returns a fresh array so callers can mutate it without
+// corrupting the shared ALLOWED_ATTR_ORDER or the caller's state.
+export function shownAttributes(attr: { values: string[]; all: boolean }): string[] {
+  return attr.all ? [...ALLOWED_ATTR_ORDER] : [...attr.values]
 }

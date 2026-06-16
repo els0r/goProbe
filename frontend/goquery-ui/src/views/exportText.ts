@@ -1,4 +1,4 @@
-import { FlowRecord } from '../api/domain'
+import { FlowRecord, runSharePct } from '../flows'
 import { humanBytes, humanPackets } from '../utils/format'
 import { renderProto } from '../utils/proto'
 import { formatTimestamp, humanRangeDuration } from '../utils/timeFormat'
@@ -37,6 +37,70 @@ export interface BuildTextOptions {
   }
 }
 
+export interface BuildCsvOptions {
+  // The attribute columns to render, in display order (same meaning as
+  // BuildTextOptions.attributes). Empty/absent -> all canonical attributes.
+  attributes?: string[] | null
+}
+
+// Canonical attribute columns, used when no explicit list is given. Mirrors
+// ALLOWED_ATTR_ORDER; kept local so this pure formatter has no dependency on the
+// AttributesSelect component module.
+const CSV_DEFAULT_ATTRS = ['sip', 'dip', 'dport', 'proto']
+
+function csvEscape(v: unknown): string {
+  if (v === null || v === undefined) return ''
+  let s = String(v)
+  // Formula-injection guard (CWE-1236): a cell beginning with = + - @ TAB or CR
+  // is evaluated as a formula by Excel/Sheets/LibreOffice. Flow values such as
+  // reverse-DNS hostnames are attacker-influenced, so prefix the dangerous
+  // leading character with a single quote to force literal text.
+  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s
+  // RFC-4180 quoting: any field containing a comma, quote, CR or LF must be
+  // wrapped in quotes (CR included so a stray \r can't split a row).
+  if (/[",\n\r]/.test(s)) {
+    return '"' + s.replace(/"/g, '""') + '"'
+  }
+  return s
+}
+
+// Pure rows -> RFC-4180 CSV string; the twin of buildTextTable. The caller keeps
+// only the download plumbing (blob/anchor). Empty rows -> '' so the caller can
+// skip the download. Columns: host?/iface? (only when any row carries one), the
+// shown attributes (caller order, unlike buildTextTable's canonical order), then
+// fixed per-row totals. bytes_total/packets_total are this row's in+out, NOT the
+// Run aggregate.
+export function buildCsv(rows: FlowRecord[], opts: BuildCsvOptions = {}): string {
+  if (rows.length === 0) return ''
+  const shown =
+    !opts.attributes || opts.attributes.length === 0 ? CSV_DEFAULT_ATTRS : opts.attributes
+  const anyHost = rows.some((r) => !!r.host)
+  const anyIface = rows.some((r) => !!r.iface)
+  const headers = [
+    ...(anyHost ? ['host'] : []),
+    ...(anyIface ? ['iface'] : []),
+    ...shown,
+    'bytes_in',
+    'bytes_out',
+    'bytes_total',
+    'packets_in',
+    'packets_out',
+    'packets_total',
+  ]
+  const lines = [headers.join(',')]
+  for (const r of rows) {
+    const values: Array<string | number> = []
+    if (anyHost) values.push(r.host || '')
+    if (anyIface) values.push(r.iface || '')
+    for (const a of shown) values.push((r as Record<string, any>)[a] ?? '')
+    const bt = r.bytes_total
+    const pt = r.packets_total
+    values.push(r.bytes_in || 0, r.bytes_out || 0, bt, r.packets_in || 0, r.packets_out || 0, pt)
+    lines.push(values.map(csvEscape).join(','))
+  }
+  return lines.join('\n')
+}
+
 export function buildTextTable(rows: FlowRecord[], opts: BuildTextOptions = {}): string {
   const attributes = opts.attributes
   const showAll = !attributes || attributes.length === 0
@@ -49,8 +113,8 @@ export function buildTextTable(rows: FlowRecord[], opts: BuildTextOptions = {}):
 
   // Pre-compute display values for all rows so column widths can be measured
   const rowVals: Record<string, string>[] = rows.map((r) => {
-    const bt = (r.bytes_in || 0) + (r.bytes_out || 0)
-    const pt = (r.packets_in || 0) + (r.packets_out || 0)
+    const bt = r.bytes_total
+    const pt = r.packets_total
     return {
       host: r.host || '',
       iface: r.iface || '',
@@ -60,10 +124,10 @@ export function buildTextTable(rows: FlowRecord[], opts: BuildTextOptions = {}):
       proto: renderProto(r.proto as any),
       pin: humanPackets(r.packets_in || 0),
       pout: humanPackets(r.packets_out || 0),
-      ppct: totalPkts > 0 ? ((pt * 100) / totalPkts).toFixed(2) : '',
+      ppct: totalPkts > 0 ? runSharePct(pt, totalPkts).toFixed(2) : '',
       bin: humanBytes(r.bytes_in || 0),
       bout: humanBytes(r.bytes_out || 0),
-      bpct: totalBytes > 0 ? ((bt * 100) / totalBytes).toFixed(2) : '',
+      bpct: totalBytes > 0 ? runSharePct(bt, totalBytes).toFixed(2) : '',
     }
   })
 

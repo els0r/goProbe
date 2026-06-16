@@ -7,29 +7,31 @@
     "build": "webpack --mode production --config webpack.config.js",
     "dev": "webpack serve --config webpack.config.js",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
     "generate:types": "openapi-typescript global-query_4.1.18_openapi.yaml --output src/api/generated.ts"
   },
   "dependencies": {
-    "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react": "19.2.7",
+    "react-dom": "19.2.7"
   },
   "devDependencies": {
-    "@types/react": "19.2.14",
+    "@types/react": "19.2.17",
     "@types/react-dom": "19.2.3",
-    "autoprefixer": "10.4.27",
+    "autoprefixer": "10.5.0",
     "css-loader": "7.1.4",
-    "dotenv": "17.3.1",
-    "html-webpack-plugin": "5.6.6",
-    "mini-css-extract-plugin": "2.10.1",
+    "dotenv": "17.4.2",
+    "html-webpack-plugin": "5.6.7",
+    "mini-css-extract-plugin": "2.10.2",
     "openapi-typescript": "7.13.0",
-    "postcss": "8.5.10",
+    "postcss": "8.5.15",
     "postcss-loader": "8.2.1",
     "style-loader": "4.0.0",
     "tailwindcss": "3.4.19",
-    "ts-loader": "9.5.4",
+    "ts-loader": "9.6.0",
     "typescript": "5.9.3",
-    "webpack": "5.105.4",
-    "webpack-cli": "7.0.2",
-    "webpack-dev-server": "5.2.3"
+    "vitest": "^4.1.8",
+    "webpack": "5.107.2",
+    "webpack-cli": "7.0.3",
+    "webpack-dev-server": "5.2.5"
   }
 }

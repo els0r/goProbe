@@ -1,9 +1,16 @@
+@import './tokens.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* JS (pre-paint script + applyTheme) sets color-scheme inline at runtime;
+ * these are static fallbacks for the JS-disabled case. */
 :root {
   color-scheme: dark;
+}
+:root[data-theme='light'] {
+  color-scheme: light;
 }
 
 body {
@@ -12,22 +19,22 @@ body {
 
 /* custom utility components */
 .btn {
-  @apply inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium bg-surface-100 hover:bg-surface-200 text-gray-200/90 hover:text-white ring-1 ring-white/10 shadow-sm transition-colors;
+  @apply inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium bg-surface-100 hover:bg-surface-200 text-gray-200/90 hover:text-gray-100 ring-1 ring-line shadow-sm transition-colors;
 }
 .btn-primary {
-  @apply bg-primary-500 hover:bg-primary-400 text-white;
+  @apply bg-primary-500 hover:bg-primary-400 text-on-accent;
 }
 .btn-danger {
-  @apply bg-red-500 hover:bg-red-400 text-white ring-1 ring-red-500/30;
+  @apply bg-red-500 hover:bg-red-400 text-on-accent ring-1 ring-red-500/30;
 }
 .card {
-  @apply rounded-lg bg-surface-100 ring-1 ring-white/10 shadow-sm;
+  @apply rounded-lg bg-surface-100 ring-1 ring-line shadow-sm;
 }
 .input {
-  @apply bg-surface-200/50 rounded-md px-2 py-1.5 text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500/50 focus:ring-offset-0 border border-white/10;
+  @apply bg-surface-200/50 rounded-md px-2 py-1.5 text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500/50 focus:ring-offset-0 border border-line;
 }
 .badge {
-  @apply inline-flex items-center rounded-md border border-white/10 bg-surface-200/40 px-1.5 py-0.5 text-[11px] font-medium text-gray-300;
+  @apply inline-flex items-center rounded-md border border-line bg-surface-200/40 px-1.5 py-0.5 text-[11px] font-medium text-gray-300;
 }
 .table-header {
   @apply bg-surface-100/60 backdrop-blur sticky top-0 z-10;
@@ -37,4 +44,4 @@ body {
 }
 .scroll-thin::-webkit-scrollbar { width: 8px; height: 8px; }
 .scroll-thin::-webkit-scrollbar-track { background: transparent; }
-.scroll-thin::-webkit-scrollbar-thumb { background-color: #242a32; border-radius: 4px; }
+.scroll-thin::-webkit-scrollbar-thumb { background-color: rgb(var(--surface-200)); border-radius: 2px; }

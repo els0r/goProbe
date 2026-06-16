@@ -61,6 +61,13 @@ module.exports = (_env, argv) => {
             "postcss-loader",
           ],
         },
+        {
+          test: /\.woff2$/,
+          type: "asset/resource",
+          generator: {
+            filename: "fonts/[name][ext]",
+          },
+        },
       ],
     },
     plugins: [

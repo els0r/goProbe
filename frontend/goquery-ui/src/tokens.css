@@ -1,0 +1,210 @@
+/*
+ * gq-aligned design tokens for goquery-ui
+ *
+ * These tokens are vendored from the gq design system.
+ * Functional tokens use space-separated RGB channel triplets
+ * to work with Tailwind's rgb(var(--token) / <alpha-value>) syntax.
+ */
+
+:root {
+  /* ─────────────────────────────────────────────────────────────────────────
+   * GQ PALETTE PRIMITIVES (vendored hex values)
+   * ───────────────────────────────────────────────────────────────────────── */
+
+  /* Neutral */
+  --gq-neutral-500: #1d273b;
+  --gq-neutral-400: #454d61;
+  --gq-neutral-300: #6b7282;
+  --gq-neutral-200: #979ca8;
+  --gq-neutral-100: #c0c4cc;
+  --gq-neutral-050: #e1e3e8;
+  --gq-neutral-030: #f0f2f5;
+  --gq-neutral-020: #fafbfc;
+  --gq-neutral-010: #fafafa;
+  --gq-neutral-000: #ffffff;
+
+  /* Blue */
+  --gq-blue-950: #002061;
+  --gq-blue-900: #00297d;
+  --gq-blue-800: #003296;
+  --gq-blue-700: #003bb2;
+  --gq-blue-600: #0049db;
+  --gq-blue-500: #0055ff;
+  --gq-blue-400: #3075ff;
+  --gq-blue-300: #5c92ff;
+  --gq-blue-200: #78a5ff;
+  --gq-blue-100: #bad1ff;
+  --gq-blue-050: #dbe7ff;
+  --gq-blue-020: #f0f5ff;
+
+  /* Red */
+  --gq-red-500: #e61728;
+  --gq-red-400: #ec535f;
+
+  /* Orange */
+  --gq-orange-500: #ff9500;
+
+  /* Green */
+  --gq-green-500: #00d66b;
+
+  /* ─────────────────────────────────────────────────────────────────────────
+   * FUNCTIONAL TOKENS (space-separated RGB channel triplets)
+   *
+   * Usage: rgb(var(--token) / <alpha-value>)
+   * Example: bg-surface-100/80 → background-color: rgb(29 39 59 / 0.8)
+   * ───────────────────────────────────────────────────────────────────────── */
+
+  /* Surfaces - dark ramp anchored on gq neutral-500 */
+  --surface-page: 21 28 43;      /* #151c2b - page background */
+  --surface-100: 29 39 59;       /* #1d273b - card/panel surfaces */
+  --surface-200: 42 55 84;       /* #2a3754 - elevated surfaces */
+  --surface-300: 56 72 108;      /* #38486c - hover on elevated surfaces */
+
+  /* Text - gq neutral palette mapped to Tailwind gray tiers */
+  --gray-100: 255 255 255;       /* #ffffff - neutral-000 */
+  --gray-200: 225 227 232;       /* #e1e3e8 - neutral-050 */
+  --gray-300: 192 196 204;       /* #c0c4cc - neutral-100 */
+  --gray-400: 151 156 168;       /* #979ca8 - neutral-200 */
+  --gray-500: 107 114 130;       /* #6b7282 - neutral-300 */
+
+  /* Primary - gq blue ramp (hover-lightens on dark surfaces)
+   * Button fill: 500, hover: 300, standalone accents: 400 */
+  --primary-020: 240 245 255;    /* #f0f5ff - blue-020 */
+  --primary-50: 219 231 255;     /* #dbe7ff - blue-050 */
+  --primary-100: 186 209 255;    /* #bad1ff - blue-100 */
+  --primary-200: 120 165 255;    /* #78a5ff - blue-200 */
+  --primary-300: 92 146 255;     /* #5c92ff - blue-300 (hover) */
+  --primary-400: 48 117 255;     /* #3075ff - blue-400 (accent) */
+  --primary-500: 0 85 255;       /* #0055ff - blue-500 (button fill) */
+  --primary-600: 0 73 219;       /* #0049db - blue-600 */
+  --primary-700: 0 59 178;       /* #003bb2 - blue-700 */
+  --primary-800: 0 50 150;       /* #003296 - blue-800 */
+  --primary-900: 0 41 125;       /* #00297d - blue-900 */
+  --primary-DEFAULT: 48 117 255; /* #3075ff - blue-400 */
+
+  /* Red - gq red ramp (channel triplets for alpha modifiers) */
+  --red-200: 243 150 158;        /* #f3969e */
+  --red-300: 240 116 126;        /* #f0747e */
+  --red-400: 236 83 95;          /* #ec535f */
+  --red-500: 230 23 40;          /* #e61728 */
+
+  /* Status colors */
+  --danger: 230 23 40;           /* #e61728 - gq red-500 */
+  --success: 0 214 107;          /* #00d66b - green-500 */
+  --warning: 255 149 0;          /* #ff9500 - orange-500 */
+
+  /* Graph / diagram strokes */
+  --blue-stroke: 186 209 255;    /* #bad1ff - blue-100 for diagram lines/fills */
+
+  /* Graph / diagram palette (read as whole colour strings via getComputedStyle,
+   * not through Tailwind alpha — so stored as ready-to-use colour values) */
+  --graph-bg: #151c2b;                       /* canvas background (surface-page) */
+  --graph-edge: #3075ff;                      /* default edge / label accent (blue-400) */
+  --graph-edge-highlight: #ec535f;            /* unidirectional / row-accent edge (red-400) */
+  --graph-node-public-fill: #3075ff;          /* public-IP node fill (blue-400) */
+  --graph-node-public-stroke: #5c92ff;        /* public-IP node stroke (blue-300) */
+  --graph-node-private-fill: #dbe7ff;         /* private-IP node fill (blue-050) */
+  --graph-node-private-stroke: #bad1ff;       /* private-IP node stroke (blue-100) */
+  --graph-node-iface-fill: #1d273b;           /* interface node fill (neutral-500) */
+  --graph-node-iface-stroke: #bad1ff;         /* interface node + label (blue-100) */
+  --graph-host-fill: rgba(48, 117, 255, 0.12); /* host bubble fill (translucent blue-400) */
+  --graph-host-stroke: rgba(255, 255, 255, 0.08); /* host bubble stroke */
+  --graph-label: #ffffff;                     /* primary label (host name) */
+  --graph-label-muted: #e5e7eb;               /* secondary label (IP name) */
+  --graph-label-accent: #60a5fa;              /* accent label (IP totals) */
+
+  /* Semantic line/hairline tokens (alpha baked in) */
+  --line-soft: rgba(255, 255, 255, 0.05);   /* was white/5  */
+  --line: rgba(255, 255, 255, 0.10);         /* was white/10 */
+  --line-strong: rgba(255, 255, 255, 0.20);  /* was white/20 */
+  /* Accent foreground (text/icons on surfaces) */
+  --accent: 92 146 255;                       /* #5c92ff — triplet, used with /<alpha> */
+  /* Text on a colored fill — white in both themes */
+  --on-accent: 255 255 255;
+  /* Modal/overlay scrim — black in both themes */
+  --scrim: rgba(0, 0, 0, 0.50);
+
+  /* Typography */
+  --font-sans: 'FiraGO', Helvetica, sans-serif;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * LIGHT THEME OVERRIDES
+ *
+ * Re-points only the surface + text (gray) ramps to their light values.
+ * Hairlines, accents and graph strokes are intentionally left to later
+ * slices. Same space-separated RGB channel triplet format as :root.
+ * ───────────────────────────────────────────────────────────────────────── */
+
+:root[data-theme='light'] {
+  /* Surfaces - light ramp */
+  --surface-page: 247 249 252;   /* #f7f9fc - page background */
+  --surface-100: 255 255 255;    /* #ffffff - card/panel surfaces */
+  --surface-200: 240 242 245;    /* #f0f2f5 - elevated surfaces */
+  --surface-300: 225 227 232;    /* #e1e3e8 - hover on elevated surfaces */
+
+  /* Text - inverted for light surfaces */
+  --gray-100: 29 39 59;          /* #1d273b - strongest text */
+  --gray-200: 69 77 97;          /* #454d61 */
+  --gray-300: 107 114 130;       /* #6b7282 */
+  --gray-400: 151 156 168;       /* #979ca8 - pivot, same as dark */
+  --gray-500: 192 196 204;       /* #c0c4cc */
+
+  /* Semantic line/hairline tokens - navy at low alpha */
+  --line-soft: rgba(13, 23, 43, 0.06);   /* navy 6% */
+  --line: rgba(13, 23, 43, 0.08);        /* navy 8% */
+  --line-strong: rgba(13, 23, 43, 0.12); /* navy 12% */
+  /* Accent foreground */
+  --accent: 0 73 219;                     /* #0049db */
+  /* --on-accent and --scrim are identical across themes; no override needed */
+
+  /* Graph / diagram palette - re-tuned for the light canvas.
+   * Faint blue fills/strokes are deepened so nodes, edges and labels read
+   * on white; labels invert to navy. */
+  --graph-bg: #ffffff;                       /* canvas background (surface-100) */
+  --graph-edge: #3075ff;                      /* edge accent reads on white (blue-400) */
+  --graph-edge-highlight: #e61728;            /* deepened for legibility (red-500) */
+  --graph-node-public-fill: #0049db;          /* deepened public fill (blue-600) */
+  --graph-node-public-stroke: #0049db;        /* matching public stroke (blue-600) */
+  --graph-node-private-fill: #bad1ff;         /* visible mid fill (blue-100) */
+  --graph-node-private-stroke: #3075ff;       /* strong private stroke (blue-400) */
+  --graph-node-iface-fill: #dbe7ff;           /* tinted iface fill (blue-050) */
+  --graph-node-iface-stroke: #3075ff;         /* iface stroke + label (blue-400) */
+  --graph-host-fill: rgba(48, 117, 255, 0.10); /* host bubble fill */
+  --graph-host-stroke: rgba(29, 39, 59, 0.12); /* host bubble stroke (navy) */
+  --graph-label: #1d273b;                     /* primary label navy (neutral-500) */
+  --graph-label-muted: #454d61;               /* secondary label (neutral-400) */
+  --graph-label-accent: #0049db;              /* accent label (blue-600) */
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * TYPOGRAPHY - FiraGO font-face definitions (OFL 1.1 licensed)
+ * ───────────────────────────────────────────────────────────────────────── */
+
+@font-face {
+  font-family: 'FiraGO';
+  font-style: normal;
+  font-weight: 400;
+  src: url('./fonts/FiraGO-Regular.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'FiraGO';
+  font-style: normal;
+  font-weight: 500;
+  src: url('./fonts/FiraGO-Medium.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'FiraGO';
+  font-style: normal;
+  font-weight: 600;
+  src: url('./fonts/FiraGO-SemiBold.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'FiraGO';
+  font-style: normal;
+  font-weight: 700;
+  src: url('./fonts/FiraGO-Bold.woff2') format('woff2');
+}
