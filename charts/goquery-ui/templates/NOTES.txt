@@ -1,0 +1,39 @@
+goquery-ui {{ .Chart.AppVersion }} deployed as release "{{ .Release.Name }}".
+
+The frontend is exposed in-cluster as a ClusterIP Service:
+
+    {{ include "goquery-ui.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.port }}  (port name: {{ .Values.service.portName }})
+
+This chart ships no Ingress/Gateway/VirtualService — external routing is the
+deployer's responsibility. Point your cluster's routing at the Service above,
+e.g. with a Kubernetes Ingress:
+
+    apiVersion: networking.k8s.io/v1
+    kind: Ingress
+    metadata:
+      name: goquery-ui
+    spec:
+      rules:
+        - host: goquery.example.com
+          http:
+            paths:
+              - path: /
+                pathType: Prefix
+                backend:
+                  service:
+                    name: {{ include "goquery-ui.fullname" . }}
+                    port:
+                      number: {{ .Values.service.port }}
+
+(or the equivalent Gateway/VirtualService if you run a service mesh).
+
+Backend (Caddy reverse-proxy target):
+
+    GQ_BACKEND_HOST = {{ .Values.backend.url }}
+
+Browser API routing: {{ if .Values.config.apiBaseUrl }}direct to {{ .Values.config.apiBaseUrl }}{{ else }}same-origin via the Caddy proxy (recommended){{ end }}
+
+Quick local check (no routing needed):
+
+    kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "goquery-ui.fullname" . }} 8080:{{ .Values.service.port }}
+    # then open http://localhost:8080
