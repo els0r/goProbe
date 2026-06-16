@@ -5,8 +5,37 @@ on:
 
 jobs:
 
+  # Decide which expensive job families need to run for this PR. The workflow
+  # always triggers (no on:-level path filter), so required status checks never
+  # get stuck "waiting" — instead the heavy jobs below are skipped via `if:`,
+  # and a skipped job counts as success for branch protection.
+  changes:
+    name: Detect changed paths
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      go: ${{ steps.filter.outputs.go }}
+      charts: ${{ steps.filter.outputs.charts }}
+    steps:
+    - uses: dorny/paths-filter@v3
+      id: filter
+      with:
+        filters: |
+          go:
+            - '**/*.go'
+            - 'go.mod'
+            - 'go.sum'
+            - '.github/workflows/ci-pr.yml'
+          charts:
+            - 'charts/**'
+            - '.github/workflows/ci-pr.yml'
+
   build-linux:
     name: Build / Test on Linux
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
     runs-on: ubuntu-latest
     steps:
     - name: Set up Go
@@ -26,6 +55,8 @@ jobs:
 
   build-linux-prod:
     name: Build / Test on Linux (Production Mode)
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
     runs-on: ubuntu-latest
     steps:
     - name: Set up Go
@@ -46,6 +77,8 @@ jobs:
 
   build-linux-nocgo:
     name: Build / Test on Linux (No-CGO Mode)
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
     runs-on: ubuntu-latest
     steps:
     - name: Set up Go
@@ -66,6 +99,8 @@ jobs:
 
   build-linux-race-detector:
     name: Build / Test on Linux (Race Detector)
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
     runs-on: ubuntu-latest
     steps:
     - name: Set up Go
@@ -86,6 +121,8 @@ jobs:
 
   lint-chart:
     name: Lint Helm Chart
+    needs: changes
+    if: needs.changes.outputs.charts == 'true'
     runs-on: ubuntu-latest
     steps:
     - name: Check out code
