@@ -83,3 +83,37 @@ jobs:
     - name: Test (Race Detector enabled)
       run: |
         go test -tags jsoniter -race -v ./...
+
+  lint-chart:
+    name: Lint Helm Chart
+    runs-on: ubuntu-latest
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0   # ct needs history to diff the chart against the target branch
+
+    - name: Set up Helm
+      uses: azure/setup-helm@v4
+
+    - name: helm lint
+      run: helm lint charts/goquery-ui
+
+    - name: helm template
+      # backend.url is a required value with no default, so supply a representative
+      # one to exercise full template rendering.
+      run: helm template charts/goquery-ui --set backend.url=http://global-query.observability.svc.cluster.local:8145
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.x'
+
+    - name: Set up chart-testing
+      uses: helm/chart-testing-action@v2
+
+    - name: ct lint
+      run: |
+        ct lint --charts charts/goquery-ui \
+          --target-branch ${{ github.event.repository.default_branch }} \
+          --check-version-increment

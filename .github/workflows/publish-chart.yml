@@ -1,0 +1,52 @@
+name: Publish Helm Chart
+
+# Decoupled from the app's v*.*.* release tags: the chart carries its own semver
+# in charts/goquery-ui/Chart.yaml. On every push to main that touches the chart,
+# we package it and publish to GHCR as an OCI artifact — but only if that exact
+# version isn't already published. The registry is the source of truth, so a
+# failed run self-heals on the next push and an already-shipped version is never
+# clobbered.
+
+on:
+  push:
+    branches: [main]
+    paths: ['charts/goquery-ui/**']
+
+jobs:
+  publish-chart:
+    name: Package & Publish to GHCR
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      - name: Log in to GHCR
+        run: helm registry login ghcr.io -u ${{ github.actor }} -p ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Read chart version
+        id: chart
+        run: echo "version=$(helm show chart charts/goquery-ui | yq '.version')" >> "$GITHUB_OUTPUT"
+
+      - name: Check whether this version is already published
+        id: exists
+        run: |
+          if helm show chart oci://ghcr.io/els0r/charts/goquery-ui \
+               --version "${{ steps.chart.outputs.version }}" >/dev/null 2>&1; then
+            echo "Chart goquery-ui ${{ steps.chart.outputs.version }} is already published — nothing to do."
+            echo "published=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Chart goquery-ui ${{ steps.chart.outputs.version }} is not yet published."
+            echo "published=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Package & push
+        if: steps.exists.outputs.published == 'false'
+        run: |
+          helm package charts/goquery-ui          # version straight from Chart.yaml
+          helm push goquery-ui-*.tgz oci://ghcr.io/els0r/charts
