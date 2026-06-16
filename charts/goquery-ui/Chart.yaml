@@ -1,0 +1,29 @@
+apiVersion: v2
+name: goquery-ui
+description: |
+  goquery-ui — the goProbe network-flow exploration frontend. A static SPA
+  served by Caddy that reverse-proxies the global-query backend API. Designed
+  to run behind a gateway: ships a ClusterIP Service with a named http port
+  and brings no Ingress/Gateway/VirtualService of its own — external routing is
+  the deployer's responsibility.
+type: application
+
+# Chart's own semver — bump on chart changes.
+version: 0.1.0
+
+# Version of the goprobe/frontend image this chart was validated against.
+# image.tag defaults to this value.
+appVersion: "4.2.11"
+
+home: https://github.com/els0r/goProbe
+sources:
+  - https://github.com/els0r/goProbe/tree/main/frontend/goquery-ui
+keywords:
+  - goprobe
+  - goquery
+  - network-observability
+  - frontend
+  - spa
+maintainers:
+  - name: goProbe maintainers
+    url: https://github.com/els0r/goProbe
