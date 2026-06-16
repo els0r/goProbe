@@ -30,14 +30,14 @@ render without it.
 
 ```bash
 helm install goquery-ui ./charts/goquery-ui \
-  --namespace observability --create-namespace \
-  --set backend.url=http://global-query.observability.svc.cluster.local:8145
+  --namespace network-observability --create-namespace \
+  --set backend.url=http://global-query.network-observability.svc.cluster.local:8145
 ```
 
 Verify locally without any routing:
 
 ```bash
-kubectl -n observability port-forward svc/goquery-ui 8080:80
+kubectl -n network-observability port-forward svc/goquery-ui 8080:80
 # open http://localhost:8080
 ```
 
