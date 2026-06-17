@@ -54,7 +54,7 @@ SSE_ON_LOAD=true
 Makefile shortcuts:
 
 ```bash
-make docker-prod  # run hardened prod-like image (docker compose up --build)
+make docker-up    # run the hardened image (docker compose up --build)
 make docker-build # build Caddy image locally
 ```
 

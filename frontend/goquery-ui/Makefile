@@ -29,7 +29,7 @@ help:
 	@echo "  make generate-index - create a minimal index.html if missing"
 	@echo "  make types          - fetch OpenAPI $(VERSION) and generate TS types ($(GENERATED_TYPES))"
 	@echo "  make regen          - install + types + build"
-	@echo "  make docker-prod    - run hardened prod-like image via docker compose"
+	@echo "  make docker-up      - run the hardened image via docker compose"
 	@echo "  make docker-stop    - stop the docker compose stack"
 	@echo "  make docker-logs    - view docker compose logs"
 	@echo "  make docker-build   - build production image locally"
@@ -95,9 +95,9 @@ clean:
 format: install
 	$(NPM) exec -- prettier --write "src/**/*.{js,jsx,ts,tsx}"
 
-.PHONY: docker-prod
-docker-prod:
-	@echo "Starting hardened prod-like Caddy image (mirrors the Helm chart securityContext)..."
+.PHONY: docker-up
+docker-up:
+	@echo "Starting the hardened Caddy image (mirrors the Helm chart securityContext)..."
 	@echo "Access the application at http://localhost:8080"
 	docker compose up --build
 

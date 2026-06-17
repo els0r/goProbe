@@ -4,7 +4,7 @@
 # cluster. Local hot-reload development is `npm run dev` (no container needed).
 #
 # Usage:
-#   docker compose up --build     (or: make docker-prod)
+#   docker compose up --build     (or: make docker-up)
 #   docker compose down
 
 services:
