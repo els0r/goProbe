@@ -15,25 +15,13 @@ npm ci
 
 ## Develop
 
-Run with Docker Compose from this folder.
-
-### Dev (hot reload via webpack-dev-server)
-
-```bash
-docker compose --profile dev up
-```
-
-Open <http://localhost:5173>
-
-### Without Docker
-
-Start webpack in watch mode and open `index.html` in a local static server (or your browser directly):
+Hot reload via webpack-dev-server:
 
 ```bash
 npm run dev
 ```
 
-The bundle is emitted to `dist/` and `index.html` loads it.
+Open <http://localhost:5173>
 
 ## Build
 
@@ -45,8 +33,12 @@ npm run build
 
 ### Prod-like (Caddy serves built SPA with runtime env.js)
 
+Runs the production image hardened to mirror the Helm chart's `securityContext`
+(read-only rootfs, non-root, no-new-privileges, all caps dropped), so
+deployment-time issues surface locally:
+
 ```bash
-docker compose --profile prod up --build
+docker compose up --build
 ```
 
 Open <http://localhost:8080>
@@ -62,8 +54,7 @@ SSE_ON_LOAD=true
 Makefile shortcuts:
 
 ```bash
-make docker-dev   # same as compose dev profile
-make docker-prod  # same as compose prod profile
+make docker-prod  # run hardened prod-like image (docker compose up --build)
 make docker-build # build Caddy image locally
 ```
 

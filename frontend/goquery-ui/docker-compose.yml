@@ -1,34 +1,14 @@
-# Two profiles:
-#   dev  — hot reload via webpack-dev-server (Dockerfile.dev)
-#   prod — production Caddy image (Dockerfile), hardened to mirror the
-#          goquery-ui Helm chart's securityContext so deployment-time issues
-#          (e.g. the Caddy file-capability / no-new-privileges EPERM) surface
-#          locally instead of in the cluster.
+# Production Caddy image (Dockerfile), hardened to mirror the goquery-ui Helm
+# chart's securityContext so deployment-time issues (e.g. the Caddy
+# file-capability / no-new-privileges EPERM) surface locally instead of in the
+# cluster. Local hot-reload development is `npm run dev` (no container needed).
 #
 # Usage:
-#   docker compose --profile dev up            (or: make docker-dev)
-#   docker compose --profile prod up --build   (or: make docker-prod)
-#   docker compose --profile prod down
+#   docker compose up --build     (or: make docker-prod)
+#   docker compose down
 
 services:
-  dev:
-    profiles: ["dev"]
-    build:
-      context: .
-      dockerfile: Dockerfile.dev
-    command: npm run dev
-    ports:
-      - "5173:5173"
-    env_file:
-      - .env.development
-    environment:
-      NODE_ENV: development
-    volumes:
-      - ./:/app:delegated
-      - /app/node_modules
-
-  prod:
-    profiles: ["prod"]
+  goquery-ui:
     build:
       context: .
       dockerfile: Dockerfile
