@@ -9,11 +9,11 @@ description: |
 type: application
 
 # Chart's own semver — bump on chart changes.
-version: 0.1.1
+version: 0.1.2
 
 # Version of the goprobe/frontend image this chart was validated against.
 # image.tag defaults to this value.
-appVersion: "4.2.11"
+appVersion: "4.2.12"
 
 home: https://github.com/els0r/goProbe
 sources:
