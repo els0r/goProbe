@@ -5,7 +5,5 @@ package-lock.json
 node_modules/
 dist/
 
-# local runtime override for the prod compose profile (host-specific);
-# .env.development is tracked intentionally and must stay so.
+# local runtime override for the prod compose (host-specific)
 .env
-!.env.development
