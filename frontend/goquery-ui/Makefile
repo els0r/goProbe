@@ -99,15 +99,21 @@ format: install
 docker-dev:
 	@echo "Starting Docker development server with hot reload..."
 	@echo "Access the application at http://localhost:5173"
-	docker compose up --build
+	docker compose --profile dev up --build
+
+.PHONY: docker-prod
+docker-prod:
+	@echo "Starting hardened prod-like Caddy image (mirrors the Helm chart securityContext)..."
+	@echo "Access the application at http://localhost:8080"
+	docker compose --profile prod up --build
 
 .PHONY: docker-stop
 docker-stop:
-	docker compose down
+	docker compose --profile dev --profile prod down
 
 .PHONY: docker-logs
 docker-logs:
-	docker compose logs -f
+	docker compose --profile dev --profile prod logs -f
 
 .PHONY: docker-build
 docker-build:

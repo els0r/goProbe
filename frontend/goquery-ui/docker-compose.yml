@@ -1,12 +1,18 @@
-# Local development only — hot reload with webpack dev server.
-# Production builds use the self-contained Dockerfile directly.
+# Two profiles:
+#   dev  — hot reload via webpack-dev-server (Dockerfile.dev)
+#   prod — production Caddy image (Dockerfile), hardened to mirror the
+#          goquery-ui Helm chart's securityContext so deployment-time issues
+#          (e.g. the Caddy file-capability / no-new-privileges EPERM) surface
+#          locally instead of in the cluster.
 #
 # Usage:
-#   docker compose up          (or: make docker-dev)
-#   docker compose down
+#   docker compose --profile dev up            (or: make docker-dev)
+#   docker compose --profile prod up --build   (or: make docker-prod)
+#   docker compose --profile prod down
 
 services:
   dev:
+    profiles: ["dev"]
     build:
       context: .
       dockerfile: Dockerfile.dev
@@ -20,3 +26,56 @@ services:
     volumes:
       - ./:/app:delegated
       - /app/node_modules
+
+  prod:
+    profiles: ["prod"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:5137"
+    # Runtime config — override via an optional .env next to this file.
+    environment:
+      GQ_API_BASE_URL: "${GQ_API_BASE_URL:-}"
+      HOST_RESOLVER_TYPES: "${HOST_RESOLVER_TYPES:-string}"
+      SSE_ON_LOAD: "${SSE_ON_LOAD:-true}"
+      GQ_BACKEND_HOST: "${GQ_BACKEND_HOST:-}"
+
+    # --- Hardening: 1:1 with charts/goquery-ui/values.yaml securityContext ---
+    # k8s runAsNonRoot/runAsUser/runAsGroup
+    user: "1000:1000"
+    # k8s readOnlyRootFilesystem: true
+    read_only: true
+    security_opt:
+      # k8s allowPrivilegeEscalation: false (sets no_new_privs)
+      - "no-new-privileges:true"
+    # k8s seccompProfile.type: RuntimeDefault has no compose line — Docker
+    # applies its default seccomp profile automatically (omitting it == default;
+    # only "seccomp:unconfined" would disable it).
+    cap_drop:
+      # k8s capabilities.drop: [ALL]
+      - ALL
+    # readOnlyRootFilesystem is on, so every path the entrypoint/Caddy writes
+    # to needs a writable mount — mirrors the chart's four emptyDir volumes.
+    # mode 01777 (sticky, world-writable) lets the non-root user (uid 1000)
+    # write: Docker mounts tmpfs over the image's pre-created dirs as root:755,
+    # and there is no docker equivalent of the chart's fsGroup to fix ownership.
+    volumes:
+      - type: tmpfs
+        target: /var/run/env   # generated env.js (served at /env.js)
+        tmpfs: { mode: 01777 }
+      - type: tmpfs
+        target: /tmp           # entrypoint scratch (env.js template)
+        tmpfs: { mode: 01777 }
+      - type: tmpfs
+        target: /data          # Caddy data dir
+        tmpfs: { mode: 01777 }
+      - type: tmpfs
+        target: /config        # Caddy config dir
+        tmpfs: { mode: 01777 }
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:5137/"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
