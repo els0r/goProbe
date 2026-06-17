@@ -29,9 +29,9 @@ help:
 	@echo "  make generate-index - create a minimal index.html if missing"
 	@echo "  make types          - fetch OpenAPI $(VERSION) and generate TS types ($(GENERATED_TYPES))"
 	@echo "  make regen          - install + types + build"
-	@echo "  make docker-dev     - docker compose dev server (hot reload)"
-	@echo "  make docker-stop    - stop docker compose dev server"
-	@echo "  make docker-logs    - view docker compose dev logs"
+	@echo "  make docker-up      - run the hardened image via docker compose"
+	@echo "  make docker-stop    - stop the docker compose stack"
+	@echo "  make docker-logs    - view docker compose logs"
 	@echo "  make docker-build   - build production image locally"
 
 # install: re-run if package.json or chosen lockfile changes
@@ -81,7 +81,7 @@ serve: build
 
 .PHONY: dev
 dev: build
-	@echo "DEPRECATED: preferably use \"make docker-dev\""
+	@echo "DEPRECATED: preferably use \"npm run dev\" (hot reload on :5173)"
 	@echo "Run these in two terminals for live development:" \
 	      "\n  Terminal 1: make watch" \
 	      "\n  Terminal 2: make serve" \
@@ -95,10 +95,10 @@ clean:
 format: install
 	$(NPM) exec -- prettier --write "src/**/*.{js,jsx,ts,tsx}"
 
-.PHONY: docker-dev
-docker-dev:
-	@echo "Starting Docker development server with hot reload..."
-	@echo "Access the application at http://localhost:5173"
+.PHONY: docker-up
+docker-up:
+	@echo "Starting the hardened Caddy image (mirrors the Helm chart securityContext)..."
+	@echo "Access the application at http://localhost:8080"
 	docker compose up --build
 
 .PHONY: docker-stop

@@ -4,3 +4,6 @@ package-lock.json
 # deps and distribution
 node_modules/
 dist/
+
+# local runtime override for the prod compose (host-specific)
+.env

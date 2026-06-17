@@ -16,17 +16,34 @@ FROM caddy:2-alpine AS caddy-builder
 # Use Alpine as the base for better security and fewer vulnerabilities
 FROM alpine:3.19
 
-# Install ca-certificates for HTTPS and gettext for envsubst (env.js generation)
-RUN apk add --no-cache ca-certificates gettext
+# Install ca-certificates for HTTPS, gettext for envsubst (env.js generation),
+# and libcap to strip file capabilities from the Caddy binary (see below).
+RUN apk add --no-cache ca-certificates gettext libcap
 
 # Copy Caddy binary from the builder image
 COPY --from=caddy-builder /usr/bin/caddy /usr/bin/caddy
+
+# The official Caddy binary carries cap_net_bind_service=+ep so it can bind to
+# :80/:443 as non-root. BuildKit's COPY preserves that file capability. Under a
+# hardened runtime (allowPrivilegeEscalation: false → no_new_privs), the kernel
+# refuses to exec() a binary that carries file caps and returns EPERM
+# ("caddy: Operation not permitted"). We listen on :5137 (non-privileged), so the
+# capability is unnecessary — strip it to keep the binary execable when hardened.
+RUN setcap -r /usr/bin/caddy
 
 # Create a non-root user for running Caddy
 RUN addgroup -g 1000 caddy && \
     adduser -D -u 1000 -G caddy -h /var/lib/caddy -s /sbin/nologin caddy
 RUN mkdir -p /var/run/env /opt/app/www /etc/caddy /data /config && \
     chown -R caddy:caddy /var/run/env /opt/app/www /etc/caddy /data /config
+
+# Point Caddy's storage at the dirs we create + back with writable volumes.
+# The official caddy image sets these; our alpine base does not, so without them
+# Caddy falls back to $HOME/.local/share & $HOME/.config — which are on the
+# read-only rootfs in production, producing errors on startup. (The /data and
+# /config volume mounts in the Helm chart / compose are inert until this is set.)
+ENV XDG_DATA_HOME=/data \
+    XDG_CONFIG_HOME=/config
 
 # static files go to a read-only dir
 COPY --from=build --chown=caddy:caddy /app/dist /opt/app/www
