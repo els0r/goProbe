@@ -63,3 +63,77 @@ jobs:
           push: true
           platforms: linux/amd64,linux/arm64,linux/arm/v7
           tags: goprobe/frontend:${{ env.COMMIT_SHA }},goprobe/frontend:${{ env.RELEASE_VERSION }},goprobe/frontend:latest
+
+  # Avenue 2 of the chart release model (see docs/adr/0002): a tagged app release
+  # retargets the goquery-ui chart's appVersion to the frontend image just built,
+  # patch-bumps the chart's own version, ships the chart, and commits both fields
+  # back to main as bookkeeping. publish-chart.yml stays the path for chart-only
+  # changes (avenue 1). Runs only after the frontend image exists, and never for
+  # prerelease tags (the chart must not point at an rc).
+  release-chart:
+    name: Release goquery-ui chart
+    needs: [build-docker]
+    if: ${{ !contains(github.ref_name, '-') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      - name: Log in to GHCR
+        run: helm registry login ghcr.io -u ${{ github.actor }} -p ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute & apply chart versions
+        id: ver
+        run: |
+          VER="${GITHUB_REF#refs/*/v}"                                  # 4.3.0 (frontend image tag)
+          CUR_APP="$(yq '.appVersion' charts/goquery-ui/Chart.yaml)"
+          if [ "$CUR_APP" = "$VER" ]; then
+            echo "appVersion is already $VER on main — chart for this release is shipped. Nothing to do."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          CUR_CHART="$(yq '.version' charts/goquery-ui/Chart.yaml)"     # 0.1.1
+          IFS='.' read -r MAJ MIN PAT <<< "$CUR_CHART"
+          NEW_CHART="${MAJ}.${MIN}.$((PAT + 1))"                        # 0.1.2
+          echo "Bumping chart $CUR_CHART -> $NEW_CHART, appVersion $CUR_APP -> $VER"
+          # Surgical edit (not `yq -i`, which strips the blank lines between the
+          # chart's commented blocks). `^version:` cannot match `apiVersion:`.
+          sed -i -E "s/^version:.*/version: ${NEW_CHART}/" charts/goquery-ui/Chart.yaml
+          sed -i -E "s|^appVersion:.*|appVersion: \"${VER}\"|" charts/goquery-ui/Chart.yaml
+          {
+            echo "skip=false"
+            echo "ver=$VER"
+            echo "new_chart=$NEW_CHART"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Package & publish to GHCR
+        if: steps.ver.outputs.skip == 'false'
+        run: |
+          helm package charts/goquery-ui                               # version/appVersion straight from Chart.yaml
+          if helm show chart oci://ghcr.io/els0r/charts/goquery-ui \
+               --version "${{ steps.ver.outputs.new_chart }}" >/dev/null 2>&1; then
+            echo "Chart goquery-ui ${{ steps.ver.outputs.new_chart }} already published — skipping push, reconciling main."
+          else
+            helm push goquery-ui-*.tgz oci://ghcr.io/els0r/charts
+          fi
+
+      - name: Commit bump back to main
+        if: steps.ver.outputs.skip == 'false'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add charts/goquery-ui/Chart.yaml
+          if git diff --staged --quiet; then
+            echo "Chart.yaml already at the target versions — nothing to commit."
+            exit 0
+          fi
+          git commit -m "[trivial] Release goquery-ui chart ${{ steps.ver.outputs.new_chart }} tracking frontend ${{ steps.ver.outputs.ver }}"
+          git push origin HEAD:main
