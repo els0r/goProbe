@@ -28,6 +28,26 @@ backend already runs as a Service you can reach in-cluster.
 `backend.url` is **required** — there is no safe default. The chart fails to
 render without it.
 
+The chart is published to GHCR as an OCI artifact at
+`oci://ghcr.io/els0r/charts/goquery-ui`. The package is public, so no
+`helm registry login` is needed to pull.
+
+> **Note:** GHCR's package page shows a `docker pull …` snippet — ignore it.
+> This is a Helm chart, not a container image; use `helm`, and pass the
+> version with `--version` rather than as a `:tag`.
+
+```bash
+helm install goquery-ui oci://ghcr.io/els0r/charts/goquery-ui \
+  --version 0.1.1 \
+  --namespace network-observability --create-namespace \
+  --set backend.url=http://global-query.network-observability.svc.cluster.local:8145
+```
+
+Inspect before installing with `helm show chart oci://ghcr.io/els0r/charts/goquery-ui --version 0.1.1`.
+
+To install from a local checkout instead (e.g. while developing the chart),
+point at the source directory:
+
 ```bash
 helm install goquery-ui ./charts/goquery-ui \
   --namespace network-observability --create-namespace \
@@ -40,6 +60,20 @@ Verify locally without any routing:
 kubectl -n network-observability port-forward svc/goquery-ui 8080:80
 # open http://localhost:8080
 ```
+
+### Use as a subchart dependency
+
+Declare it in your own chart's `Chart.yaml` — the `repository` is the parent
+OCI path, with the chart name and version as separate fields:
+
+```yaml
+dependencies:
+  - name: goquery-ui
+    version: 0.1.1
+    repository: oci://ghcr.io/els0r/charts
+```
+
+then run `helm dependency update`.
 
 ## Key values
 
