@@ -58,6 +58,24 @@ make docker-up    # run the hardened image (docker compose up --build)
 make docker-build # build Caddy image locally
 ```
 
+### Listen address & exposure
+
+Caddy's bind address is set by `GQ_LISTEN_ADDR` (host:port). The image is
+**secure by default**: it binds `127.0.0.1:5137` (loopback only), so the UI is
+not exposed on any external interface unless you opt in.
+
+- **`network_mode: host`**: the default `127.0.0.1:5137` keeps the UI local to
+  the host. To reach it from other machines, set `GQ_LISTEN_ADDR=:5137` (all
+  interfaces) or a specific trusted interface, and front it with a reverse
+  proxy / firewall. The provided host-network `docker-compose.yaml` makes the
+  loopback default explicit.
+- **Bridged containers / Kubernetes**: the container needs to bind all
+  interfaces so published ports (`docker run -p`) and the kubelet probes /
+  Service can reach it by IP — loopback would break them. These set
+  `GQ_LISTEN_ADDR=:5137` explicitly: the Helm chart via `config.listenAddr`, the
+  bridge `docker-compose.yml` by pinning it. Exposure is still governed by the
+  published ports / Service / Ingress, not the in-container bind address.
+
 ## Using the UI
 
 - Time range: quick presets (5m…30d) or set exact From/To.

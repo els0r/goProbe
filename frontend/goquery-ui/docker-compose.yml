@@ -16,6 +16,10 @@ services:
       - "8080:5137"
     # Runtime config — override via an optional .env next to this file.
     environment:
+      # Bridge networking with published ports: Caddy must bind all interfaces
+      # inside the container so Docker's port mapping (8080 -> 5137) can reach
+      # it. Exposure is controlled by the host-side port publishing, not here.
+      GQ_LISTEN_ADDR: "${GQ_LISTEN_ADDR:-:5137}"
       GQ_API_BASE_URL: "${GQ_API_BASE_URL:-}"
       HOST_RESOLVER_TYPES: "${HOST_RESOLVER_TYPES:-string}"
       SSE_ON_LOAD: "${SSE_ON_LOAD:-true}"

@@ -5,6 +5,9 @@ metadata:
   labels:
     {{- include "goquery-ui.labels" . | nindent 4 }}
 data:
+  # Caddy bind address. Consumed by the Caddyfile. Keep this bound to all
+  # interfaces so the kubelet probes and the Service can reach the pod by IP.
+  GQ_LISTEN_ADDR: {{ .Values.config.listenAddr | quote }}
   # Caddy reverse-proxy target. Consumed by the Caddyfile.
   GQ_BACKEND_HOST: {{ .Values.backend.url | quote }}
   # Runtime UI settings, rendered into env.js at container startup.

@@ -59,11 +59,16 @@ USER caddy
 
 EXPOSE 5137
 
-# Runtime env vars with defaults (override in K8s Deployment / docker-compose)
+# Runtime env vars with defaults (override in K8s Deployment / docker-compose).
+# GQ_LISTEN_ADDR controls Caddy's bind address; it defaults to 127.0.0.1:5137
+# (loopback, secure by default). Bridged containers and Kubernetes must bind all
+# interfaces — set GQ_LISTEN_ADDR=:5137 (the Helm chart and bridge compose do
+# this explicitly). See #479.
 ENV GQ_API_BASE_URL="" \
     HOST_RESOLVER_TYPES="string" \
     SSE_ON_LOAD="true" \
-    GQ_BACKEND_HOST=""
+    GQ_BACKEND_HOST="" \
+    GQ_LISTEN_ADDR="127.0.0.1:5137"
 
 ENTRYPOINT ["/docker-entrypoint.sh"]
 CMD ["caddy", "run", "--config", "/etc/caddy/Caddyfile"]

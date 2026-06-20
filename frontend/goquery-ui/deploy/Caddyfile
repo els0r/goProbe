@@ -4,7 +4,14 @@
 	admin off
 }
 
-:5137 {
+# Listen address, configurable via GQ_LISTEN_ADDR (host:port). Defaults to
+# 127.0.0.1:5137 — loopback only — so the UI is not exposed on any external
+# interface out of the box. Bridged containers and Kubernetes must bind all
+# interfaces (published ports / the kubelet probes and Service reach the
+# container by IP, not loopback): they set GQ_LISTEN_ADDR=:5137 explicitly — the
+# Helm chart via config.listenAddr, the bridge docker-compose by pinning it.
+# See #479.
+{$GQ_LISTEN_ADDR:127.0.0.1:5137} {
 	root * /opt/app/www
 	encode zstd gzip
 
