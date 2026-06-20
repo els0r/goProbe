@@ -59,11 +59,14 @@ USER caddy
 
 EXPOSE 5137
 
-# Runtime env vars with defaults (override in K8s Deployment / docker-compose)
+# Runtime env vars with defaults (override in K8s Deployment / docker-compose).
+# GQ_BACKEND_HOST defaults to the global-query address of the single-host
+# docker-compose setup; the Caddyfile applies the same fallback when it is unset
+# or empty, so the proxy always has an upstream to dial (see #480).
 ENV GQ_API_BASE_URL="" \
     HOST_RESOLVER_TYPES="string" \
     SSE_ON_LOAD="true" \
-    GQ_BACKEND_HOST=""
+    GQ_BACKEND_HOST="http://127.0.0.1:8146"
 
 ENTRYPOINT ["/docker-entrypoint.sh"]
 CMD ["caddy", "run", "--config", "/etc/caddy/Caddyfile"]

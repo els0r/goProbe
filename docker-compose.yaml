@@ -43,8 +43,9 @@ services:
   # from environment variables — no sidecar or init container needed.
   #
   # Environment variables:
-  #   GQ_BACKEND_HOST      - backend API address for Caddy's reverse proxy
-  #                          (default: http://127.0.0.1:8145)
+  #   GQ_BACKEND_HOST      - global-query API address for Caddy's reverse proxy.
+  #                          Must match the query service's SERVER_ADDR below
+  #                          (default: http://127.0.0.1:8146).
   #   GQ_API_BASE_URL      - URL the *browser* uses to reach the API.
   #                          Leave empty (default) to route via the Caddy proxy.
   #   HOST_RESOLVER_TYPES  - comma-separated resolver types shown in the UI (default: string)
@@ -67,7 +68,7 @@ services:
       - frontend_data:/data
       - frontend_config:/config
     environment:
-      GQ_BACKEND_HOST: ${GQ_BACKEND_HOST:-http://127.0.0.1:8145}
+      GQ_BACKEND_HOST: ${GQ_BACKEND_HOST:-http://127.0.0.1:8146}
       GQ_API_BASE_URL: ${GQ_API_BASE_URL:-}
       HOST_RESOLVER_TYPES: ${HOST_RESOLVER_TYPES:-string}
       SSE_ON_LOAD: ${SSE_ON_LOAD:-true}
