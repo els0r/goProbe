@@ -43,19 +43,25 @@
 		}
 	}
 
-	# Proxy API calls to the backend. The browser sees same-origin requests,
-	# so no CORS headers are required on the backend for browser traffic.
-	# GQ_BACKEND_HOST must be set in the container environment, e.g.
-	#   GQ_BACKEND_HOST=http://global-query:8145
+	# Proxy API calls to the global-query backend. The browser sees same-origin
+	# requests, so no CORS headers are required on the backend for browser traffic.
+	#
+	# GQ_BACKEND_HOST points Caddy at the backend. It falls back to
+	# http://127.0.0.1:8146 — the global-query address in the single-host
+	# docker-compose setup — when unset OR empty. Without a fallback, an empty
+	# value expands to a reverse_proxy with no upstream, and every request fails
+	# with 503 "no upstreams available" (see #480). Override it for any other
+	# topology, e.g. GQ_BACKEND_HOST=http://global-query.observability.svc:8145
+	# in Kubernetes.
 	#
 	# header_up Host rewrites the Host header to the backend's hostport instead
 	# of preserving the browser's external Host. This is required behind service
 	# meshes like Istio, whose sidecar routes by Host: an unrecognized external
 	# host falls through to PassthroughCluster and fails with 503 (see #478).
-	reverse_proxy /_query* {$GQ_BACKEND_HOST} {
+	reverse_proxy /_query* {$GQ_BACKEND_HOST:http://127.0.0.1:8146} {
 		header_up Host {http.reverse_proxy.upstream.hostport}
 	}
-	reverse_proxy /-/* {$GQ_BACKEND_HOST} {
+	reverse_proxy /-/* {$GQ_BACKEND_HOST:http://127.0.0.1:8146} {
 		header_up Host {http.reverse_proxy.upstream.hostport}
 	}
 

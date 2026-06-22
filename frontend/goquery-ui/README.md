@@ -58,6 +58,28 @@ make docker-up    # run the hardened image (docker compose up --build)
 make docker-build # build Caddy image locally
 ```
 
+### Runtime configuration
+
+The image is configured entirely through environment variables, read at
+container startup. The two networking knobs are easy to confuse:
+
+| Variable | Consumed by | Purpose | Default |
+| --- | --- | --- | --- |
+| `GQ_BACKEND_HOST` | Caddy (reverse proxy) | Where Caddy forwards `/_query*` and `/-/*` **server-side**. Point it at the global-query backend. | `http://127.0.0.1:8146` |
+| `GQ_API_BASE_URL` | Browser (env.js) | URL the **browser** uses to reach the API. Leave empty to route through Caddy's same-origin proxy (recommended — keeps the CSP intact and avoids CORS). | empty |
+| `HOST_RESOLVER_TYPES` | Browser (env.js) | Comma-separated resolver types offered in the UI. | `string` |
+| `SSE_ON_LOAD` | Browser (env.js) | Enable SSE streaming by default. | `true` |
+
+Browser API calls go to `/_query*` on the same origin as the UI, and Caddy
+proxies them on to `GQ_BACKEND_HOST` — so under normal use you only set
+`GQ_BACKEND_HOST`, and leave `GQ_API_BASE_URL` empty. The default backend
+(`http://127.0.0.1:8146`) matches the global-query address in the single-host
+`docker-compose.yaml`; override it for other topologies, e.g. in Kubernetes:
+
+```bash
+GQ_BACKEND_HOST=http://global-query.observability.svc.cluster.local:8145
+```
+
 ## Using the UI
 
 - Time range: quick presets (5m…30d) or set exact From/To.
@@ -94,6 +116,13 @@ make docker-build # build Caddy image locally
 - Export CSV: exports the current table with selected columns and totals.
 
 ## Troubleshooting
+
+- API requests fail with `503` and Caddy logs `"no upstreams available"`: the
+  reverse proxy has no backend to dial because `GQ_BACKEND_HOST` resolved to an
+  empty value. Set it to your global-query address (see
+  [Runtime configuration](#runtime-configuration)). Note that listing the
+  variable with an empty value (e.g. `GQ_BACKEND_HOST=` or `${GQ_BACKEND_HOST:-}`)
+  overrides the built-in default with empty — leave it unset to take the default.
 
 - If the editor reports a spurious import error for a newly added view file, run a fresh typecheck:
 
