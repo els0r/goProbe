@@ -33,6 +33,12 @@ backend:
 # Runtime UI configuration (injected into env.js at container startup)
 # ----------------------------------------------------------------------------
 config:
+  # -- Caddy bind address (host:port) inside the pod. The image defaults to
+  # loopback (127.0.0.1:5137) for safety, so the chart binds all interfaces
+  # explicitly: the kubelet probes and the Service reach the pod by its IP, so
+  # loopback would break them. Network exposure is governed by the Service /
+  # NetworkPolicy / gateway, not this address.
+  listenAddr: ":5137"
   # -- URL the *browser* uses to reach the API. Leave empty to route through
   # the Caddy same-origin reverse proxy (recommended; preserves the CSP).
   apiBaseUrl: ""

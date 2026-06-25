@@ -43,8 +43,17 @@ services:
   # from environment variables — no sidecar or init container needed.
   #
   # Environment variables:
-  #   GQ_BACKEND_HOST      - backend API address for Caddy's reverse proxy
-  #                          (default: http://127.0.0.1:8145)
+  #   GQ_LISTEN_ADDR       - Caddy bind address. network_mode: host means the
+  #                          container shares the host's interfaces, so this
+  #                          defaults to 127.0.0.1:5137 (loopback only). To reach
+  #                          the UI from other hosts, set it to :5137 (all
+  #                          interfaces) and put it behind a reverse proxy /
+  #                          firewall, or bind a specific trusted interface.
+  #   GQ_BACKEND_HOST      - address of the global-query API that Caddy forwards
+  #                          the UI's /_query and /-/ requests to. This is Caddy's
+  #                          own in-container forwarding, not any external reverse
+  #                          proxy (e.g. nginx) you may run in front of the UI.
+  #                          Match it to the query service's SERVER_ADDR above.
   #   GQ_API_BASE_URL      - URL the *browser* uses to reach the API.
   #                          Leave empty (default) to route via the Caddy proxy.
   #   HOST_RESOLVER_TYPES  - comma-separated resolver types shown in the UI (default: string)
@@ -67,7 +76,8 @@ services:
       - frontend_data:/data
       - frontend_config:/config
     environment:
-      GQ_BACKEND_HOST: ${GQ_BACKEND_HOST:-http://127.0.0.1:8145}
+      GQ_LISTEN_ADDR: ${GQ_LISTEN_ADDR:-127.0.0.1:5137}
+      GQ_BACKEND_HOST: ${GQ_BACKEND_HOST:-http://127.0.0.1:8146}
       GQ_API_BASE_URL: ${GQ_API_BASE_URL:-}
       HOST_RESOLVER_TYPES: ${HOST_RESOLVER_TYPES:-string}
       SSE_ON_LOAD: ${SSE_ON_LOAD:-true}
