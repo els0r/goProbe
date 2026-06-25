@@ -13,7 +13,7 @@ version: 0.1.3
 
 # Version of the goprobe/frontend image this chart was validated against.
 # image.tag defaults to this value.
-appVersion: "4.2.12"
+appVersion: "4.2.13"
 
 home: https://github.com/els0r/goProbe
 sources:
