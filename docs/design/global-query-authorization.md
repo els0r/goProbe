@@ -1,7 +1,7 @@
 # global-query: pluggable authorization and host scoping
 
 Date: 2026-10-03
-Status: research notes, no code changed
+Status: design decided 2026-10-03, implementation pending
 
 ## Problem
 
@@ -167,6 +167,9 @@ Add a third plugin kind next to querier and resolver.
 // Scope is what a principal may see. It is opaque to global-query except
 // for its ability to filter host IDs.
 type Scope interface {
+    // Principal is an opaque identifier of the caller (user, tenant, service
+    // account) used only for logging and tracing. It must not be secret.
+    Principal() string
     // Filter returns the subset of hosts the principal may query.
     Filter(ctx context.Context, in hosts.Hosts) (hosts.Hosts, error)
 }
@@ -292,29 +295,32 @@ extracted once per request in an operation-level huma middleware, carried on
 the context, and applied exactly once in `prepareHostList`. Nothing below
 that point learns about authorization.
 
-## Decisions needed before implementation
+## Decisions taken
 
-1. **Fail-open or fail-closed when `authz.type` is unset.** Today everything
-   is open. Fail-closed by default is the safer contract but breaks every
-   existing deployment on upgrade; fail-open with a startup warning preserves
-   behaviour. Proposal: fail-open with a loud warning now, flip the default
-   in the next major.
-2. **Response when the filtered host list is empty.** 403 with a problem
-   detail, or 200 with an empty result. 403 is more honest and lets the
-   frontend show something useful.
-3. **Response when some requested hosts were filtered.** Silently narrow (the
-   user story as written), or 200 plus a `forbidden` status per dropped host
-   in `HostsStatuses`. The latter leaks that the host exists. Proposal:
-   silently narrow.
-4. **Scope shape.** `Filter(hosts) hosts` only, or also an enumerating
-   `Hosts()` for cheap `*`. Proposal: `Filter` only; add `Hosts()` when a
-   provider needs it.
-5. **Where token verification runs.** In the plugin (self-contained, portable)
-   or upstream with a trusted header (Option D). Both are the same interface;
-   the choice is per deployment.
-6. **Reuse for goProbe's own API.** An authentication-only hook on
-   `DefaultServer` would resurrect the dead `keys` field. Out of scope for
-   host scoping, but the middleware placement should not preclude it.
+Walked through on 2026-10-03. Each item names the alternative that was
+rejected and why.
+
+| # | Decision | Rejected | Reason |
+|---|---|---|---|
+| 1 | Architecture: Option A. Authorizer plugin kind, scope applied once in `prepareHostList`. | B alone, C | B is opt-in via `args.QueryHostsResolverType` and skips `*`; C pays the remote query for disallowed hosts. |
+| 2 | No `authz.type` configured: fail-open, one `Warn` at startup that queries are unscoped. Flip to fail-closed in the next major. | fail-closed, fail-closed plus `allow-all` type | Both break every existing deployment on upgrade. |
+| 3 | Filtered host list empty: 403 with `huma.ErrorModel`, detail `no authorized hosts in query`. SSE emits a `queryError` event like other preparation errors. | 200 empty result, 404 | Empty 200 hides misconfiguration from the user; 404 misuses the status. |
+| 4 | Partially allowed request: silently narrow to the allowed hosts. Dropped hosts never appear in `HostsStatuses`. | mark dropped hosts `forbidden`, reject whole request | Both confirm that a foreign host exists; rejection makes `*` unusable. |
+| 5 | `Scope` exposes `Principal() string` and `Filter(ctx, hosts) (hosts, error)` only. | optional `Hosts()` enumerator, `Allowed(id)` predicate | No provider needs cheap `*` yet; a predicate forces one call per host. |
+| 6 | `Authorizer.Authorize(ctx, *http.Request) (Scope, error)`. | credential string, headers only | Request access covers bearer, cookie, injected header and mTLS peer identity without a wrapper type to maintain. |
+| 7 | First in-tree plugin: `authz.type: header`. Reads a comma-separated list of `hosts.ID` from a configurable header, default `X-GoProbe-Allowed-Hosts`, parsed with the string resolver's split/trim/dedup. Missing or empty header is 403. Refuses to start unless `trusted: true` is set in its config. | static token map, JWT/JWKS, interface only | Static map duplicates the resolver pattern for little value; JWT adds a dependency; interface-only ships nothing usable. |
+| 8 | Header plugin has no wildcard. A literal `*` in the header is an ordinary, non-matching host ID. | `*` grants all | One gateway misconfiguration must not become full fleet access. |
+| 9 | Middleware is attached to the operation-level `huma.Middlewares` slice, next to the rate limiter. Covers `/_query` and `/_query/sse`. `/_query/validate` stays open: it never dispatches. | all three query routes, gin-level | Validate has no host list to scope; gin-level would gate health and readiness probes. |
+| 10 | `QuerierAnyable.AllHosts()` keeps its signature. `*` is `AllHosts()` then `scope.Filter()`. | `AllHosts(ctx)` | Breaks out-of-tree queriers for an optimisation nobody needs yet. |
+| 11 | Audit: request log gains `principal`, `hosts_requested`, `hosts_allowed`. Dropped host names only at Debug. | nothing new, dropped names at Info | No trail versus other tenants' fleet names in Info logs. |
+
+Open for a later iteration, explicitly not part of the first implementation:
+
+- `Hosts()` enumerator on `Scope` for cheap `*` on large fleets.
+- A tenant resolver (Option B) layered on the scope for "query my fleet"
+  convenience.
+- Authentication-only hook on `DefaultServer` so goProbe's own API can
+  resurrect its dead `keys` config.
 
 ## Files that change under Option A
 
@@ -323,11 +329,10 @@ that point learns about authorization.
 | `pkg/distributed/authz/authz.go` | new: `Authorizer`, `Scope`, context helpers, `ErrNoAuthorizedHosts` |
 | `plugins/authorizer.go` | new: registry functions mirroring `plugins/resolver.go` |
 | `plugins/plugin.go` | add `authorizers` map to `Initializer`, extend `LogValue`/`GetAvailablePlugins` |
-| `plugins/authorizer/header/` | new: in-tree trusted-header implementation (Option D) |
-| `pkg/api/middleware.go` | new `AuthorizationMiddleware` |
+| `plugins/authorizer/header/` | new: trusted-header implementation (Option D), `trusted: true` guard, no wildcard |
+| `pkg/api/middleware.go` | new `AuthorizationMiddleware`; request log fields `principal`, `hosts_requested`, `hosts_allowed` |
 | `pkg/api/globalquery/server/server.go` | accept an `authz.Authorizer`, append middleware |
-| `cmd/global-query/pkg/distributed/query.go` | apply scope in `prepareHostList`, map empty result to 403 |
-| `pkg/distributed/querier.go` | optional: `AllHosts(ctx)` so a scope-aware querier can short-circuit `*` |
+| `cmd/global-query/pkg/distributed/query.go` | apply scope in `prepareHostList` after both branches, empty result → 403, counts into log |
 | `cmd/global-query/pkg/conf/conf.go`, `cmd/global-query/cmd/init_plugins.go`, `server.go` | config keys, init, wiring |
 | `cmd/global-query/README.md`, `examples/config/` | document `authz` block |
 | tests | `query_test.go` with a `mockScope`; `plugins/authorizer_test.go`; middleware test |
