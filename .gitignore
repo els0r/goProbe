@@ -9,10 +9,10 @@ cmd/goProbe/goProbe
 cmd/goQuery/goQuery
 cmd/gpctl/gpctl
 cmd/gpdb/gpdb
-goprobe
-goquery
-global-query
-gpctl
+/goprobe
+/goquery
+/global-query
+/gpctl
 
 # IDEs and editors
 .idea/
