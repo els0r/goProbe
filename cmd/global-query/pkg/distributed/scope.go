@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 
 	"github.com/els0r/goProbe/v4/pkg/distributed/authz"
 	"github.com/els0r/goProbe/v4/pkg/distributed/hosts"
@@ -46,7 +47,9 @@ func newScopeError(status int, detail string, cause error) error {
 }
 
 // applyScope narrows hostList with the scope carried by ctx. It is the single place a
-// scope is applied: after the host list is resolved and before any sensor is contacted
+// scope is applied: after the host list is resolved and before any sensor is contacted.
+// The scope only ever sees a copy of the list, so the reference set the narrowing check
+// relies on cannot be modified by the scope
 func (q *QueryRunner) applyScope(ctx context.Context, hostList hosts.Hosts) (hosts.Hosts, error) {
 	if !q.enforceScope {
 		return hostList, nil
@@ -62,7 +65,7 @@ func (q *QueryRunner) applyScope(ctx context.Context, hostList hosts.Hosts) (hos
 
 	logger = logger.With("principal", scope.Principal(), "scope_type", fmt.Sprintf("%T", scope))
 
-	scoped, err := scope.Filter(ctx, hostList)
+	scoped, err := scope.Filter(ctx, slices.Clone(hostList))
 	if err != nil {
 		logger.Error("scope filter failed", "error", err)
 		return nil, newScopeError(http.StatusServiceUnavailable, detailAuthorizationUnavailable, err)
@@ -71,11 +74,13 @@ func (q *QueryRunner) applyScope(ctx context.Context, hostList hosts.Hosts) (hos
 		logger.Error("scope returned host IDs it was not given", "host_ids", widened)
 		return nil, newScopeError(http.StatusServiceUnavailable, detailAuthorizationUnavailable, errScopeNotNarrowing)
 	}
-	if len(scoped) == 0 {
+
+	// an empty resolved list is not a scope decision and runs as without a scope
+	if len(hostList) > 0 && len(scoped) == 0 {
 		return nil, newScopeError(http.StatusForbidden, authz.ErrNoAuthorizedHosts.Error(), authz.ErrNoAuthorizedHosts)
 	}
 
-	return scoped, nil
+	return dedupe(scoped), nil
 }
 
 // hostsNotIn returns the host IDs of candidates that are not part of reference
@@ -90,4 +95,18 @@ func hostsNotIn(candidates, reference hosts.Hosts) (missing hosts.Hosts) {
 		}
 	}
 	return missing
+}
+
+// dedupe removes repeated host IDs, keeping the first occurrence in order
+func dedupe(hostList hosts.Hosts) hosts.Hosts {
+	seen := make(map[hosts.ID]struct{}, len(hostList))
+	unique := make(hosts.Hosts, 0, len(hostList))
+	for _, id := range hostList {
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		unique = append(unique, id)
+	}
+	return unique
 }

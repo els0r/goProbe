@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/sse"
@@ -255,6 +256,13 @@ func TestScopedQuery_ScopeFilterFailure_Unavailable_NothingDispatched(t *testing
 				return nil, errors.New("provider unreachable: secret detail")
 			},
 		},
+		{
+			name: "scope widens the list it was given in place",
+			filter: func(given hosts.Hosts) (hosts.Hosts, error) {
+				out := given[:0]
+				return append(out, "widened"), nil
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -302,6 +310,86 @@ func TestScopedQuery_ResultCarriesOnlyHostsInScope(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestScopedQuery_RejectedQuery_NeverTakesConcurrencySlot(t *testing.T) {
+	tests := []struct {
+		name   string
+		ctx    context.Context
+		status int
+		detail string
+	}{
+		{
+			name:   "no host in scope",
+			ctx:    scopedCtx(&mockScope{principal: "alice", allowed: []hosts.ID{"other"}}),
+			status: http.StatusForbidden,
+			detail: "no authorized hosts in query",
+		},
+		{
+			name:   "no scope on context",
+			ctx:    context.Background(),
+			status: http.StatusServiceUnavailable,
+			detail: "authorization unavailable",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rm := hosts.NewResolverMap()
+			rm.Set("string", &mockResolver{out: hosts.Hosts{"h1", "h2"}})
+			mq := &mockQuerier{}
+
+			// every concurrency slot is taken: a query that waits for one times out
+			sem := make(chan struct{}, 1)
+			sem <- struct{}{}
+			qr := NewQueryRunner(rm, mq, WithScopeEnforcement(), WithMaxConcurrent(sem))
+
+			args := baseArgs()
+			args.QueryHosts = "h1,h2"
+
+			start := time.Now()
+			res, err := qr.Run(tt.ctx, args)
+			require.Nil(t, res)
+			requireStatus(t, err, tt.status, tt.detail)
+			assert.Less(t, time.Since(start), DefaultSemTimeout, "rejected query must not wait for a slot")
+			assert.Nil(t, mq.lastArgs, "querier must not be called")
+		})
+	}
+}
+
+func TestScopedQuery_EmptyResolvedList_RunsAsBefore(t *testing.T) {
+	rm := hosts.NewResolverMap()
+	rm.Set("string", &mockResolver{out: hosts.Hosts{}})
+	mq := &mockQuerier{}
+	qr := NewQueryRunner(rm, mq, WithScopeEnforcement())
+
+	args := baseArgs()
+	args.QueryHosts = "nothing-resolves"
+
+	scope := &mockScope{principal: "alice", allowed: []hosts.ID{"h1"}}
+	res, err := qr.Run(scopedCtx(scope), args)
+	require.NoError(t, err)
+	require.NotNil(t, res)
+
+	assert.NotNil(t, mq.lastArgs, "querier is called as without a scope")
+	assert.Empty(t, mq.lastHosts)
+}
+
+func TestScopedQuery_DuplicateHostIDsFromScope_QueriedOnce(t *testing.T) {
+	rm := hosts.NewResolverMap()
+	rm.Set("string", &mockResolver{out: hosts.Hosts{"h1", "h2", "h3"}})
+	mq := &mockQuerier{}
+	qr := NewQueryRunner(rm, mq, WithScopeEnforcement())
+
+	args := baseArgs()
+	args.QueryHosts = "h1,h2,h3"
+
+	scope := &mockScope{principal: "alice", filter: func(hosts.Hosts) (hosts.Hosts, error) {
+		return hosts.Hosts{"h2", "h1", "h2", "h1"}, nil
+	}}
+	_, err := qr.Run(scopedCtx(scope), args)
+	require.NoError(t, err)
+
+	assert.Equal(t, hosts.Hosts{"h2", "h1"}, mq.lastHosts)
 }
 
 func TestUnscopedQuery_RunnerWithoutEnforcement_IgnoresScope(t *testing.T) {
