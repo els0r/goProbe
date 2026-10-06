@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/danielgtaylor/huma/v2"
 	"github.com/els0r/goProbe/v4/pkg/api"
 	"github.com/els0r/goProbe/v4/pkg/api/server"
 	"github.com/els0r/goProbe/v4/pkg/distributed/authz"
@@ -161,6 +162,9 @@ func TestServer_WithAuthorizer_ScopesQueries(t *testing.T) {
 	t.Run("principal with no host in query is forbidden", func(t *testing.T) {
 		resp := postQuery(t, client, "bob")
 		require.Equal(t, http.StatusForbidden, resp.StatusCode)
+		var problem huma.ErrorModel
+		require.NoError(t, json.NewDecoder(resp.Body).Decode(&problem))
+		assert.Equal(t, "no authorized hosts in query", problem.Detail)
 		assert.Empty(t, querier.queried)
 	})
 
