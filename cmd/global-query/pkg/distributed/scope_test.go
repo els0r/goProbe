@@ -4,11 +4,14 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"slices"
 	"testing"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/danielgtaylor/huma/v2/sse"
 	"github.com/els0r/goProbe/v4/pkg/distributed/authz"
 	"github.com/els0r/goProbe/v4/pkg/distributed/hosts"
+	"github.com/els0r/goProbe/v4/pkg/query"
 	"github.com/els0r/goProbe/v4/pkg/results"
 	"github.com/els0r/goProbe/v4/pkg/types"
 	"github.com/els0r/goProbe/v4/plugins/resolver/stringresolver"
@@ -41,26 +44,80 @@ func (s *mockScope) Filter(_ context.Context, hostIDs hosts.Hosts) (hosts.Hosts,
 	return out, nil
 }
 
+// perHostQuerier answers one result per host ID it is given and an error result for every
+// host ID in missing, mirroring a sensor that does not exist
+type perHostQuerier struct {
+	lastHosts hosts.Hosts
+	missing   []hosts.ID
+}
+
+func (q *perHostQuerier) Query(_ context.Context, queryHosts hosts.Hosts, _ *query.Args) (<-chan *results.Result, <-chan struct{}) {
+	q.lastHosts = queryHosts
+	rc := make(chan *results.Result, len(queryHosts))
+	for _, id := range queryHosts {
+		if slices.Contains(q.missing, id) {
+			r := results.New()
+			r.Hostname = id
+			r.SetErr(errors.New("host not found"))
+			rc <- r
+			continue
+		}
+		r := makeResult(id, "eth0", 10, 1)
+		r.HostsStatuses[id] = results.Status{Code: types.StatusOK}
+		rc <- r
+	}
+	close(rc)
+	kc := make(chan struct{})
+	close(kc)
+	return rc, kc
+}
+
 func scopedCtx(scope authz.Scope) context.Context {
 	return authz.WithScope(context.Background(), scope)
 }
 
+type runFunc func(qr *QueryRunner, ctx context.Context, args *query.Args) (*results.Result, error)
+
+// runModes runs a query through the plain and the streaming entry point of the runner
+var runModes = []struct {
+	name string
+	run  runFunc
+}{
+	{
+		name: "plain",
+		run: func(qr *QueryRunner, ctx context.Context, args *query.Args) (*results.Result, error) {
+			return qr.Run(ctx, args)
+		},
+	},
+	{
+		name: "streaming",
+		run: func(qr *QueryRunner, ctx context.Context, args *query.Args) (*results.Result, error) {
+			sender := &captureSender{}
+			return qr.RunStreaming(ctx, args, sse.Sender(sender.send))
+		},
+	},
+}
+
 func TestScopedQuery_ExplicitHostList_NarrowedBeforeFanOut(t *testing.T) {
-	mr := &mockResolver{out: hosts.Hosts{"h1", "h2", "h3"}}
-	rm := hosts.NewResolverMap()
-	rm.Set("string", mr)
-	mq := &mockQuerier{results: []*results.Result{makeResult("h1", "eth0", 10, 1)}}
-	qr := NewQueryRunner(rm, mq, WithScopeEnforcement())
+	for _, mode := range runModes {
+		t.Run(mode.name, func(t *testing.T) {
+			mr := &mockResolver{out: hosts.Hosts{"h1", "h2", "h3"}}
+			rm := hosts.NewResolverMap()
+			rm.Set("string", mr)
+			mq := &mockQuerier{results: []*results.Result{makeResult("h1", "eth0", 10, 1)}}
+			qr := NewQueryRunner(rm, mq, WithScopeEnforcement())
 
-	args := baseArgs()
-	args.QueryHosts = "h1,h2,h3"
+			args := baseArgs()
+			args.QueryHosts = "h1,h2,h3"
 
-	scope := &mockScope{principal: "alice", allowed: []hosts.ID{"h1", "h3"}}
-	res, err := qr.Run(scopedCtx(scope), args)
-	require.NoError(t, err)
-	require.NotNil(t, res)
+			scope := &mockScope{principal: "alice", allowed: []hosts.ID{"h1", "h3"}}
+			res, err := mode.run(qr, scopedCtx(scope), args)
+			require.NoError(t, err)
+			require.NotNil(t, res)
 
-	assert.ElementsMatch(t, hosts.Hosts{"h1", "h3"}, mq.lastHosts)
+			assert.ElementsMatch(t, hosts.Hosts{"h1", "h3"}, mq.lastHosts)
+		})
+	}
 }
 
 func TestScopedQuery_AllHostsSelector_EnumeratedThenNarrowed(t *testing.T) {
@@ -140,37 +197,45 @@ func requireStatus(t *testing.T, err error, status int, detail string) {
 }
 
 func TestScopedQuery_NoHostInScope_Forbidden_NothingDispatched(t *testing.T) {
-	rm := hosts.NewResolverMap()
-	rm.Set("string", &mockResolver{out: hosts.Hosts{"h1", "h2"}})
-	mq := &mockQuerier{}
-	qr := NewQueryRunner(rm, mq, WithScopeEnforcement())
+	for _, mode := range runModes {
+		t.Run(mode.name, func(t *testing.T) {
+			rm := hosts.NewResolverMap()
+			rm.Set("string", &mockResolver{out: hosts.Hosts{"h1", "h2"}})
+			mq := &mockQuerier{}
+			qr := NewQueryRunner(rm, mq, WithScopeEnforcement())
 
-	args := baseArgs()
-	args.QueryHosts = "h1,h2"
+			args := baseArgs()
+			args.QueryHosts = "h1,h2"
 
-	scope := &mockScope{principal: "alice", allowed: []hosts.ID{"other"}}
-	res, err := qr.Run(scopedCtx(scope), args)
-	require.Nil(t, res)
-	requireStatus(t, err, http.StatusForbidden, "no authorized hosts in query")
-	assert.ErrorIs(t, err, authz.ErrNoAuthorizedHosts)
+			scope := &mockScope{principal: "alice", allowed: []hosts.ID{"other"}}
+			res, err := mode.run(qr, scopedCtx(scope), args)
+			require.Nil(t, res)
+			requireStatus(t, err, http.StatusForbidden, "no authorized hosts in query")
+			assert.ErrorIs(t, err, authz.ErrNoAuthorizedHosts)
 
-	assert.Nil(t, mq.lastArgs, "querier must not be called")
+			assert.Nil(t, mq.lastArgs, "querier must not be called")
+		})
+	}
 }
 
 func TestScopedQuery_EnforcementWithoutScope_Fails_NothingDispatched(t *testing.T) {
-	rm := hosts.NewResolverMap()
-	rm.Set("string", &mockResolver{out: hosts.Hosts{"h1", "h2"}})
-	mq := &mockQuerier{}
-	qr := NewQueryRunner(rm, mq, WithScopeEnforcement())
+	for _, mode := range runModes {
+		t.Run(mode.name, func(t *testing.T) {
+			rm := hosts.NewResolverMap()
+			rm.Set("string", &mockResolver{out: hosts.Hosts{"h1", "h2"}})
+			mq := &mockQuerier{}
+			qr := NewQueryRunner(rm, mq, WithScopeEnforcement())
 
-	args := baseArgs()
-	args.QueryHosts = "h1,h2"
+			args := baseArgs()
+			args.QueryHosts = "h1,h2"
 
-	res, err := qr.Run(context.Background(), args)
-	require.Nil(t, res)
-	requireStatus(t, err, http.StatusServiceUnavailable, "authorization unavailable")
+			res, err := mode.run(qr, context.Background(), args)
+			require.Nil(t, res)
+			requireStatus(t, err, http.StatusServiceUnavailable, "authorization unavailable")
 
-	assert.Nil(t, mq.lastArgs, "querier must not be called")
+			assert.Nil(t, mq.lastArgs, "querier must not be called")
+		})
+	}
 }
 
 func TestScopedQuery_ScopeFilterFailure_Unavailable_NothingDispatched(t *testing.T) {
@@ -208,6 +273,33 @@ func TestScopedQuery_ScopeFilterFailure_Unavailable_NothingDispatched(t *testing
 			assert.NotContains(t, err.Error(), "secret detail")
 
 			assert.Nil(t, mq.lastArgs, "querier must not be called")
+		})
+	}
+}
+
+func TestScopedQuery_ResultCarriesOnlyHostsInScope(t *testing.T) {
+	for _, mode := range runModes {
+		t.Run(mode.name, func(t *testing.T) {
+			rm := hosts.NewResolverMap()
+			rm.Set("string", &mockResolver{out: hosts.Hosts{"h1", "dropped", "unknown"}})
+			pq := &perHostQuerier{missing: []hosts.ID{"unknown", "dropped"}}
+			qr := NewQueryRunner(rm, pq, WithScopeEnforcement())
+
+			args := baseArgs()
+			args.QueryHosts = "h1,dropped,unknown"
+
+			scope := &mockScope{principal: "alice", allowed: []hosts.ID{"h1", "unknown"}}
+			res, err := mode.run(qr, scopedCtx(scope), args)
+			require.NoError(t, err)
+			require.NotNil(t, res)
+
+			assert.ElementsMatch(t, hosts.Hosts{"h1", "unknown"}, pq.lastHosts)
+			assert.NotContains(t, res.HostsStatuses, "dropped")
+			assert.Equal(t, types.StatusOK, res.HostsStatuses["h1"].Code)
+			assert.Equal(t, types.StatusError, res.HostsStatuses["unknown"].Code, "unknown host ID inside the scope is still reported")
+			for _, row := range res.Rows {
+				assert.NotEqual(t, "dropped", row.Labels.Hostname)
+			}
 		})
 	}
 }
