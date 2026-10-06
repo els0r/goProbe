@@ -38,6 +38,9 @@ type QueryRunner struct {
 	resolvers *hosts.ResolverMap
 	querier   distributed.Querier
 	sem       concurrency.Semaphore
+
+	// enforceScope requires a scope on every query (see WithScopeEnforcement)
+	enforceScope bool
 }
 
 // QueryOption configures the query runner
@@ -132,6 +135,10 @@ func (q *QueryRunner) run(ctx context.Context, args *query.Args, send sse.Sender
 	hostList, err := q.prepareHostList(ctx, hostsResolver, args.QueryHosts)
 	if err != nil {
 		return nil, err // prepareHostList() returns formatted error
+	}
+	hostList, err = q.applyScope(ctx, hostList)
+	if err != nil {
+		return nil, err
 	}
 
 	// log the query
