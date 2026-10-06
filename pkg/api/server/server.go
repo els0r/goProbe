@@ -12,6 +12,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humagin"
 	"github.com/els0r/goProbe/v4/pkg/api"
+	"github.com/els0r/goProbe/v4/pkg/distributed/authz"
 	"github.com/els0r/goProbe/v4/pkg/goDB/info"
 	"github.com/els0r/goProbe/v4/pkg/version"
 	"github.com/els0r/telemetry/metrics"
@@ -62,6 +63,9 @@ type DefaultServer struct {
 	// global rate limiting for queries
 	queryRateLimiter       *rate.Limiter
 	queryRateMaxConcurrent int
+
+	// authorizer scopes queries to the host IDs a caller may see (nil: queries run unscoped)
+	authorizer authz.Authorizer
 
 	srv    *http.Server
 	router *gin.Engine
@@ -115,6 +119,14 @@ func WithQueryRateLimit(r rate.Limit, b, maxConcurrent int) Option {
 		if r > 0. {
 			server.queryRateLimiter = rate.NewLimiter(r, b)
 		}
+	}
+}
+
+// WithAuthorizer scopes every query to the host IDs the authorizer grants the caller.
+// Without it, queries run unscoped
+func WithAuthorizer(authorizer authz.Authorizer) Option {
+	return func(server *DefaultServer) {
+		server.authorizer = authorizer
 	}
 }
 
@@ -215,6 +227,11 @@ func (server *DefaultServer) WriteOpenAPISpec(w io.Writer) error {
 // if enabled (if not it return nil and false)
 func (server *DefaultServer) QueryRateLimiter() (int, *rate.Limiter, bool) {
 	return server.queryRateMaxConcurrent, server.queryRateLimiter, server.queryRateLimiter != nil
+}
+
+// Authorizer returns the configured authorizer, if any
+func (server *DefaultServer) Authorizer() (authz.Authorizer, bool) {
+	return server.authorizer, server.authorizer != nil
 }
 
 func (server *DefaultServer) registerInfoRoutes() {
