@@ -101,6 +101,12 @@ func TestAuthorization_RejectedRequest_StatusMapping(t *testing.T) {
 			detail:     "forbidden",
 		},
 		{
+			name:       "no authorized hosts",
+			authorizer: stubAuthorizer{err: fmt.Errorf("%s: %w", secret, authz.ErrNoAuthorizedHosts)},
+			status:     http.StatusForbidden,
+			detail:     "forbidden",
+		},
+		{
 			name:       "authorizer failure",
 			authorizer: stubAuthorizer{err: errors.New(secret)},
 			status:     http.StatusServiceUnavailable,

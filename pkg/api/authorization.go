@@ -30,10 +30,13 @@ func AuthorizationMiddleware(a huma.API, authorizer authz.Authorizer) func(huma.
 		}
 		if err != nil {
 			status, detail := authorizationStatus(err)
-			logging.FromContext(ctx.Context()).Error("authorization rejected request",
-				"authorizer", fmt.Sprintf("%T", authorizer), "status", status, "error", err,
+			logger := logging.FromContext(ctx.Context()).With(
+				"authorizer", fmt.Sprintf("%T", authorizer), "status", status,
 			)
-			_ = huma.WriteErr(a, ctx, status, detail)
+			logger.Error("authorization rejected request", "error", err)
+			if werr := huma.WriteErr(a, ctx, status, detail); werr != nil {
+				logger.Error("failed to write authorization response", "error", werr)
+			}
 			return
 		}
 
@@ -46,7 +49,7 @@ func authorizationStatus(err error) (int, string) {
 	switch {
 	case errors.Is(err, authz.ErrUnauthenticated):
 		return http.StatusUnauthorized, DetailUnauthenticated
-	case errors.Is(err, authz.ErrForbidden):
+	case errors.Is(err, authz.ErrForbidden), errors.Is(err, authz.ErrNoAuthorizedHosts):
 		return http.StatusForbidden, DetailForbidden
 	default:
 		return http.StatusServiceUnavailable, DetailAuthorizationUnavailable
