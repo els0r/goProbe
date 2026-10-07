@@ -1,6 +1,7 @@
 package server
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -23,13 +24,21 @@ type Server struct {
 	*server.DefaultServer
 }
 
-// New creates a new goprobe API server
+// errAuthorizerUnsupported is raised when the sensor API server is handed an authorizer:
+// only global-query scopes queries (ADR 0003), a sensor would silently ignore it
+var errAuthorizerUnsupported = errors.New("goProbe API server does not support an authorizer: only global-query scopes queries")
+
+// New creates a new goprobe API server. It panics when an authorizer is configured, since
+// the sensor does not scope queries and must not pretend to
 func New(addr, dbPath string, captureManager *capture.Manager, configMonitor *config.Monitor, opts ...server.Option) *Server {
 	server := &Server{
 		dbPath:         dbPath,
 		captureManager: captureManager,
 		configMonitor:  configMonitor,
 		DefaultServer:  server.NewDefault(config.ServiceName, addr, opts...),
+	}
+	if _, ok := server.Authorizer(); ok {
+		panic(errAuthorizerUnsupported)
 	}
 
 	server.registerRoutes()

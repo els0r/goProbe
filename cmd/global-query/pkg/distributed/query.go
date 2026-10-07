@@ -38,6 +38,9 @@ type QueryRunner struct {
 	resolvers *hosts.ResolverMap
 	querier   distributed.Querier
 	sem       concurrency.Semaphore
+
+	// enforceScope requires a scope on every query (see WithScopeEnforcement)
+	enforceScope bool
 }
 
 // QueryOption configures the query runner
@@ -111,6 +114,24 @@ func (q *QueryRunner) run(ctx context.Context, args *query.Args, send sse.Sender
 		return nil, fmt.Errorf("failed to prepare query statement: %w", err)
 	}
 
+	// safeguards against loading too much data, as in, dumping whole
+	// DBs via the network
+	err = queryArgs.CheckUnboundedQueries()
+	if err != nil {
+		return nil, err
+	}
+
+	// resolve and scope the host list before taking a concurrency slot, so that a
+	// rejected scoped query never waits for or holds one
+	hostList, err := q.prepareHostList(ctx, hostsResolver, args.QueryHosts)
+	if err != nil {
+		return nil, err // prepareHostList() returns formatted error
+	}
+	hostList, err = q.applyScope(ctx, hostList)
+	if err != nil {
+		return nil, err
+	}
+
 	smeDone, err := q.checkSemaphore(stmt)
 	if err != nil {
 		return &results.Result{
@@ -121,18 +142,6 @@ func (q *QueryRunner) run(ctx context.Context, args *query.Args, send sse.Sender
 		}, nil
 	}
 	defer smeDone()
-
-	// safeguards against loading too much data, as in, dumping whole
-	// DBs via the network
-	err = queryArgs.CheckUnboundedQueries()
-	if err != nil {
-		return nil, err
-	}
-
-	hostList, err := q.prepareHostList(ctx, hostsResolver, args.QueryHosts)
-	if err != nil {
-		return nil, err // prepareHostList() returns formatted error
-	}
 
 	// log the query
 	logger := logging.Logger().With("hosts", hostList)

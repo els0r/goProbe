@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/sse"
 	"github.com/els0r/goProbe/v4/pkg/query"
 	"github.com/els0r/goProbe/v4/pkg/results"
@@ -64,12 +65,23 @@ func getSSEBodyQueryRunnerHandler(caller string, querier SSEQueryRunner) func(co
 		res, err := runQuerySSE(ctx, caller, input.Body, querier, send)
 		if err != nil {
 			logging.FromContext(ctx).Error("error running SSE query", "args", input.Body, "error", err)
-			_ = send.Data(query.NewDetailError(http.StatusInternalServerError, err))
+			_ = send.Data(queryErrorEvent(err))
 			return
 		}
 
 		_ = send.Data(&FinalResult{res})
 	}
+}
+
+// queryErrorEvent builds the query-error event for a failed streaming query. An error that
+// already carries a status keeps it and its detail (nothing wrapped in it is exposed); any
+// other error is reported as 500
+func queryErrorEvent(err error) *query.DetailError {
+	var statusErr huma.StatusError
+	if errors.As(err, &statusErr) {
+		return query.NewDetailError(statusErr.GetStatus(), errors.New(statusErr.Error()))
+	}
+	return query.NewDetailError(http.StatusInternalServerError, err)
 }
 
 func runQuery(ctx context.Context, caller string, args *query.Args, querier query.Runner) (*results.Result, error) {
