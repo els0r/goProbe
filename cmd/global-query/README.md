@@ -52,7 +52,7 @@ authorizer:
   config: ./my-authorizer.yaml
 ```
 
-With an authorizer configured, each request to `/_query` and `/_query/sse` is turned into a **scope** before fan-out: host IDs outside the scope are dropped silently, a request whose every host lies outside the scope is answered with `403`, a request without a valid credential with `401`. The vocabulary (host ID, principal, scope) is defined in [CONTEXT.md](../../CONTEXT.md), the design in [ADR 0003](../../docs/adr/0003-global-query-scopes-queries-by-host-id-before-fan-out.md).
+With an authorizer configured, each request to `/_query` and `/_query/sse` is turned into a **scope** before fan-out: host IDs outside the scope are dropped silently, a request whose every host lies outside the scope is answered with `403`, a request without a valid credential with `401`. Any other authorizer or scope-filter failure, including an unreachable provider, is answered with `503`: authorization never fails open. The vocabulary (host ID, principal, scope) is defined in [CONTEXT.md](../../CONTEXT.md), the design in [ADR 0003](../../docs/adr/0003-global-query-scopes-queries-by-host-id-before-fan-out.md).
 
 **No authorizer (the default).** Queries run as **unscoped queries**: every caller reaches every host. The server warns once at startup. This default flips to fail-closed with the next major version, where unscoped operation becomes an explicit opt-in.
 
