@@ -20,6 +20,9 @@ import (
 	_ "github.com/els0r/goProbe/plugins/contrib/v4" // Include third-party plugins (if enabled, see README)
 )
 
+// msgUnscopedQueries is the startup warning emitted exactly once when no authorizer is configured
+const msgUnscopedQueries = "no authorizer configured, queries run unscoped; unscoped operation becomes opt-in with the next major version"
+
 // serverCommand represents the server command
 func serverCommand() (*cobra.Command, error) {
 	serverCmd := &cobra.Command{
@@ -93,8 +96,7 @@ func newAPIServer(ctx context.Context, addr string) (*gqserver.Server, error) {
 	if authorizer != nil {
 		opts = append(opts, server.WithAuthorizer(authorizer))
 	} else {
-		logger.Warn("no authorizer configured, queries run unscoped; unscoped operation becomes opt-in with the next major version",
-			"key", conf.AuthorizerType)
+		logger.Warn(msgUnscopedQueries, "key", conf.AuthorizerType)
 	}
 
 	return gqserver.New(addr, hostListResolvers, querier, opts...), nil
