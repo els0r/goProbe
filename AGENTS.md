@@ -168,7 +168,7 @@ If `golangci-lint` is unavailable, at minimum run `go test` and `go vet` for tou
 ## Generated Code
 - `pkg/version/version.go` -> `go generate` may update `pkg/version/git_version.go`
 - `pkg/goDB/protocols/protocols.go` -> generated protocol lookup tables
-- `plugins/contrib/contrib_gen.go` -> generated contrib registration
+- `plugins/contrib/contrib_gen.go` (`go:generate` directive) -> `gen.go` writes `plugins/contrib/contrib_generated.go` (gitignored contrib import)
 - `pkg/goDB/engine/gen.go` -> benchmark generation hook
 - Do not manually edit generated files unless explicitly requested
 
