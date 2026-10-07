@@ -168,7 +168,36 @@ func TestAuthorization_NoAuthorizer_RunnerSeesNoScope(t *testing.T) {
 func TestAuthorization_ValidationRoute_IsNotAuthorized(t *testing.T) {
 	api := setupAuthorizedAPI(t, stubAuthorizer{err: authz.ErrUnauthenticated}, &scopeRecordingRunner{})
 
-	resp := api.Post(ValidationRoute, distributedArgs())
+	t.Run("POST", func(t *testing.T) {
+		resp := api.Post(ValidationRoute, distributedArgs())
 
-	require.Equal(t, http.StatusNoContent, resp.Code)
+		require.Equal(t, http.StatusNoContent, resp.Code)
+	})
+
+	t.Run("GET", func(t *testing.T) {
+		resp := api.Get(ValidationRoute + "?query=sip&ifaces=eth0&format=json&query_hosts=hostA")
+
+		require.Equal(t, http.StatusNoContent, resp.Code)
+	})
+}
+
+// plainRunner runs queries without streaming, like a sensor does
+type plainRunner struct{}
+
+func (plainRunner) Run(context.Context, *query.Args) (*results.Result, error) {
+	return results.New(), nil
+}
+
+// TestAuthorization_SensorQueryRoute_DeclaresNoAuthorizationStatuses pins that only the
+// distributed query routes are scoped: the sensor route declares none of the statuses
+func TestAuthorization_SensorQueryRoute_DeclaresNoAuthorizationStatuses(t *testing.T) {
+	_, api := humatest.New(t)
+	RegisterQueryAPI(api, "test", plainRunner{}, nil)
+
+	op := api.OpenAPI().Paths[QueryRoute].Post
+	require.NotNil(t, op)
+	assert.Equal(t, "query-post-run", op.OperationID)
+	for _, status := range []string{"401", "403", "503"} {
+		assert.NotContains(t, op.Responses, status)
+	}
 }
