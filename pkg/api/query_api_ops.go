@@ -11,6 +11,15 @@ import (
 
 var queryTags = []string{"Query"}
 
+// authorizationErrors are the statuses the authorization middleware answers with on the
+// routes that dispatch queries (see AuthorizationMiddleware). Declared on those routes so
+// that generated clients handle them
+var authorizationErrors = []int{
+	http.StatusUnauthorized,
+	http.StatusForbidden,
+	http.StatusServiceUnavailable,
+}
+
 // RegisterQueryAPI registers all query related endpoints
 func RegisterQueryAPI(a huma.API, caller string, querier query.Runner, middlewares huma.Middlewares) {
 	// register routes specific to distributed querying
@@ -110,6 +119,7 @@ func registerDistributedQueryAPI(a huma.API, caller string, qr SSEQueryRunner, m
 			Summary:     "Run query",
 			Description: "Runs a query based on the parameters provided in the body",
 			Middlewares: middlewares,
+			Errors:      authorizationErrors,
 			Tags:        queryTags,
 		},
 		getBodyQueryRunnerHandler(caller, qr),
@@ -126,6 +136,7 @@ Pushes back partial results via SSE. Partial results will be truncated to the fi
 
 The final result will honor the limit parameter passed in the query args.`,
 			Middlewares: middlewares,
+			Errors:      authorizationErrors,
 			Tags:        queryTags,
 		},
 		map[string]any{

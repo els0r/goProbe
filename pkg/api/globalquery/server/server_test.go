@@ -33,6 +33,35 @@ func TestGenerateOpenAPISpec(t *testing.T) {
 	require.Nil(t, err)
 }
 
+// operationByID returns the operation registered under id in the OpenAPI spec
+func operationByID(t *testing.T, oapi *huma.OpenAPI, id string) *huma.Operation {
+	t.Helper()
+	for _, item := range oapi.Paths {
+		for _, op := range []*huma.Operation{item.Get, item.Post, item.Put, item.Patch, item.Delete} {
+			if op != nil && op.OperationID == id {
+				return op
+			}
+		}
+	}
+	t.Fatalf("operation %q not found in spec", id)
+	return nil
+}
+
+// TestGenerateOpenAPISpec_QueryRoutesDeclareAuthorizationStatuses pins that generated clients
+// learn about the statuses the authorizer may answer with on both query routes
+func TestGenerateOpenAPISpec_QueryRoutesDeclareAuthorizationStatuses(t *testing.T) {
+	oapi := New("localhost:8146", nil, nil).API().OpenAPI()
+
+	for _, id := range []string{"query-post-run", "query-post-run-sse"} {
+		t.Run(id, func(t *testing.T) {
+			op := operationByID(t, oapi, id)
+			for _, status := range []string{"401", "403", "503"} {
+				assert.Contains(t, op.Responses, status)
+			}
+		})
+	}
+}
+
 // listResolver resolves every query to a fixed host list
 type listResolver struct{ out hosts.Hosts }
 
