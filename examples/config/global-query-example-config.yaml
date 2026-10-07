@@ -8,5 +8,10 @@ querier:
   type: api
   max_concurrent: 64
   config: ./examples/config/global-query-api-client-querier-example-config.yaml
+# authorizer scoping queries to the host IDs a caller may see. Empty / absent: queries run
+# unscoped (the server warns once at startup; becomes opt-in with the next major version)
+# authorizer:
+#   type: ""
+#   config: ""
 server:
   addr: localhost:8146

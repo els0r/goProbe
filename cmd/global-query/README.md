@@ -37,6 +37,31 @@ In future releases, the plugin system will be built out so that other queriers c
 * the `query.Runner` interface is implemented
 * the use case specific configuration is supplied to `global-query` upon initialization
 
+## Authorization
+
+`global-query` can scope every query to the **host IDs** a caller may see. The decision is made by an **authorizer**, a plugin selected the same way a querier is: by type and config file.
+
+| Key                 | Flag                  | Default | Meaning                                                   |
+|---------------------|-----------------------|---------|-----------------------------------------------------------|
+| `authorizer.type`   | `--authorizer.type`   | `""`    | Name of the registered authorizer plugin. Empty: none     |
+| `authorizer.config` | `--authorizer.config` | `""`    | Path to the authorizer's configuration file, if it needs one |
+
+```yaml
+authorizer:
+  type: my-authorizer
+  config: ./my-authorizer.yaml
+```
+
+With an authorizer configured, each request to `/_query` and `/_query/sse` is turned into a **scope** before fan-out: host IDs outside the scope are dropped silently, a request whose every host lies outside the scope is answered with `403`, a request without a valid credential with `401`. The vocabulary (host ID, principal, scope) is defined in [CONTEXT.md](../../CONTEXT.md), the design in [ADR 0003](../../docs/adr/0003-global-query-scopes-queries-by-host-id-before-fan-out.md).
+
+**No authorizer (the default).** Queries run as **unscoped queries**: every caller reaches every host. The server warns once at startup. This default flips to fail-closed with the next major version, where unscoped operation becomes an explicit opt-in.
+
+**Unknown type.** A type that is not registered fails startup with an error naming it, so a typo cannot silently leave queries unscoped.
+
+**Sensors remain unauthenticated.** Only `global-query` is scoped. A `goProbe` sensor still answers anyone who can reach its API, so the path between `global-query` and the sensors must stay private: it must not be reachable by the callers of `global-query`.
+
+No in-tree authorizer ships yet. Out-of-tree authorizers register through the [contrib mechanism](../../plugins/contrib/README.md), which also documents the contract for plugin authors.
+
 ## Running Global Queries
 
 A global query is run analogously to the way you would query local data via the `goProbe` API: via the `/_query` endpoint.
