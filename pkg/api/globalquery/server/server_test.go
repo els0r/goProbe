@@ -149,25 +149,44 @@ func startServer(t *testing.T, querier *recordingQuerier, opts ...server.Option)
 	}}
 }
 
-func postQuery(t *testing.T, client *http.Client, principal string) *http.Response {
-	t.Helper()
-	return postQueryTo(t, client, api.QueryRoute, principal)
+// response is a fully read HTTP response
+type response struct {
+	status int
+	body   []byte
 }
 
-func postQueryTo(t *testing.T, client *http.Client, route, principal string) *http.Response {
+// doRequest sends one request to the server behind client and returns the status and the
+// fully read body. The body is drained and closed here so that no half-read keep-alive
+// connection outlives the test and stalls the server shutdown. A non-empty principal is
+// sent in the header the test authorizer reads
+func doRequest(t *testing.T, client *http.Client, method, route string, body []byte, principal string) response {
 	t.Helper()
-	body, err := json.Marshal(query.Args{Query: "sip", Ifaces: "eth0", Format: "json", QueryHosts: "h1,h2,h3"})
+	req, err := http.NewRequest(method, "http://unix"+route, bytes.NewReader(body))
 	require.NoError(t, err)
-	req, err := http.NewRequest(http.MethodPost, "http://unix"+route, bytes.NewReader(body))
-	require.NoError(t, err)
-	req.Header.Set("Content-Type", "application/json")
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
 	if principal != "" {
 		req.Header.Set("X-Test-Principal", principal)
 	}
 	resp, err := client.Do(req)
 	require.NoError(t, err)
-	t.Cleanup(func() { _ = resp.Body.Close() })
-	return resp
+	payload, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.NoError(t, resp.Body.Close())
+	return response{status: resp.StatusCode, body: payload}
+}
+
+func postQuery(t *testing.T, client *http.Client, principal string) response {
+	t.Helper()
+	return postQueryTo(t, client, api.QueryRoute, principal)
+}
+
+func postQueryTo(t *testing.T, client *http.Client, route, principal string) response {
+	t.Helper()
+	body, err := json.Marshal(query.Args{Query: "sip", Ifaces: "eth0", Format: "json", QueryHosts: "h1,h2,h3"})
+	require.NoError(t, err)
+	return doRequest(t, client, http.MethodPost, route, body, principal)
 }
 
 func receiveQueried(t *testing.T, querier *recordingQuerier) hosts.Hosts {
@@ -191,22 +210,22 @@ func TestServer_WithAuthorizer_ScopesQueries(t *testing.T) {
 
 	t.Run("scoped principal reaches only hosts in scope", func(t *testing.T) {
 		resp := postQuery(t, client, "alice")
-		require.Equal(t, http.StatusOK, resp.StatusCode)
+		require.Equal(t, http.StatusOK, resp.status)
 		assert.Equal(t, hosts.Hosts{"h2"}, receiveQueried(t, querier))
 	})
 
 	t.Run("principal with no host in query is forbidden", func(t *testing.T) {
 		resp := postQuery(t, client, "bob")
-		require.Equal(t, http.StatusForbidden, resp.StatusCode)
+		require.Equal(t, http.StatusForbidden, resp.status)
 		var problem huma.ErrorModel
-		require.NoError(t, json.NewDecoder(resp.Body).Decode(&problem))
+		require.NoError(t, json.Unmarshal(resp.body, &problem))
 		assert.Equal(t, "no authorized hosts in query", problem.Detail)
 		assert.Empty(t, querier.queried)
 	})
 
 	t.Run("request without credential is unauthenticated", func(t *testing.T) {
 		resp := postQuery(t, client, "")
-		require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+		require.Equal(t, http.StatusUnauthorized, resp.status)
 		assert.Empty(t, querier.queried)
 	})
 }
@@ -229,17 +248,17 @@ func TestServer_RejectedRequests_LeaveRateLimitUntouched(t *testing.T) {
 
 			for i := 0; i < burst; i++ {
 				resp := postQueryTo(t, client, route, "")
-				require.Equal(t, http.StatusUnauthorized, resp.StatusCode, "rejected request %d", i)
+				require.Equal(t, http.StatusUnauthorized, resp.status, "rejected request %d", i)
 			}
 
 			for i := 0; i < burst; i++ {
 				resp := postQueryTo(t, client, route, "alice")
-				require.Equal(t, http.StatusOK, resp.StatusCode, "entitled request %d after rejected burst", i)
+				require.Equal(t, http.StatusOK, resp.status, "entitled request %d after rejected burst", i)
 				assert.Equal(t, hosts.Hosts{"h1"}, receiveQueried(t, querier))
 			}
 
 			resp := postQueryTo(t, client, route, "alice")
-			require.Equal(t, http.StatusTooManyRequests, resp.StatusCode, "burst must be exhausted by entitled requests only")
+			require.Equal(t, http.StatusTooManyRequests, resp.status, "burst must be exhausted by entitled requests only")
 			assert.Empty(t, querier.queried)
 		})
 	}
@@ -279,18 +298,9 @@ func TestServer_WithAuthorizer_OpenRoutesStayOpen(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req, err := http.NewRequest(tt.method, "http://unix"+tt.path, bytes.NewReader(tt.body))
-			require.NoError(t, err)
-			if tt.body != nil {
-				req.Header.Set("Content-Type", "application/json")
-			}
-			resp, err := client.Do(req)
-			require.NoError(t, err)
-			defer func() { _ = resp.Body.Close() }()
-			_, err = io.Copy(io.Discard, resp.Body)
-			require.NoError(t, err)
+			resp := doRequest(t, client, tt.method, tt.path, tt.body, "")
 
-			assert.Equal(t, tt.status, resp.StatusCode)
+			assert.Equal(t, tt.status, resp.status)
 		})
 	}
 }
@@ -300,6 +310,6 @@ func TestServer_WithoutAuthorizer_QueriesRunUnscoped(t *testing.T) {
 	client := startServer(t, querier)
 
 	resp := postQuery(t, client, "")
-	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.Equal(t, http.StatusOK, resp.status)
 	assert.Equal(t, hosts.Hosts{"h1", "h2", "h3"}, receiveQueried(t, querier))
 }
