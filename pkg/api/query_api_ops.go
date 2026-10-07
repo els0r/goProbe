@@ -11,14 +11,20 @@ import (
 
 var queryTags = []string{"Query"}
 
-// authorizationErrors are the statuses the authorization middleware answers with on the
+// authorizationErrors returns the statuses the authorization middleware answers with on the
 // routes that dispatch queries (see AuthorizationMiddleware). Declared on those routes so
-// that generated clients handle them
-var authorizationErrors = []int{
-	http.StatusUnauthorized,
-	http.StatusForbidden,
-	http.StatusServiceUnavailable,
+// that generated clients handle them. A fresh slice per call: huma appends to it on
+// registration
+func authorizationErrors() []int {
+	return []int{
+		http.StatusUnauthorized,
+		http.StatusForbidden,
+		http.StatusServiceUnavailable,
+	}
 }
+
+// authorizationDescription is appended to the description of the routes that dispatch queries
+const authorizationDescription = "When an authorizer is configured, the request is answered with 401 (unauthenticated), 403 (forbidden) or 503 (authorization unavailable) before any query runs."
 
 // RegisterQueryAPI registers all query related endpoints
 func RegisterQueryAPI(a huma.API, caller string, querier query.Runner, middlewares huma.Middlewares) {
@@ -117,9 +123,9 @@ func registerDistributedQueryAPI(a huma.API, caller string, qr SSEQueryRunner, m
 			Method:      http.MethodPost,
 			Path:        QueryRoute,
 			Summary:     "Run query",
-			Description: "Runs a query based on the parameters provided in the body",
+			Description: "Runs a query based on the parameters provided in the body. " + authorizationDescription,
 			Middlewares: middlewares,
-			Errors:      authorizationErrors,
+			Errors:      authorizationErrors(),
 			Tags:        queryTags,
 		},
 		getBodyQueryRunnerHandler(caller, qr),
@@ -134,9 +140,11 @@ func registerDistributedQueryAPI(a huma.API, caller string, qr SSEQueryRunner, m
 
 Pushes back partial results via SSE. Partial results will be truncated to the first 100 items to save bandwidth on larger queries.
 
-The final result will honor the limit parameter passed in the query args.`,
+The final result will honor the limit parameter passed in the query args.
+
+` + authorizationDescription,
 			Middlewares: middlewares,
-			Errors:      authorizationErrors,
+			Errors:      authorizationErrors(),
 			Tags:        queryTags,
 		},
 		map[string]any{
