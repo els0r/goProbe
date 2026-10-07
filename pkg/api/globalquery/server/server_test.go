@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -211,6 +212,56 @@ func TestServer_RejectedRequests_LeaveRateLimitUntouched(t *testing.T) {
 			resp := postQueryTo(t, client, route, "alice")
 			require.Equal(t, http.StatusTooManyRequests, resp.StatusCode, "burst must be exhausted by entitled requests only")
 			assert.Empty(t, querier.queried)
+		})
+	}
+}
+
+// rejectingAuthorizer rejects every request as unauthenticated
+type rejectingAuthorizer struct{}
+
+func (rejectingAuthorizer) Authorize(context.Context, authz.Request) (authz.Scope, error) {
+	return nil, authz.ErrUnauthenticated
+}
+
+// TestServer_WithAuthorizer_OpenRoutesStayOpen pins that routes which never reach a sensor
+// answer without a credential while an authorizer that rejects everything is configured
+func TestServer_WithAuthorizer_OpenRoutesStayOpen(t *testing.T) {
+	client := startServer(t, &recordingQuerier{queried: make(chan hosts.Hosts, 1)},
+		server.WithAuthorizer(rejectingAuthorizer{}),
+	)
+
+	validArgs, err := json.Marshal(query.Args{Query: "sip", Ifaces: "eth0", Format: "json", QueryHosts: "h1"})
+	require.NoError(t, err)
+
+	tests := []struct {
+		name   string
+		method string
+		path   string
+		body   []byte
+		status int
+	}{
+		{name: "health", method: http.MethodGet, path: api.HealthRoute, status: http.StatusOK},
+		{name: "ready", method: http.MethodGet, path: api.ReadyRoute, status: http.StatusOK},
+		{name: "info", method: http.MethodGet, path: api.InfoRoute, status: http.StatusOK},
+		{name: "validate GET", method: http.MethodGet, path: api.ValidationRoute + "?query=sip&ifaces=eth0&format=json&query_hosts=h1", status: http.StatusNoContent},
+		{name: "validate POST", method: http.MethodPost, path: api.ValidationRoute, body: validArgs, status: http.StatusNoContent},
+		// control: the query route itself is guarded by the same authorizer
+		{name: "query POST is rejected", method: http.MethodPost, path: api.QueryRoute, body: validArgs, status: http.StatusUnauthorized},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req, err := http.NewRequest(tt.method, "http://unix"+tt.path, bytes.NewReader(tt.body))
+			require.NoError(t, err)
+			if tt.body != nil {
+				req.Header.Set("Content-Type", "application/json")
+			}
+			resp, err := client.Do(req)
+			require.NoError(t, err)
+			defer func() { _ = resp.Body.Close() }()
+			_, err = io.Copy(io.Discard, resp.Body)
+			require.NoError(t, err)
+
+			assert.Equal(t, tt.status, resp.StatusCode)
 		})
 	}
 }
