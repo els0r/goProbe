@@ -190,6 +190,27 @@ func unscopedWarnings(logs string) (lines []string) {
 	return lines
 }
 
+func TestServerCommand_AuthorizerFlags(t *testing.T) {
+	viper.Reset()
+	cmd, err := serverCommand()
+	require.NoError(t, err)
+
+	for _, tc := range []struct {
+		name string
+		key  string
+		def  string
+	}{
+		{name: "authorizer type flag", key: conf.AuthorizerType, def: conf.DefaultAuthorizerType},
+		{name: "authorizer config flag", key: conf.AuthorizerConfig, def: ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			flag := cmd.PersistentFlags().Lookup(tc.key)
+			require.NotNil(t, flag, "flag --%s", tc.key)
+			assert.Equal(t, tc.def, flag.DefValue)
+		})
+	}
+}
+
 func TestServer_NoAuthorizer_WarnsOnceAtStartup(t *testing.T) {
 	t.Run("empty type warns once that queries run unscoped", func(t *testing.T) {
 		configureServer(t, "")

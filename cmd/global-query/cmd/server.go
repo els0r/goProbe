@@ -35,6 +35,10 @@ func serverCommand() (*cobra.Command, error) {
 	pflags.Duration(conf.ServerShutdownGracePeriod, conf.DefaultServerShutdownGracePeriod, "duration the server will wait during shutdown before forcing shutdown")
 	pflags.StringSlice(conf.ServerCORSOrigins, nil, "allowed CORS origins for browser clients (empty = allow none; recommended in production: set to the frontend origin)")
 
+	// authorization
+	pflags.String(conf.AuthorizerType, conf.DefaultAuthorizerType, "authorizer scoping queries to the host IDs a caller may see (empty = none; queries run unscoped)")
+	pflags.String(conf.AuthorizerConfig, "", "authorizer config file location")
+
 	pflags.String(conf.OpenAPISpecOutfile, "", "write OpenAPI 3.0.3 spec to output file and exit")
 
 	// telemetry
