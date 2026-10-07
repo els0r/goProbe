@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -21,6 +22,7 @@ import (
 	"github.com/els0r/goProbe/v4/pkg/results"
 	"github.com/els0r/goProbe/v4/plugins"
 	"github.com/els0r/goProbe/v4/plugins/resolver/stringresolver"
+	"github.com/els0r/telemetry/logging"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -162,6 +164,55 @@ func receiveQueried(t *testing.T) hosts.Hosts {
 		t.Fatal("querier was not called")
 		return nil
 	}
+}
+
+// captureLogs routes the global logger into a buffer for the duration of the test
+func captureLogs(t *testing.T) *bytes.Buffer {
+	t.Helper()
+	buf := &bytes.Buffer{}
+	_, err := logging.Init(logging.LevelDebug, logging.EncodingLogfmt,
+		logging.WithOutput(buf), logging.WithErrorOutput(buf))
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_, _ = logging.Init(logging.LevelDebug, logging.EncodingLogfmt,
+			logging.WithOutput(os.Stdout), logging.WithErrorOutput(os.Stderr))
+	})
+	return buf
+}
+
+// unscopedWarnings returns the warning lines announcing unscoped operation
+func unscopedWarnings(logs string) (lines []string) {
+	for _, line := range strings.Split(logs, "\n") {
+		if strings.Contains(line, "level=warn") && strings.Contains(line, "unscoped") {
+			lines = append(lines, line)
+		}
+	}
+	return lines
+}
+
+func TestServer_NoAuthorizer_WarnsOnceAtStartup(t *testing.T) {
+	t.Run("empty type warns once that queries run unscoped", func(t *testing.T) {
+		configureServer(t, "")
+		logs := captureLogs(t)
+
+		_, err := newAPIServer(context.Background(), "localhost:0")
+		require.NoError(t, err)
+
+		warnings := unscopedWarnings(logs.String())
+		require.Len(t, warnings, 1, "logs:\n%s", logs.String())
+		assert.Contains(t, warnings[0], "queries run unscoped")
+		assert.Contains(t, warnings[0], "opt-in with the next major version")
+	})
+
+	t.Run("configured authorizer does not warn", func(t *testing.T) {
+		configureServer(t, testAuthorizerType)
+		logs := captureLogs(t)
+
+		_, err := newAPIServer(context.Background(), "localhost:0")
+		require.NoError(t, err)
+
+		assert.Empty(t, unscopedWarnings(logs.String()), "logs:\n%s", logs.String())
+	})
 }
 
 func TestServer_ConfiguredAuthorizer_ScopesQueriesOverHTTP(t *testing.T) {

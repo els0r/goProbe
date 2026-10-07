@@ -88,6 +88,9 @@ func newAPIServer(ctx context.Context, addr string) (*gqserver.Server, error) {
 	}
 	if authorizer != nil {
 		opts = append(opts, server.WithAuthorizer(authorizer))
+	} else {
+		logger.Warn("no authorizer configured, queries run unscoped; unscoped operation becomes opt-in with the next major version",
+			"key", conf.AuthorizerType)
 	}
 
 	return gqserver.New(addr, hostListResolvers, querier, opts...), nil
