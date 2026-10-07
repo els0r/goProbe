@@ -55,6 +55,27 @@ func TestInitResolvers_AppendsFlagAndStringResolver(t *testing.T) {
 	require.Implements(t, (*hosts.Resolver)(nil), r)
 }
 
+func TestInitAuthorizer_EmptyType_YieldsNoAuthorizer(t *testing.T) {
+	viper.Reset()
+	viper.Set(conf.AuthorizerType, "")
+	viper.Set(conf.AuthorizerConfig, "")
+
+	a, err := initAuthorizer(context.Background())
+	require.NoError(t, err)
+	require.Nil(t, a)
+}
+
+func TestInitAuthorizer_UnknownType_ReturnsErrorNamingType(t *testing.T) {
+	viper.Reset()
+	viper.Set(conf.AuthorizerType, "does-not-exist")
+	viper.Set(conf.AuthorizerConfig, "")
+
+	a, err := initAuthorizer(context.Background())
+	require.Error(t, err)
+	require.Nil(t, a)
+	require.Contains(t, err.Error(), `"does-not-exist"`)
+}
+
 func TestInitQuerier_UnknownType_ReturnsError(t *testing.T) {
 	viper.Reset()
 	viper.Set(conf.QuerierType, "does-not-exist")

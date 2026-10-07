@@ -1,0 +1,182 @@
+package cmd
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"net"
+	"net/http"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/els0r/goProbe/v4/cmd/global-query/pkg/conf"
+	"github.com/els0r/goProbe/v4/pkg/api"
+	"github.com/els0r/goProbe/v4/pkg/distributed"
+	"github.com/els0r/goProbe/v4/pkg/distributed/authz"
+	"github.com/els0r/goProbe/v4/pkg/distributed/hosts"
+	"github.com/els0r/goProbe/v4/pkg/query"
+	"github.com/els0r/goProbe/v4/pkg/results"
+	"github.com/els0r/goProbe/v4/plugins"
+	"github.com/els0r/goProbe/v4/plugins/resolver/stringresolver"
+	"github.com/spf13/viper"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+const (
+	testQuerierType    = "test-recording"
+	testAuthorizerType = "test-header-scope"
+	testPrincipalHdr   = "X-Test-Principal"
+)
+
+// recordingQuerier records the host IDs it is asked to query and answers nothing
+type recordingQuerier struct{ queried chan hosts.Hosts }
+
+func (q *recordingQuerier) Query(_ context.Context, queryHosts hosts.Hosts, _ *query.Args) (<-chan *results.Result, <-chan struct{}) {
+	q.queried <- queryHosts
+	rc := make(chan *results.Result)
+	close(rc)
+	kc := make(chan struct{})
+	close(kc)
+	return rc, kc
+}
+
+// principalScope keeps the host IDs listed for the principal
+type principalScope struct {
+	principal string
+	allowed   hosts.Hosts
+}
+
+func (s principalScope) Principal() string { return s.principal }
+
+func (s principalScope) Filter(_ context.Context, hostIDs hosts.Hosts) (out hosts.Hosts, err error) {
+	for _, id := range hostIDs {
+		for _, allowed := range s.allowed {
+			if id == allowed {
+				out = append(out, id)
+			}
+		}
+	}
+	return out, nil
+}
+
+// headerAuthorizer is a test authorizer that takes the principal from a request header
+type headerAuthorizer struct{ scopes map[string]hosts.Hosts }
+
+func (a headerAuthorizer) Authorize(_ context.Context, req authz.Request) (authz.Scope, error) {
+	principal := req.Header(testPrincipalHdr)
+	if principal == "" {
+		return nil, authz.ErrUnauthenticated
+	}
+	allowed, ok := a.scopes[principal]
+	if !ok {
+		return nil, authz.ErrForbidden
+	}
+	return principalScope{principal: principal, allowed: allowed}, nil
+}
+
+// testQuerier is the querier the test plugin hands out, so tests can observe what was queried
+var testQuerier = &recordingQuerier{queried: make(chan hosts.Hosts, 1)}
+
+// the test plugins register exactly like in-tree or contrib plugins do: from init()
+func init() {
+	plugins.RegisterQuerier(testQuerierType, func(_ context.Context, _ string) (distributed.Querier, error) {
+		return testQuerier, nil
+	})
+	plugins.RegisterAuthorizer(testAuthorizerType, func(_ context.Context, _ string) (authz.Authorizer, error) {
+		return headerAuthorizer{scopes: map[string]hosts.Hosts{"alice": {"h2"}}}, nil
+	})
+}
+
+// configureServer sets the viper keys a server start reads, selecting the test querier and
+// the given authorizer type
+func configureServer(t *testing.T, authorizerType string) {
+	t.Helper()
+	viper.Reset()
+	viper.Set("hosts.resolvers", []map[string]string{})
+	viper.Set(conf.HostsResolverType, stringresolver.Type)
+	viper.Set(conf.QuerierType, testQuerierType)
+	viper.Set(conf.AuthorizerType, authorizerType)
+}
+
+// startConfiguredServer builds the server from the viper config the way the server command
+// does, serves it on a unix socket and returns a client for it
+func startConfiguredServer(t *testing.T) *http.Client {
+	t.Helper()
+
+	dir, err := os.MkdirTemp("", "gq")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	socket := filepath.Join(dir, "s.sock")
+
+	srv, err := newAPIServer(context.Background(), "unix:"+socket)
+	require.NoError(t, err)
+	go func() {
+		if err := srv.Serve(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			t.Errorf("serve: %v", err)
+		}
+	}()
+	t.Cleanup(func() { _ = srv.Shutdown(context.Background()) })
+
+	require.Eventually(t, func() bool {
+		conn, err := net.Dial("unix", socket)
+		if err != nil {
+			return false
+		}
+		_ = conn.Close()
+		return true
+	}, 5*time.Second, 10*time.Millisecond)
+
+	return &http.Client{Transport: &http.Transport{
+		DialContext: func(context.Context, string, string) (net.Conn, error) {
+			return net.Dial("unix", socket)
+		},
+	}}
+}
+
+func postQuery(t *testing.T, client *http.Client, principal string) *http.Response {
+	t.Helper()
+	body, err := json.Marshal(query.Args{Query: "sip", Ifaces: "eth0", Format: "json", QueryHosts: "h1,h2,h3"})
+	require.NoError(t, err)
+	req, err := http.NewRequest(http.MethodPost, "http://unix"+api.QueryRoute, bytes.NewReader(body))
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/json")
+	if principal != "" {
+		req.Header.Set(testPrincipalHdr, principal)
+	}
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = resp.Body.Close() })
+	return resp
+}
+
+func receiveQueried(t *testing.T) hosts.Hosts {
+	t.Helper()
+	select {
+	case queried := <-testQuerier.queried:
+		return queried
+	case <-time.After(5 * time.Second):
+		t.Fatal("querier was not called")
+		return nil
+	}
+}
+
+func TestServer_ConfiguredAuthorizer_ScopesQueriesOverHTTP(t *testing.T) {
+	configureServer(t, testAuthorizerType)
+	client := startConfiguredServer(t)
+
+	t.Run("scoped principal reaches only hosts in scope", func(t *testing.T) {
+		resp := postQuery(t, client, "alice")
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.Equal(t, hosts.Hosts{"h2"}, receiveQueried(t))
+	})
+
+	t.Run("request without credential is unauthenticated", func(t *testing.T) {
+		resp := postQuery(t, client, "")
+		require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+		assert.Empty(t, testQuerier.queried)
+	})
+}

@@ -48,6 +48,51 @@ func serverCommand() (*cobra.Command, error) {
 	return serverCmd, nil
 }
 
+// newAPIServer instantiates the plugins selected by the configuration and builds the API
+// server listening on addr from them
+func newAPIServer(ctx context.Context, addr string) (*gqserver.Server, error) {
+	logger := logging.FromContext(ctx)
+
+	hostListResolvers, err := initResolvers(ctx)
+	if err != nil {
+		logger.Errorf("failed to prepare host resolver: %v", err)
+		return nil, err
+	}
+
+	qlogger := logger.With("plugins", plugins.GetInitializer())
+	qlogger.Debug("getting available plugins")
+
+	// get the querier
+	querier, err := initQuerier(ctx)
+	if err != nil {
+		qlogger.Errorf("failed to set up queriers: %v", err)
+		return nil, err
+	}
+
+	opts := []server.Option{
+		// Set the release mode of GIN depending on the log level
+		server.WithDebugMode(
+			logging.LevelFromString(viper.GetString(conf.LogLevel)) == logging.LevelDebug,
+		),
+		server.WithProfiling(viper.GetBool(conf.ProfilingEnabled)),
+		server.WithTracing(viper.GetBool(tracing.TracingEnabledArg)),
+		server.WithCORSOrigins(viper.GetStringSlice(conf.ServerCORSOrigins)...),
+	}
+
+	// an authorizer handed to the server constructor wires middleware and runner
+	// enforcement together. A typo in the type fails here and never leaves queries unscoped
+	authorizer, err := initAuthorizer(ctx)
+	if err != nil {
+		qlogger.Errorf("failed to set up authorizer: %v", err)
+		return nil, err
+	}
+	if authorizer != nil {
+		opts = append(opts, server.WithAuthorizer(authorizer))
+	}
+
+	return gqserver.New(addr, hostListResolvers, querier, opts...), nil
+}
+
 func serverEntrypoint(_ *cobra.Command, _ []string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	defer stop()
@@ -65,33 +110,11 @@ func serverEntrypoint(_ *cobra.Command, _ []string) error {
 		logger.With("error", err).Error("failed to set up tracing")
 	}
 
-	hostListResolvers, err := initResolvers(ctx)
-	if err != nil {
-		logger.Errorf("failed to prepare host resolver: %v", err)
-		return err
-	}
-
-	qlogger := logger.With("plugins", plugins.GetInitializer())
-	qlogger.Debug("getting available plugins")
-
-	// get the querier
-	querier, err := initQuerier(ctx)
-	if err != nil {
-		qlogger.Errorf("failed to set up queriers: %v", err)
-		return err
-	}
-
-	// set up the API server
 	addr := viper.GetString(conf.ServerAddr)
-	apiServer := gqserver.New(addr, hostListResolvers, querier,
-		// Set the release mode of GIN depending on the log level
-		server.WithDebugMode(
-			logging.LevelFromString(viper.GetString(conf.LogLevel)) == logging.LevelDebug,
-		),
-		server.WithProfiling(viper.GetBool(conf.ProfilingEnabled)),
-		server.WithTracing(viper.GetBool(tracing.TracingEnabledArg)),
-		server.WithCORSOrigins(viper.GetStringSlice(conf.ServerCORSOrigins)...),
-	)
+	apiServer, err := newAPIServer(ctx, addr)
+	if err != nil {
+		return err
+	}
 
 	// initializing the server in a goroutine so that it won't block the graceful
 	// shutdown handling below
