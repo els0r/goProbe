@@ -21,6 +21,7 @@ import (
 	"github.com/els0r/goProbe/v4/pkg/results"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/time/rate"
 )
 
 func TestGenerateOpenAPISpec(t *testing.T) {
@@ -120,9 +121,14 @@ func startServer(t *testing.T, querier *recordingQuerier, opts ...server.Option)
 
 func postQuery(t *testing.T, client *http.Client, principal string) *http.Response {
 	t.Helper()
+	return postQueryTo(t, client, api.QueryRoute, principal)
+}
+
+func postQueryTo(t *testing.T, client *http.Client, route, principal string) *http.Response {
+	t.Helper()
 	body, err := json.Marshal(query.Args{Query: "sip", Ifaces: "eth0", Format: "json", QueryHosts: "h1,h2,h3"})
 	require.NoError(t, err)
-	req, err := http.NewRequest(http.MethodPost, "http://unix"+api.QueryRoute, bytes.NewReader(body))
+	req, err := http.NewRequest(http.MethodPost, "http://unix"+route, bytes.NewReader(body))
 	require.NoError(t, err)
 	req.Header.Set("Content-Type", "application/json")
 	if principal != "" {
@@ -173,6 +179,40 @@ func TestServer_WithAuthorizer_ScopesQueries(t *testing.T) {
 		require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 		assert.Empty(t, querier.queried)
 	})
+}
+
+// TestServer_RejectedRequests_LeaveRateLimitUntouched pins that authorization runs before the
+// rate limiter on both query routes: a burst of rejected requests must not consume the shared
+// budget, whereas the same number of entitled requests exhausts it
+func TestServer_RejectedRequests_LeaveRateLimitUntouched(t *testing.T) {
+	const burst = 2
+
+	for _, route := range []string{api.QueryRoute, api.SSEQueryRoute} {
+		t.Run(route, func(t *testing.T) {
+			querier := &recordingQuerier{queried: make(chan hosts.Hosts, 1)}
+			authorizer := headerAuthorizer{scopes: map[string]hosts.Hosts{"alice": {"h1"}}}
+			client := startServer(t, querier,
+				server.WithAuthorizer(authorizer),
+				// the budget never refills during the test, so only the burst is available
+				server.WithQueryRateLimit(rate.Every(time.Hour), burst, 0),
+			)
+
+			for i := 0; i < burst; i++ {
+				resp := postQueryTo(t, client, route, "")
+				require.Equal(t, http.StatusUnauthorized, resp.StatusCode, "rejected request %d", i)
+			}
+
+			for i := 0; i < burst; i++ {
+				resp := postQueryTo(t, client, route, "alice")
+				require.Equal(t, http.StatusOK, resp.StatusCode, "entitled request %d after rejected burst", i)
+				assert.Equal(t, hosts.Hosts{"h1"}, receiveQueried(t, querier))
+			}
+
+			resp := postQueryTo(t, client, route, "alice")
+			require.Equal(t, http.StatusTooManyRequests, resp.StatusCode, "burst must be exhausted by entitled requests only")
+			assert.Empty(t, querier.queried)
+		})
+	}
 }
 
 func TestServer_WithoutAuthorizer_QueriesRunUnscoped(t *testing.T) {
