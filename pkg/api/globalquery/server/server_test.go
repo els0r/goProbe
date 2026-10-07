@@ -171,9 +171,9 @@ func doRequest(t *testing.T, client *http.Client, method, route string, body []b
 	}
 	resp, err := client.Do(req)
 	require.NoError(t, err)
+	defer func() { assert.NoError(t, resp.Body.Close()) }()
 	payload, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
-	require.NoError(t, resp.Body.Close())
 	return response{status: resp.StatusCode, body: payload}
 }
 
