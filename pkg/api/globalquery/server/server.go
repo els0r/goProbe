@@ -12,7 +12,6 @@ import (
 	"github.com/els0r/goProbe/v4/pkg/distributed"
 	"github.com/els0r/goProbe/v4/pkg/distributed/hosts"
 	"github.com/els0r/goProbe/v4/pkg/version"
-	"github.com/els0r/telemetry/logging"
 )
 
 // Server runs a global-query API server
@@ -44,12 +43,11 @@ func (server *Server) registerRoutes() {
 
 	// an authorizer always comes with runner enforcement: a query never runs unscoped
 	// because a middleware was not attached. Authorization runs before the rate limiter
-	// so that rejected requests never consume the shared budget
+	// so that rejected requests never consume the shared budget. Without an authorizer
+	// queries run unscoped; the global-query command warns about that once at startup
 	if authorizer, ok := server.Authorizer(); ok {
 		middlewares = append(middlewares, api.AuthorizationMiddleware(server.API(), authorizer))
 		opts = append(opts, gqdistributed.WithScopeEnforcement())
-	} else {
-		logging.Logger().Warn("no authorizer configured, queries run unscoped")
 	}
 
 	maxConcurrentQueries, rateLimiter, enabled := server.QueryRateLimiter()

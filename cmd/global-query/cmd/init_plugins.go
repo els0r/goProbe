@@ -7,10 +7,12 @@ import (
 
 	"github.com/els0r/goProbe/v4/cmd/global-query/pkg/conf"
 	"github.com/els0r/goProbe/v4/pkg/distributed"
+	"github.com/els0r/goProbe/v4/pkg/distributed/authz"
 	"github.com/els0r/goProbe/v4/pkg/distributed/hosts"
 	"github.com/els0r/goProbe/v4/plugins"
 
 	// internal plugin support
+	_ "github.com/els0r/goProbe/v4/plugins/authorizer"
 	_ "github.com/els0r/goProbe/v4/plugins/querier"
 	_ "github.com/els0r/goProbe/v4/plugins/resolver"
 	"github.com/els0r/goProbe/v4/plugins/resolver/stringresolver"
@@ -21,6 +23,16 @@ func initQuerier(ctx context.Context) (querier distributed.Querier, err error) {
 		viper.GetString(conf.QuerierType),
 		viper.GetString(conf.QuerierConfig),
 	)
+}
+
+// initAuthorizer constructs the authorizer selected by authorizer.type. An empty type
+// selects no authorizer (nil): queries then run unscoped
+func initAuthorizer(ctx context.Context) (authz.Authorizer, error) {
+	authorizerType := viper.GetString(conf.AuthorizerType)
+	if authorizerType == "" {
+		return nil, nil
+	}
+	return plugins.InitAuthorizer(ctx, authorizerType, viper.GetString(conf.AuthorizerConfig))
 }
 
 func initResolvers(ctx context.Context) (resolvers *hosts.ResolverMap, err error) {

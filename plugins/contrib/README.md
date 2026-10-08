@@ -3,3 +3,53 @@
 > Third-party contributions for the goProbe software suite
 
 See [github.com/els0r/goProbe-contrib](https://github.com/els0r/goProbe-contrib) for how to contribute.
+
+## How plugins register
+
+This module side-effect imports `github.com/els0r/goProbe-contrib` when the `goprobe_contrib` build tag is set (`contrib_gen.go` holds the `go:generate` directive; running `go generate` in this directory has `gen.go` write the import into `contrib_generated.go`, which is gitignored and must never be edited by hand). A contrib plugin registers itself from its `init()` with the registry in `github.com/els0r/goProbe/v4/plugins`, under a name an operator then selects in the `global-query` configuration. Three plugin kinds exist:
+
+| Kind       | Registration                                 | Selected by                          |
+|------------|----------------------------------------------|--------------------------------------|
+| querier    | `plugins.RegisterQuerier(name, initFn)`      | `querier.type` / `querier.config`    |
+| resolver   | `plugins.RegisterResolver(name, initFn)`     | `hosts.resolver.type` / `.config`    |
+| authorizer | `plugins.RegisterAuthorizer(name, initFn)`   | `authorizer.type` / `authorizer.config` |
+
+Registering a name twice panics at startup. Every `initFn` takes a `context.Context` and the path of the plugin's config file (empty when none was configured) and returns the plugin instance or an error, which fails startup.
+
+## Writing an authorizer
+
+An **authorizer** turns a request to `global-query` into a **scope**, or rejects it. One authorizer is active per server. The contract lives in `github.com/els0r/goProbe/v4/pkg/distributed/authz`, which depends on the standard library and the host ID type only. The vocabulary is defined in [CONTEXT.md](../../CONTEXT.md), the design in [ADR 0003](../../docs/adr/0003-global-query-scopes-queries-by-host-id-before-fan-out.md).
+
+```go
+package myauthorizer
+
+import (
+	"context"
+
+	"github.com/els0r/goProbe/v4/pkg/distributed/authz"
+	"github.com/els0r/goProbe/v4/plugins"
+)
+
+const Name = "my-authorizer"
+
+func init() {
+	plugins.RegisterAuthorizer(Name, func(ctx context.Context, cfgPath string) (authz.Authorizer, error) {
+		return New(cfgPath) // read the config file, set up provider clients, caches, ...
+	})
+}
+```
+
+### Contract
+
+- `Authorize(ctx, req) (authz.Scope, error)` is called once per request to the two query routes, before the rate limiter. It sees a read-only view of the request (headers, TLS connection state, remote address), never the body.
+- Return `authz.ErrUnauthenticated` when the request carries no valid credential (answered with `401`), `authz.ErrForbidden` when the caller may not query at all (`403`). Both may be wrapped with `%w`; they are matched with `errors.Is`. Any other error, including an unreachable provider, is answered with `503`: authorization never fails open. The error you return is logged, never shown to the caller.
+- A `Scope` exposes `Principal()` and `Filter(ctx, hostIDs)`. `Filter` may only narrow: returning a host ID it was not given is treated as an authorizer failure. A scope that keeps no host of a query is answered with `403`.
+- Authorization is by **host ID**, the operator-chosen identifier under which `global-query` knows a sensor. The hostname a sensor reports about itself is never an input.
+
+### Caching is the plugin's job
+
+The authorizer runs on the request path of every query. `global-query` does not cache decisions or scopes; if your provider is remote or slow, cache its answers inside the plugin (and bound the cache's lifetime so revoked access takes effect).
+
+### The principal is not a secret
+
+`Principal()` is the opaque, non-secret identity of the caller, used for audit only. It is attached to every log line of the request from the point of authorization on and to trace spans. Never return a token, password, API key or any other credential from it; derive a stable, non-sensitive identifier instead.

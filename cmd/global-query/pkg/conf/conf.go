@@ -36,6 +36,10 @@ const (
 	QuerierConfig        = querierKey + ".config"
 	QuerierMaxConcurrent = querierKey + ".max_concurrent"
 
+	authorizerKey    = "authorizer"
+	AuthorizerType   = authorizerKey + ".type"
+	AuthorizerConfig = authorizerKey + ".config"
+
 	serverKey                 = "server"
 	ServerAddr                = serverKey + ".addr"
 	ServerShutdownGracePeriod = serverKey + ".shutdowngraceperiod"
@@ -53,6 +57,10 @@ const (
 	DefaultHostsResolverType = "string"
 
 	DefaultHostsQuerierType = "api"
+
+	// DefaultAuthorizerType selects no authorizer: queries run unscoped. The next major
+	// version makes unscoped operation opt-in
+	DefaultAuthorizerType = ""
 
 	DefaultServerAddr                = "localhost:8145"
 	DefaultServerShutdownGracePeriod = 30 * time.Second

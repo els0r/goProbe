@@ -57,10 +57,9 @@ func (p *Initializer) getQuerier(name string) (QuerierInitializer, bool) {
 
 func (p *Initializer) registerQuerier(name string, initFn QuerierInitializer) {
 	p.Lock()
-	_, exists := p.queriers[name]
-	if exists {
+	defer p.Unlock()
+	if _, exists := p.queriers[name]; exists {
 		panic(fmt.Sprintf("%q querier already registered", name))
 	}
 	p.queriers[name] = initFn
-	p.Unlock()
 }

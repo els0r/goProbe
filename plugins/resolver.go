@@ -121,9 +121,9 @@ func (i *Initializer) getResolver(name string) (ResolverInitializer, bool) {
 
 func (i *Initializer) registerResolver(name string, initFn ResolverInitializer) {
 	i.Lock()
+	defer i.Unlock()
 	if _, exists := i.resolvers[name]; exists {
 		panic(fmt.Sprintf("%q resolver already registered", name))
 	}
 	i.resolvers[name] = initFn
-	i.Unlock()
 }
