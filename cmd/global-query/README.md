@@ -60,7 +60,36 @@ With an authorizer configured, each request to `/_query` and `/_query/sse` is tu
 
 **Sensors remain unauthenticated.** Only `global-query` is scoped. A `goProbe` sensor still answers anyone who can reach its API, so the path between `global-query` and the sensors must stay private: it must not be reachable by the callers of `global-query`.
 
-No in-tree authorizer ships yet. Out-of-tree authorizers register through the [contrib mechanism](../../plugins/contrib/README.md), which also documents the contract for plugin authors.
+One authorizer ships in-tree, `header`, described below. Out-of-tree authorizers register through the [contrib mechanism](../../plugins/contrib/README.md), which also documents the contract for plugin authors.
+
+### The `header` authorizer
+
+The `header` authorizer reads the **scope** from a request header set by a trusted gateway in front of `global-query`, and optionally the **principal** from a second header. It lets an operator enable scoping without writing code.
+
+> **Warning: the `header` authorizer is exactly as safe as the network path in front of it.** It trusts the scope header unconditionally. The gateway must **replace** the scope and principal headers on **every** path a client can reach, never append to them, and no proxy between the gateway and `global-query` may fold repeated headers into one value. If a client can reach `global-query` directly, or through any path that passes its headers through, that client can grant itself any scope. The authorizer refuses to start until the config acknowledges this with `trusted: true`.
+
+```yaml
+authorizer:
+  type: header
+  config: ./examples/config/global-query-header-authorizer-example-config.yaml
+```
+
+Config file (see the [example](../../examples/config/global-query-header-authorizer-example-config.yaml)):
+
+| Key                | Default                   | Meaning                                                                                       |
+|--------------------|---------------------------|-----------------------------------------------------------------------------------------------|
+| `trusted`          | none, required            | Must be `true`: acknowledges that clients cannot set the scope header. Anything else, or no config file at all, fails startup |
+| `scope_header`     | `X-GoProbe-Allowed-Hosts` | Header carrying the comma-separated **host IDs** of the scope                                 |
+| `principal_header` | `X-GoProbe-Principal`     | Header carrying the **principal**, audit only. `unknown` when absent, empty or sent more than once |
+
+Rules:
+
+- The scope header holds a comma-separated list of host IDs. Each is trimmed, duplicates are dropped, and host IDs are matched exactly. There is no wildcard: a literal `*` is an ordinary host ID that matches nothing.
+- A missing scope header, an empty one (also one holding only whitespace and commas), or one arriving **more than once** is answered with `403`. The repetition rule catches a gateway that appends a second header line instead of replacing the client's; it is a safety net, not a substitute for the gateway replacing the header. It cannot catch an intermediate proxy that folds repeated headers into one comma-joined value (RFC 9110 allows combining list-valued headers, and some gateways do it): a client-sent value folded into the gateway's arrives as a single header and passes. Hence the gateway must **replace**, never append, and no proxy between gateway and `global-query` may fold headers. The authorizer never answers `401`: it does not authenticate.
+- The principal is the value of the principal header. It is reported as `unknown` when the header is absent, empty or arrives **more than once** (with an appending gateway the first value would be the client's, and the audit trail must not record it), capped at 256 runes before it is stored and logged, and never influences the decision: a repeated principal header does not reject the request.
+- Unknown keys in the config file fail startup with an error naming the key, so a misspelled header name cannot silently fall back to the default.
+
+**Scope size bound.** The scope travels in a request header, and proxies commonly cap request headers at around 8 KB. A scope of more than a few hundred host IDs will not fit; that is the point where a provider-backed authorizer, which looks the scope up by principal, is needed instead.
 
 ## Running Global Queries
 

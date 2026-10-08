@@ -9,9 +9,11 @@ querier:
   max_concurrent: 64
   config: ./examples/config/global-query-api-client-querier-example-config.yaml
 # authorizer scoping queries to the host IDs a caller may see. Empty / absent: queries run
-# unscoped (the server warns once at startup; becomes opt-in with the next major version)
+# unscoped (the server warns once at startup; becomes opt-in with the next major version).
+# The in-tree "header" authorizer reads the scope from a header set by a trusted gateway, see
+# ./examples/config/global-query-header-authorizer-example-config.yaml
 # authorizer:
-#   type: ""
-#   config: ""
+#   type: header
+#   config: ./examples/config/global-query-header-authorizer-example-config.yaml
 server:
   addr: localhost:8146
