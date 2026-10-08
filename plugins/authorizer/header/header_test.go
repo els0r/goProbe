@@ -171,6 +171,45 @@ func TestAuthorize_Principal(t *testing.T) {
 	})
 }
 
+func TestNew_HeaderNamesAreConfigurable(t *testing.T) {
+	t.Run("defaults", func(t *testing.T) {
+		assert.Equal(t, "X-GoProbe-Allowed-Hosts", header.DefaultScopeHeader)
+		assert.Equal(t, "X-GoProbe-Principal", header.DefaultPrincipalHeader)
+	})
+
+	t.Run("configured names are read, defaults are ignored", func(t *testing.T) {
+		a, err := header.New(writeConfig(t, "trusted: true\nscope_header: X-Scope\nprincipal_header: X-Who\n"))
+		require.NoError(t, err)
+
+		req := fakeRequest{header: http.Header{
+			"X-Scope":                 {"h2"},
+			"X-Who":                   {"alice"},
+			"X-Goprobe-Allowed-Hosts": {"h1"},
+			"X-Goprobe-Principal":     {"mallory"},
+		}}
+		scope, err := a.Authorize(context.Background(), req)
+		require.NoError(t, err)
+		assert.Equal(t, "alice", scope.Principal())
+
+		got, err := scope.Filter(context.Background(), hosts.Hosts{"h1", "h2"})
+		require.NoError(t, err)
+		assert.Equal(t, hosts.Hosts{"h2"}, got)
+	})
+
+	t.Run("blank names fall back to the defaults", func(t *testing.T) {
+		a, err := header.New(writeConfig(t, "trusted: true\nscope_header: '  '\nprincipal_header: ''\n"))
+		require.NoError(t, err)
+
+		req := fakeRequest{header: http.Header{
+			"X-Goprobe-Allowed-Hosts": {"h1"},
+			"X-Goprobe-Principal":     {"alice"},
+		}}
+		scope, err := a.Authorize(context.Background(), req)
+		require.NoError(t, err)
+		assert.Equal(t, "alice", scope.Principal())
+	})
+}
+
 func TestAuthorize_ScopeFromHeader(t *testing.T) {
 	a, err := header.New(writeConfig(t, "trusted: true\n"))
 	require.NoError(t, err)

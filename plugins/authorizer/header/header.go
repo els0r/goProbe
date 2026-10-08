@@ -82,9 +82,17 @@ func NewFromConfig(cfg Config) (*Authorizer, error) {
 		return nil, errors.New("header authorizer: config must set trusted: true, acknowledging that the gateway strips or replaces the scope header on every client-reachable path so that clients cannot set it")
 	}
 	return &Authorizer{
-		scopeHeader:     DefaultScopeHeader,
-		principalHeader: DefaultPrincipalHeader,
+		scopeHeader:     headerName(cfg.ScopeHeader, DefaultScopeHeader),
+		principalHeader: headerName(cfg.PrincipalHeader, DefaultPrincipalHeader),
 	}, nil
+}
+
+// headerName returns the trimmed configured header name, or def when it is blank
+func headerName(configured, def string) string {
+	if name := strings.TrimSpace(configured); name != "" {
+		return name
+	}
+	return def
 }
 
 // Authorize turns the scope header into a Scope. A scope header that is missing, empty or
