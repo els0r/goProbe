@@ -143,11 +143,16 @@ func (sse *SSEClient) Query(ctx context.Context, args *query.Args) (*results.Res
 	return sse.readEventStream(ctx, resp.Body)
 }
 
+// maxErrorBodyBytes bounds how much of a response sent instead of an event stream is read
+// into the error returned to the caller
+const maxErrorBodyBytes = 64 << 10
+
 // responseError turns a response the server sent instead of an event stream into an error
 // that carries the response's status. An RFC 9457 problem body is returned as is; any
-// other body becomes the detail
+// other body becomes the detail, prefixed with the response status. Bodies longer than
+// maxErrorBodyBytes are truncated
 func responseError(resp *http.Response) error {
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxErrorBodyBytes))
 	if err != nil {
 		return fmt.Errorf("failed to read body of %s response: %w", resp.Status, err)
 	}
@@ -157,9 +162,9 @@ func responseError(resp *http.Response) error {
 		return problem
 	}
 
-	detail := string(bytes.TrimSpace(body))
-	if detail == "" {
-		detail = resp.Status
+	detail := resp.Status
+	if text := string(bytes.TrimSpace(body)); text != "" {
+		detail += ": " + text
 	}
 	return query.NewDetailError(resp.StatusCode, errors.New(detail))
 }

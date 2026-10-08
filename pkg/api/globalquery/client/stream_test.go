@@ -143,7 +143,7 @@ func TestSSEClient_Query_SurfacesAuthorizationStatus(t *testing.T) {
 				assert.NoError(t, err)
 			},
 			status: http.StatusBadGateway,
-			detail: "upstream gone",
+			detail: "502 Bad Gateway: upstream gone",
 		},
 	}
 	for _, tt := range tests {
@@ -158,4 +158,22 @@ func TestSSEClient_Query_SurfacesAuthorizationStatus(t *testing.T) {
 			assert.Equal(t, tt.detail, statusErr.Error())
 		})
 	}
+}
+
+// TestSSEClient_Query_TruncatesLongErrorBody pins that the body of a response sent instead
+// of an event stream is read up to a bound and still yields the status
+func TestSSEClient_Query_TruncatesLongErrorBody(t *testing.T) {
+	const prefix = "502 Bad Gateway: "
+	_, err := queryAgainst(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		w.WriteHeader(http.StatusBadGateway)
+		_, werr := fmt.Fprint(w, strings.Repeat("x", 3*maxErrorBodyBytes))
+		assert.NoError(t, werr)
+	})
+
+	var statusErr huma.StatusError
+	require.ErrorAs(t, err, &statusErr)
+	assert.Equal(t, http.StatusBadGateway, statusErr.GetStatus())
+	assert.True(t, strings.HasPrefix(statusErr.Error(), prefix))
+	assert.Len(t, statusErr.Error(), len(prefix)+maxErrorBodyBytes)
 }
