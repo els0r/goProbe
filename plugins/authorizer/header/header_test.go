@@ -11,6 +11,7 @@ import (
 
 	"github.com/els0r/goProbe/v4/pkg/distributed/authz"
 	"github.com/els0r/goProbe/v4/pkg/distributed/hosts"
+	"github.com/els0r/goProbe/v4/plugins"
 	"github.com/els0r/goProbe/v4/plugins/authorizer/header"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -207,6 +208,30 @@ func TestNew_HeaderNamesAreConfigurable(t *testing.T) {
 		scope, err := a.Authorize(context.Background(), req)
 		require.NoError(t, err)
 		assert.Equal(t, "alice", scope.Principal())
+	})
+}
+
+func TestRegistration(t *testing.T) {
+	t.Run("listed among the in-tree authorizers", func(t *testing.T) {
+		assert.Contains(t, plugins.GetAvailableAuthorizerPlugins(), header.Type)
+	})
+
+	t.Run("selected by type", func(t *testing.T) {
+		a, err := plugins.InitAuthorizer(context.Background(), header.Type, writeConfig(t, "trusted: true\n"))
+		require.NoError(t, err)
+		require.IsType(t, &header.Authorizer{}, a)
+
+		scope, err := a.Authorize(context.Background(), fakeRequest{header: http.Header{"X-Goprobe-Allowed-Hosts": {"h1"}}})
+		require.NoError(t, err)
+		got, err := scope.Filter(context.Background(), hosts.Hosts{"h1", "h2"})
+		require.NoError(t, err)
+		assert.Equal(t, hosts.Hosts{"h1"}, got)
+	})
+
+	t.Run("selected by type without a config file fails", func(t *testing.T) {
+		a, err := plugins.InitAuthorizer(context.Background(), header.Type, "")
+		require.Error(t, err)
+		assert.Nil(t, a)
 	})
 }
 
