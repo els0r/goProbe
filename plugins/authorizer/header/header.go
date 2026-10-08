@@ -4,9 +4,11 @@
 package header
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -69,10 +71,15 @@ func New(cfgPath string) (*Authorizer, error) {
 	if err != nil {
 		return nil, fmt.Errorf("header authorizer: failed to read config: %w", err)
 	}
+	// unknown keys fail startup: a misspelled header name must not silently fall back to the
+	// default
+	dec := yaml.NewDecoder(bytes.NewReader(b))
+	dec.KnownFields(true)
 	var cfg Config
-	if err := yaml.Unmarshal(b, &cfg); err != nil {
+	if err := dec.Decode(&cfg); err != nil && !errors.Is(err, io.EOF) {
 		return nil, fmt.Errorf("header authorizer: failed to parse config: %w", err)
 	}
+	// an empty file decodes to the zero config, which fails the trusted check below
 	return NewFromConfig(cfg)
 }
 
@@ -106,16 +113,26 @@ func (a *Authorizer) Authorize(_ context.Context, req authz.Request) (authz.Scop
 		return nil, fmt.Errorf("scope header %q present %d times: %w", a.scopeHeader, n, authz.ErrForbidden)
 	}
 
-	s := newScope(normalizePrincipal(req.Header(a.principalHeader)), req.Header(a.scopeHeader))
+	s := newScope(a.principal(req), req.Header(a.scopeHeader))
 	if len(s.allowed) == 0 {
 		return nil, fmt.Errorf("scope header %q empty: %w", a.scopeHeader, authz.ErrForbidden)
 	}
 	return s, nil
 }
 
+// principal returns the principal of the request. A principal header present more than once
+// is reported as UnknownPrincipal: with an appending gateway the first value would be the
+// client's, and the audit trail must not record it. The principal never influences the
+// decision, so a repeated header is not rejected
+func (a *Authorizer) principal(req authz.Request) string {
+	if countHeader(req, a.principalHeader) > 1 {
+		return UnknownPrincipal
+	}
+	return normalizePrincipal(req.Header(a.principalHeader))
+}
+
 // normalizePrincipal turns the principal header value into the reported principal: empty
-// becomes UnknownPrincipal, anything longer than MaxPrincipalLength runes is cut. The
-// principal never influences the decision
+// becomes UnknownPrincipal, anything longer than MaxPrincipalLength runes is cut
 func normalizePrincipal(value string) string {
 	if value == "" {
 		return UnknownPrincipal

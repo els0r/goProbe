@@ -52,6 +52,7 @@ func TestNew_RefusesWithoutTrustedAcknowledgement(t *testing.T) {
 		{name: "empty config path", cfgPath: "", wantErr: "config file required"},
 		{name: "trusted missing", cfgPath: writeConfig(t, "scope_header: X-Scope\n"), wantErr: "trusted: true"},
 		{name: "trusted false", cfgPath: writeConfig(t, "trusted: false\n"), wantErr: "trusted: true"},
+		{name: "config file empty", cfgPath: writeConfig(t, ""), wantErr: "trusted: true"},
 		{name: "config file missing", cfgPath: filepath.Join(t.TempDir(), "none.yaml"), wantErr: "failed to read config"},
 		{name: "config not yaml", cfgPath: writeConfig(t, "trusted: [\n"), wantErr: "failed to parse config"},
 	} {
@@ -60,6 +61,25 @@ func TestNew_RefusesWithoutTrustedAcknowledgement(t *testing.T) {
 			require.Error(t, err)
 			assert.Nil(t, a)
 			assert.ErrorContains(t, err, tc.wantErr)
+		})
+	}
+}
+
+func TestNew_RejectsUnknownKeys(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		config string
+		field  string
+	}{
+		{name: "misspelled scope header key", config: "trusted: true\nscope-header: X-Foo\n", field: "scope-header"},
+		{name: "unknown key", config: "trusted: true\nallow_all: true\n", field: "allow_all"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			a, err := header.New(writeConfig(t, tc.config))
+			require.Error(t, err)
+			assert.Nil(t, a)
+			assert.ErrorContains(t, err, "failed to parse config")
+			assert.ErrorContains(t, err, tc.field)
 		})
 	}
 }
@@ -149,10 +169,15 @@ func TestAuthorize_Principal(t *testing.T) {
 			"X-Goprobe-Allowed-Hosts": {"h1"},
 			"X-Goprobe-Principal":     {longPrincipal},
 		}, want: strings.Repeat("ä", header.MaxPrincipalLength)},
-		{name: "repeated takes the first value", header: http.Header{
+		{name: "repeated is unknown, scope still granted", header: http.Header{
 			"X-Goprobe-Allowed-Hosts": {"h1"},
 			"X-Goprobe-Principal":     {"alice", "bob"},
-		}, want: "alice"},
+		}, want: header.UnknownPrincipal},
+		{name: "repeated with different case is unknown", header: http.Header{
+			"X-Goprobe-Allowed-Hosts": {"h1"},
+			"X-Goprobe-Principal":     {"alice"},
+			"x-goprobe-principal":     {"bob"},
+		}, want: header.UnknownPrincipal},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			scope, err := a.Authorize(context.Background(), fakeRequest{header: tc.header})
