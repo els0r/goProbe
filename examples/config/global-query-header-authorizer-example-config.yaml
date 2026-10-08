@@ -1,0 +1,28 @@
+# Configuration of the in-tree "header" authorizer. Select it in the global-query config:
+#
+#   authorizer:
+#     type: header
+#     config: ./examples/config/global-query-header-authorizer-example-config.yaml
+#
+# The authorizer reads the scope of a request (the host IDs the caller may query) from a
+# header set by a trusted gateway in front of global-query, and the principal (the caller's
+# identity, audit only) from a second header.
+#
+# It is exactly as safe as the network path in front of it: the gateway must strip or
+# replace both headers on every path a client can reach, and must replace rather than
+# append. A request carrying the scope header more than once is answered 403.
+
+# Required. Acknowledges that clients cannot set the scope header, because every
+# client-reachable path strips or replaces it. The authorizer refuses to start with any other
+# value. There is no way to give this acknowledgement without a config file.
+trusted: true
+
+# Header carrying the comma-separated host IDs of the scope. Host IDs are trimmed,
+# de-duplicated and matched exactly: there is no wildcard, a literal "*" matches nothing.
+# A missing or empty header is forbidden. Default: X-GoProbe-Allowed-Hosts
+scope_header: X-GoProbe-Allowed-Hosts
+
+# Header carrying the principal. Optional: an absent or empty value is reported as "unknown".
+# The value is capped at 256 runes before it is logged and never influences the decision.
+# Default: X-GoProbe-Principal
+principal_header: X-GoProbe-Principal
