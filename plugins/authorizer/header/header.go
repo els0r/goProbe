@@ -106,16 +106,17 @@ func (a *Authorizer) Authorize(_ context.Context, req authz.Request) (authz.Scop
 		return nil, fmt.Errorf("scope header %q present %d times: %w", a.scopeHeader, n, authz.ErrForbidden)
 	}
 
-	s := newScope(principal(req.Header(a.principalHeader)), req.Header(a.scopeHeader))
+	s := newScope(normalizePrincipal(req.Header(a.principalHeader)), req.Header(a.scopeHeader))
 	if len(s.allowed) == 0 {
 		return nil, fmt.Errorf("scope header %q empty: %w", a.scopeHeader, authz.ErrForbidden)
 	}
 	return s, nil
 }
 
-// principal normalises the principal header value: empty becomes UnknownPrincipal, anything
-// longer than MaxPrincipalLength runes is cut. The principal never influences the decision
-func principal(value string) string {
+// normalizePrincipal turns the principal header value into the reported principal: empty
+// becomes UnknownPrincipal, anything longer than MaxPrincipalLength runes is cut. The
+// principal never influences the decision
+func normalizePrincipal(value string) string {
 	if value == "" {
 		return UnknownPrincipal
 	}
