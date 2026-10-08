@@ -80,9 +80,33 @@ func NewFromConfig(cfg Config) (*Authorizer, error) {
 	}, nil
 }
 
-// Authorize turns the scope header into a Scope
+// Authorize turns the scope header into a Scope. A scope header that is missing, empty or
+// present more than once is forbidden: a gateway that appends instead of replacing the header
+// must not let a client-set value through
 func (a *Authorizer) Authorize(_ context.Context, req authz.Request) (authz.Scope, error) {
-	return newScope(req.Header(a.principalHeader), req.Header(a.scopeHeader)), nil
+	switch n := countHeader(req, a.scopeHeader); {
+	case n == 0:
+		return nil, fmt.Errorf("scope header %q missing: %w", a.scopeHeader, authz.ErrForbidden)
+	case n > 1:
+		return nil, fmt.Errorf("scope header %q present %d times: %w", a.scopeHeader, n, authz.ErrForbidden)
+	}
+
+	s := newScope(req.Header(a.principalHeader), req.Header(a.scopeHeader))
+	if len(s.allowed) == 0 {
+		return nil, fmt.Errorf("scope header %q empty: %w", a.scopeHeader, authz.ErrForbidden)
+	}
+	return s, nil
+}
+
+// countHeader returns how many times the named header occurs, matched case-insensitively.
+// Request.Header only returns the first value, so repetition is only visible this way
+func countHeader(req authz.Request, name string) (n int) {
+	req.EachHeader(func(hdr, _ string) {
+		if strings.EqualFold(hdr, name) {
+			n++
+		}
+	})
+	return n
 }
 
 // scope is the set of host IDs listed in the scope header
