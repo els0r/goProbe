@@ -8,21 +8,27 @@
 # header set by a trusted gateway in front of global-query, and the principal (the caller's
 # identity, audit only) from a second header.
 #
-# It is exactly as safe as the network path in front of it: the gateway must strip or
-# replace both headers on every path a client can reach, and must replace rather than
-# append. A request carrying the scope header more than once is answered 403.
+# It is exactly as safe as the network path in front of it: the gateway must REPLACE both
+# headers on every path a client can reach, never append to them, and no proxy between the
+# gateway and global-query may fold repeated headers into one comma-joined value. A scope
+# header arriving more than once is answered 403; that catches a gateway appending a second
+# header line, but not a proxy that folds a client-sent value into the gateway's.
+#
+# Unknown keys in this file fail startup, so a misspelled key cannot silently fall back to a
+# default.
 
 # Required. Acknowledges that clients cannot set the scope header, because every
-# client-reachable path strips or replaces it. The authorizer refuses to start with any other
-# value. There is no way to give this acknowledgement without a config file.
+# client-reachable path replaces it. The authorizer refuses to start with any other value.
+# There is no way to give this acknowledgement without a config file.
 trusted: true
 
 # Header carrying the comma-separated host IDs of the scope. Host IDs are trimmed,
 # de-duplicated and matched exactly: there is no wildcard, a literal "*" matches nothing.
-# A missing or empty header is forbidden. Default: X-GoProbe-Allowed-Hosts
+# A missing, empty or repeated header is forbidden. Default: X-GoProbe-Allowed-Hosts
 scope_header: X-GoProbe-Allowed-Hosts
 
-# Header carrying the principal. Optional: an absent or empty value is reported as "unknown".
-# The value is capped at 256 runes before it is logged and never influences the decision.
+# Header carrying the principal. Optional: an absent or empty value is reported as "unknown",
+# and so is a header arriving more than once (the first value could be the client's). The
+# value is capped at 256 runes before it is logged and never influences the decision.
 # Default: X-GoProbe-Principal
 principal_header: X-GoProbe-Principal
