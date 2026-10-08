@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/els0r/goProbe/v4/pkg/distributed/authz"
@@ -88,6 +89,86 @@ func TestAuthorize_ScopeHeaderForbidden(t *testing.T) {
 			assert.Nil(t, scope)
 		})
 	}
+}
+
+func TestScope_FilterMatchesHostIDsExactly(t *testing.T) {
+	a, err := header.New(writeConfig(t, "trusted: true\n"))
+	require.NoError(t, err)
+
+	for _, tc := range []struct {
+		name  string
+		scope string
+		query hosts.Hosts
+		want  hosts.Hosts
+	}{
+		{name: "literal star matches no host", scope: "*", query: hosts.Hosts{"h1", "h2", "h3"}, want: hosts.Hosts{}},
+		{name: "literal star does not widen a scope", scope: "h1,*", query: hosts.Hosts{"h1", "h2", "h3"}, want: hosts.Hosts{"h1"}},
+		{name: "trimmed and de-duplicated", scope: " h1 ,h2,, h1 ,\th3 ", query: hosts.Hosts{"h3", "h1", "h2", "h4"}, want: hosts.Hosts{"h3", "h1", "h2"}},
+		{name: "exact match is case-sensitive", scope: "H1", query: hosts.Hosts{"h1", "H1"}, want: hosts.Hosts{"H1"}},
+		{name: "prefix does not match", scope: "h1", query: hosts.Hosts{"h10", "h1"}, want: hosts.Hosts{"h1"}},
+		{name: "nothing in scope", scope: "h9", query: hosts.Hosts{"h1", "h2"}, want: hosts.Hosts{}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			scope, err := a.Authorize(context.Background(), fakeRequest{header: http.Header{"X-Goprobe-Allowed-Hosts": {tc.scope}}})
+			require.NoError(t, err)
+
+			input := append(hosts.Hosts{}, tc.query...)
+			got, err := scope.Filter(context.Background(), input)
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, got)
+			assert.Equal(t, tc.query, input, "Filter must not mutate its input")
+		})
+	}
+}
+
+func TestAuthorize_Principal(t *testing.T) {
+	a, err := header.New(writeConfig(t, "trusted: true\n"))
+	require.NoError(t, err)
+
+	// a principal of multi-byte runes, longer than the cap, to prove the cap counts runes
+	longPrincipal := strings.Repeat("ä", header.MaxPrincipalLength+10)
+
+	for _, tc := range []struct {
+		name   string
+		header http.Header
+		want   string
+	}{
+		{name: "present", header: http.Header{
+			"X-Goprobe-Allowed-Hosts": {"h1"},
+			"X-Goprobe-Principal":     {"alice"},
+		}, want: "alice"},
+		{name: "absent is unknown", header: http.Header{
+			"X-Goprobe-Allowed-Hosts": {"h1"},
+		}, want: header.UnknownPrincipal},
+		{name: "empty is unknown", header: http.Header{
+			"X-Goprobe-Allowed-Hosts": {"h1"},
+			"X-Goprobe-Principal":     {""},
+		}, want: header.UnknownPrincipal},
+		{name: "over-long is capped", header: http.Header{
+			"X-Goprobe-Allowed-Hosts": {"h1"},
+			"X-Goprobe-Principal":     {longPrincipal},
+		}, want: strings.Repeat("ä", header.MaxPrincipalLength)},
+		{name: "repeated takes the first value", header: http.Header{
+			"X-Goprobe-Allowed-Hosts": {"h1"},
+			"X-Goprobe-Principal":     {"alice", "bob"},
+		}, want: "alice"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			scope, err := a.Authorize(context.Background(), fakeRequest{header: tc.header})
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, scope.Principal())
+
+			got, err := scope.Filter(context.Background(), hosts.Hosts{"h1", "h2"})
+			require.NoError(t, err)
+			assert.Equal(t, hosts.Hosts{"h1"}, got, "the principal must not change the decision")
+		})
+	}
+
+	t.Run("principal does not stand in for a missing scope", func(t *testing.T) {
+		scope, err := a.Authorize(context.Background(), fakeRequest{header: http.Header{"X-Goprobe-Principal": {"alice"}}})
+		require.ErrorIs(t, err, authz.ErrForbidden)
+		assert.Nil(t, scope)
+	})
 }
 
 func TestAuthorize_ScopeFromHeader(t *testing.T) {

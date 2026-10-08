@@ -26,6 +26,13 @@ const (
 
 	// DefaultPrincipalHeader is the header carrying the principal
 	DefaultPrincipalHeader = "X-GoProbe-Principal"
+
+	// UnknownPrincipal is reported when the principal header is absent or empty
+	UnknownPrincipal = "unknown"
+
+	// MaxPrincipalLength is the number of runes a principal is capped at before it is stored
+	// and logged
+	MaxPrincipalLength = 256
 )
 
 func init() {
@@ -91,11 +98,23 @@ func (a *Authorizer) Authorize(_ context.Context, req authz.Request) (authz.Scop
 		return nil, fmt.Errorf("scope header %q present %d times: %w", a.scopeHeader, n, authz.ErrForbidden)
 	}
 
-	s := newScope(req.Header(a.principalHeader), req.Header(a.scopeHeader))
+	s := newScope(principal(req.Header(a.principalHeader)), req.Header(a.scopeHeader))
 	if len(s.allowed) == 0 {
 		return nil, fmt.Errorf("scope header %q empty: %w", a.scopeHeader, authz.ErrForbidden)
 	}
 	return s, nil
+}
+
+// principal normalises the principal header value: empty becomes UnknownPrincipal, anything
+// longer than MaxPrincipalLength runes is cut. The principal never influences the decision
+func principal(value string) string {
+	if value == "" {
+		return UnknownPrincipal
+	}
+	if runes := []rune(value); len(runes) > MaxPrincipalLength {
+		return string(runes[:MaxPrincipalLength])
+	}
+	return value
 }
 
 // countHeader returns how many times the named header occurs, matched case-insensitively.
