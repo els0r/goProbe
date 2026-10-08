@@ -159,6 +159,11 @@ func responseError(resp *http.Response) error {
 
 	problem := new(query.DetailError)
 	if err := jsoniter.Unmarshal(body, problem); err == nil && problem.Status != 0 {
+		// the transport status is authoritative over what the body claims
+		if problem.Status != resp.StatusCode {
+			problem.Status = resp.StatusCode
+			problem.Title = http.StatusText(resp.StatusCode)
+		}
 		return problem
 	}
 

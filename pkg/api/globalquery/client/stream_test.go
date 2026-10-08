@@ -177,3 +177,20 @@ func TestSSEClient_Query_TruncatesLongErrorBody(t *testing.T) {
 	assert.True(t, strings.HasPrefix(statusErr.Error(), prefix))
 	assert.Len(t, statusErr.Error(), len(prefix)+maxErrorBodyBytes)
 }
+
+// TestSSEClient_Query_TransportStatusWins pins that the HTTP status of a rejection is
+// authoritative over the status claimed inside its problem body
+func TestSSEClient_Query_TransportStatusWins(t *testing.T) {
+	_, err := queryAgainst(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/problem+json")
+		w.WriteHeader(http.StatusUnauthorized)
+		_, werr := fmt.Fprint(w, `{"status":403,"title":"Forbidden","detail":"unauthenticated"}`)
+		assert.NoError(t, werr)
+	})
+
+	var problem *query.DetailError
+	require.ErrorAs(t, err, &problem)
+	assert.Equal(t, http.StatusUnauthorized, problem.GetStatus())
+	assert.Equal(t, http.StatusText(http.StatusUnauthorized), problem.Title)
+	assert.Equal(t, "unauthenticated", problem.Detail)
+}
