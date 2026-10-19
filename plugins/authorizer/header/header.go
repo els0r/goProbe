@@ -71,16 +71,35 @@ func New(cfgPath string) (*Authorizer, error) {
 	if err != nil {
 		return nil, fmt.Errorf("header authorizer: failed to read config: %w", err)
 	}
-	// unknown keys fail startup: a misspelled header name must not silently fall back to the
-	// default
+	cfg, err := decodeConfig(b)
+	if err != nil {
+		return nil, fmt.Errorf("header authorizer: failed to parse config: %w", err)
+	}
+	return NewFromConfig(cfg)
+}
+
+// decodeConfig parses exactly one YAML document into a Config. Unknown keys fail: a misspelled
+// header name must not silently fall back to the default. A second document fails too: keys
+// in it would otherwise be ignored, leaving the authorizer on a default header the gateway
+// does not replace. An empty file decodes to the zero Config, which fails the trusted check
+func decodeConfig(b []byte) (Config, error) {
 	dec := yaml.NewDecoder(bytes.NewReader(b))
 	dec.KnownFields(true)
 	var cfg Config
-	if err := dec.Decode(&cfg); err != nil && !errors.Is(err, io.EOF) {
-		return nil, fmt.Errorf("header authorizer: failed to parse config: %w", err)
+	if err := dec.Decode(&cfg); err != nil {
+		if errors.Is(err, io.EOF) {
+			return cfg, nil
+		}
+		return Config{}, err
 	}
-	// an empty file decodes to the zero config, which fails the trusted check below
-	return NewFromConfig(cfg)
+	var extra yaml.Node
+	if err := dec.Decode(&extra); !errors.Is(err, io.EOF) {
+		if err != nil {
+			return Config{}, err
+		}
+		return Config{}, errors.New("config must hold a single YAML document, found a second one")
+	}
+	return cfg, nil
 }
 
 // NewFromConfig returns the authorizer described by cfg

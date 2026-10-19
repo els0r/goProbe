@@ -84,6 +84,35 @@ func TestNew_RejectsUnknownKeys(t *testing.T) {
 	}
 }
 
+func TestNew_RejectsAdditionalDocuments(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		config string
+	}{
+		{name: "second document sets the scope header", config: "trusted: true\n---\nscope_header: X-Scope\n"},
+		{name: "second document is empty", config: "trusted: true\n---\n"},
+		{name: "second document ends with a marker", config: "trusted: true\n---\nscope_header: X-Scope\n...\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			a, err := header.New(writeConfig(t, tc.config))
+			require.Error(t, err)
+			assert.Nil(t, a)
+			assert.ErrorContains(t, err, "failed to parse config")
+			assert.ErrorContains(t, err, "single YAML document")
+		})
+	}
+
+	t.Run("a leading document marker is a single document", func(t *testing.T) {
+		a, err := header.New(writeConfig(t, "---\ntrusted: true\nscope_header: X-Scope\n"))
+		require.NoError(t, err)
+		scope, err := a.Authorize(context.Background(), fakeRequest{header: http.Header{"X-Scope": {"h1"}}})
+		require.NoError(t, err)
+		got, err := scope.Filter(context.Background(), hosts.Hosts{"h1", "h2"})
+		require.NoError(t, err)
+		assert.Equal(t, hosts.Hosts{"h1"}, got)
+	})
+}
+
 func TestAuthorize_ScopeHeaderForbidden(t *testing.T) {
 	a, err := header.New(writeConfig(t, "trusted: true\n"))
 	require.NoError(t, err)

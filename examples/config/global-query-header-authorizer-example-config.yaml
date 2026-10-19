@@ -15,7 +15,8 @@
 # header line, but not a proxy that folds a client-sent value into the gateway's.
 #
 # Unknown keys in this file fail startup, so a misspelled key cannot silently fall back to a
-# default.
+# default. So does a second YAML document (after a "---" separator): its keys would be ignored
+# and leave the authorizer reading a default header the gateway does not replace.
 
 # Required. Acknowledges that clients cannot set the scope header, because every
 # client-reachable path replaces it. The authorizer refuses to start with any other value.
