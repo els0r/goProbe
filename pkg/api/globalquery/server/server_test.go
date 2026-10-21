@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -151,8 +152,33 @@ func startServer(t *testing.T, querier *recordingQuerier, opts ...server.Option)
 
 // response is a fully read HTTP response
 type response struct {
-	status int
-	body   []byte
+	status      int
+	contentType string
+	body        []byte
+}
+
+// sseEvent is one frame of an event stream
+type sseEvent struct {
+	event string
+	data  string
+}
+
+// parseSSE splits an event-stream body into its frames (blank-line separated, one
+// "event:" and one "data:" line each)
+func parseSSE(body []byte) (events []sseEvent) {
+	for _, frame := range strings.Split(strings.TrimSpace(string(body)), "\n\n") {
+		var ev sseEvent
+		for _, line := range strings.Split(frame, "\n") {
+			switch {
+			case strings.HasPrefix(line, "event: "):
+				ev.event = strings.TrimPrefix(line, "event: ")
+			case strings.HasPrefix(line, "data: "):
+				ev.data = strings.TrimPrefix(line, "data: ")
+			}
+		}
+		events = append(events, ev)
+	}
+	return events
 }
 
 // doRequest sends one request to the server behind client and returns the status and the
@@ -174,7 +200,7 @@ func doRequest(t *testing.T, client *http.Client, method, route string, body []b
 	defer func() { assert.NoError(t, resp.Body.Close()) }()
 	payload, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
-	return response{status: resp.StatusCode, body: payload}
+	return response{status: resp.StatusCode, contentType: resp.Header.Get("Content-Type"), body: payload}
 }
 
 func postQuery(t *testing.T, client *http.Client, principal string) response {
@@ -312,4 +338,83 @@ func TestServer_WithoutAuthorizer_QueriesRunUnscoped(t *testing.T) {
 	resp := postQuery(t, client, "")
 	require.Equal(t, http.StatusOK, resp.status)
 	assert.Equal(t, hosts.Hosts{"h1", "h2", "h3"}, receiveQueried(t, querier))
+}
+
+// TestServer_SSERoute_ScopeExcludesEveryHost_QueryErrorForbidden pins that on the streaming
+// route a query whose every host ID is outside the scope is answered as an open event stream
+// carrying exactly one query-error event with the runner's 403, and that no sensor is contacted
+func TestServer_SSERoute_ScopeExcludesEveryHost_QueryErrorForbidden(t *testing.T) {
+	querier := &recordingQuerier{queried: make(chan hosts.Hosts, 1)}
+	authorizer := headerAuthorizer{scopes: map[string]hosts.Hosts{"bob": {"elsewhere"}}}
+	client := startServer(t, querier, server.WithAuthorizer(authorizer))
+
+	resp := postQueryTo(t, client, api.SSEQueryRoute, "bob")
+
+	require.Equal(t, http.StatusOK, resp.status)
+	assert.Contains(t, resp.contentType, "text/event-stream")
+	events := parseSSE(resp.body)
+	require.Len(t, events, 1, "body:\n%s", resp.body)
+	require.Equal(t, string(api.StreamEventQueryError), events[0].event)
+	var detail query.DetailError
+	require.NoError(t, json.Unmarshal([]byte(events[0].data), &detail))
+	assert.Equal(t, http.StatusForbidden, detail.Status)
+	assert.Equal(t, "no authorized hosts in query", detail.Detail)
+	assert.Empty(t, querier.queried)
+}
+
+// TestServer_SSERoute_AuthorizerRejection_PlainProblemResponse pins that a rejection by the
+// authorizer is answered on the streaming route exactly as on the plain route: a problem
+// response with the rejection's status, and no event stream is opened
+func TestServer_SSERoute_AuthorizerRejection_PlainProblemResponse(t *testing.T) {
+	querier := &recordingQuerier{queried: make(chan hosts.Hosts, 1)}
+	authorizer := headerAuthorizer{scopes: map[string]hosts.Hosts{"alice": {"h1"}}}
+	client := startServer(t, querier, server.WithAuthorizer(authorizer))
+
+	resp := postQueryTo(t, client, api.SSEQueryRoute, "")
+
+	require.Equal(t, http.StatusUnauthorized, resp.status)
+	assert.Contains(t, resp.contentType, "application/problem+json")
+	assert.NotContains(t, resp.contentType, "text/event-stream")
+	var problem huma.ErrorModel
+	require.NoError(t, json.Unmarshal(resp.body, &problem))
+	assert.Equal(t, http.StatusUnauthorized, problem.Status)
+	assert.Equal(t, api.DetailUnauthenticated, problem.Detail)
+	assert.Empty(t, querier.queried)
+}
+
+// wideningScope returns a host ID it was not given, which the runner treats as an authorizer
+// failure
+type wideningScope struct{}
+
+func (wideningScope) Principal() string { return "carol" }
+
+func (wideningScope) Filter(_ context.Context, hostIDs hosts.Hosts) (hosts.Hosts, error) {
+	return append(hostIDs, "not-requested"), nil
+}
+
+// wideningAuthorizer admits every request with a scope that widens the host list
+type wideningAuthorizer struct{}
+
+func (wideningAuthorizer) Authorize(context.Context, authz.Request) (authz.Scope, error) {
+	return wideningScope{}, nil
+}
+
+// TestServer_SSERoute_RunnerAuthorizationFailure_QueryErrorUnavailable pins that an
+// authorization failure raised by the runner after the stream is open is delivered as a
+// query-error event carrying the runner's 503, not a hard-coded 500
+func TestServer_SSERoute_RunnerAuthorizationFailure_QueryErrorUnavailable(t *testing.T) {
+	querier := &recordingQuerier{queried: make(chan hosts.Hosts, 1)}
+	client := startServer(t, querier, server.WithAuthorizer(wideningAuthorizer{}))
+
+	resp := postQueryTo(t, client, api.SSEQueryRoute, "carol")
+
+	require.Equal(t, http.StatusOK, resp.status)
+	events := parseSSE(resp.body)
+	require.Len(t, events, 1, "body:\n%s", resp.body)
+	require.Equal(t, string(api.StreamEventQueryError), events[0].event)
+	var detail query.DetailError
+	require.NoError(t, json.Unmarshal([]byte(events[0].data), &detail))
+	assert.Equal(t, http.StatusServiceUnavailable, detail.Status)
+	assert.Equal(t, "authorization unavailable", detail.Detail)
+	assert.Empty(t, querier.queried)
 }

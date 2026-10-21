@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 
 	"github.com/els0r/goProbe/v4/pkg/api"
 	"github.com/els0r/goProbe/v4/pkg/api/client"
@@ -134,17 +133,45 @@ func (sse *SSEClient) Query(ctx context.Context, args *query.Args) (*results.Res
 	}
 	defer resp.Body.Close()
 
-	// Handle RFC 9457
-	if strings.EqualFold(resp.Header.Get("Content-Type"), "application/problem+json") {
-		buf := new(bytes.Buffer)
-		if _, err := io.Copy(buf, resp.Body); err != nil {
-			return nil, fmt.Errorf("failed to load body into buffer for error handling: %w", err)
-		}
-		return nil, fmt.Errorf("%s [body=%s]", resp.Status, buf.String())
+	// a rejection before the stream opens (e.g. by the authorization middleware) is answered
+	// instead of an event stream
+	if resp.StatusCode/100 != 2 {
+		return nil, responseError(resp)
 	}
 
 	// parse events
 	return sse.readEventStream(ctx, resp.Body)
+}
+
+// maxErrorBodyBytes bounds how much of a response sent instead of an event stream is read
+// into the error returned to the caller
+const maxErrorBodyBytes = 64 << 10
+
+// responseError turns a response the server sent instead of an event stream into an error
+// that carries the response's status. An RFC 9457 problem body is returned as is; any
+// other body becomes the detail, prefixed with the response status. Bodies longer than
+// maxErrorBodyBytes are truncated
+func responseError(resp *http.Response) error {
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxErrorBodyBytes))
+	if err != nil {
+		return fmt.Errorf("failed to read body of %s response: %w", resp.Status, err)
+	}
+
+	problem := new(query.DetailError)
+	if err := jsoniter.Unmarshal(body, problem); err == nil && problem.Status != 0 {
+		// the transport status is authoritative over what the body claims
+		if problem.Status != resp.StatusCode {
+			problem.Status = resp.StatusCode
+			problem.Title = http.StatusText(resp.StatusCode)
+		}
+		return problem
+	}
+
+	detail := resp.Status
+	if text := string(bytes.TrimSpace(body)); text != "" {
+		detail += ": " + text
+	}
+	return query.NewDetailError(resp.StatusCode, errors.New(detail))
 }
 
 func (sse *SSEClient) readEventStream(ctx context.Context, r io.Reader) (res *results.Result, err error) {
