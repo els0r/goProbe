@@ -135,13 +135,26 @@ func startConfiguredServer(t *testing.T) *http.Client {
 // closes the response body before returning, so the server can shut down without stalling
 func doQuery(t *testing.T, client *http.Client, principal string) (status int, body []byte) {
 	t.Helper()
+	header := http.Header{}
+	if principal != "" {
+		header.Set(testPrincipalHdr, principal)
+	}
+	return doQueryWithHeader(t, client, header)
+}
+
+// doQueryWithHeader posts a query for h1,h2,h3 carrying every value of header. It drains and
+// closes the response body before returning, so the server can shut down without stalling
+func doQueryWithHeader(t *testing.T, client *http.Client, header http.Header) (status int, body []byte) {
+	t.Helper()
 	args, err := json.Marshal(query.Args{Query: "sip", Ifaces: "eth0", Format: "json", QueryHosts: "h1,h2,h3"})
 	require.NoError(t, err)
 	req, err := http.NewRequest(http.MethodPost, "http://unix"+api.QueryRoute, bytes.NewReader(args))
 	require.NoError(t, err)
 	req.Header.Set("Content-Type", "application/json")
-	if principal != "" {
-		req.Header.Set(testPrincipalHdr, principal)
+	for name, values := range header {
+		for _, value := range values {
+			req.Header.Add(name, value)
+		}
 	}
 	resp, err := client.Do(req)
 	require.NoError(t, err)
@@ -259,4 +272,52 @@ func TestServer_ConfiguredAuthorizer_ScopesQueriesOverHTTP(t *testing.T) {
 		require.Equal(t, http.StatusUnauthorized, status, "body: %s", body)
 		assert.Empty(t, testQuerier.queried)
 	})
+}
+
+// The in-tree header authorizer is selected by its type name only, never imported here: the
+// test proves that the in-tree authorizer list wires it in and that the repetition check
+// holds against the real web framework
+const (
+	headerAuthorizerType = "header"
+	scopeHdr             = "X-GoProbe-Allowed-Hosts"
+)
+
+func TestServer_HeaderAuthorizer_OverHTTP(t *testing.T) {
+	require.Contains(t, plugins.GetAvailableAuthorizerPlugins(), headerAuthorizerType)
+
+	cfgPath := filepath.Join(t.TempDir(), "header.yaml")
+	require.NoError(t, os.WriteFile(cfgPath, []byte("trusted: true\n"), 0o600))
+
+	configureServer(t, headerAuthorizerType)
+	viper.Set(conf.AuthorizerConfig, cfgPath)
+	client := startConfiguredServer(t)
+
+	t.Run("scope header sent once narrows the query", func(t *testing.T) {
+		status, body := doQueryWithHeader(t, client, http.Header{scopeHdr: {"h2"}})
+		require.Equal(t, http.StatusOK, status, "body: %s", body)
+		assert.Equal(t, hosts.Hosts{"h2"}, receiveQueried(t))
+	})
+
+	t.Run("scope header sent twice is forbidden", func(t *testing.T) {
+		status, body := doQueryWithHeader(t, client, http.Header{scopeHdr: {"h2", "h1,h2,h3"}})
+		require.Equal(t, http.StatusForbidden, status, "body: %s", body)
+		assert.Empty(t, testQuerier.queried)
+	})
+
+	t.Run("scope header missing is forbidden", func(t *testing.T) {
+		status, body := doQueryWithHeader(t, client, http.Header{})
+		require.Equal(t, http.StatusForbidden, status, "body: %s", body)
+		assert.Empty(t, testQuerier.queried)
+	})
+}
+
+func TestServer_HeaderAuthorizer_RefusesToStartUntrusted(t *testing.T) {
+	cfgPath := filepath.Join(t.TempDir(), "header.yaml")
+	require.NoError(t, os.WriteFile(cfgPath, []byte("trusted: false\n"), 0o600))
+
+	configureServer(t, headerAuthorizerType)
+	viper.Set(conf.AuthorizerConfig, cfgPath)
+
+	_, err := newAPIServer(context.Background(), "localhost:0")
+	require.ErrorContains(t, err, "trusted: true")
 }
