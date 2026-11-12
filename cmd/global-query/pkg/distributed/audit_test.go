@@ -1,13 +1,11 @@
 package distributed
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"log/slog"
-	"os"
 	"testing"
 
+	"github.com/els0r/goProbe/v4/internal/logtest"
 	"github.com/els0r/goProbe/v4/pkg/distributed/authz"
 	"github.com/els0r/goProbe/v4/pkg/distributed/hosts"
 	"github.com/els0r/telemetry/logging"
@@ -27,29 +25,6 @@ type logRecord struct {
 	Requested *int     `json:"requested"`
 	Remaining *int     `json:"remaining"`
 	Dropped   []string `json:"dropped"`
-}
-
-// captureLogs routes the global logger into a buffer as JSON records at the given level
-// for the duration of the test and returns a function decoding the records captured so far
-func captureLogs(t *testing.T, level slog.Level) func() []logRecord {
-	t.Helper()
-	buf := &bytes.Buffer{}
-	_, err := logging.Init(level, logging.EncodingJSON,
-		logging.WithOutput(buf), logging.WithErrorOutput(buf))
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		_, _ = logging.Init(logging.LevelDebug, logging.EncodingLogfmt,
-			logging.WithOutput(os.Stdout), logging.WithErrorOutput(os.Stderr))
-	})
-	return func() (records []logRecord) {
-		dec := json.NewDecoder(bytes.NewReader(buf.Bytes()))
-		for dec.More() {
-			var rec logRecord
-			require.NoError(t, dec.Decode(&rec))
-			records = append(records, rec)
-		}
-		return records
-	}
 }
 
 // findRecord returns the first record with msg, failing the test when there is none
@@ -72,7 +47,7 @@ func auditCtx(scope authz.Scope) context.Context {
 }
 
 func TestScopedQuery_QueryLogLine_CarriesPrincipal(t *testing.T) {
-	records := captureLogs(t, logging.LevelInfo)
+	records := logtest.Capture[logRecord](t, logging.LevelInfo)
 	rm := hosts.NewResolverMap()
 	rm.Set("string", &mockResolver{out: hosts.Hosts{"h1", "h2", "h3"}})
 	qr := NewQueryRunner(rm, &mockQuerier{}, WithScopeEnforcement())
@@ -90,7 +65,7 @@ func TestScopedQuery_QueryLogLine_CarriesPrincipal(t *testing.T) {
 const msgScopedHostList = "scoped query host list"
 
 func TestScopedQuery_LogsRequestedAndRemainingHostIDCounts(t *testing.T) {
-	records := captureLogs(t, logging.LevelInfo)
+	records := logtest.Capture[logRecord](t, logging.LevelInfo)
 	rm := hosts.NewResolverMap()
 	rm.Set("string", &mockResolver{out: hosts.Hosts{"h1", "h2", "h3"}})
 	qr := NewQueryRunner(rm, &mockQuerier{}, WithScopeEnforcement())
@@ -111,7 +86,7 @@ func TestScopedQuery_LogsRequestedAndRemainingHostIDCounts(t *testing.T) {
 }
 
 func TestScopedQuery_DuplicateRequestedHostIDs_CountedOnce(t *testing.T) {
-	records := captureLogs(t, logging.LevelDebug)
+	records := logtest.Capture[logRecord](t, logging.LevelDebug)
 	rm := hosts.NewResolverMap()
 	rm.Set("string", &mockResolver{out: hosts.Hosts{"h1", "h1", "h2"}})
 	qr := NewQueryRunner(rm, &mockQuerier{}, WithScopeEnforcement())
@@ -149,7 +124,7 @@ func TestScopedQuery_DroppedHostIDs_LoggedAtDebugOnly(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			records := captureLogs(t, tt.level)
+			records := logtest.Capture[logRecord](t, tt.level)
 			rm := hosts.NewResolverMap()
 			rm.Set("string", &mockResolver{out: hosts.Hosts{"h1", "h2", "h3"}})
 			qr := NewQueryRunner(rm, &mockQuerier{}, WithScopeEnforcement())
@@ -166,7 +141,7 @@ func TestScopedQuery_DroppedHostIDs_LoggedAtDebugOnly(t *testing.T) {
 }
 
 func TestUnscopedQuery_NoScopeEnforcement_LogsNoHostIDCounts(t *testing.T) {
-	records := captureLogs(t, logging.LevelDebug)
+	records := logtest.Capture[logRecord](t, logging.LevelDebug)
 	rm := hosts.NewResolverMap()
 	rm.Set("string", &mockResolver{out: hosts.Hosts{"h1", "h2", "h3"}})
 	qr := NewQueryRunner(rm, &mockQuerier{})

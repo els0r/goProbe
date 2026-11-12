@@ -1,15 +1,13 @@
 package server
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 	"testing"
 	"time"
 
+	"github.com/els0r/goProbe/v4/internal/logtest"
 	"github.com/els0r/goProbe/v4/pkg/api"
 	"github.com/els0r/goProbe/v4/pkg/api/server"
 	"github.com/els0r/goProbe/v4/pkg/distributed/authz"
@@ -31,29 +29,6 @@ type logRecord struct {
 	Msg       string `json:"msg"`
 	Principal string `json:"principal"`
 	Error     string `json:"error"`
-}
-
-// captureLogs routes the global logger into a buffer as JSON records for the duration of the
-// test and returns a function decoding the records captured so far
-func captureLogs(t *testing.T) func() []logRecord {
-	t.Helper()
-	buf := &bytes.Buffer{}
-	_, err := logging.Init(logging.LevelInfo, logging.EncodingJSON,
-		logging.WithOutput(buf), logging.WithErrorOutput(buf))
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		_, _ = logging.Init(logging.LevelDebug, logging.EncodingLogfmt,
-			logging.WithOutput(os.Stdout), logging.WithErrorOutput(os.Stderr))
-	})
-	return func() (records []logRecord) {
-		dec := json.NewDecoder(bytes.NewReader(buf.Bytes()))
-		for dec.More() {
-			var rec logRecord
-			require.NoError(t, dec.Decode(&rec))
-			records = append(records, rec)
-		}
-		return records
-	}
 }
 
 // recordsWithLevel returns the records at level
@@ -93,7 +68,7 @@ func (reasonAuthorizer) Authorize(context.Context, authz.Request) (authz.Scope, 
 }
 
 func TestServer_RejectedRequest_OneWarningWithReason_NotReturned(t *testing.T) {
-	records := captureLogs(t)
+	records := logtest.Capture[logRecord](t, logging.LevelInfo)
 	querier := &recordingQuerier{queried: make(chan hosts.Hosts, 1)}
 	client := startServer(t, querier, server.WithAuthorizer(reasonAuthorizer{}))
 
@@ -115,7 +90,7 @@ func TestServer_RejectedRequest_OneWarningWithReason_NotReturned(t *testing.T) {
 }
 
 func TestServer_ScopedQuery_LogLinesAfterAuthorizationCarryPrincipal(t *testing.T) {
-	records := captureLogs(t)
+	records := logtest.Capture[logRecord](t, logging.LevelInfo)
 	querier := &recordingQuerier{queried: make(chan hosts.Hosts, 1)}
 	authorizer := headerAuthorizer{scopes: map[string]hosts.Hosts{"alice": {"h1", "h3"}}}
 	client := startServer(t, querier, server.WithAuthorizer(authorizer))
@@ -139,7 +114,7 @@ func TestServer_ScopedQuery_LogLinesAfterAuthorizationCarryPrincipal(t *testing.
 func TestServer_ScopeExcludesEveryHost_OneWarningCarriesPrincipal(t *testing.T) {
 	for _, route := range []string{api.QueryRoute, api.SSEQueryRoute} {
 		t.Run(route, func(t *testing.T) {
-			records := captureLogs(t)
+			records := logtest.Capture[logRecord](t, logging.LevelInfo)
 			querier := &recordingQuerier{queried: make(chan hosts.Hosts, 1)}
 			authorizer := headerAuthorizer{scopes: map[string]hosts.Hosts{"alice": {"other"}}}
 			client := startServer(t, querier, server.WithAuthorizer(authorizer))
