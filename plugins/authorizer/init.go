@@ -2,3 +2,7 @@
 // register themselves with plugins.RegisterAuthorizer from their init() and are included
 // here via side-effect imports
 package authorizer
+
+import (
+	_ "github.com/els0r/goProbe/v4/plugins/authorizer/header"
+)
