@@ -11,6 +11,8 @@ import (
 	"github.com/els0r/goProbe/v4/pkg/distributed/hosts"
 	"github.com/els0r/goProbe/v4/pkg/query"
 	"github.com/els0r/telemetry/logging"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // detailAuthorizationUnavailable is the fixed detail of every 503 the runner answers when a
@@ -64,7 +66,9 @@ func (q *QueryRunner) applyScope(ctx context.Context, hostList hosts.Hosts) (hos
 	}
 
 	// the principal is already on the context logger: the middleware attaches it to every
-	// line of the request from the point of authorization on
+	// line of the request from the point of authorization on. The current span is the
+	// host-list span of prepareHostList
+	trace.SpanFromContext(ctx).SetAttributes(attribute.String("principal", scope.Principal()))
 	logger = logger.With("scope_type", fmt.Sprintf("%T", scope))
 
 	scoped, err := scope.Filter(ctx, slices.Clone(hostList))

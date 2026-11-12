@@ -127,10 +127,6 @@ func (q *QueryRunner) run(ctx context.Context, args *query.Args, send sse.Sender
 	if err != nil {
 		return nil, err // prepareHostList() returns formatted error
 	}
-	hostList, err = q.applyScope(ctx, hostList)
-	if err != nil {
-		return nil, err
-	}
 
 	smeDone, err := q.checkSemaphore(stmt)
 	if err != nil {
@@ -158,10 +154,22 @@ func (q *QueryRunner) run(ctx context.Context, args *query.Args, send sse.Sender
 	return finalResult, nil
 }
 
-func (q *QueryRunner) prepareHostList(ctx context.Context, resolver hosts.Resolver, queryHosts string) (hostList hosts.Hosts, err error) {
+// prepareHostList resolves queryHosts (including the ANY selector) and narrows the result
+// with the query's scope. Both happen within the host-list span, which carries the principal
+// of a scoped query
+func (q *QueryRunner) prepareHostList(ctx context.Context, resolver hosts.Resolver, queryHosts string) (hosts.Hosts, error) {
 	ctx, span := tracing.Start(ctx, "(*distributed.QueryRunner).prepareHostList", trace.WithAttributes(attribute.String("hosts", queryHosts)))
 	defer span.End()
 
+	hostList, err := q.resolveHostList(ctx, resolver, queryHosts)
+	if err != nil {
+		return nil, err
+	}
+
+	return q.applyScope(ctx, hostList)
+}
+
+func (q *QueryRunner) resolveHostList(ctx context.Context, resolver hosts.Resolver, queryHosts string) (hostList hosts.Hosts, err error) {
 	// Handle ANY (all hosts) case
 	if types.IsAnySelector(queryHosts) {
 		querierAnyable, ok := q.querier.(distributed.QuerierAnyable)

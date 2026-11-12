@@ -13,6 +13,10 @@ import (
 	"github.com/els0r/telemetry/logging"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 )
 
 // logRecord is the structured view of one captured log line
@@ -159,4 +163,52 @@ func TestUnscopedQuery_NoScopeEnforcement_LogsNoHostIDCounts(t *testing.T) {
 		assert.Nil(t, rec.Remaining)
 		assert.Empty(t, rec.Dropped)
 	}
+}
+
+// captureSpans exports every span ended during the test into memory
+func captureSpans(t *testing.T) *tracetest.InMemoryExporter {
+	t.Helper()
+	exporter := tracetest.NewInMemoryExporter()
+	provider := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
+	previous := otel.GetTracerProvider()
+	otel.SetTracerProvider(provider)
+	t.Cleanup(func() {
+		otel.SetTracerProvider(previous)
+		require.NoError(t, provider.Shutdown(context.Background()))
+	})
+	return exporter
+}
+
+// spanAttribute returns the value of the attribute key on the span named name
+func spanAttribute(t *testing.T, spans tracetest.SpanStubs, name string, key attribute.Key) string {
+	t.Helper()
+	for _, span := range spans {
+		if span.Name != name {
+			continue
+		}
+		for _, attr := range span.Attributes {
+			if attr.Key == key {
+				return attr.Value.AsString()
+			}
+		}
+		t.Fatalf("span %q carries no attribute %q", name, key)
+	}
+	t.Fatalf("no span named %q", name)
+	return ""
+}
+
+func TestScopedQuery_HostListSpan_CarriesPrincipal(t *testing.T) {
+	spans := captureSpans(t)
+	rm := hosts.NewResolverMap()
+	rm.Set("string", &mockResolver{out: hosts.Hosts{"h1", "h2", "h3"}})
+	qr := NewQueryRunner(rm, &mockQuerier{}, WithScopeEnforcement())
+
+	args := baseArgs()
+	args.QueryHosts = "h1,h2,h3"
+
+	_, err := qr.Run(auditCtx(&mockScope{principal: "alice", allowed: []hosts.ID{"h1"}}), args)
+	require.NoError(t, err)
+
+	principal := spanAttribute(t, spans.GetSpans(), "(*distributed.QueryRunner).prepareHostList", "principal")
+	assert.Equal(t, "alice", principal)
 }
