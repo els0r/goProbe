@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 
 	"github.com/els0r/goProbe/v4/pkg/api"
@@ -148,23 +149,21 @@ func (sse *SSEClient) Query(ctx context.Context, args *query.Args) (*results.Res
 const maxErrorBodyBytes = 64 << 10
 
 // responseError turns a response the server sent instead of an event stream into an error
-// that carries the response's status. An RFC 9457 problem body is returned as is; any
-// other body becomes the detail, prefixed with the response status. Bodies longer than
+// that carries the response's status. An RFC 9457 problem body is returned with its
+// members as served, the status always being the one of the response; any other body
+// becomes the detail, prefixed with the response status. Bodies longer than
 // maxErrorBodyBytes are truncated
 func responseError(resp *http.Response) error {
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxErrorBodyBytes))
 	if err != nil {
-		return fmt.Errorf("failed to read body of %s response: %w", resp.Status, err)
+		// the rejection's status is known even if its body cannot be read
+		return query.NewDetailError(resp.StatusCode,
+			fmt.Errorf("%s: failed to read response body: %w", resp.Status, err))
 	}
 
 	problem := new(query.DetailError)
-	if err := jsoniter.Unmarshal(body, problem); err == nil && problem.Status != 0 {
-		// the transport status is authoritative over what the body claims
-		if problem.Status != resp.StatusCode {
-			problem.Status = resp.StatusCode
-			problem.Title = http.StatusText(resp.StatusCode)
-		}
-		return problem
+	if err := jsoniter.Unmarshal(body, problem); err == nil && (isProblemJSON(resp) || problem.Status != 0) {
+		return withTransportStatus(problem, resp)
 	}
 
 	detail := resp.Status
@@ -172,6 +171,30 @@ func responseError(resp *http.Response) error {
 		detail += ": " + text
 	}
 	return query.NewDetailError(resp.StatusCode, errors.New(detail))
+}
+
+// isProblemJSON reports whether the response declares an RFC 9457 problem body
+func isProblemJSON(resp *http.Response) bool {
+	mediaType, _, err := mime.ParseMediaType(resp.Header.Get("Content-Type"))
+	return err == nil && mediaType == "application/problem+json"
+}
+
+// withTransportStatus makes the response's status the one of the problem: it is
+// authoritative over what the body claims, and stands in where the body omits the
+// optional status, title or detail members
+func withTransportStatus(problem *query.DetailError, resp *http.Response) *query.DetailError {
+	if problem.Status != 0 && problem.Status != resp.StatusCode {
+		// the title described the status the body claimed
+		problem.Title = ""
+	}
+	problem.Status = resp.StatusCode
+	if problem.Title == "" {
+		problem.Title = http.StatusText(resp.StatusCode)
+	}
+	if problem.Detail == "" {
+		problem.Detail = resp.Status
+	}
+	return problem
 }
 
 func (sse *SSEClient) readEventStream(ctx context.Context, r io.Reader) (res *results.Result, err error) {

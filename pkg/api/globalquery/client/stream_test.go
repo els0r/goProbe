@@ -194,3 +194,79 @@ func TestSSEClient_Query_TransportStatusWins(t *testing.T) {
 	assert.Equal(t, http.StatusText(http.StatusUnauthorized), problem.Title)
 	assert.Equal(t, "unauthenticated", problem.Detail)
 }
+
+// TestSSEClient_Query_ProblemWithoutStatus pins that a problem body omitting the optional
+// status member (RFC 9457, section 3.1.2) keeps its detail as served and takes its status
+// from the response
+func TestSSEClient_Query_ProblemWithoutStatus(t *testing.T) {
+	tests := []struct {
+		name        string
+		contentType string
+		body        string
+		title       string
+		detail      string
+	}{
+		{
+			name:        "detail only",
+			contentType: "application/problem+json",
+			body:        `{"detail":"token expired"}`,
+			title:       "Unauthorized",
+			detail:      "token expired",
+		},
+		{
+			name:        "media type parameter and served title",
+			contentType: "application/problem+json; charset=utf-8",
+			body:        `{"title":"Token Expired","detail":"token expired"}`,
+			title:       "Token Expired",
+			detail:      "token expired",
+		},
+		{
+			name:        "no members",
+			contentType: "application/problem+json",
+			body:        `{}`,
+			title:       "Unauthorized",
+			detail:      "401 Unauthorized",
+		},
+		{
+			name:        "JSON that is not a problem stays the detail",
+			contentType: "application/json",
+			body:        `{"detail":"token expired"}`,
+			title:       "Unauthorized",
+			detail:      `401 Unauthorized: {"detail":"token expired"}`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := queryAgainst(t, func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", tt.contentType)
+				w.WriteHeader(http.StatusUnauthorized)
+				_, werr := fmt.Fprint(w, tt.body)
+				assert.NoError(t, werr)
+			})
+
+			var problem *query.DetailError
+			require.ErrorAs(t, err, &problem)
+			assert.Equal(t, http.StatusUnauthorized, problem.GetStatus())
+			assert.Equal(t, tt.title, problem.Title)
+			assert.Equal(t, tt.detail, problem.Error())
+		})
+	}
+}
+
+// TestSSEClient_Query_UnreadableErrorBodyKeepsStatus pins that a rejection whose body
+// cannot be read in full still yields the status of the response
+func TestSSEClient_Query_UnreadableErrorBodyKeepsStatus(t *testing.T) {
+	_, err := queryAgainst(t, func(w http.ResponseWriter, _ *http.Request) {
+		// declare more than is sent, so the client's read ends in io.ErrUnexpectedEOF
+		w.Header().Set("Content-Type", "application/problem+json")
+		w.Header().Set("Content-Length", "1024")
+		w.WriteHeader(http.StatusForbidden)
+		_, werr := fmt.Fprint(w, `{"status":403,"title":"Forbidden","det`)
+		assert.NoError(t, werr)
+	})
+
+	var statusErr huma.StatusError
+	require.ErrorAs(t, err, &statusErr, "error %q carries no status", err)
+	assert.Equal(t, http.StatusForbidden, statusErr.GetStatus())
+	assert.Equal(t, "403 Forbidden: failed to read response body: unexpected EOF", statusErr.Error())
+}
