@@ -33,7 +33,9 @@ func AuthorizationMiddleware(a huma.API, authorizer authz.Authorizer) func(huma.
 			logger := logging.FromContext(ctx.Context()).With(
 				"authorizer", fmt.Sprintf("%T", authorizer), "status", status,
 			)
-			logger.Error("authorization rejected request", "error", err)
+			// the one audit line of a rejected request: the authorizer's reason is logged
+			// here and nowhere else, and is not an error of the server
+			logger.Warn("authorization rejected request", "error", err)
 			if werr := huma.WriteErr(a, ctx, status, detail); werr != nil {
 				logger.Error("failed to write authorization response", "error", werr)
 			}
