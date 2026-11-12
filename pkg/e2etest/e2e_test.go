@@ -708,7 +708,7 @@ func runGoQuery(t *testing.T, res interface{}, args []string) {
 	require.Nil(t, jsoniter.NewDecoder(buf).Decode(&res))
 }
 
-func runGlobalQuery(t *testing.T, addr string, apiEndpoints map[string]string) func() error {
+func runGlobalQuery(t *testing.T, addr string, apiEndpoints map[string]string, opts ...server.Option) func() error {
 	endpoints := map[string]*client.Config{}
 	for k, v := range apiEndpoints {
 		endpoints[k] = &client.Config{Addr: v}
@@ -720,7 +720,7 @@ func runGlobalQuery(t *testing.T, addr string, apiEndpoints map[string]string) f
 	apiServer := gqserver.New(addr, resolvers, &apiclient.APIClientQuerier{
 		APIEndpoints:  endpoints,
 		MaxConcurrent: 10,
-	}, server.WithNoRecursionDetection())
+	}, append([]server.Option{server.WithNoRecursionDetection()}, opts...)...)
 	go func() {
 		require.ErrorIs(t, apiServer.Serve(), http.ErrServerClosed)
 	}()
