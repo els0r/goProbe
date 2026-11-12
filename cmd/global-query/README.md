@@ -58,6 +58,8 @@ With an authorizer configured, each request to `/_query` and `/_query/sse` is tu
 
 **Unknown type.** A type that is not registered fails startup with an error naming it, so a typo cannot silently leave queries unscoped.
 
+**Audit trail.** From the point of authorization on, every log line of a request carries the **principal** as the `principal` field. A scoped query logs at `info` how many host IDs were requested and how many remained after narrowing (`requested`, `remaining`); the dropped host IDs themselves appear at `debug` only, so routine logs do not carry other principals' host names. A rejected request produces one `warn` line with the authorizer's reason, which is never returned to the caller. The per-request access-log line is written before authorization and does not carry the principal; with tracing enabled, the trace ID joins it to the audit lines, and the host-list span carries the principal as an attribute.
+
 **Sensors remain unauthenticated.** Only `global-query` is scoped. A `goProbe` sensor still answers anyone who can reach its API, so the path between `global-query` and the sensors must stay private: it must not be reachable by the callers of `global-query`.
 
 One authorizer ships in-tree, `header`, described below. Out-of-tree authorizers register through the [contrib mechanism](../../plugins/contrib/README.md), which also documents the contract for plugin authors.
