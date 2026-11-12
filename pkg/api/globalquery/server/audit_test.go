@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/els0r/goProbe/v4/pkg/api"
 	"github.com/els0r/goProbe/v4/pkg/api/server"
 	"github.com/els0r/goProbe/v4/pkg/distributed/authz"
 	"github.com/els0r/goProbe/v4/pkg/distributed/hosts"
@@ -130,4 +131,30 @@ func TestServer_ScopedQuery_LogLinesAfterAuthorizationCarryPrincipal(t *testing.
 	accessLog := awaitRecord(t, records, msgAccessLog)
 	assert.Equal(t, "info", accessLog.Level)
 	assert.Empty(t, accessLog.Principal, "the access-log line does not carry the principal")
+}
+
+// TestServer_ScopeExcludesEveryHost_OneWarningCarriesPrincipal pins that the runner's 403 is
+// an authorization outcome: it is logged once, as a warning carrying the principal, and the
+// only error-level line is the access log of the 4xx
+func TestServer_ScopeExcludesEveryHost_OneWarningCarriesPrincipal(t *testing.T) {
+	for _, route := range []string{api.QueryRoute, api.SSEQueryRoute} {
+		t.Run(route, func(t *testing.T) {
+			records := captureLogs(t)
+			querier := &recordingQuerier{queried: make(chan hosts.Hosts, 1)}
+			authorizer := headerAuthorizer{scopes: map[string]hosts.Hosts{"alice": {"other"}}}
+			client := startServer(t, querier, server.WithAuthorizer(authorizer))
+
+			postQueryTo(t, client, route, "alice")
+
+			awaitRecord(t, records, msgAccessLog)
+			warnings := recordsWithLevel(records(), "warn")
+			require.Len(t, warnings, 1)
+			assert.Equal(t, "alice", warnings[0].Principal)
+			assert.Contains(t, warnings[0].Error, authz.ErrNoAuthorizedHosts.Error())
+			for _, rec := range recordsWithLevel(records(), "error") {
+				assert.Equal(t, msgAccessLog, rec.Msg, "only the access-log line of a 4xx is at error level")
+			}
+			assert.Empty(t, querier.queried)
+		})
+	}
 }
