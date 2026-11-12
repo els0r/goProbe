@@ -3,6 +3,7 @@ package api
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -42,7 +43,10 @@ func AuthorizationMiddleware(a huma.API, authorizer authz.Authorizer) func(huma.
 			return
 		}
 
-		next(huma.WithContext(ctx, authz.WithScope(ctx.Context(), scope)))
+		// from here on every log line of the request carries the principal: the context
+		// logger is the one the server's middlewares already attached, extended by one field
+		reqCtx := logging.WithFields(ctx.Context(), slog.String("principal", scope.Principal()))
+		next(huma.WithContext(ctx, authz.WithScope(reqCtx, scope)))
 	}
 }
 

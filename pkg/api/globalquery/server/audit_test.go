@@ -112,3 +112,22 @@ func TestServer_RejectedRequest_OneWarningWithReason_NotReturned(t *testing.T) {
 	}
 	assert.Empty(t, querier.queried)
 }
+
+func TestServer_ScopedQuery_LogLinesAfterAuthorizationCarryPrincipal(t *testing.T) {
+	records := captureLogs(t)
+	querier := &recordingQuerier{queried: make(chan hosts.Hosts, 1)}
+	authorizer := headerAuthorizer{scopes: map[string]hosts.Hosts{"alice": {"h1", "h3"}}}
+	client := startServer(t, querier, server.WithAuthorizer(authorizer))
+
+	resp := postQuery(t, client, "alice")
+
+	require.Equal(t, http.StatusOK, resp.status)
+	assert.ElementsMatch(t, hosts.Hosts{"h1", "h3"}, receiveQueried(t, querier))
+
+	for _, msg := range []string{msgHostCounts, msgQueryLine} {
+		assert.Equal(t, "alice", awaitRecord(t, records, msg).Principal, msg)
+	}
+	accessLog := awaitRecord(t, records, msgAccessLog)
+	assert.Equal(t, "info", accessLog.Level)
+	assert.Empty(t, accessLog.Principal, "the access-log line does not carry the principal")
+}
