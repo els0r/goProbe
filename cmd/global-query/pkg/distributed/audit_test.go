@@ -110,6 +110,26 @@ func TestScopedQuery_LogsRequestedAndRemainingHostIDCounts(t *testing.T) {
 	assert.Equal(t, 2, *countLine.Remaining)
 }
 
+func TestScopedQuery_DuplicateRequestedHostIDs_CountedOnce(t *testing.T) {
+	records := captureLogs(t, logging.LevelDebug)
+	rm := hosts.NewResolverMap()
+	rm.Set("string", &mockResolver{out: hosts.Hosts{"h1", "h1", "h2"}})
+	qr := NewQueryRunner(rm, &mockQuerier{}, WithScopeEnforcement())
+
+	args := baseArgs()
+	args.QueryHosts = "h1,h1,h2"
+
+	_, err := qr.Run(auditCtx(&mockScope{principal: "alice", allowed: []hosts.ID{"h1", "h2"}}), args)
+	require.NoError(t, err)
+
+	countLine := findRecord(t, records(), msgScopedHostList)
+	require.NotNil(t, countLine.Requested)
+	require.NotNil(t, countLine.Remaining)
+	assert.Equal(t, 2, *countLine.Requested)
+	assert.Equal(t, 2, *countLine.Remaining)
+	assert.Empty(t, droppedHostIDs(records()), "nothing was dropped, so nothing is logged as dropped")
+}
+
 // droppedHostIDs collects the dropped host IDs across all captured records
 func droppedHostIDs(records []logRecord) (dropped []string) {
 	for _, rec := range records {

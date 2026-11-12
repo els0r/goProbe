@@ -25,7 +25,10 @@ var (
 )
 
 // WithScopeEnforcement makes the runner require a scope on every query and narrow the
-// resolved host list with it before fan-out. Without it, the runner ignores scopes
+// resolved host list with it before fan-out. Without it, the runner ignores scopes.
+// The principal on the runner's log lines comes from the context logger the authorization
+// middleware attaches; a runner driven with a scope placed on the context by other means
+// logs no principal
 func WithScopeEnforcement() QueryOption {
 	return func(qr *QueryRunner) {
 		qr.enforceScope = true
@@ -71,12 +74,16 @@ func (q *QueryRunner) applyScope(ctx context.Context, hostList hosts.Hosts) (hos
 	trace.SpanFromContext(ctx).SetAttributes(attribute.String("principal", scope.Principal()))
 	logger = logger.With("scope_type", fmt.Sprintf("%T", scope))
 
-	scoped, err := scope.Filter(ctx, slices.Clone(hostList))
+	// the requested set is the unique host IDs, so that requested and remaining counts and
+	// the dropped host IDs compare like with like
+	requested := dedupe(hostList)
+
+	scoped, err := scope.Filter(ctx, slices.Clone(requested))
 	if err != nil {
 		logger.Error("scope filter failed", "error", err)
 		return nil, newScopeError(http.StatusServiceUnavailable, detailAuthorizationUnavailable, err)
 	}
-	if widened := hostsNotIn(scoped, hostList); len(widened) > 0 {
+	if widened := hostsNotIn(scoped, requested); len(widened) > 0 {
 		logger.Error("scope returned host IDs it was not given", "host_ids", widened)
 		return nil, newScopeError(http.StatusServiceUnavailable, detailAuthorizationUnavailable, errScopeNotNarrowing)
 	}
@@ -84,13 +91,13 @@ func (q *QueryRunner) applyScope(ctx context.Context, hostList hosts.Hosts) (hos
 
 	// the audit trail of the narrowing: how much of what was asked for is inside the scope.
 	// The dropped host IDs themselves are other principals' hosts and stay out of routine logs
-	logger.Info("scoped query host list", "requested", len(hostList), "remaining", len(remaining))
-	if dropped := hostsNotIn(hostList, remaining); len(dropped) > 0 {
+	logger.Info("scoped query host list", "requested", len(requested), "remaining", len(remaining))
+	if dropped := hostsNotIn(requested, remaining); len(dropped) > 0 {
 		logger.Debug("scope dropped host IDs", "dropped", dropped)
 	}
 
 	// an empty resolved list is not a scope decision and runs as without a scope
-	if len(hostList) > 0 && len(remaining) == 0 {
+	if len(requested) > 0 && len(remaining) == 0 {
 		return nil, newScopeError(http.StatusForbidden, authz.ErrNoAuthorizedHosts.Error(), authz.ErrNoAuthorizedHosts)
 	}
 
