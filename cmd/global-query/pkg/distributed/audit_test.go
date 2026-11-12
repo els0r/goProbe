@@ -82,3 +82,81 @@ func TestScopedQuery_QueryLogLine_CarriesPrincipal(t *testing.T) {
 	queryLine := findRecord(t, records(), "reading query results from querier")
 	assert.Equal(t, "alice", queryLine.Principal)
 }
+
+const msgScopedHostList = "scoped query host list"
+
+func TestScopedQuery_LogsRequestedAndRemainingHostIDCounts(t *testing.T) {
+	records := captureLogs(t, logging.LevelInfo)
+	rm := hosts.NewResolverMap()
+	rm.Set("string", &mockResolver{out: hosts.Hosts{"h1", "h2", "h3"}})
+	qr := NewQueryRunner(rm, &mockQuerier{}, WithScopeEnforcement())
+
+	args := baseArgs()
+	args.QueryHosts = "h1,h2,h3"
+
+	_, err := qr.Run(auditCtx(&mockScope{principal: "alice", allowed: []hosts.ID{"h1", "h3"}}), args)
+	require.NoError(t, err)
+
+	countLine := findRecord(t, records(), msgScopedHostList)
+	assert.Equal(t, "info", countLine.Level)
+	assert.Equal(t, "alice", countLine.Principal)
+	require.NotNil(t, countLine.Requested)
+	require.NotNil(t, countLine.Remaining)
+	assert.Equal(t, 3, *countLine.Requested)
+	assert.Equal(t, 2, *countLine.Remaining)
+}
+
+// droppedHostIDs collects the dropped host IDs across all captured records
+func droppedHostIDs(records []logRecord) (dropped []string) {
+	for _, rec := range records {
+		dropped = append(dropped, rec.Dropped...)
+	}
+	return dropped
+}
+
+func TestScopedQuery_DroppedHostIDs_LoggedAtDebugOnly(t *testing.T) {
+	tests := []struct {
+		name    string
+		level   slog.Level
+		dropped []string
+	}{
+		{name: "info level omits them", level: logging.LevelInfo, dropped: nil},
+		{name: "debug level carries them", level: logging.LevelDebug, dropped: []string{"h2"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			records := captureLogs(t, tt.level)
+			rm := hosts.NewResolverMap()
+			rm.Set("string", &mockResolver{out: hosts.Hosts{"h1", "h2", "h3"}})
+			qr := NewQueryRunner(rm, &mockQuerier{}, WithScopeEnforcement())
+
+			args := baseArgs()
+			args.QueryHosts = "h1,h2,h3"
+
+			_, err := qr.Run(auditCtx(&mockScope{principal: "alice", allowed: []hosts.ID{"h1", "h3"}}), args)
+			require.NoError(t, err)
+
+			assert.Equal(t, tt.dropped, droppedHostIDs(records()))
+		})
+	}
+}
+
+func TestUnscopedQuery_NoScopeEnforcement_LogsNoHostIDCounts(t *testing.T) {
+	records := captureLogs(t, logging.LevelDebug)
+	rm := hosts.NewResolverMap()
+	rm.Set("string", &mockResolver{out: hosts.Hosts{"h1", "h2", "h3"}})
+	qr := NewQueryRunner(rm, &mockQuerier{})
+
+	args := baseArgs()
+	args.QueryHosts = "h1,h2,h3"
+
+	_, err := qr.Run(auditCtx(&mockScope{principal: "alice", allowed: []hosts.ID{"h1"}}), args)
+	require.NoError(t, err)
+
+	for _, rec := range records() {
+		assert.NotEqual(t, msgScopedHostList, rec.Msg)
+		assert.Nil(t, rec.Requested)
+		assert.Nil(t, rec.Remaining)
+		assert.Empty(t, rec.Dropped)
+	}
+}

@@ -63,7 +63,9 @@ func (q *QueryRunner) applyScope(ctx context.Context, hostList hosts.Hosts) (hos
 		return nil, newScopeError(http.StatusServiceUnavailable, detailAuthorizationUnavailable, errScopeMissing)
 	}
 
-	logger = logger.With("principal", scope.Principal(), "scope_type", fmt.Sprintf("%T", scope))
+	// the principal is already on the context logger: the middleware attaches it to every
+	// line of the request from the point of authorization on
+	logger = logger.With("scope_type", fmt.Sprintf("%T", scope))
 
 	scoped, err := scope.Filter(ctx, slices.Clone(hostList))
 	if err != nil {
@@ -74,13 +76,21 @@ func (q *QueryRunner) applyScope(ctx context.Context, hostList hosts.Hosts) (hos
 		logger.Error("scope returned host IDs it was not given", "host_ids", widened)
 		return nil, newScopeError(http.StatusServiceUnavailable, detailAuthorizationUnavailable, errScopeNotNarrowing)
 	}
+	remaining := dedupe(scoped)
+
+	// the audit trail of the narrowing: how much of what was asked for is inside the scope.
+	// The dropped host IDs themselves are other principals' hosts and stay out of routine logs
+	logger.Info("scoped query host list", "requested", len(hostList), "remaining", len(remaining))
+	if dropped := hostsNotIn(hostList, remaining); len(dropped) > 0 {
+		logger.Debug("scope dropped host IDs", "dropped", dropped)
+	}
 
 	// an empty resolved list is not a scope decision and runs as without a scope
-	if len(hostList) > 0 && len(scoped) == 0 {
+	if len(hostList) > 0 && len(remaining) == 0 {
 		return nil, newScopeError(http.StatusForbidden, authz.ErrNoAuthorizedHosts.Error(), authz.ErrNoAuthorizedHosts)
 	}
 
-	return dedupe(scoped), nil
+	return remaining, nil
 }
 
 // hostsNotIn returns the host IDs of candidates that are not part of reference
