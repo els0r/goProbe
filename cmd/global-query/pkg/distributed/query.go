@@ -143,10 +143,9 @@ func (q *QueryRunner) run(ctx context.Context, args *query.Args, send sse.Sender
 	}
 	defer smeDone()
 
-	// log the query
-	logger := logging.Logger().With("hosts", hostList)
-
-	logger.Info("reading query results from querier")
+	// log the query through the context logger, so that the line carries whatever the
+	// request attached to it (the principal of a scoped query, the trace ID)
+	logging.FromContext(ctx).With("hosts", hostList).Info("reading query results from querier")
 
 	resChan, keepaliveChan := q.querier.Query(ctx, hostList, &queryArgs)
 	if send != nil && queryArgs.KeepAlive > 0 {
