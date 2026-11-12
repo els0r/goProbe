@@ -468,25 +468,10 @@ func testE2EDistributed(t *testing.T, enableStreaming bool, nDistHosts, valFilte
 		goProbeHosts        = make(map[string]string)
 	)
 	for i := range nDistHosts {
-		tempDir, err := os.MkdirTemp(os.TempDir(), fmt.Sprintf("goprobe_e2e_%d", i))
-		require.Nil(t, err)
-		defer func(t *testing.T) {
-			require.Nil(t, os.RemoveAll(tempDir))
-		}(t)
-
-		// Define mock interfaces
-		var mockIfaces mockIfaces
-		for j, data := range datasets {
-			mockIfaces = append(mockIfaces, newPcapSource(t, fmt.Sprintf("mock%03d", j+1), data))
-		}
+		hostID := strconv.Itoa(i)
+		goProbeHosts[hostID] = fmt.Sprintf("127.0.0.1:%d", getAvailablePort())
+		mockIfaces, liveFlowResults := runSensor(t, hostID, goProbeHosts[hostID], datasets...)
 		mockIfacesList = append(mockIfacesList, mockIfaces)
-
-		// Run GoProbe (storing a copy of all processed live flows)
-		liveFlowResults := make(map[string]hashmap.AggFlowMapWithMetadata)
-		goProbeHosts[strconv.Itoa(i)] = fmt.Sprintf("127.0.0.1:%d", getAvailablePort())
-		for liveFlowMap := range runGoProbe(t, tempDir, goProbeHosts[strconv.Itoa(i)], setupSources(mockIfaces)) {
-			liveFlowResults[liveFlowMap.Interface] = liveFlowMap
-		}
 		liveFlowResultsList = append(liveFlowResultsList, liveFlowResults)
 	}
 
@@ -623,6 +608,30 @@ func validateMetrics(t *testing.T, muliplier uint64, mockIfaces mockIfaces) {
 
 	// Brute force cross-check that we actually validated all relevant metrics
 	require.Equal(t, 3, metricsValidated)
+}
+
+// runSensor runs one goProbe sensor with one mock interface per dataset, storing its DB in a
+// temporary directory removed when the test ends and serving its API on addr. It returns the
+// mock interfaces and a copy of all processed live flows per interface
+func runSensor(t *testing.T, name, addr string, datasets ...[]byte) (mockIfaces, map[string]hashmap.AggFlowMapWithMetadata) {
+	tempDir, err := os.MkdirTemp(os.TempDir(), "goprobe_e2e_"+name)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, os.RemoveAll(tempDir))
+	})
+
+	// Define mock interfaces
+	var mockIfaces mockIfaces
+	for j, data := range datasets {
+		mockIfaces = append(mockIfaces, newPcapSource(t, fmt.Sprintf("mock%03d", j+1), data))
+	}
+
+	// Run GoProbe (storing a copy of all processed live flows)
+	liveFlowResults := make(map[string]hashmap.AggFlowMapWithMetadata)
+	for liveFlowMap := range runGoProbe(t, tempDir, addr, setupSources(mockIfaces)) {
+		liveFlowResults[liveFlowMap.Interface] = liveFlowMap
+	}
+	return mockIfaces, liveFlowResults
 }
 
 func runGoProbe(t *testing.T, testDir, addr string, sourceInitFn func() (mockIfaces, func(c *capture.Capture) (capture.Source, error))) chan hashmap.AggFlowMapWithMetadata {
