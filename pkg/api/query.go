@@ -51,7 +51,7 @@ func getBodyQueryRunnerHandler(caller string, querier query.Runner) func(context
 
 		res, err := runQuery(ctx, caller, input.Body, querier)
 		if err != nil {
-			logging.FromContext(ctx).Error("error running plain query", "args", input.Body, "error", err)
+			logQueryError(ctx, "error running plain query", input.Body, err)
 			return nil, err
 		}
 		output.Body = res
@@ -64,13 +64,25 @@ func getSSEBodyQueryRunnerHandler(caller string, querier SSEQueryRunner) func(co
 	return func(ctx context.Context, input *ArgsInput, send sse.Sender) {
 		res, err := runQuerySSE(ctx, caller, input.Body, querier, send)
 		if err != nil {
-			logging.FromContext(ctx).Error("error running SSE query", "args", input.Body, "error", err)
+			logQueryError(ctx, "error running SSE query", input.Body, err)
 			_ = send.Data(queryErrorEvent(err))
 			return
 		}
 
 		_ = send.Data(&FinalResult{res})
 	}
+}
+
+// logQueryError logs a failed query. A 4xx status error is an outcome of the request (such
+// as a scope that excludes every host) and is logged as a warning; anything else is an error
+func logQueryError(ctx context.Context, msg string, args *query.Args, err error) {
+	logger := logging.FromContext(ctx).With("args", args, "error", err)
+	var statusErr huma.StatusError
+	if errors.As(err, &statusErr) && statusErr.GetStatus() < http.StatusInternalServerError {
+		logger.Warn(msg)
+		return
+	}
+	logger.Error(msg)
 }
 
 // queryErrorEvent builds the query-error event for a failed streaming query. An error that

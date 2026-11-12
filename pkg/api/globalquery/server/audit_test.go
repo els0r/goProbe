@@ -1,0 +1,135 @@
+package server
+
+import (
+	"context"
+	"fmt"
+	"net/http"
+	"testing"
+	"time"
+
+	"github.com/els0r/goProbe/v4/internal/logtest"
+	"github.com/els0r/goProbe/v4/pkg/api"
+	"github.com/els0r/goProbe/v4/pkg/api/server"
+	"github.com/els0r/goProbe/v4/pkg/distributed/authz"
+	"github.com/els0r/goProbe/v4/pkg/distributed/hosts"
+	"github.com/els0r/telemetry/logging"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+const (
+	msgAccessLog  = "handled request"
+	msgQueryLine  = "reading query results from querier"
+	msgHostCounts = "scoped query host list"
+)
+
+// logRecord is the structured view of one captured log line
+type logRecord struct {
+	Level     string `json:"level"`
+	Msg       string `json:"msg"`
+	Principal string `json:"principal"`
+	Error     string `json:"error"`
+}
+
+// recordsWithLevel returns the records at level
+func recordsWithLevel(records []logRecord, level string) (out []logRecord) {
+	for _, rec := range records {
+		if rec.Level == level {
+			out = append(out, rec)
+		}
+	}
+	return out
+}
+
+// awaitRecord waits for the record with msg: the access-log line is written after the
+// handler chain returns, which may be after the client has read the response
+func awaitRecord(t *testing.T, records func() []logRecord, msg string) logRecord {
+	t.Helper()
+	var found logRecord
+	require.Eventually(t, func() bool {
+		for _, rec := range records() {
+			if rec.Msg == msg {
+				found = rec
+				return true
+			}
+		}
+		return false
+	}, 5*time.Second, 10*time.Millisecond, "no log record with message %q", msg)
+	return found
+}
+
+// reasonAuthorizer rejects every request with a reason only the operator may see
+type reasonAuthorizer struct{}
+
+const rejectionReason = "token expired at provider"
+
+func (reasonAuthorizer) Authorize(context.Context, authz.Request) (authz.Scope, error) {
+	return nil, fmt.Errorf("%s: %w", rejectionReason, authz.ErrUnauthenticated)
+}
+
+func TestServer_RejectedRequest_OneWarningWithReason_NotReturned(t *testing.T) {
+	records := logtest.Capture[logRecord](t, logging.LevelInfo)
+	querier := &recordingQuerier{queried: make(chan hosts.Hosts, 1)}
+	client := startServer(t, querier, server.WithAuthorizer(reasonAuthorizer{}))
+
+	resp := postQuery(t, client, "alice")
+
+	require.Equal(t, http.StatusUnauthorized, resp.status)
+	assert.NotContains(t, string(resp.body), rejectionReason)
+
+	accessLog := awaitRecord(t, records, msgAccessLog)
+	assert.Empty(t, accessLog.Principal, "the access-log line does not carry the principal")
+
+	warnings := recordsWithLevel(records(), "warn")
+	require.Len(t, warnings, 1)
+	assert.Contains(t, warnings[0].Error, rejectionReason)
+	for _, rec := range recordsWithLevel(records(), "error") {
+		assert.Equal(t, msgAccessLog, rec.Msg, "only the access-log line of a 4xx is at error level")
+	}
+	assert.Empty(t, querier.queried)
+}
+
+func TestServer_ScopedQuery_LogLinesAfterAuthorizationCarryPrincipal(t *testing.T) {
+	records := logtest.Capture[logRecord](t, logging.LevelInfo)
+	querier := &recordingQuerier{queried: make(chan hosts.Hosts, 1)}
+	authorizer := headerAuthorizer{scopes: map[string]hosts.Hosts{"alice": {"h1", "h3"}}}
+	client := startServer(t, querier, server.WithAuthorizer(authorizer))
+
+	resp := postQuery(t, client, "alice")
+
+	require.Equal(t, http.StatusOK, resp.status)
+	assert.ElementsMatch(t, hosts.Hosts{"h1", "h3"}, receiveQueried(t, querier))
+
+	for _, msg := range []string{msgHostCounts, msgQueryLine} {
+		assert.Equal(t, "alice", awaitRecord(t, records, msg).Principal, msg)
+	}
+	accessLog := awaitRecord(t, records, msgAccessLog)
+	assert.Equal(t, "info", accessLog.Level)
+	assert.Empty(t, accessLog.Principal, "the access-log line does not carry the principal")
+}
+
+// TestServer_ScopeExcludesEveryHost_OneWarningCarriesPrincipal pins that the runner's 403 is
+// an authorization outcome: it is logged once, as a warning carrying the principal, and the
+// only error-level line is the access log of the 4xx
+func TestServer_ScopeExcludesEveryHost_OneWarningCarriesPrincipal(t *testing.T) {
+	for _, route := range []string{api.QueryRoute, api.SSEQueryRoute} {
+		t.Run(route, func(t *testing.T) {
+			records := logtest.Capture[logRecord](t, logging.LevelInfo)
+			querier := &recordingQuerier{queried: make(chan hosts.Hosts, 1)}
+			authorizer := headerAuthorizer{scopes: map[string]hosts.Hosts{"alice": {"other"}}}
+			client := startServer(t, querier, server.WithAuthorizer(authorizer))
+
+			postQueryTo(t, client, route, "alice")
+
+			awaitRecord(t, records, msgAccessLog)
+			warnings := recordsWithLevel(records(), "warn")
+			require.Len(t, warnings, 1)
+			assert.Equal(t, "alice", warnings[0].Principal)
+			assert.Contains(t, warnings[0].Error, authz.ErrNoAuthorizedHosts.Error())
+			for _, rec := range recordsWithLevel(records(), "error") {
+				assert.Equal(t, msgAccessLog, rec.Msg, "only the access-log line of a 4xx is at error level")
+			}
+			assert.Empty(t, querier.queried)
+		})
+	}
+}
