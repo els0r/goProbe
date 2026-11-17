@@ -50,7 +50,7 @@ $(OPENAPI_SPEC):
 
 # openapi type generation (uses local dev dependency openapi-typescript)
 $(GENERATED_TYPES): $(OPENAPI_SPEC) | install
-	$(NPM) exec -- openapi-typescript "$(OPENAPI_SPEC)" --output "$(GENERATED_TYPES)"
+	$(NPM) exec -- openapi-typescript "$(OPENAPI_SPEC)" --default-non-nullable=false --output "$(GENERATED_TYPES)"
 
 .PHONY: types
 types: $(GENERATED_TYPES)
