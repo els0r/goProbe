@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/els0r/goProbe/v4/cmd/global-query/pkg/conf"
+	"github.com/els0r/goProbe/v4/internal/logtest"
 	"github.com/els0r/goProbe/v4/pkg/api"
 	"github.com/els0r/goProbe/v4/pkg/distributed"
 	"github.com/els0r/goProbe/v4/pkg/distributed/authz"
@@ -181,29 +182,6 @@ type logRecord struct {
 	Msg   string `json:"msg"`
 }
 
-// captureLogs routes the global logger into a buffer as JSON records for the duration of the
-// test and returns a function decoding the records captured so far
-func captureLogs(t *testing.T) func() []logRecord {
-	t.Helper()
-	buf := &bytes.Buffer{}
-	_, err := logging.Init(logging.LevelDebug, logging.EncodingJSON,
-		logging.WithOutput(buf), logging.WithErrorOutput(buf))
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		_, _ = logging.Init(logging.LevelDebug, logging.EncodingLogfmt,
-			logging.WithOutput(os.Stdout), logging.WithErrorOutput(os.Stderr))
-	})
-	return func() (records []logRecord) {
-		dec := json.NewDecoder(bytes.NewReader(buf.Bytes()))
-		for dec.More() {
-			var rec logRecord
-			require.NoError(t, dec.Decode(&rec))
-			records = append(records, rec)
-		}
-		return records
-	}
-}
-
 // countUnscopedWarnings counts the warning records announcing unscoped operation
 func countUnscopedWarnings(records []logRecord) (n int) {
 	for _, rec := range records {
@@ -238,7 +216,7 @@ func TestServerCommand_AuthorizerFlags(t *testing.T) {
 func TestServer_NoAuthorizer_WarnsOnceAtStartup(t *testing.T) {
 	t.Run("empty type warns once that queries run unscoped", func(t *testing.T) {
 		configureServer(t, "")
-		records := captureLogs(t)
+		records := logtest.Capture[logRecord](t, logging.LevelDebug)
 
 		_, err := newAPIServer(context.Background(), "localhost:0")
 		require.NoError(t, err)
@@ -248,7 +226,7 @@ func TestServer_NoAuthorizer_WarnsOnceAtStartup(t *testing.T) {
 
 	t.Run("configured authorizer does not warn", func(t *testing.T) {
 		configureServer(t, testAuthorizerType)
-		records := captureLogs(t)
+		records := logtest.Capture[logRecord](t, logging.LevelDebug)
 
 		_, err := newAPIServer(context.Background(), "localhost:0")
 		require.NoError(t, err)

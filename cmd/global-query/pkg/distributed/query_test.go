@@ -37,6 +37,7 @@ type mockQuerier struct {
 	lastArgs  *query.Args
 	results   []*results.Result
 	anyHosts  hosts.Hosts
+	anyErr    error
 }
 
 func (m *mockQuerier) Query(ctx context.Context, queryHosts hosts.Hosts, args *query.Args) (<-chan *results.Result, <-chan struct{}) {
@@ -54,7 +55,7 @@ func (m *mockQuerier) Query(ctx context.Context, queryHosts hosts.Hosts, args *q
 }
 
 func (m *mockQuerier) AllHosts() (hosts.Hosts, error) { // implements distributed.QuerierAnyable
-	return m.anyHosts, nil
+	return m.anyHosts, m.anyErr
 }
 
 func makeResult(host, iface string, bytes, packets uint64) *results.Result {
