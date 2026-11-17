@@ -67,3 +67,47 @@ Flagged ambiguities:
   not a goProbe concept. How principals group is internal to an **Authorizer**.
 - "host" was used for both **Host ID** and **Hostname** — resolved: these are
   distinct namespaces and can differ for the same sensor.
+
+## Query attributes
+
+Language for what a query groups flows by. Attributes are the columns of the
+result key; **conditions** are the filter and use a separate grammar even
+where the words overlap.
+
+- **Attribute** — a column flows are grouped by (`sip`, `dip`, `proto`,
+  `dport`, and the network attributes below). The attribute list is the
+  query type.
+  _Avoid_: column, field, dimension.
+
+- **Network attribute** — `snet` or `dnet`: the source or destination IP
+  truncated to a prefix length, so rows group by network segment instead of
+  by host. Written `snet/<v4>/<v6>` with the IPv4 length first and the IPv6
+  length second; `snet/24` sets IPv4 to /24 and leaves IPv6 at the default
+  /64. A bare `snet` without a length is a parse error, never a guessed
+  default. Bounds: 0..32 for IPv4, 0..128 for IPv6.
+  _Avoid_: subnet attribute, masked IP.
+
+- **Prefix length** — the number of leading bits kept by a network attribute.
+  One per IP family, set independently per attribute (`snet/24,dnet/29`).
+  _Avoid_: netmask (reserved for the condition grammar's CIDR value).
+
+Relationships:
+
+- A **Network attribute** occupies the same key column as its IP attribute
+  (`snet` ↔ `sip`, `dnet` ↔ `dip`). One attribute per key column: `sip,snet`
+  or `snet/24,snet/16` is a parse error, never a silent override.
+- `snet`/`dnet` in a **condition** filter on a CIDR; as an **Attribute** they
+  group by prefix length. Same word, two grammars, no shared value.
+- A result row carries a **Network attribute** as a prefix (`10.0.0.0/24`),
+  in its own `snet`/`dnet` field, never as a bare address in `sip`/`dip`.
+  Two rows are the same segment only if address and prefix length match.
+- A **Network attribute** is never resolved via reverse DNS.
+- A result echoes its attributes in **canonical form**: a network attribute
+  always as `snet/<v4>/<v6>` with both lengths filled in, so the echo is a
+  valid query type that reproduces the grouping.
+
+Flagged ambiguities:
+
+- "mask" was used for both the condition CIDR and the grouping length —
+  resolved: **Prefix length** is the grouping term; netmask stays with
+  conditions.
