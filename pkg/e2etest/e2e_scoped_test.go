@@ -27,22 +27,21 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// excludedPcapTestFile is captured by the sensor outside the scope. Its flows differ from those
-// of defaultPcapTestFile, so a result that carries any of them has reached the wrong sensor
-const excludedPcapTestFile = "c04-wap-r1.pcap.gz"
+// Every sensor of the scoped scenario captures its own pcap. Each fixture holds flows none of
+// the others has, so a result that misses a sensor in the scope, or that carries the flows of the
+// sensor outside it, shows in the rows
+const (
+	secondInScopePcapTestFile = "fragmented.pcap.gz"
+	excludedPcapTestFile      = "c04-wap-r1.pcap.gz"
+)
 
 // TestE2EDistributedScoped pins the wiring of the header authorizer into a real global-query:
 // a query for all hosts, sent with a scope naming two of three sensors, is answered with the
 // data of those two sensors only. The sensors run in this process and therefore share its
 // hostname, so the result rows and the successful per-host statuses carry a single hostname;
-// the excluded sensor shows neither in the rows (it captures a different pcap), nor in the
-// summary totals, nor as a status keyed by its host ID
+// the excluded sensor shows neither in the rows, nor in the summary totals, nor as a status
+// keyed by its host ID
 func TestE2EDistributedScoped(t *testing.T) {
-	defaultData, err := pcaps.ReadFile(filepath.Join(testDataPath, defaultPcapTestFile))
-	require.NoError(t, err)
-	excludedData, err := pcaps.ReadFile(filepath.Join(testDataPath, excludedPcapTestFile))
-	require.NoError(t, err)
-
 	// Reset all Prometheus counters for the next E2E test to avoid double counting
 	defer promMetrics.ResetCountersTestingOnly()
 
@@ -50,7 +49,11 @@ func TestE2EDistributedScoped(t *testing.T) {
 	var (
 		scope    = []string{"0", "1"}
 		excluded = "2"
-		datasets = map[string][]byte{"0": defaultData, "1": defaultData, excluded: excludedData}
+		datasets = map[string][]byte{
+			"0":      readPcap(t, defaultPcapTestFile),
+			"1":      readPcap(t, secondInScopePcapTestFile),
+			excluded: readPcap(t, excludedPcapTestFile),
+		}
 
 		endpoints   = make(map[string]string, len(datasets))
 		sensorFlows = make(map[string]map[results.Attributes]struct{}, len(datasets))
@@ -107,6 +110,27 @@ func TestE2EDistributedScoped(t *testing.T) {
 	// Only the sensors in the scope contribute traffic
 	assert.Equal(t, wantPackets, res.Summary.Totals.PacketsRcvd, "packets received must stem from the sensors in the scope only")
 
+	// Every sensor has seen flows no other sensor has: a sensor in the scope that is not queried
+	// (or that another one answers for) leaves its flows out of the rows, the excluded sensor
+	// being queried puts its flows in
+	onlySeenBy := func(hostID string, flow results.Attributes) bool {
+		for other, seen := range sensorFlows {
+			if _, ok := seen[flow]; ok && other != hostID {
+				return false
+			}
+		}
+		return true
+	}
+	for hostID, seen := range sensorFlows {
+		distinctive := 0
+		for flow := range seen {
+			if onlySeenBy(hostID, flow) {
+				distinctive++
+			}
+		}
+		require.NotZero(t, distinctive, "the pcap of sensor %s must hold flows no other sensor has seen", hostID)
+	}
+
 	// The rows hold every flow of the sensors in the scope and none of the flows only the
 	// excluded sensor has seen
 	rowFlows := make(map[results.Attributes]struct{}, len(res.Rows))
@@ -118,23 +142,11 @@ func TestE2EDistributedScoped(t *testing.T) {
 			assert.Contains(t, rowFlows, flow, "flow of sensor %s in the scope missing from the rows", hostID)
 		}
 	}
-	seenInScope := func(flow results.Attributes) bool {
-		for _, hostID := range scope {
-			if _, seen := sensorFlows[hostID][flow]; seen {
-				return true
-			}
-		}
-		return false
-	}
-	distinctive := 0
 	for flow := range sensorFlows[excluded] {
-		if seenInScope(flow) {
-			continue
+		if onlySeenBy(excluded, flow) {
+			assert.NotContains(t, rowFlows, flow, "flow only sensor %s outside the scope has seen is in the rows", excluded)
 		}
-		distinctive++
-		assert.NotContains(t, rowFlows, flow, "flow only sensor %s outside the scope has seen is in the rows", excluded)
 	}
-	require.NotZero(t, distinctive, "the excluded sensor's pcap must hold flows the in-scope sensors have not seen")
 
 	// Rows carry the sensors' self-reported hostname, never a host ID
 	hostname, err := os.Hostname()
@@ -147,6 +159,14 @@ func TestE2EDistributedScoped(t *testing.T) {
 	// scope share this process' hostname, the excluded sensor must not show up at all
 	assert.Equal(t, results.HostsStatuses{hostname: {Code: types.StatusOK}}, res.HostsStatuses,
 		"statuses must hold the in-scope sensors' hostname only, nothing keyed by host ID %s", excluded)
+}
+
+// readPcap returns the contents of a (compressed) pcap test fixture
+func readPcap(t *testing.T, name string) []byte {
+	t.Helper()
+	data, err := pcaps.ReadFile(filepath.Join(testDataPath, name))
+	require.NoError(t, err)
+	return data
 }
 
 // flows returns the sip/dip/dport/proto tuples the mock interfaces have seen, in the shape the
