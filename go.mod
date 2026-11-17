@@ -20,7 +20,7 @@ require (
 	github.com/gin-contrib/pprof v1.5.4
 	github.com/gin-gonic/gin v1.12.0
 	github.com/json-iterator/go v1.1.12
-	github.com/klauspost/compress v1.18.6
+	github.com/klauspost/compress v1.18.7
 	github.com/pierrec/lz4/v4 v4.1.26
 	github.com/prometheus/client_golang v1.23.2
 	github.com/spf13/cobra v1.10.2
