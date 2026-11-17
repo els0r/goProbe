@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/els0r/goProbe/v4/internal/logtest"
+	"github.com/els0r/goProbe/v4/pkg/api"
 	"github.com/els0r/goProbe/v4/pkg/distributed/authz"
 	"github.com/els0r/goProbe/v4/pkg/distributed/hosts"
 	"github.com/els0r/goProbe/v4/pkg/types"
@@ -248,6 +249,49 @@ func TestScopedQuery_HostListSpan_CarriesPrincipal_WhenResolutionFails(t *testin
 
 			principal := spanAttribute(t, spans.GetSpans(), "(*distributed.QueryRunner).prepareHostList", "principal")
 			assert.Equal(t, "alice", principal)
+		})
+	}
+}
+
+// TestScopedQuery_SpanAttributes_OmitRequestedHostList pins that traces, like routine logs,
+// do not name the hosts a scope dropped: the host list as the caller requested it is redacted
+// on the spans of a scoped query and kept on those of an unscoped one
+func TestScopedQuery_SpanAttributes_OmitRequestedHostList(t *testing.T) {
+	tests := []struct {
+		name     string
+		opts     []QueryOption
+		redacted bool
+	}{
+		{name: "scoped", opts: []QueryOption{WithScopeEnforcement()}, redacted: true},
+		{name: "unscoped", redacted: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			spans := captureSpans(t)
+			rm := hosts.NewResolverMap()
+			rm.Set("string", &mockResolver{out: hosts.Hosts{"h1", "h2", "h3"}})
+			qr := NewQueryRunner(rm, &mockQuerier{}, tt.opts...)
+
+			args := baseArgs()
+			args.QueryHosts = "h1,h2,h3"
+
+			_, err := qr.Run(auditCtx(&mockScope{principal: "alice", allowed: []hosts.ID{"h1"}}), args)
+			require.NoError(t, err)
+
+			runArgs := spanAttribute(t, spans.GetSpans(), "(*distributed.QueryRunner).run", "args")
+			hostList := spanAttribute(t, spans.GetSpans(), "(*distributed.QueryRunner).prepareHostList", "hosts")
+			if !tt.redacted {
+				assert.Contains(t, runArgs, "h1,h2,h3")
+				assert.Equal(t, "h1,h2,h3", hostList)
+				return
+			}
+			assert.Equal(t, api.RedactedQueryHosts, hostList)
+			for _, span := range spans.GetSpans() {
+				for _, attr := range span.Attributes {
+					assert.NotContains(t, attr.Value.Emit(), "h2", "span %q attribute %q", span.Name, attr.Key)
+					assert.NotContains(t, attr.Value.Emit(), "h3", "span %q attribute %q", span.Name, attr.Key)
+				}
+			}
 		})
 	}
 }

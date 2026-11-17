@@ -86,8 +86,9 @@ func logQueryError(ctx context.Context, msg string, args *query.Args, err error)
 	logger.Error(msg)
 }
 
-// redactedQueryHosts replaces the requested host list in the logged arguments of a scoped query
-const redactedQueryHosts = "[redacted]"
+// RedactedQueryHosts replaces the requested host list of a scoped query wherever the query
+// arguments are logged or traced
+const RedactedQueryHosts = "[redacted]"
 
 // loggedArgs returns args as they are written to the log. The host list of a scoped query
 // is the one the caller requested and may name hosts outside the scope, which stay out of
@@ -98,7 +99,7 @@ func loggedArgs(ctx context.Context, args *query.Args) *query.Args {
 		return args
 	}
 	redacted := *args
-	redacted.QueryHosts = redactedQueryHosts
+	redacted.QueryHosts = RedactedQueryHosts
 	return &redacted
 }
 

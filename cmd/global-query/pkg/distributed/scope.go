@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"slices"
 
+	"github.com/els0r/goProbe/v4/pkg/api"
 	"github.com/els0r/goProbe/v4/pkg/distributed/authz"
 	"github.com/els0r/goProbe/v4/pkg/distributed/hosts"
 	"github.com/els0r/goProbe/v4/pkg/query"
@@ -60,6 +61,19 @@ func (q *QueryRunner) setSpanPrincipal(ctx context.Context, span trace.Span) {
 	if scope, ok := authz.ScopeFromContext(ctx); ok {
 		span.SetAttributes(attribute.String("principal", scope.Principal()))
 	}
+}
+
+// tracedQueryHosts returns queryHosts as it is set on span attributes. The host list of a
+// scoped query is the one the caller requested and may name hosts outside the scope, so it is
+// redacted in traces as it is in routine logs
+func (q *QueryRunner) tracedQueryHosts(ctx context.Context, queryHosts string) string {
+	if !q.enforceScope {
+		return queryHosts
+	}
+	if _, ok := authz.ScopeFromContext(ctx); !ok {
+		return queryHosts
+	}
+	return api.RedactedQueryHosts
 }
 
 // applyScope narrows hostList with the scope carried by ctx. It is the single place a
