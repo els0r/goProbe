@@ -51,7 +51,7 @@ jobs:
           tar czf ./goprobe_${{ env.RELEASE_VERSION }}_debian_amd64.tar.gz goProbe global-query goQuery gpctl gpdb
 
           # Config
-          cp examples/config/goprobe-example-config.yaml .debpkg/etc/goprobe.conf.example
+          cp examples/config/goprobe-example-config.yaml .debpkg/etc/goprobe.yaml.example
           cp examples/config/goprobe-example.service .debpkg/etc/systemd/system/goprobe.service
 
           # pre/post/rm scripts
@@ -129,7 +129,7 @@ jobs:
           tar czf ./goprobe_${{ env.RELEASE_VERSION }}_fedora_x86_64.tar.gz goProbe global-query goQuery gpctl gpdb
 
           # Config
-          cp examples/config/goprobe-example-config.yaml .rpmpkg/etc/goprobe.conf.example
+          cp examples/config/goprobe-example-config.yaml .rpmpkg/etc/goprobe.yaml.example
           cp examples/config/goprobe-example.service .rpmpkg/etc/systemd/system/goprobe.service
       - uses: jiro4989/build-rpm-action@v2
         with:

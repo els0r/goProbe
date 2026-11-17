@@ -21,5 +21,10 @@ jobs:
     - name: Build for AMD64
       run: GOOS=linux GOARCH=amd64 go build -tags jsoniter -v ./...
 
+    # -skip-benchmarks is a test-binary flag defined only in pkg/e2etest, so
+    # that package runs in its own step and receives the flag via -args.
     - name: Test
-      run: go test -tags jsoniter -skip-benchmarks -v ./...
+      run: go test -tags jsoniter -v $(go list ./... | grep -v /pkg/e2etest)
+
+    - name: Test E2E
+      run: go test -tags jsoniter -v ./pkg/e2etest -args -skip-benchmarks
