@@ -52,6 +52,7 @@ func NewFromConfig(cfg *Config) *Client {
 		client.WithRequestTimeout(cfg.RequestTimeout),
 		client.WithScheme(cfg.Scheme),
 		client.WithAPIKey(cfg.Key),
+		client.WithBearerToken(cfg.Token),
 	)
 
 	return c

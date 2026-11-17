@@ -83,6 +83,7 @@ func NewSSEFromConfig(cfg *gpclient.Config, keepaliveChan chan<- struct{}) *SSEC
 		client.WithRequestTimeout(cfg.RequestTimeout),
 		client.WithScheme(cfg.Scheme),
 		client.WithAPIKey(cfg.Key),
+		client.WithBearerToken(cfg.Token),
 	)
 }
 

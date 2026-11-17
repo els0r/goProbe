@@ -10,6 +10,8 @@ type Config struct {
 	Scheme string `json:"scheme" yaml:"scheme"`
 	Addr   string `json:"addr" yaml:"addr"`
 	Key    string `json:"key,omitempty" yaml:"key,omitempty"`
+	// Token is presented as a Bearer credential. It takes precedence over Key
+	Token string `json:"token,omitempty" yaml:"token,omitempty"`
 
 	RequestTimeout time.Duration `json:"timeout,omitempty" yaml:"timeout,omitempty"`
 

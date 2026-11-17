@@ -6,6 +6,8 @@ const (
 
 	serverKey              = queryKey + ".server"
 	QueryServerAddr        = serverKey + ".addr"
+	QueryServerToken       = serverKey + ".token"
+	QueryServerTokenFile   = serverKey + ".token-file"
 	QueryTimeout           = queryKey + ".timeout"
 	QueryHostsResolution   = queryKey + ".hosts-resolution"
 	QueryHostsResolverType = queryKey + ".hosts-resolver-type"
