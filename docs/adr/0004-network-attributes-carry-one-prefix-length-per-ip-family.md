@@ -53,5 +53,8 @@ hosts.
   host-only, so no consumer can mistake a segment for a host.
 - Live queries are rejected with a network attribute until the live path
   projects keys like the DB reader does (#520).
-- A shorthand such as `talk_net` would need a default IPv4 length, which this
-  decision refuses to guess; none is added.
+- No new query-type shorthand is added: one such as `talk_net` would need a
+  default IPv4 length, which this decision refuses to guess. The existing
+  shorthands (`talk_conv`, `talk_src`, `talk_dst`, `apps_port`,
+  `agg_talk_port`, `raw`) expand to `sip`, `dip`, `dport`, `proto` and
+  labels only, so none of them is affected.
