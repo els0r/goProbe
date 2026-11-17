@@ -44,7 +44,7 @@ func WithVersion() Option { return func(a *Args) { a.Version = true } }
 // WithResolve enables reverse lookups of IPs
 func WithResolve() Option { return func(a *Args) { a.DNSResolution.Enabled = true } }
 
-// WithResolveTimeout sets the timeout for reverse lookups (in seconds)
+// WithResolveTimeout sets the timeout (a time.Duration) for reverse lookups
 func WithResolveTimeout(t time.Duration) Option { return func(a *Args) { a.DNSResolution.Timeout = t } }
 
 // WithResolveRows sets the amount of rows for which lookups should be attempted

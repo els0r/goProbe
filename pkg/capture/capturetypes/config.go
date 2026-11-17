@@ -1,3 +1,4 @@
+// Package capturetypes holds the capture configuration and statistics types exchanged through the goProbe API.
 package capturetypes
 
 import "log/slog"

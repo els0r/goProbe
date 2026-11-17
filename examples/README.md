@@ -14,4 +14,4 @@
 
 ### Docker Config
 
-* [docker](./docker/) - example configuration files (working) for a Docker / Compose setup
+* [docker](./docker/) - configuration files for the Docker / Compose setup in the repository root: `querier.example.yaml` is mounted by `docker-compose.yaml`; `goprobe.example.yaml` and `query.example.yaml` are file-based equivalents of the environment variables set there

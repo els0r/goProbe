@@ -63,17 +63,17 @@ func NewQueryRunner(dbPath string, opts ...RunnerOption) *QueryRunner {
 	return qr
 }
 
-// DBLister lists network interfaces from DB.
+// DBInterfaceLister lists network interfaces from DB.
 type DBInterfaceLister struct {
 	dbPath string
 }
 
-// Constructor for DBInterfaceLister
+// NewDBInterfaceLister creates a DBInterfaceLister for the DB at dbPath
 func NewDBInterfaceLister(dbPath string) *DBInterfaceLister {
 	return &DBInterfaceLister{dbPath: dbPath}
 }
 
-// Implementation of the interface function that uses existing functionality.
+// ListInterfaces implements types.InterfaceLister by listing the interfaces present in the DB.
 func (dbLister DBInterfaceLister) ListInterfaces() ([]string, error) {
 	return info.GetInterfaces(dbLister.dbPath)
 }

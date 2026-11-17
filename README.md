@@ -1,7 +1,7 @@
 # goProbe
 
 [![Github Release](https://img.shields.io/github/release/els0r/goProbe.svg)](https://github.com/els0r/goProbe/releases)
-[![GoDoc](https://godoc.org/github.com/els0r/goProbe?status.svg)](https://godoc.org/github.com/els0r/goProbe/)
+[![GoDoc](https://pkg.go.dev/badge/github.com/els0r/goProbe/v4.svg)](https://pkg.go.dev/github.com/els0r/goProbe/v4)
 [![Go Report Card](https://goreportcard.com/badge/github.com/els0r/goProbe)](https://goreportcard.com/report/github.com/els0r/goProbe)
 [![Build / Test Status](https://github.com/els0r/goProbe/actions/workflows/ci-push.yml/badge.svg)](https://github.com/els0r/goProbe/actions/workflows/ci-push.yml)
 [![CodeQL](https://github.com/els0r/goProbe/actions/workflows/codeql.yml/badge.svg)](https://github.com/els0r/goProbe/actions/workflows/codeql.yml)
@@ -12,10 +12,13 @@ This package comprises:
 * [goQuery](./cmd/goQuery/) - CLI tool for high-performance querying of goDB flow data acquired by goProbe
 * [gpctl](./cmd/gpctl/) - CLI tool to interact with a running goProbe instance (for status and capture configuration)
 * [gpdb](./cmd/gpdb/) - CLI tool to maintain goDB data on disk (merge/import)
+* [global-query](./cmd/global-query/) - API server aggregating queries across a fleet of goProbe hosts
 
 Data backends:
 
 * [goDB](./pkg/goDB/) - A small, high-performance, columnar database for flow data (pkg)
+* [query](./pkg/query/) - Go API for running queries against goDB
+* [results](./pkg/results/) - result types (JSON schema of goQuery output)
 
 As the name suggests, all components are written in [Go](https://golang.org/).
 
@@ -38,7 +41,7 @@ goProbe deviates from traditional NetFlow as flow capturing and collection is ru
 
 ## Quick Start
 
-Refer to the Releases section to install the software suite.
+Download the packages (deb, rpm, tarballs) from the [GitHub Releases](https://github.com/els0r/goProbe/releases) page.
 
 To start capturing, configure [goProbe](./cmd/goProbe/). To query data produced by it, run [goQuery](./cmd/goQuery/). To query across a fleet of hosts, deploy [global-query](./cmd/global-query/).
 
@@ -54,13 +57,13 @@ The database is a columnar block-storage. The raw attribute data is captured in 
 
 The database has two built-in partition dimensions: interfaces and time. These were chosen with the goal to drastically reduce the amount of data that has to be loaded during querying. In practice, most analyses are narrowed down to a time frame and a particular interface.
 
-Time partitioning is done in two steps: per day, and within the files, per five minute intervals. The location of flow data for these intervals is specified (amongst other properties) in the `.meta` files.
+Time partitioning is done in two steps: per day, and within the files, per five minute intervals. The location of flow data for these intervals is specified (amongst other properties) in the `.blockmeta` files.
 
-#### `.meta` file
+#### `.blockmeta` file
 
-The `.meta` file can be thought of as a partition-index and a layout for how the data is stored. Next to storing the timestamps and positions of blocks of flow data, it also captures which compression algorithm was used and provides sizing information for block decompression.
+The `.blockmeta` file can be thought of as a partition-index and a layout for how the data is stored. Next to storing the timestamps and positions of blocks of flow data, it also captures which compression algorithm was used and provides sizing information for block decompression.
 
-The `.meta` files are vitally important and - if deleted, corrupted or modified in any way - will result in failed data reading for the *day* of data.
+The `.blockmeta` files are vitally important and - if deleted, corrupted or modified in any way - will result in failed data reading for the *day* of data.
 
 #### Compression
 
@@ -72,7 +75,7 @@ Supported compression algorithms are:
 * [zstd](https://github.com/facebook/zstd)
 * None (not recommended)
 
-Check [encoder.go](./pkg/goDB/encoder/encoder.go) for the enumeration of supported compression algorithms and the definition fo the `Encoder` interface. Compression features are available by linking against system-level libraries (`liblz4` and `libzstd`, respectively, so if `CGO` is used (default) those must be available at runtime and consequently their development libraries are required if the project is build from source).
+Check [encoders.go](./pkg/goDB/encoder/encoders/encoders.go) for the enumeration of supported compression algorithms and [encoder.go](./pkg/goDB/encoder/encoder.go) for the definition of the `Encoder` interface. Compression features are available by linking against system-level libraries (`liblz4` and `libzstd`, respectively, so if `CGO` is used (default) those must be available at runtime and consequently their development libraries are required if the project is build from source).
 
 Alternatively, native Go implementations can be used if `CGO` is unavailable or by disabling individual or all C library dependencies (in favor of their respective native implementations) by means of the following build overrides:
 
@@ -93,27 +96,17 @@ Both `goProbe` and the distributed query component can be deployed using Docker 
 
 * [goprobe/sensor](https://hub.docker.com/repository/docker/goprobe/sensor)
 * [goprobe/query](https://hub.docker.com/repository/docker/goprobe/query)
+* [goprobe/frontend](https://hub.docker.com/repository/docker/goprobe/frontend) - the goquery-ui web front end
 
-### Bash autocompletion
+### Shell completion
 
-`goQuery` has extensive support for bash autocompletion. To enable autocompletion, you need to tell bash that it should use the `goquery_completion` program for completing `goquery` commands.  How to do this depends on your distribution. On Debian derivatives, it is recommended to create a file `goquery` in `/etc/bash_completion.d` with the following contents:
+`goQuery` generates its own completion scripts:
 
 ```bash
-_goquery() {
-    case "$3" in
-        -d) # the -d flag specifies the database directory.
-            # we rely on bash's builtin directory completion.
-            COMPREPLY=( $( compgen -d -- "$2" ) )
-        ;;
-
-        *)
-            if [ -x /usr/local/share/goquery_completion ]; then
-                mapfile -t COMPREPLY < <( /usr/local/share/goquery_completion bash "${COMP_POINT}" "${COMP_LINE}" )
-            fi
-        ;;
-    esac
-}
+goQuery completion bash > /etc/bash_completion.d/goquery
 ```
+
+Run `goQuery completion --help` for zsh, fish and PowerShell.
 
 ### Supported Operating Systems
 
@@ -145,4 +138,4 @@ Make sure to branch off the `main` branch with your feature branch.
 
 ## License
 
-See the [LICENSE](./LICENSE) file for usage conditions.
+See the [LICENCE](./LICENCE) file for usage conditions.

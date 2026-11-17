@@ -37,7 +37,7 @@ The list of available options is rich, so it's best to familiarize oneself with 
 
 ### Local goDB
 
-The standard way to query flow data is via a flow database (goDB) stored on the same host as where `goQuery` is invoked. The parameter `--database|-d` will instruct `goQuery` to load and aggregate flow data from a local directory.
+The standard way to query flow data is via a flow database (goDB) stored on the same host as where `goQuery` is invoked. The parameter `--db.path|-d` will instruct `goQuery` to load and aggregate flow data from a local directory.
 
 `db.path` is mandatory for local DB operations (queries against local goDB data and the `list` command).
 
@@ -81,13 +81,24 @@ The args file can look as follows:
   "sort_ascending": false,
   "dns_resolution": {
     "enabled": true,
-    "timeout": "1s",
+    "timeout": 1000000000,
     "max_rows": 25
   },
   "max_mem_pct": 25,
   "caller": "batch-job-XYZ"
 }
 ```
+
+Durations such as `dns_resolution.timeout` are integers in nanoseconds, not strings. `--stored-query -` reads the args from stdin.
+
+### Subcommands
+
+* `list [ifaces]`: lists available interfaces and their statistics from the local goDB; `-v|--detailed` prints more information
+* `examples`: prints example invocations
+* `version`: prints the version
+* `completion`: generates shell completion scripts (see `goQuery completion --help`)
+
+Flags for queries against a query server: `--query.hosts-resolver-type` selects the hosts resolver (default `string`) and `--query.streaming` streams results instead of waiting for the final result.
 
 ## Configuration
 
@@ -100,7 +111,7 @@ file guiding query behavior and creating an alias:
 alias goquery="./goQuery --config /path/to/goquery.yaml"
 ```
 
-Refer to [goquery-example-config.yaml](../../examples/config/goquery-example-config.yaml) for configuration options. If both `db.path` and `query.server.addr` are specified, the local query mode via DB takes precedence.
+Refer to [goquery-example-config.yaml](../../examples/config/goquery-example-config.yaml) for configuration options. If both `db.path` and `query.server.addr` are specified, the query is sent to the query server and `db.path` is ignored (it is only used when `query.server.addr` is empty, and by the `list` command).
 
 ## Retention / Information Lifecycle Management
 

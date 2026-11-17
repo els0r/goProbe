@@ -144,7 +144,7 @@ func registerFlags(cmd *cobra.Command, cfg *gpconf.Config) error {
 	pflags.BoolVar(&cfg.API.DisableIfaceMetrics, flagAPIDisableIfaceMetrics, false, "disable per-interface metrics")
 	pflags.BoolVar(&cfg.API.Profiling, flagAPIProfiling, false, "enable API profiling")
 	pflags.IntVar(&cfg.API.Timeout, flagAPITimeout, 0, "API request timeout in seconds")
-	pflags.StringSliceVar(&cfg.API.Keys, flagAPIKeys, nil, "API authentication keys")
+	pflags.StringSliceVar(&cfg.API.Keys, flagAPIKeys, nil, "API authentication keys (accepted, not yet enforced)")
 	pflags.Float64(flagAPIQueryRateLimitMaxReq, 0, "maximum query requests per second")
 	pflags.IntVar(&cfg.API.QueryRateLimit.MaxBurst, flagAPIQueryRateLimitMaxBurst, 0, "maximum query burst size")
 	pflags.IntVar(&cfg.API.QueryRateLimit.MaxConcurrent, flagAPIQueryRateLimitMaxConcurrent, 0, "maximum concurrent queries")

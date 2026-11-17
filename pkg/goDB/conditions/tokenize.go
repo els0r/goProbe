@@ -15,6 +15,7 @@
 //
 /////////////////////////////////////////////////////////////////////////////////
 
+// Package conditions parses and evaluates goQuery filter conditions (e.g. "dport eq 443"); see tokenize.go for the accepted operator aliases.
 package conditions
 
 import (

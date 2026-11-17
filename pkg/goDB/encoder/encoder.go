@@ -1,3 +1,4 @@
+// Package encoder defines the Encoder interface used to compress goDB blocks and constructs encoders by type.
 package encoder
 
 import (
@@ -14,7 +15,7 @@ import (
 var (
 
 	// ErrDeprecatedLZ4Cust is used to signify the obsoletion of the lz4cust encoding
-	ErrDeprecatedLZ4Cust = errors.New("the LZ4 custom implementation has been deprecated, please check out the v4.0.0 README")
+	ErrDeprecatedLZ4Cust = errors.New("the LZ4 custom implementation has been deprecated and can no longer be used")
 )
 
 // Encoder provides the GP File with a means to compress and decompress its raw data

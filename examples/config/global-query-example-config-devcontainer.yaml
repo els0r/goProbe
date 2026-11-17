@@ -8,7 +8,7 @@ hosts:
       config: ./examples/config/global-query-static-resolver-example-config-devcontainer.yaml
 querier:
   type: api
-  max_concurrent: 64
+  max_concurrent: 64 # currently not consumed by the api querier
   config: ./examples/config/global-query-api-client-querier-example-config-devcontainer.yaml
 server:
   addr: localhost:8146

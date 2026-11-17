@@ -51,7 +51,7 @@ func NewSSE(addr string, onUpdate, onFinish StreamingUpdate, onKeepalive Streami
 	}
 }
 
-// NewFromConfig creates the client based on cfg, sending keepalive signals on
+// NewSSEFromConfig creates the client based on cfg, sending keepalive signals on
 // the provided channel
 func NewSSEFromConfig(cfg *gpclient.Config, keepaliveChan chan<- struct{}) *SSEClient {
 	return NewSSE(cfg.Addr,

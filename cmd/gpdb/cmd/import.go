@@ -49,7 +49,7 @@ The schema must include a time field and either an iface field or --iface.`,
 	flags.StringVar(&opts.schema, flagSchema, "", "CSV schema (comma-separated fields); defaults to first CSV row")
 	flags.StringVar(&opts.iface, flagInterface, "", "interface for all rows when schema has no iface field")
 	flags.IntVarP(&opts.maxRows, flagMaxRows, "n", 0, "maximum number of CSV data rows to import (0 = all)")
-	flags.StringVar(&opts.encoder, flagEncoder, "lz4", "compression encoder (lz4, zstd, null, lz4cust or numeric type)")
+	flags.StringVar(&opts.encoder, flagEncoder, "lz4", "compression encoder (lz4, zstd, null or numeric type)")
 	flags.StringVar(&opts.permissions, flagPermissions, "", "file permissions mode for created DB files/directories (e.g. 0644)")
 
 	return importCmd

@@ -110,7 +110,7 @@ type Args struct {
 	// Format: the output format
 	Format string `json:"format,omitempty" yaml:"format,omitempty" query:"format" required:"false" doc:"Output format" enum:"json,txt,csv" example:"json"`
 	// SortBy: column to sort by
-	SortBy string `json:"sort_by,omitempty" yaml:"sort_by,omitempty" query:"sort_by" required:"false" doc:"Colum to sort by" enum:"bytes,packets" example:"packets" default:"bytes"`
+	SortBy string `json:"sort_by,omitempty" yaml:"sort_by,omitempty" query:"sort_by" required:"false" doc:"Column to sort by" enum:"bytes,packets,time" example:"packets" default:"bytes"`
 	// NumResults: number of results to return/print
 	NumResults uint64 `json:"num_results,omitempty" yaml:"num_results,omitempty" query:"num_results" required:"false" doc:"Number of results to return/print" example:"25" minimum:"1" default:"1000"`
 	// SortAscending: sort ascending instead of the default descending

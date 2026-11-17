@@ -16,9 +16,8 @@ type Config struct {
 	Log bool `json:"log" yaml:"log"`
 }
 
-var (
-	ErrorEmptyAddress = errors.New("no endpoint address (host:port) provided") // ErrorEmptyAddress : Denotes that an empty config has been provided
-)
+// ErrorEmptyAddress denotes that an empty config has been provided
+var ErrorEmptyAddress = errors.New("no endpoint address (host:port) provided")
 
 // Validate validates the configuration
 func (cfg *Config) Validate() error {

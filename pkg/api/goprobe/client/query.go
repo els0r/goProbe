@@ -46,7 +46,7 @@ func (c *Client) Query(ctx context.Context, args *query.Args) (*results.Result, 
 	return res, nil
 }
 
-// Query runs a query on the API endpoint
+// Validate submits the query args to /_query/validate without running the query
 func (c *Client) Validate(ctx context.Context, args *query.Args) (*results.Result, error) {
 	var res = new(results.Result)
 

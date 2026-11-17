@@ -4,6 +4,12 @@
 db:
   # path of the goDB database written by goprobe and read by goquery
   path: /var/lib/goprobe/db
+  # encoder_type is the compression encoder used for the database (default: lz4)
+  # encoder_type: lz4
+  # permissions sets the database file permissions
+  # permissions: 0644
+# syslog_flows enables syslog flow logging
+# syslog_flows: false
 # local_buffers sets the local buffer configuration used during rotation of a capture
 local_buffers:
   # size_limit is the buffer held for packet capture during flow rotation
@@ -32,6 +38,12 @@ interfaces:
       num_blocks: 4
       # block_size of 1 MB should be enough for interfaces with much traffic
       block_size: 1048576
+    # ignore_vlans enables / disables skipping of VLAN-tagged packets on interface
+    # ignore_vlans: true
+    # extra_bpf_filters are extra BPF filter instructions to be applied during capture
+    # extra_bpf_filters: []
+    # disable explicitly disables capture on this interface
+    # disable: true
   tun0:
     # there is no need for capturing in promsicuous mode on tunnel interfaces
     promisc: false
@@ -50,14 +62,28 @@ api:
   # addr defines what the API server binds to. This may also be a unix
   # socket.
   addr: "unix:/var/run/goprobe"
-  # profiling is enabled by default. It will only be run if one of the
-  # /debug/pprof endpoints is accessed and otherwise will not have an impact
-  # on performance.
+  # profiling is disabled unless set to true. When enabled, the /debug/pprof
+  # endpoints are registered; they only cost anything while being accessed.
   # Leaving this enabled paves the way for continuous profiling and feeding
   # such profiles back via PGO
   profiling: true
   # metrics enables scraping of metrics via /metrics endpoint
   metrics: true
+  # disable_iface_metrics disables per-interface metrics
+  # disable_iface_metrics: false
+  # query_rate_limit limits the queries served by the API
+  # query_rate_limit:
+  #   # max_req_per_sec is the maximum query requests per second
+  #   max_req_per_sec: 2
+  #   # max_burst is the maximum query burst size
+  #   max_burst: 2
+  #   # max_concurrent is the maximum concurrent queries
+  #   max_concurrent: 1
+# autodetection configures auto-detection of interfaces, see goprobe-example-config-auto.yaml
+# autodetection:
+#   enabled: true
+#   exclude:
+#     - tun0
 # logging sets the logging parameters for goprobe
 logging:
   # level info is set not to spam the logs with writeout information for interfaces
@@ -66,4 +92,4 @@ logging:
   encoding: logfmt
   # destination describes the file goprobe logs to. If left empty, goprobe will log
   # to stdout by default
-  destination: /var/logs/goprobe.log
+  destination: /var/log/goprobe.log

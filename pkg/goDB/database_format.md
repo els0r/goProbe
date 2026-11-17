@@ -1,3 +1,5 @@
+> **Outdated.** This file describes the pre-v4 format. For the v4 layout see pkg/goDB/storage/gpfile/gpdir.go (Marshal/Unmarshal) and pkg/types/columns.go.
+
 goDB Database Format
 ====================
 

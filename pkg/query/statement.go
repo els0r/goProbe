@@ -76,6 +76,7 @@ func (s *Statement) String() string {
 	return str
 }
 
+// Pretty returns a human-readable, multi-line representation of the statement
 func (s *Statement) Pretty() string {
 	ifaces := "any"
 	if len(s.Ifaces) > 0 {

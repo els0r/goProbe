@@ -1,3 +1,4 @@
+// Package server builds the gin/huma HTTP server shared by goProbe and global-query and generates the OpenAPI spec.
 package server
 
 import (

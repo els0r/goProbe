@@ -14,6 +14,7 @@ import (
 	"github.com/els0r/telemetry/tracing"
 )
 
+// PostProcess applies time binning and the row limit to the query result
 func (s *Statement) PostProcess(ctx context.Context, result *results.Result) error {
 	ctx, span := tracing.Start(ctx, "(*Statement).PostProcess")
 	defer span.End()
