@@ -8,6 +8,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/sse"
+	"github.com/els0r/goProbe/v4/pkg/distributed/authz"
 	"github.com/els0r/goProbe/v4/pkg/query"
 	"github.com/els0r/goProbe/v4/pkg/results"
 	"github.com/els0r/goProbe/v4/pkg/types"
@@ -76,13 +77,29 @@ func getSSEBodyQueryRunnerHandler(caller string, querier SSEQueryRunner) func(co
 // logQueryError logs a failed query. A 4xx status error is an outcome of the request (such
 // as a scope that excludes every host) and is logged as a warning; anything else is an error
 func logQueryError(ctx context.Context, msg string, args *query.Args, err error) {
-	logger := logging.FromContext(ctx).With("args", args, "error", err)
+	logger := logging.FromContext(ctx).With("args", loggedArgs(ctx, args), "error", err)
 	var statusErr huma.StatusError
 	if errors.As(err, &statusErr) && statusErr.GetStatus() < http.StatusInternalServerError {
 		logger.Warn(msg)
 		return
 	}
 	logger.Error(msg)
+}
+
+// redactedQueryHosts replaces the requested host list in the logged arguments of a scoped query
+const redactedQueryHosts = "[redacted]"
+
+// loggedArgs returns args as they are written to the log. The host list of a scoped query
+// is the one the caller requested and may name hosts outside the scope, which stay out of
+// routine logs: it is redacted on a copy. The runner logs how many host IDs were requested
+// and remained, and the host IDs it queries
+func loggedArgs(ctx context.Context, args *query.Args) *query.Args {
+	if _, scoped := authz.ScopeFromContext(ctx); !scoped || args == nil || args.QueryHosts == "" {
+		return args
+	}
+	redacted := *args
+	redacted.QueryHosts = redactedQueryHosts
+	return &redacted
 }
 
 // queryErrorEvent builds the query-error event for a failed streaming query. An error that
@@ -190,7 +207,7 @@ func prepareArgs(ctx context.Context, caller string, args *query.Args) error {
 	logger := logging.FromContext(ctx)
 
 	// Check if the statement can be created
-	logger.Info("running query", "args", args)
+	logger.Info("running query", "args", loggedArgs(ctx, args))
 
 	_, err := args.Prepare()
 	return err

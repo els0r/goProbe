@@ -2,8 +2,10 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -132,4 +134,64 @@ func TestServer_ScopeExcludesEveryHost_OneWarningCarriesPrincipal(t *testing.T) 
 			assert.Empty(t, querier.queried)
 		})
 	}
+}
+
+// awaitRawRecord waits for the log line with msg and returns every line captured by then
+func awaitRawRecord(t *testing.T, lines func() []json.RawMessage, msg string) []string {
+	t.Helper()
+	var captured []string
+	require.Eventually(t, func() bool {
+		captured = captured[:0]
+		found := false
+		for _, line := range lines() {
+			captured = append(captured, string(line))
+			found = found || strings.Contains(string(line), msg)
+		}
+		return found
+	}, 5*time.Second, 10*time.Millisecond, "no log line with message %q", msg)
+	return captured
+}
+
+// TestServer_ScopedQuery_RoutineLogsOmitOutOfScopeHostIDs pins that no line at info level or
+// above names a host ID outside the scope: neither the narrowing nor the logged query
+// arguments, which carry the host list as the caller requested it
+func TestServer_ScopedQuery_RoutineLogsOmitOutOfScopeHostIDs(t *testing.T) {
+	tests := []struct {
+		name       string
+		scope      hosts.Hosts
+		status     int
+		outOfScope []string
+	}{
+		{name: "narrowed", scope: hosts.Hosts{"h2"}, status: http.StatusOK, outOfScope: []string{"h1", "h3"}},
+		{name: "every host excluded", scope: hosts.Hosts{"other"}, status: http.StatusForbidden, outOfScope: []string{"h1", "h2", "h3"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lines := logtest.Capture[json.RawMessage](t, logging.LevelInfo)
+			querier := &recordingQuerier{queried: make(chan hosts.Hosts, 1)}
+			authorizer := headerAuthorizer{scopes: map[string]hosts.Hosts{"alice": tt.scope}}
+			client := startServer(t, querier, server.WithAuthorizer(authorizer))
+
+			resp := postQuery(t, client, "alice")
+			require.Equal(t, tt.status, resp.status)
+
+			for _, line := range awaitRawRecord(t, lines, msgAccessLog) {
+				for _, id := range tt.outOfScope {
+					assert.NotContains(t, line, id)
+				}
+			}
+		})
+	}
+}
+
+func TestServer_UnscopedQuery_LoggedArgsKeepRequestedHosts(t *testing.T) {
+	lines := logtest.Capture[json.RawMessage](t, logging.LevelInfo)
+	querier := &recordingQuerier{queried: make(chan hosts.Hosts, 1)}
+	client := startServer(t, querier)
+
+	resp := postQuery(t, client, "")
+	require.Equal(t, http.StatusOK, resp.status)
+
+	logged := strings.Join(awaitRawRecord(t, lines, msgAccessLog), "\n")
+	assert.Contains(t, logged, "h1,h2,h3")
 }
