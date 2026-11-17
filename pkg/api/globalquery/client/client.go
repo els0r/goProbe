@@ -1,3 +1,4 @@
+// Package client calls the global-query API, including the streaming /_query/sse route.
 package client
 
 import (

@@ -52,7 +52,7 @@ type Query struct {
 	// would contain DipColIdx and DportColIdx
 	conditionalAttributeIndices []types.ColumnIndex
 	// Set containing the union of queryAttributeIndices, conditionalAttributeIndices, and
-	// {BytesSentColIdx, PacketsRcvdColIdx, PacketsSentColIdx, ColIdxCount}.
+	// {BytesRcvdColIdx, BytesSentColIdx, PacketsRcvdColIdx, PacketsSentColIdx}.
 	// The latter four elements are needed for every query since they contain the variables we aggregate.
 	columnIndices []types.ColumnIndex
 

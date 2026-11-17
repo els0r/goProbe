@@ -1,3 +1,4 @@
+// Package client is the shared HTTP client used by the goProbe and global-query API clients.
 package client
 
 import (

@@ -12,11 +12,24 @@ This will produce the capture statistics (processed packets, drops, active captu
 
 ### Reloading goProbe's Configuration
 
-To force a configuration reload of goProbe's interface configuration, point to its configuration file and run
+To make goProbe re-read its own on-disk configuration file and apply the `interfaces` section, run
 
 ```sh
-./gpctl -s unix:/var/run/goprobe config -f /path/to/goprobe.yaml
+./gpctl -s unix:/var/run/goprobe config -r
 ```
+
+To push the `interfaces` section of a different file without touching goProbe's on-disk configuration, use `config -f /path/to/goprobe.yaml`. Add `--silent` to suppress the per-interface change listing.
+
+### Flags and subcommands
+
+| Flag / command | Meaning |
+|---|---|
+| `-s, --server.addr` | goProbe API address (`host:port` or `unix:/path`) |
+| `-t, --timeout` | request timeout (default `10s`) |
+| `--config` | gpctl configuration file |
+| `status [IFACES] -v` | capture statistics; `-v` adds packet-parsing error counters |
+| `config -r \| -f FILE [--silent]` | reload / apply interface configuration |
+| `version` | print version |
 
 ## Configuration
 

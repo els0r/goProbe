@@ -36,7 +36,7 @@ type GetInfoOutput struct {
 	}
 }
 
-// GetInfoOperation is the operation for getting a greeting.
+// GetInfoOperation is the operation for getting the service info.
 func GetInfoOperation() huma.Operation {
 	return huma.Operation{
 		OperationID: getInfoOpName,

@@ -26,6 +26,8 @@ Common options:
 
 Use `--overwrite` to prefer source data on conflicts and to replace complete destination days with complete source days.
 
+A day counts as complete when its first block starts within `--complete-tolerance` (default `2m30s`) of midnight and its last block reaches within the same tolerance of the day's end.
+
 ### import
 
 ```sh
@@ -50,8 +52,10 @@ Common options:
 
 `--permissions` accepts numeric modes like `0644`.
 
+`--encoder` accepts `lz4` (default), `zstd` or `null`; `-n` is the short form of `--max-rows` (`0` imports all rows).
+
 ## Configuration
 
 `gpdb` currently operates directly on local database paths and does not require API server configuration.
 
-Refer to [goDB Database Format](../../pkg/goDB/database_format.md) for layout and metadata details.
+Refer to pkg/goDB/storage/gpfile for the on-disk layout and metadata details.

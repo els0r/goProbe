@@ -6,32 +6,56 @@ This package exposes methods to query the data stored in goDB.
 
 To access the data captured by goProbe (stored at the default location) from your own application, you can use the following to get started:
 
-```golang
+```go
+package main
+
+import (
+	"context"
+	"fmt"
+	"os"
+
+	"github.com/els0r/goProbe/v4/pkg/defaults"
+	"github.com/els0r/goProbe/v4/pkg/goDB/engine"
+	"github.com/els0r/goProbe/v4/pkg/query"
+)
+
 func main() {
-     // set query output(s) redirection (default is os.Stdout). You can use multiple io.Writers here
-     ctx := context.Background()
-     outputs := os.Stderr
+	ctx := context.Background()
 
-     args := query.NewArgs("sip,dip", "eth0",
-        query.WithSortAscending(),
-        query.WithCondition("dport eq 443"),
-     )
+	// build the query arguments (defaults are applied by NewArgs)
+	args := query.NewArgs("sip,dip", "eth0",
+		query.WithSortAscending(),
+		query.WithCondition("dport eq 443"),
+	)
 
-     // prepare the statement (e.g. parse args and setup query parameters).
-     // This example assumes that you are querying against goDB
-     stmt, err := args.Prepare(output)
-     if err != nil {
-          fmt.Fprintf(os.Stderr, "couldn't prepare statement: %s\n", err)
-          os.Exit(1)
-     }
+	// optional: route the printed results somewhere other than os.Stdout.
+	// You can pass multiple io.Writers here
+	args.AddOutputs(os.Stderr)
 
-     // execute statement
-     err = engine.NewQueryRunner().Run(ctx, stmt)
-     if err != nil {
-          fmt.Fprintf(os.Stderr, "query failed: %s\n", err)
-          os.Exit(1)
-     }
+	// validate the arguments and create the executable statement (needed for printing)
+	stmt, err := args.Prepare()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "couldn't prepare statement: %s\n", err)
+		os.Exit(1)
+	}
+
+	// execute the query against a local goDB (the runner prepares the args itself)
+	res, err := engine.NewQueryRunner(defaults.DBPath).Run(ctx, args)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "query failed: %s\n", err)
+		os.Exit(1)
+	}
+
+	// post-process (time binning, row limit) and print the results
+	if err := stmt.PostProcess(ctx, res); err != nil {
+		fmt.Fprintf(os.Stderr, "couldn't post-process results: %s\n", err)
+		os.Exit(1)
+	}
+	if err := stmt.Print(ctx, res); err != nil {
+		fmt.Fprintf(os.Stderr, "couldn't print results: %s\n", err)
+		os.Exit(1)
+	}
 }
 ```
 
-For a more complete overview, please consult the documentation.
+For the full API see https://pkg.go.dev/github.com/els0r/goProbe/v4/pkg/query.

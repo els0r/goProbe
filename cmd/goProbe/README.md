@@ -23,10 +23,18 @@ Note: _a goProbe-flow is hence not a NetFlow-flow_. Nonetheless, the limited met
 To start capturing, run
 
 ```sh
-./goProbe -config goprobe.yaml
+./goProbe --config goprobe.yaml
 ```
 
+`-c` is the short form of `--config`.
+
 The tool is meant to run as a service/daemon by means of init scripts or systems such as `systemctl`. Examples for such intergrations can be found inside the [examples/config](../../examples/config) folder.
+
+### Flags and environment
+
+Every key of the configuration file can also be passed as a flag (`--db.path`, `--api.addr`, `--autodetection.enabled`, …) or as an environment variable with dots replaced by `_` (`DB_PATH`, `API_ADDR`, `LOCAL_BUFFERS_SIZE_LIMIT`).
+
+`goProbe version` prints the version.
 
 ## Configuration
 
@@ -38,25 +46,25 @@ The configuration can be provided as YAML or as JSON.
 
 ### Live Config
 
-The `interfaces` section of the configuration file is watched by goProbe and reloaded periodically. This is in order to reflect changes to individual interfaces without having to restart capturing. This ensures that only the affected interfaces have a short downtime while capturing resumes for all other interfaces.
+The `interfaces` section of the configuration file is watched by goProbe and reloaded every 5 minutes (or on demand with `gpctl config -r`). This is in order to reflect changes to individual interfaces without having to restart capturing. This ensures that only the affected interfaces have a short downtime while capturing resumes for all other interfaces.
 
 All other changes to the configuration _require a restart of goProbe_.
 
 ## API
 
-By default, goProbe spawns a command-and-control HTTP API server, to provide access to its internal state as well as a query API to to query data from the goDB database to which it writes.
+If `api.addr` is set (a `host:port` or a `unix:/path` socket), goProbe spawns a command-and-control HTTP API server, to provide access to its internal state as well as a query API to query data from the goDB database to which it writes.
 
 The API is able to bind on UNIX sockets.
 
 ### Documentation
 
-The goProbe API is laid out in the [OpenAPI 3.0 Specification](../../pkg/api/goprobe/spec/openapi.yaml).
-
-**Note**: some tools only accept a single OpenAPI file. To merge the specification into one output file, use [`swagger-cli`](https://www.npmjs.com/package/swagger-cli):
+The goProbe API is described by an OpenAPI 3.0.3 specification generated from the registered routes. A running goProbe serves it at `/openapi.yaml` (also `/openapi.json`) with interactive documentation at `/docs`. To write the spec to a file without starting the capture, run:
 
 ```sh
-swagger-cli bundle ../../pkg/api/goprobe/spec/openapi.yaml --outfile _build/openapi.yaml --type yaml
+./goProbe --config goprobe.yaml --openapi.spec-outfile goprobe_openapi.yaml
 ```
+
+The output is a single file, so no bundling step is needed. Every GitHub release also attaches it as `goprobe_<version>_openapi.yaml`.
 
 ### Using `gpctl`
 

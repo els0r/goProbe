@@ -1,3 +1,4 @@
+global-query_openapi.yaml
 global-query_*_openapi.yaml
 package-lock.json
 

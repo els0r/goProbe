@@ -28,9 +28,8 @@ api:
   # addr defines what the API server binds to. This may also be a unix
   # socket.
   addr: "localhost:8145"
-  # profiling is enabled by default. It will only be run if one of the
-  # /debug/pprof endpoints is accessed and otherwise will not have an impact
-  # on performance.
+  # profiling is disabled unless set to true. When enabled, the /debug/pprof
+  # endpoints are registered; they only cost anything while being accessed.
   # Leaving this enabled paves the way for continuous profiling and feeding
   # such profiles back via PGO
   profiling: true

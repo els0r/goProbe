@@ -1,3 +1,4 @@
+// Package encoders enumerates the supported block compression types (lz4, zstd, null).
 package encoders
 
 import (
@@ -12,7 +13,7 @@ type Type uint8
 // When implementing new encoders, make sure to add the type above MaxEncoderType. Otherwise, compatibility
 // with existing databases is broken
 const (
-	EncoderTypeLZ4CustomDeprecated Type = iota // EncoderTypeLZ4Custom : LZ4 encoder / compressor with custom checksum stripping (default, hence allocated the value 0)
+	EncoderTypeLZ4CustomDeprecated Type = iota // EncoderTypeLZ4CustomDeprecated : deprecated custom LZ4 encoder (kept at value 0 for on-disk compatibility; no longer constructible)
 	EncoderTypeNull                            // EncoderTypeNull : Null encoder
 	EncoderTypeZSTD                            // EncoderTypeZSTD : ZSTD encoder / compressor
 	EncoderTypeLZ4                             // EncoderTypeLZ4 ; LZ4 encoder / compressor based on available lz4 system library (1.9.4 recommended for performance)

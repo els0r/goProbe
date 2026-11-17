@@ -1,3 +1,4 @@
+// Package client calls the goProbe control and query API (status, config, /_query).
 package client
 
 import (

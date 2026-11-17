@@ -4,7 +4,7 @@ Lightweight table + graph UI for exploring network flow data via the Global Quer
 
 ## Prerequisites
 
-- Node.js 18+
+- Node.js 20.9+
 - npm 9+
 
 ## Install
@@ -119,13 +119,16 @@ not exposed on any external interface unless you opt in.
 npm run typecheck
 ```
 
-- If the Global Query API changes, regenerate client types:
+- If the Global Query API changes, dump the spec from the Go server into this directory and regenerate the client types (the file name must match the one in `package.json`):
 
 ```bash
+CGO_ENABLED=0 go run ../../cmd/global-query --config ../../examples/config/global-query-example-config.yaml server --openapi.spec-outfile global-query_openapi.yaml
 npm run generate:types
 ```
 
+Alternatively `make types` downloads the spec of a published release (`make VERSION=4.2.13 types`).
+
 ## Notes
 
-- For development without a server, open `index.html` directly; API calls must resolve against your environment-provided endpoint if required by `client.ts`.
-- This UI is a standalone package under `applications/network-observability/src/goquery-ui`.
+- Local development needs a server: `npm run dev` serves the UI on port 5173 and proxies `/_query` and `/-/` to `GQ_API_BASE_URL` (default `http://localhost:8145`, see `webpack.config.js`).
+- This UI is a standalone package under `frontend/goquery-ui`.

@@ -18,9 +18,12 @@ When task-specific direction is missing, use this lookup order:
    - `README.md`
    - `cmd/goProbe/README.md`
    - `cmd/goQuery/README.md`
+   - `cmd/global-query/README.md`
+   - `cmd/gpctl/README.md`
    - `cmd/gpdb/README.md`
    - `pkg/query/README.md`
    - `examples/README.md`
+   - `plugins/contrib/README.md`
 3. CI workflows and release pipelines as source of truth for verification and packaging behavior:
    - `.github/workflows/ci-pr.yml`
    - `.github/workflows/ci-push.yml`
@@ -28,7 +31,7 @@ When task-specific direction is missing, use this lookup order:
 4. Existing patterns in nearby code
 
 ## Project Layout
-- Language: Go (`go 1.25`)
+- Language: Go (`go 1.26`, see `go.mod`)
 - Module: `github.com/els0r/goProbe/v4`
 - Workspace: `go.work` includes `.` and `./plugins/contrib`
 - Primary binaries:
@@ -37,6 +40,7 @@ When task-specific direction is missing, use this lookup order:
   - `./cmd/global-query`
   - `./cmd/gpctl`
   - `./cmd/gpdb`
+  - `./cmd/goquery_completion` (legacy bash completer, built by `./...` but not packaged; see README "Shell completion")
 - Primary code folders:
   - `pkg/` (API, capture, query, goDB, results, shared types)
   - `plugins/` (resolver/querier plugin registration)
@@ -61,7 +65,7 @@ Run commands from repository root.
 - `GOOS=linux GOARCH=amd64 go build -a -tags jsoniter -pgo=auto -o global-query ./cmd/global-query`
 - `GOOS=linux GOARCH=amd64 go build -a -pgo=auto -o goQuery ./cmd/goQuery`
 - `GOOS=linux GOARCH=amd64 go build -a -pgo=auto -o gpctl ./cmd/gpctl`
-- `GOOS=linux GOARCH=amd64 go build -a -o gpdb ./cmd/gpdb`
+- `GOOS=linux GOARCH=amd64 go build -a -pgo=auto -o gpdb ./cmd/gpdb`
 
 ## Test Commands
 
@@ -72,7 +76,7 @@ Run commands from repository root.
 - `go test -tags jsoniter -race -v ./...`
 
 ### Push workflow variant
-- `go test -tags jsoniter -skip-benchmarks -v ./...`
+- `go test -tags jsoniter -v $(go list ./... | grep -v /pkg/e2etest)` followed by `go test -tags jsoniter -v ./pkg/e2etest -args -skip-benchmarks` (`-skip-benchmarks` is only defined by `pkg/e2etest`, see below; every other package rejects it, and placed before the package list it keeps `./...` from being read as packages)
 
 ### Package-level testing
 - `go test -tags jsoniter -v ./pkg/query`
@@ -94,7 +98,7 @@ Run commands from repository root.
 - `go test -tags jsoniter -run '^TestE2EBasic$' -v ./pkg/e2etest`
 
 ## Lint, Format, and Static Analysis
-No dedicated lint workflow currently runs in CI, but dev setup indicates `golangci-lint` + `staticcheck`.
+No Go lint workflow runs in CI (dev setup indicates `golangci-lint` + `staticcheck`). PRs do run `helm lint`, `helm template` and `ct lint --check-version-increment` on `charts/goquery-ui` (`.github/workflows/ci-pr.yml`), so chart changes must bump `version:` in `Chart.yaml`.
 - `gofmt -w <changed-files>`
 - `goimports -w <changed-files>`
 - `go vet ./...`

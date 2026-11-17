@@ -10,19 +10,21 @@ The query server is meant to be deployed centrally (i.e. in a kubernetes cluster
 
 ## Getting Started
 
+From the repository root:
+
 ```sh
-go run main.go --config global-query-config.yaml server
+go run ./cmd/global-query --config examples/config/global-query-example-config.yaml server
 ```
 
 ## Deployment
 
-A `Dockerfile` will follow in future releases. The tool is written in pure `go` and does not have any low-level dependencies (in contrast to `goProbe`/`goQuery`).
+`global-query` ships as the `query` target of the repository [Dockerfile](../../Dockerfile) (image `goprobe/query`, entrypoint `global-query server`); see the `query` service in [docker-compose.yaml](../../docker-compose.yaml). The tool is written in pure Go and has no C library dependencies (in contrast to `goProbe`/`goQuery`).
 
 ## Distributed Query Runner
 
 Aggregation of results is purely based on the [`results.Results`](../../pkg/results/result.go) data structure.
 
-The query server is set up in a way that different query runners can be used to fetch the results from the sensors. The default distributed query runner is the [`APIClientQuerier`](./pkg/distributed/querier.go), which uses the [`goProbe` Client](../../pkg/api/goprobe/client/) to fetch results from a sensor.
+The query server is set up in a way that different query runners can be used to fetch the results from the sensors. The default distributed query runner is the [`APIClientQuerier`](../../plugins/querier/apiclient/querier.go), which uses the [`goProbe` Client](../../pkg/api/goprobe/client/) to fetch results from a sensor. It is the `api` querier, selected by `querier.type` (the default).
 
 ### API Client Querier Configuration
 
@@ -32,10 +34,26 @@ An example configuration for the API Client Querier is available under [global-q
 
 ### Custom Query Runners
 
-In future releases, the plugin system will be built out so that other queriers can be used. There are two requirements:
+Other queriers plug in through the [contrib mechanism](../../plugins/contrib/README.md): implement `distributed.Querier` ([pkg/distributed/querier.go](../../pkg/distributed/querier.go)), register it with `plugins.RegisterQuerier`, and select it with `querier.type` / `querier.config`.
 
-* the `query.Runner` interface is implemented
-* the use case specific configuration is supplied to `global-query` upon initialization
+## Configuration
+
+Next to the authorizer keys described below, the configuration file accepts:
+
+| Key                     | Default          | Meaning                                                    |
+|-------------------------|------------------|------------------------------------------------------------|
+| `server.addr`           | `localhost:8145` | Address to which the server binds                          |
+| `server.cors_origins`   | none             | Allowed CORS origins for browser clients (empty: allow none) |
+| `hosts.resolver.type`   | `string`         | Resolver used for the hosts resolution query               |
+| `hosts.resolvers`       | none             | List of additional resolvers, each with `type` and `config` (path to its configuration file) |
+| `querier.type`          | `api`            | Querier used to run queries                                |
+| `querier.config`        | `""`             | Querier config file location                               |
+| `profiling.enabled`     | `false`          | Enable profiling endpoints                                 |
+| `logging.level`         | `info`           | Log level                                                  |
+| `logging.encoding`      | `logfmt`         | Message encoding format                                    |
+| `logging.destination`   | `""`             | Logging destination file path (empty for stdout)           |
+
+Except for `hosts.resolvers`, every key is also a flag of the same name. The `server.*`, `authorizer.*`, `profiling.enabled` and `openapi.spec-outfile` flags belong to the `server` subcommand and must follow `server` on the command line.
 
 ## Authorization
 
@@ -97,14 +115,14 @@ Rules:
 
 A global query is run analogously to the way you would query local data via the `goProbe` API: via the `/_query` endpoint.
 
-The parameters which need to be provided are the JSON-serialized [`query.Args`](../../pkg/query/args.go). The main difference to calling the endpoint directly on the `goProbe` API is that the `hosts_query` parameter needs to be explicitly provided in order to tell the query server which host(s) should be queried.
+The parameters which need to be provided are the JSON-serialized [`query.Args`](../../pkg/query/args.go). The main difference to calling the endpoint directly on the `goProbe` API is that the `query_hosts` parameter needs to be explicitly provided in order to tell the query server which host(s) should be queried.
 
 ## API Documentation
 
-The global-query API is laid out in the [OpenAPI 3.0 Specification](../../pkg/api/globalquery/spec/openapi.yaml).
-
-**Note**: some tools only accept a single OpenAPI file. To merge the specification into one output file, use [`swagger-cli`](https://www.npmjs.com/package/swagger-cli):
+The global-query API is described by an OpenAPI 3.0.3 specification generated from the registered routes. A running server serves it at `/openapi.yaml` (also `/openapi.json`) with interactive documentation at `/docs`. To write it to a file without starting the server:
 
 ```sh
-swagger-cli bundle ../../pkg/api/globalquery/spec/openapi.yaml --outfile _build/openapi.yaml --type yaml
+go run ./cmd/global-query --config examples/config/global-query-example-config.yaml server --openapi.spec-outfile global-query_openapi.yaml
 ```
+
+The output is a single file. Every GitHub release also attaches it as `global-query_<version>_openapi.yaml`.

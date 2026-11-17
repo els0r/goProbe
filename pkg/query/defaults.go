@@ -19,7 +19,7 @@ var (
 	DefaultSortBy         = "bytes"
 )
 
-// PermittedFormats stores all supported output formats
+// permittedFormats stores all supported output formats
 var permittedFormats = map[string]struct{}{
 	types.FormatTXT:  {},
 	types.FormatJSON: {},
@@ -48,7 +48,7 @@ func PermittedFormats() []string {
 	return permittedFormatsSlice
 }
 
-// PermittedSortBy sorts all permitted sorting orders
+// permittedSortBy stores all permitted sorting orders
 var permittedSortBy = map[string]results.SortOrder{
 	"bytes":   results.SortTraffic,
 	"packets": results.SortPackets,

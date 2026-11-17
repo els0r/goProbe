@@ -101,7 +101,7 @@ func CalcTimeBinSize(resolution, duration time.Duration) time.Duration {
 
 // BinTimestamp bins a timestamp to the end of its bin period, accounting for the
 // interval that each timestamp represents. A timestamp t represents flows in the interval
-// [t - DefaultBucketSize, t]. The binning uses ceiling division to find the bin end
+// [t - types.DefaultTimeResolution, t]. The binning uses ceiling division to find the bin end
 // that the timestamp belongs to.
 func BinTimestamp(ts int64, binSize time.Duration) int64 {
 	if binSize <= 0 {

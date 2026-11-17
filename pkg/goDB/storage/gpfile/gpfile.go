@@ -286,7 +286,7 @@ func (g *GPFile) Close() error {
 	return nil
 }
 
-// Delete removes the file and its metadata
+// delete removes the data file
 func (g *GPFile) delete() error {
 	return os.Remove(g.filename)
 }

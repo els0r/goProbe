@@ -58,7 +58,8 @@ frontend image is pushed first), gated to final tags only
    and sets `appVersion` to the tag's `X.Y.Z`. Patch is the conventional Helm
    signal for an appVersion retarget; minor/major stay reserved for real
    template changes shipped via avenue 1.
-2. Runs `helm package charts/goquery-ui --app-version "$VER" --version "$NEW"`,
+2. Rewrites `version:` and `appVersion:` in `Chart.yaml` with `sed`, runs plain
+   `helm package charts/goquery-ui`,
    checks GHCR for that version (idempotent, mirroring `publish-chart.yml`), and
    `helm push`es if absent.
 3. Commits both fields back to `main` with the default `GITHUB_TOKEN` as

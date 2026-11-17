@@ -12,5 +12,6 @@ api:
   addr: 127.0.0.1:3005
   metrics: true
   profiling: false
+  # NOTE: keys are validated at startup but not yet enforced by the API server
   keys:
     - 48fd01fa8f8b12a31fdc614c27c6c273459fe7755a141e9e8deed9f65123f97d

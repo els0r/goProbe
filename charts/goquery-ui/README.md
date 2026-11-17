@@ -38,12 +38,14 @@ The chart is published to GHCR as an OCI artifact at
 
 ```bash
 helm install goquery-ui oci://ghcr.io/els0r/charts/goquery-ui \
-  --version 0.1.1 \
+  --version 0.1.4 \
   --namespace network-observability --create-namespace \
   --set backend.url=http://global-query.network-observability.svc.cluster.local:8145
 ```
 
-Inspect before installing with `helm show chart oci://ghcr.io/els0r/charts/goquery-ui --version 0.1.1`.
+Inspect before installing with `helm show chart oci://ghcr.io/els0r/charts/goquery-ui --version 0.1.4`.
+
+The current chart version is the `version:` field of [Chart.yaml](Chart.yaml); it is patch-bumped automatically on every tagged release.
 
 To install from a local checkout instead (e.g. while developing the chart),
 point at the source directory:
@@ -69,7 +71,7 @@ OCI path, with the chart name and version as separate fields:
 ```yaml
 dependencies:
   - name: goquery-ui
-    version: 0.1.1
+    version: 0.1.4
     repository: oci://ghcr.io/els0r/charts
 ```
 
@@ -80,6 +82,7 @@ then run `helm dependency update`.
 | Key | Default | Description |
 |---|---|---|
 | `backend.url` | `""` (**required**) | Caddy reverse-proxy target → `GQ_BACKEND_HOST`. |
+| `config.listenAddr` | `":5137"` | Caddy bind address inside the pod → `GQ_LISTEN_ADDR`. |
 | `config.apiBaseUrl` | `""` | Browser API base URL. Empty = same-origin proxy (recommended). |
 | `config.hostResolverTypes` | `"string"` | Resolver types shown in the UI. |
 | `config.sseOnLoad` | `"true"` | Enable SSE streaming by default. |
