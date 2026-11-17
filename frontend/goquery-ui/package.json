@@ -8,7 +8,7 @@
     "dev": "webpack serve --config webpack.config.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "generate:types": "openapi-typescript global-query_openapi.yaml --output src/api/generated.ts"
+    "generate:types": "openapi-typescript global-query_openapi.yaml --default-non-nullable=false --output src/api/generated.ts"
   },
   "dependencies": {
     "react": "19.2.7",
