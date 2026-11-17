@@ -22,6 +22,7 @@ import (
 // DefaultClient denotes the default client used for all requests
 type DefaultClient struct {
 	client  *http.Client
+	baseRT  http.RoundTripper
 	timeout time.Duration
 
 	retry          bool
@@ -30,6 +31,7 @@ type DefaultClient struct {
 	scheme   string
 	hostAddr string
 	key      string
+	token    string
 
 	name string
 
@@ -60,6 +62,29 @@ func WithAPIKey(key string) Option {
 	return func(c *DefaultClient) {
 		if key != "" {
 			c.key = key
+		}
+	}
+}
+
+// WithTransport sets the base transport every request is sent through, in place of
+// http.DefaultTransport (or the transport dialing a unix socket address, which rt then has
+// to dial itself). The client still wraps it with tracing, logging and its headers, so rt
+// sees each request with those set. Use it to e.g. attach credentials per request from the
+// request's context
+func WithTransport(rt http.RoundTripper) Option {
+	return func(c *DefaultClient) {
+		if rt != nil {
+			c.baseRT = rt
+		}
+	}
+}
+
+// WithBearerToken sets the token presented to the API server as a Bearer credential
+// (Authorization: Bearer <token>) on every request. It takes precedence over WithAPIKey
+func WithBearerToken(token string) Option {
+	return func(c *DefaultClient) {
+		if token != "" {
+			c.token = token
 		}
 	}
 }
@@ -125,6 +150,9 @@ func NewDefault(addr string, opts ...Option) *DefaultClient {
 		c.hostAddr = ""
 		c.scheme = c.scheme + unixIdent
 	}
+	if c.baseRT != nil {
+		t = c.baseRT
+	}
 
 	// extract the scheme from the address if it is available
 	scheme, addr := api.ExtractSchemeAddr(c.hostAddr)
@@ -141,9 +169,21 @@ func NewDefault(addr string, opts ...Option) *DefaultClient {
 			),
 			requestLogging: c.requestLogging,
 			clientName:     c.name,
+			authorization:  c.authorization(),
 		},
 	}
 	return c
+}
+
+// authorization returns the value of the Authorization header sent with every request
+func (c *DefaultClient) authorization() string {
+	switch {
+	case c.token != "":
+		return "Bearer " + c.token
+	case c.key != "":
+		return "digest " + c.key
+	}
+	return ""
 }
 
 // Client returns the client's *http.Client
@@ -155,14 +195,22 @@ type transport struct {
 	rt             http.RoundTripper
 	requestLogging bool
 	clientName     string
+	authorization  string
 }
 
 // RoundTrip implements the http.RoundTripper interface, adding tracing and
-// logging (if enabled) to a client request
+// logging (if enabled) to a client request. It sets the headers every request of the
+// client carries, so that they are sent no matter how the request was built
 func (t *transport) RoundTrip(r *http.Request) (*http.Response, error) {
 	start := time.Now()
 
+	// a RoundTripper must not modify the request it is handed
+	r = r.Clone(r.Context())
 	r.Header.Set("User-Agent", t.clientName)
+	r.Header.Set(server.RuntimeIDHeaderKey, info.RuntimeID())
+	if t.authorization != "" && r.Header.Get("Authorization") == "" {
+		r.Header.Set("Authorization", t.authorization)
+	}
 
 	// make request
 	resp, err := t.rt.RoundTrip(r)
@@ -206,13 +254,9 @@ func (t *transport) RoundTrip(r *http.Request) (*http.Response, error) {
 	return resp, err
 }
 
-// Modify activates retry behavior, timeout handling and authorization via the stored key
+// Modify activates retry behavior and timeout handling. Headers common to all requests,
+// such as the credential, are set by the client's transport
 func (c *DefaultClient) Modify(_ context.Context, req *httpc.Request) *httpc.Request {
-
-	req = req.Headers(httpc.Params{
-		server.RuntimeIDHeaderKey: info.RuntimeID(),
-	})
-
 	// retry any request that isn't 2xx
 	if c.retry {
 		req = req.RetryBackOff(c.retryIntervals).
@@ -231,9 +275,6 @@ func (c *DefaultClient) Modify(_ context.Context, req *httpc.Request) *httpc.Req
 	}
 	if c.timeout > 0 {
 		req = req.Timeout(c.timeout)
-	}
-	if c.key != "" {
-		req = req.AuthToken("digest", c.key)
 	}
 	return req
 }

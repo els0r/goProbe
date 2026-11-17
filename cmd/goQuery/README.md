@@ -51,6 +51,14 @@ This scenario requires the query server to be reachable at `--query.server.addr`
 
 If this mode is used, the attribute `hostname` will always be provided in the output of `goQuery`.
 
+If the query server enforces scoped queries (an authorizer is configured), `goQuery` presents a Bearer token (`Authorization: Bearer <token>`) on both the regular and the streaming (`--query.streaming`) query. The token is taken from exactly one of:
+
+- the file named by `--query.server.token-file` (surrounding whitespace is trimmed),
+- the `query.server.token` key of the configuration file,
+- the `QUERY_SERVER_TOKEN` environment variable.
+
+There is deliberately no flag carrying the token itself, so that it never shows up in the process list. Setting both a token file and a token is an error.
+
 ### Stored queries
 
 Query arguments are JSON serializable and `goQuery` offers the ability to load them from disk and run a query based on the stored args.

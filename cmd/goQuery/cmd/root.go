@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/els0r/goProbe/v4/cmd/goQuery/pkg/conf"
+	"github.com/els0r/goProbe/v4/pkg/api/client"
 	gqclient "github.com/els0r/goProbe/v4/pkg/api/globalquery/client"
 	"github.com/els0r/goProbe/v4/pkg/goDB/engine"
 	"github.com/els0r/goProbe/v4/pkg/query"
@@ -185,6 +186,11 @@ and I/O load)
 	pflags.String(conf.QueryServerAddr, "",
 		`Address of query server to run queries against (host:port). If this value is
 set, goQuery will attempt to run queries using the specified query server as opposed to its local goDB
+`,
+	)
+	pflags.String(conf.QueryServerTokenFile, "",
+		`File holding the Bearer token presented to the query server. The token can also be
+set via the "`+conf.QueryServerToken+`" config file key or the `+queryServerTokenEnv+` environment variable
 `,
 	)
 	pflags.StringP(conf.QueryDBPath, "d", "",
@@ -362,6 +368,12 @@ func entrypoint(cmd *cobra.Command, args []string) (err error) {
 			}
 		}
 
+		token, err := queryServerToken()
+		if err != nil {
+			return err
+		}
+		clientOpts := []client.Option{client.WithBearerToken(token)}
+
 		// query using query server
 		if viper.GetBool(conf.QueryStreaming) {
 			logger.Info("calling streaming API")
@@ -386,9 +398,10 @@ func entrypoint(cmd *cobra.Command, args []string) (err error) {
 					logging.FromContext(ctx).Debugf("received keepalive")
 					return nil
 				},
+				clientOpts...,
 			)
 		} else {
-			querier = gqclient.New(queryServerAddr)
+			querier = gqclient.New(queryServerAddr, clientOpts...)
 		}
 	} else {
 		if queryArgs.Live {
