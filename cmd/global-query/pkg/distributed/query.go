@@ -156,10 +156,13 @@ func (q *QueryRunner) run(ctx context.Context, args *query.Args, send sse.Sender
 
 // prepareHostList resolves queryHosts (including the ANY selector) and narrows the result
 // with the query's scope. Both happen within the host-list span, which carries the principal
-// of a scoped query
+// of a scoped query, whether or not resolution and narrowing succeed
 func (q *QueryRunner) prepareHostList(ctx context.Context, resolver hosts.Resolver, queryHosts string) (hosts.Hosts, error) {
 	ctx, span := tracing.Start(ctx, "(*distributed.QueryRunner).prepareHostList", trace.WithAttributes(attribute.String("hosts", queryHosts)))
 	defer span.End()
+
+	// set before resolution, so that the span of a query failing there carries it too
+	q.setSpanPrincipal(ctx, span)
 
 	hostList, err := q.resolveHostList(ctx, resolver, queryHosts)
 	if err != nil {

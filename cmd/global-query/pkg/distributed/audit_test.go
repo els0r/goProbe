@@ -2,12 +2,14 @@ package distributed
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"testing"
 
 	"github.com/els0r/goProbe/v4/internal/logtest"
 	"github.com/els0r/goProbe/v4/pkg/distributed/authz"
 	"github.com/els0r/goProbe/v4/pkg/distributed/hosts"
+	"github.com/els0r/goProbe/v4/pkg/types"
 	"github.com/els0r/telemetry/logging"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -206,4 +208,46 @@ func TestScopedQuery_HostListSpan_CarriesPrincipal(t *testing.T) {
 
 	principal := spanAttribute(t, spans.GetSpans(), "(*distributed.QueryRunner).prepareHostList", "principal")
 	assert.Equal(t, "alice", principal)
+}
+
+// TestScopedQuery_HostListSpan_CarriesPrincipal_WhenResolutionFails pins that a scoped query
+// failing before narrowing is still attributable: the principal is on the span before the
+// host list is resolved
+func TestScopedQuery_HostListSpan_CarriesPrincipal_WhenResolutionFails(t *testing.T) {
+	tests := []struct {
+		name       string
+		queryHosts string
+		resolver   *mockResolver
+		querier    *mockQuerier
+	}{
+		{
+			name:       "resolver fails",
+			queryHosts: "h1,h2,h3",
+			resolver:   &mockResolver{err: errors.New("resolver down")},
+			querier:    &mockQuerier{},
+		},
+		{
+			name:       "enumerating all hosts fails",
+			queryHosts: types.AnySelector,
+			resolver:   &mockResolver{},
+			querier:    &mockQuerier{anyErr: errors.New("inventory down")},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			spans := captureSpans(t)
+			rm := hosts.NewResolverMap()
+			rm.Set("string", tt.resolver)
+			qr := NewQueryRunner(rm, tt.querier, WithScopeEnforcement())
+
+			args := baseArgs()
+			args.QueryHosts = tt.queryHosts
+
+			_, err := qr.Run(auditCtx(&mockScope{principal: "alice", allowed: []hosts.ID{"h1"}}), args)
+			require.Error(t, err)
+
+			principal := spanAttribute(t, spans.GetSpans(), "(*distributed.QueryRunner).prepareHostList", "principal")
+			assert.Equal(t, "alice", principal)
+		})
+	}
 }

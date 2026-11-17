@@ -51,6 +51,17 @@ func newScopeError(status int, detail string, cause error) error {
 	}
 }
 
+// setSpanPrincipal sets the principal of a scoped query as an attribute on span. A runner
+// that does not enforce scopes, or a query without a scope, leaves the span as it is
+func (q *QueryRunner) setSpanPrincipal(ctx context.Context, span trace.Span) {
+	if !q.enforceScope {
+		return
+	}
+	if scope, ok := authz.ScopeFromContext(ctx); ok {
+		span.SetAttributes(attribute.String("principal", scope.Principal()))
+	}
+}
+
 // applyScope narrows hostList with the scope carried by ctx. It is the single place a
 // scope is applied: after the host list is resolved and before any sensor is contacted.
 // The scope only ever sees a copy of the list, so the reference set the narrowing check
@@ -69,9 +80,8 @@ func (q *QueryRunner) applyScope(ctx context.Context, hostList hosts.Hosts) (hos
 	}
 
 	// the principal is already on the context logger: the middleware attaches it to every
-	// line of the request from the point of authorization on. The current span is the
-	// host-list span of prepareHostList
-	trace.SpanFromContext(ctx).SetAttributes(attribute.String("principal", scope.Principal()))
+	// line of the request from the point of authorization on. The host-list span carries
+	// it since prepareHostList started it
 	logger = logger.With("scope_type", fmt.Sprintf("%T", scope))
 
 	// the requested set is the unique host IDs, so that requested and remaining counts and
